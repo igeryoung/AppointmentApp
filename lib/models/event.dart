@@ -1,0 +1,154 @@
+/// Event model - Individual appointment entry with minimal metadata as per PRD
+class Event {
+  final int? id;
+  final int bookId;
+  final String name;
+  final String recordNumber;
+  final String eventType;
+  final DateTime startTime;
+  final DateTime? endTime; // Optional as per PRD
+  final DateTime createdAt;
+  final DateTime updatedAt;
+  final bool isRemoved; // Soft removal flag
+  final String? removalReason; // Reason for removal
+  final int? originalEventId; // Reference to original event for time changes
+  final int? newEventId; // Reference to new event if this event's time was changed
+
+  const Event({
+    this.id,
+    required this.bookId,
+    required this.name,
+    required this.recordNumber,
+    required this.eventType,
+    required this.startTime,
+    this.endTime,
+    required this.createdAt,
+    required this.updatedAt,
+    this.isRemoved = false,
+    this.removalReason,
+    this.originalEventId,
+    this.newEventId,
+  });
+
+  Event copyWith({
+    int? id,
+    int? bookId,
+    String? name,
+    String? recordNumber,
+    String? eventType,
+    DateTime? startTime,
+    DateTime? endTime,
+    DateTime? createdAt,
+    DateTime? updatedAt,
+    bool? isRemoved,
+    String? removalReason,
+    int? originalEventId,
+    int? newEventId,
+  }) {
+    return Event(
+      id: id ?? this.id,
+      bookId: bookId ?? this.bookId,
+      name: name ?? this.name,
+      recordNumber: recordNumber ?? this.recordNumber,
+      eventType: eventType ?? this.eventType,
+      startTime: startTime ?? this.startTime,
+      endTime: endTime ?? this.endTime,
+      createdAt: createdAt ?? this.createdAt,
+      updatedAt: updatedAt ?? this.updatedAt,
+      isRemoved: isRemoved ?? this.isRemoved,
+      removalReason: removalReason ?? this.removalReason,
+      originalEventId: originalEventId ?? this.originalEventId,
+      newEventId: newEventId ?? this.newEventId,
+    );
+  }
+
+  Map<String, dynamic> toMap() {
+    return {
+      'id': id,
+      'book_id': bookId,
+      'name': name,
+      'record_number': recordNumber,
+      'event_type': eventType,
+      'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
+      'end_time': endTime != null ? endTime!.millisecondsSinceEpoch ~/ 1000 : null,
+      'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
+      'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
+      'is_removed': isRemoved ? 1 : 0,
+      'removal_reason': removalReason,
+      'original_event_id': originalEventId,
+      'new_event_id': newEventId,
+    };
+  }
+
+  factory Event.fromMap(Map<String, dynamic> map) {
+    return Event(
+      id: map['id']?.toInt(),
+      bookId: map['book_id']?.toInt() ?? 0,
+      name: map['name'] ?? '',
+      recordNumber: map['record_number'] ?? '',
+      eventType: map['event_type'] ?? '',
+      startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
+      endTime: map['end_time'] != null
+          ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000)
+          : null,
+      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
+      isRemoved: (map['is_removed'] ?? 0) == 1,
+      removalReason: map['removal_reason'],
+      originalEventId: map['original_event_id']?.toInt(),
+      newEventId: map['new_event_id']?.toInt(),
+    );
+  }
+
+  /// Returns true if this is an open-ended event (no end time)
+  bool get isOpenEnded => endTime == null;
+
+  /// Returns true if this event is a time-changed version of another event
+  bool get isTimeChanged => originalEventId != null;
+
+  /// Returns true if this event's time was changed (moved to a new event)
+  bool get hasNewTime => newEventId != null;
+
+  /// Returns the duration in minutes, or null if open-ended
+  int? get durationInMinutes {
+    if (endTime == null) return null;
+    return endTime!.difference(startTime).inMinutes;
+  }
+
+  /// Returns a display string for the time range
+  String get timeRangeDisplay {
+    final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
+    if (endTime == null) {
+      return startStr;
+    }
+    final endStr = '${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}';
+    return '$startStr - $endStr';
+  }
+
+  @override
+  String toString() {
+    return 'Event(id: $id, bookId: $bookId, name: $name, recordNumber: $recordNumber, eventType: $eventType, startTime: $startTime, endTime: $endTime)';
+  }
+
+  @override
+  bool operator ==(Object other) {
+    if (identical(this, other)) return true;
+    return other is Event &&
+        other.id == id &&
+        other.bookId == bookId &&
+        other.name == name &&
+        other.recordNumber == recordNumber &&
+        other.eventType == eventType &&
+        other.startTime == startTime &&
+        other.endTime == endTime &&
+        other.isRemoved == isRemoved &&
+        other.removalReason == removalReason &&
+        other.originalEventId == originalEventId &&
+        other.newEventId == newEventId;
+  }
+
+  @override
+  int get hashCode {
+    return Object.hash(id, bookId, name, recordNumber, eventType, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId);
+  }
+}

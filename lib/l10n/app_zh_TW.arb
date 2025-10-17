@@ -1,0 +1,1015 @@
+{
+  "@@locale": "zh_TW",
+
+  "appTitle": "預約登記應用程式",
+  "@appTitle": {
+    "description": "The title of the application"
+  },
+
+  "appointmentBooks": "預約簿",
+  "@appointmentBooks": {
+    "description": "Title for appointment books screen"
+  },
+
+  "errorLoadingBooks": "載入簿冊時發生錯誤：{error}",
+  "@errorLoadingBooks": {
+    "description": "Error message when loading books fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "archiveBook": "封存簿冊",
+  "@archiveBook": {
+    "description": "Title for archive book dialog"
+  },
+
+  "archiveBookConfirmation": "您確定要封存「{bookName}」嗎？",
+  "@archiveBookConfirmation": {
+    "description": "Confirmation message for archiving a book",
+    "placeholders": {
+      "bookName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "cancel": "取消",
+  "@cancel": {
+    "description": "Cancel button text"
+  },
+
+  "archive": "封存",
+  "@archive": {
+    "description": "Archive button text"
+  },
+
+  "deleteBook": "刪除簿冊",
+  "@deleteBook": {
+    "description": "Title for delete book dialog"
+  },
+
+  "deleteBookConfirmation": "您確定要永久刪除「{bookName}」及其所有活動嗎？",
+  "@deleteBookConfirmation": {
+    "description": "Confirmation message for deleting a book",
+    "placeholders": {
+      "bookName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "delete": "刪除",
+  "@delete": {
+    "description": "Delete button text"
+  },
+
+  "noAppointmentBooks": "沒有預約簿",
+  "@noAppointmentBooks": {
+    "description": "Message shown when there are no books"
+  },
+
+  "tapToCreateFirstBook": "點擊 + 按鈕以建立您的第一本簿冊",
+  "@tapToCreateFirstBook": {
+    "description": "Hint message to create first book"
+  },
+
+  "createNewBook": "建立新簿冊",
+  "@createNewBook": {
+    "description": "Title for create new book dialog and tooltip"
+  },
+
+  "bookName": "簿冊名稱",
+  "@bookName": {
+    "description": "Label for book name field"
+  },
+
+  "enterBookName": "輸入簿冊名稱",
+  "@enterBookName": {
+    "description": "Hint text for book name field"
+  },
+
+  "bookNameRequired": "簿冊名稱為必填項目",
+  "@bookNameRequired": {
+    "description": "Validation error for empty book name"
+  },
+
+  "bookNameTooLong": "簿冊名稱不能超過 50 個字元",
+  "@bookNameTooLong": {
+    "description": "Validation error for book name too long"
+  },
+
+  "create": "建立",
+  "@create": {
+    "description": "Create button text"
+  },
+
+  "renameBook": "重新命名簿冊",
+  "@renameBook": {
+    "description": "Title for rename book dialog"
+  },
+
+  "rename": "重新命名",
+  "@rename": {
+    "description": "Rename menu item text"
+  },
+
+  "save": "儲存",
+  "@save": {
+    "description": "Save button text"
+  },
+
+  "created": "建立時間：",
+  "@created": {
+    "description": "Label for created date"
+  },
+
+  "archived": "封存時間：",
+  "@archived": {
+    "description": "Label for archived date"
+  },
+
+  "errorCreatingBook": "建立簿冊時發生錯誤：{error}",
+  "@errorCreatingBook": {
+    "description": "Error message when creating book fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorUpdatingBook": "更新簿冊時發生錯誤：{error}",
+  "@errorUpdatingBook": {
+    "description": "Error message when updating book fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorArchivingBook": "封存簿冊時發生錯誤：{error}",
+  "@errorArchivingBook": {
+    "description": "Error message when archiving book fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorDeletingBook": "刪除簿冊時發生錯誤：{error}",
+  "@errorDeletingBook": {
+    "description": "Error message when deleting book fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "schedule": "日程表",
+  "@schedule": {
+    "description": "Schedule text"
+  },
+
+  "bookSchedule": "{bookName} - 日程表",
+  "@bookSchedule": {
+    "description": "Title for schedule screen",
+    "placeholders": {
+      "bookName": {
+        "type": "String"
+      }
+    }
+  },
+
+  "day": "日",
+  "@day": {
+    "description": "Day view tab"
+  },
+
+  "threeDays": "三日",
+  "@threeDays": {
+    "description": "3-day view tab"
+  },
+
+  "week": "週",
+  "@week": {
+    "description": "Week view tab"
+  },
+
+  "goToToday": "前往今天",
+  "@goToToday": {
+    "description": "Tooltip for go to today button"
+  },
+
+  "createEvent": "建立活動",
+  "@createEvent": {
+    "description": "Tooltip for create event button"
+  },
+
+  "errorLoadingEvents": "載入活動時發生錯誤：{error}",
+  "@errorLoadingEvents": {
+    "description": "Error message when loading events fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "record": "紀錄：",
+  "@record": {
+    "description": "Label for record number in event tile"
+  },
+
+  "moved": "已移動",
+  "@moved": {
+    "description": "Label for moved event"
+  },
+
+  "timeChanged": "時間已變更：{reason}",
+  "@timeChanged": {
+    "description": "Label for time changed event",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+
+  "removedReason": "已移除：{reason}",
+  "@removedReason": {
+    "description": "Label for removed event",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+
+  "newEvent": "新活動",
+  "@newEvent": {
+    "description": "Title for new event screen"
+  },
+
+  "editEvent": "編輯活動",
+  "@editEvent": {
+    "description": "Title for edit event screen"
+  },
+
+  "eventName": "活動名稱 *",
+  "@eventName": {
+    "description": "Label for event name field"
+  },
+
+  "eventNameRequired": "活動名稱為必填項目",
+  "@eventNameRequired": {
+    "description": "Validation error for empty event name"
+  },
+
+  "recordNumber": "紀錄編號 *",
+  "@recordNumber": {
+    "description": "Label for record number field"
+  },
+
+  "recordNumberRequired": "紀錄編號為必填項目",
+  "@recordNumberRequired": {
+    "description": "Validation error for empty record number"
+  },
+
+  "eventType": "活動類型 *",
+  "@eventType": {
+    "description": "Label for event type field"
+  },
+
+  "eventTypeRequired": "活動類型為必填項目",
+  "@eventTypeRequired": {
+    "description": "Validation error for empty event type"
+  },
+
+  "startTime": "開始時間",
+  "@startTime": {
+    "description": "Label for start time field"
+  },
+
+  "endTime": "結束時間",
+  "@endTime": {
+    "description": "Label for end time field"
+  },
+
+  "openEnded": "不設結束時間",
+  "@openEnded": {
+    "description": "Label for open-ended event"
+  },
+
+  "deleteEvent": "刪除活動",
+  "@deleteEvent": {
+    "description": "Title for delete event dialog"
+  },
+
+  "deleteEventConfirmation": "您確定要刪除此活動及其筆記嗎？",
+  "@deleteEventConfirmation": {
+    "description": "Confirmation message for deleting event"
+  },
+
+  "removeEvent": "移除活動",
+  "@removeEvent": {
+    "description": "Title for remove event dialog and menu item"
+  },
+
+  "removeEventDescription": "此活動將被標記為已移除，但仍會以刪除線顯示。",
+  "@removeEventDescription": {
+    "description": "Description for remove event action"
+  },
+
+  "reasonForRemoval": "移除原因：",
+  "@reasonForRemoval": {
+    "description": "Label for removal reason field"
+  },
+
+  "enterReasonForRemoval": "輸入移除原因",
+  "@enterReasonForRemoval": {
+    "description": "Hint text for removal reason field"
+  },
+
+  "remove": "移除",
+  "@remove": {
+    "description": "Remove button text"
+  },
+
+  "changeEventTime": "變更活動時間",
+  "@changeEventTime": {
+    "description": "Title for change event time dialog and menu item"
+  },
+
+  "changeEventType": "變更活動類型",
+  "@changeEventType": {
+    "description": "Title for change event type dialog and menu item"
+  },
+
+  "eventTypeChanged": "活動類型已更新",
+  "@eventTypeChanged": {
+    "description": "Success message after changing event type"
+  },
+
+  "errorUpdatingEvent": "更新活動時發生錯誤：{error}",
+  "@errorUpdatingEvent": {
+    "description": "Error message when updating event fails",
+    "placeholders": {
+      "error": {
+        "type": "String",
+        "description": "Error message"
+      }
+    }
+  },
+
+  "eventDeleted": "活動已刪除",
+  "@eventDeleted": {
+    "description": "Success message after deleting event"
+  },
+
+  "confirmDeleteEvent": "您確定要刪除「{eventName}」及其筆記嗎？",
+  "@confirmDeleteEvent": {
+    "description": "Confirmation message for deleting event with name",
+    "placeholders": {
+      "eventName": {
+        "type": "String",
+        "description": "Name of the event"
+      }
+    }
+  },
+
+  "changeTimeDescription": "這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。",
+  "@changeTimeDescription": {
+    "description": "Description for change time action"
+  },
+
+  "startTimeLabel": "開始：{time}",
+  "@startTimeLabel": {
+    "description": "Label for start time in change time dialog",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "endTimeLabel": "結束：{time}",
+  "@endTimeLabel": {
+    "description": "Label for end time in change time dialog",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "setEndTimeOptional": "設定結束時間（選填）",
+  "@setEndTimeOptional": {
+    "description": "Label for optional end time button"
+  },
+
+  "reasonForTimeChange": "時間變更原因： *",
+  "@reasonForTimeChange": {
+    "description": "Label for time change reason field"
+  },
+
+  "enterReasonForTimeChange": "請輸入時間變更原因",
+  "@enterReasonForTimeChange": {
+    "description": "Hint text for time change reason field"
+  },
+
+  "reasonRequired": "原因為必填項目",
+  "@reasonRequired": {
+    "description": "Validation error for empty reason"
+  },
+
+  "reasonRequiredMessage": "必須提供原因才能變更活動時間。",
+  "@reasonRequiredMessage": {
+    "description": "Error message when reason is required"
+  },
+
+  "changeTime": "變更時間",
+  "@changeTime": {
+    "description": "Change time button text"
+  },
+
+  "eventTimeChangedSuccess": "活動時間變更成功",
+  "@eventTimeChangedSuccess": {
+    "description": "Success message for time change"
+  },
+
+  "errorChangingEventTime": "變更活動時間時發生錯誤：{error}",
+  "@errorChangingEventTime": {
+    "description": "Error message when changing time fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "retry": "重試",
+  "@retry": {
+    "description": "Retry button text"
+  },
+
+  "deletePermanently": "永久刪除",
+  "@deletePermanently": {
+    "description": "Delete permanently menu item"
+  },
+
+  "processing": "處理中...",
+  "@processing": {
+    "description": "Processing message"
+  },
+
+  "eventTimeChanged": "活動時間已變更",
+  "@eventTimeChanged": {
+    "description": "Label for event time changed status"
+  },
+
+  "eventRemoved": "活動已移除",
+  "@eventRemoved": {
+    "description": "Label for event removed status"
+  },
+
+  "reason": "原因：{reason}",
+  "@reason": {
+    "description": "Label for reason",
+    "placeholders": {
+      "reason": {
+        "type": "String"
+      }
+    }
+  },
+
+  "movedTo": "移至：{time}",
+  "@movedTo": {
+    "description": "Label for moved to time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "handwritingNotes": "手寫筆記",
+  "@handwritingNotes": {
+    "description": "Label for handwriting notes section"
+  },
+
+  "pen": "筆",
+  "@pen": {
+    "description": "Pen tool label"
+  },
+
+  "eraser": "橡皮擦",
+  "@eraser": {
+    "description": "Eraser tool label"
+  },
+
+  "controls": "控制項",
+  "@controls": {
+    "description": "Controls label"
+  },
+
+  "undo": "復原",
+  "@undo": {
+    "description": "Undo tooltip"
+  },
+
+  "redo": "重做",
+  "@redo": {
+    "description": "Redo tooltip"
+  },
+
+  "clearAll": "全部清除",
+  "@clearAll": {
+    "description": "Clear all tooltip"
+  },
+
+  "eraserSize": "橡皮擦大小：",
+  "@eraserSize": {
+    "description": "Label for eraser size"
+  },
+
+  "penWidth": "筆寬：",
+  "@penWidth": {
+    "description": "Label for pen width"
+  },
+
+  "color": "顏色：",
+  "@color": {
+    "description": "Label for color"
+  },
+
+  "errorLoadingNote": "載入筆記時發生錯誤：{error}",
+  "@errorLoadingNote": {
+    "description": "Error message when loading note fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorSavingEvent": "儲存活動時發生錯誤：{error}",
+  "@errorSavingEvent": {
+    "description": "Error message when saving event fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "eventSavedNoteFailure": "活動已儲存，但筆記儲存失敗",
+  "@eventSavedNoteFailure": {
+    "description": "Message when event saves but note save fails"
+  },
+
+  "errorDeletingEvent": "刪除活動時發生錯誤：{error}",
+  "@errorDeletingEvent": {
+    "description": "Error message when deleting event fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorRemovingEvent": "移除活動時發生錯誤：{error}",
+  "@errorRemovingEvent": {
+    "description": "Error message when removing event fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "consultation": "諮詢",
+  "@consultation": {
+    "description": "Consultation event type"
+  },
+
+  "surgery": "手術",
+  "@surgery": {
+    "description": "Surgery event type"
+  },
+
+  "followUp": "追蹤",
+  "@followUp": {
+    "description": "Follow-up event type"
+  },
+
+  "emergency": "緊急",
+  "@emergency": {
+    "description": "Emergency event type"
+  },
+
+  "checkUp": "檢查",
+  "@checkUp": {
+    "description": "Check-up event type"
+  },
+
+  "treatment": "治療",
+  "@treatment": {
+    "description": "Treatment event type"
+  },
+
+  "dateChangedToToday": "日期已變更 - 已更新至今天",
+  "@dateChangedToToday": {
+    "description": "Message when date changes and app updates to today"
+  },
+
+  "timeChangedViaDrag": "透過拖曳變更時間",
+  "@timeChangedViaDrag": {
+    "description": "Default reason when event time is changed via drag"
+  },
+
+  "reasonForTimeChangeLabel": "時間變更原因",
+  "@reasonForTimeChangeLabel": {
+    "description": "Label for time change reason field"
+  },
+
+  "enterReasonHint": "輸入原因...",
+  "@enterReasonHint": {
+    "description": "Hint text for reason input field"
+  },
+
+  "ok": "確定",
+  "@ok": {
+    "description": "OK button text"
+  },
+
+  "eventTimeChangedSuccessfully": "活動時間變更成功",
+  "@eventTimeChangedSuccessfully": {
+    "description": "Success message after changing event time"
+  },
+
+  "errorChangingTime": "變更時間時發生錯誤：{error}",
+  "@errorChangingTime": {
+    "description": "Error message when changing time fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "errorSavingDrawing": "儲存繪圖時發生錯誤：{error}",
+  "@errorSavingDrawing": {
+    "description": "Error message when saving drawing fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "reasonForRemovalLabel": "移除原因",
+  "@reasonForRemovalLabel": {
+    "description": "Label for removal reason field"
+  },
+
+  "eventRemovedSuccessfully": "活動已成功移除",
+  "@eventRemovedSuccessfully": {
+    "description": "Success message after removing event"
+  },
+
+  "errorRemovingEventMessage": "移除活動時發生錯誤：{error}",
+  "@errorRemovingEventMessage": {
+    "description": "Error message when removing event fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "generateRandomEvents": "產生隨機活動",
+  "@generateRandomEvents": {
+    "description": "Title for generate random events dialog"
+  },
+
+  "numberOfEvents": "活動數量",
+  "@numberOfEvents": {
+    "description": "Label for number of events field"
+  },
+
+  "enterNumber": "輸入數字（1-50）",
+  "@enterNumber": {
+    "description": "Hint text for number input"
+  },
+
+  "clearAllExistingEventsFirst": "先清除所有現有活動",
+  "@clearAllExistingEventsFirst": {
+    "description": "Checkbox label to clear existing events"
+  },
+
+  "generateOpenEndedEventsOnly": "僅產生不設結束時間的活動",
+  "@generateOpenEndedEventsOnly": {
+    "description": "Checkbox label for open-ended events"
+  },
+
+  "noEndTime": "無結束時間",
+  "@noEndTime": {
+    "description": "Subtitle for open-ended events option"
+  },
+
+  "generate": "產生",
+  "@generate": {
+    "description": "Generate button text"
+  },
+
+  "testTimeActive": "測試時間已啟用",
+  "@testTimeActive": {
+    "description": "Title for test time active dialog"
+  },
+
+  "currentTestTime": "目前測試時間：\n{time}",
+  "@currentTestTime": {
+    "description": "Label showing current test time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "resetToRealTime": "重設為實際時間",
+  "@resetToRealTime": {
+    "description": "Button to reset test time"
+  },
+
+  "testTimeSetTo": "測試時間已設定為：{time}",
+  "@testTimeSetTo": {
+    "description": "Message when test time is set",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "clearedAndGeneratedEvents": "已清除所有活動並產生 {count} 個活動",
+  "@clearedAndGeneratedEvents": {
+    "description": "Message after clearing and generating events",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "clearedAndGeneratedEventsSomeFull": "已清除所有活動並產生 {count} 個活動（部分時段已滿）",
+  "@clearedAndGeneratedEventsSomeFull": {
+    "description": "Message when some slots were full",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "clearedAndGeneratedOpenEndedEvents": "已清除所有活動並產生 {count} 個不設結束時間的活動",
+  "@clearedAndGeneratedOpenEndedEvents": {
+    "description": "Message for open-ended events",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "clearedAndGeneratedOpenEndedEventsSomeFull": "已清除所有活動並產生 {count} 個不設結束時間的活動（部分時段已滿）",
+  "@clearedAndGeneratedOpenEndedEventsSomeFull": {
+    "description": "Message for open-ended events with full slots",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "generatedEvents": "已產生 {count} 個隨機活動",
+  "@generatedEvents": {
+    "description": "Message after generating events",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "generatedEventsSomeFull": "已產生 {count} 個活動（部分時段已滿）",
+  "@generatedEventsSomeFull": {
+    "description": "Message when some slots were full",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "generatedOpenEndedEvents": "已產生 {count} 個不設結束時間的活動",
+  "@generatedOpenEndedEvents": {
+    "description": "Message for generated open-ended events",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "generatedOpenEndedEventsSomeFull": "已產生 {count} 個不設結束時間的活動（部分時段已滿）",
+  "@generatedOpenEndedEventsSomeFull": {
+    "description": "Message for open-ended events with full slots",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+
+  "goToTodayTooltip": "前往今天",
+  "@goToTodayTooltip": {
+    "description": "Tooltip for go to today button"
+  },
+
+  "eventOptions": "活動選項",
+  "@eventOptions": {
+    "description": "Title for event options menu"
+  },
+
+  "undo": "復原",
+  "@undo": {
+    "description": "Undo action label"
+  },
+
+  "redo": "重做",
+  "@redo": {
+    "description": "Redo action label"
+  },
+
+  "clear": "清除",
+  "@clear": {
+    "description": "Clear action label"
+  },
+
+  "createdLabel": "建立時間：",
+  "@createdLabel": {
+    "description": "Label for creation date"
+  },
+
+  "archivedLabel": "封存時間：",
+  "@archivedLabel": {
+    "description": "Label for archive date"
+  },
+
+  "errorLoadingNoteMessage": "載入筆記時發生錯誤：{error}",
+  "@errorLoadingNoteMessage": {
+    "description": "Error message when loading note fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "eventSavedButNoteFailed": "活動已儲存，但筆記儲存失敗",
+  "@eventSavedButNoteFailed": {
+    "description": "Message when event saves but note fails"
+  },
+
+  "errorSavingEventMessage": "儲存活動時發生錯誤：{error}",
+  "@errorSavingEventMessage": {
+    "description": "Error message when saving event fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "deleteEventTitle": "刪除活動",
+  "@deleteEventTitle": {
+    "description": "Title for delete event dialog"
+  },
+
+  "deleteEventConfirmMessage": "您確定要刪除此活動及其筆記嗎？",
+  "@deleteEventConfirmMessage": {
+    "description": "Confirmation message for deleting event"
+  },
+
+  "deleteButton": "刪除",
+  "@deleteButton": {
+    "description": "Delete button text"
+  },
+
+  "errorDeletingEventMessage": "刪除活動時發生錯誤：{error}",
+  "@errorDeletingEventMessage": {
+    "description": "Error message when deleting event fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "removeEventTitle": "移除活動",
+  "@removeEventTitle": {
+    "description": "Title for remove event dialog"
+  },
+
+  "removeEventMessage": "此活動將被標記為已移除，但仍會以刪除線顯示。",
+  "@removeEventMessage": {
+    "description": "Message explaining remove action"
+  },
+
+  "reasonForRemovalField": "移除原因：",
+  "@reasonForRemovalField": {
+    "description": "Label for removal reason field"
+  },
+
+  "removeButton": "移除",
+  "@removeButton": {
+    "description": "Remove button text"
+  },
+
+  "changeEventTimeTitle": "變更活動時間",
+  "@changeEventTimeTitle": {
+    "description": "Title for change event time dialog"
+  },
+
+  "changeTimeMessage": "這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。",
+  "@changeTimeMessage": {
+    "description": "Message explaining time change action"
+  },
+
+  "reasonForTimeChangeField": "時間變更原因： *",
+  "@reasonForTimeChangeField": {
+    "description": "Label for time change reason field (required)"
+  },
+
+  "changeTimeButton": "變更時間",
+  "@changeTimeButton": {
+    "description": "Change time button text"
+  },
+
+  "eventTimeChangedSuccess": "活動時間變更成功",
+  "@eventTimeChangedSuccess": {
+    "description": "Success message for time change"
+  },
+
+  "errorChangingEventTimeMessage": "變更活動時間時發生錯誤：{error}",
+  "@errorChangingEventTimeMessage": {
+    "description": "Error message when changing event time fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
+  },
+
+  "startTime": "開始時間",
+  "@startTime": {
+    "description": "Simple label for start time (no parameters)"
+  },
+
+  "endTime": "結束時間",
+  "@endTime": {
+    "description": "Simple label for end time (no parameters)"
+  },
+
+  "enterReasonForRemoval": "輸入移除原因",
+  "@enterReasonForRemoval": {
+    "description": "Hint text for removal reason input field"
+  },
+
+  "enterReasonForTimeChange": "請輸入時間變更原因",
+  "@enterReasonForTimeChange": {
+    "description": "Hint text for time change reason input field"
+  },
+
+  "reasonRequired": "必須填寫原因",
+  "@reasonRequired": {
+    "description": "Error text when reason is required but not provided"
+  },
+
+  "reasonRequiredMessage": "必須提供變更活動時間的原因。",
+  "@reasonRequiredMessage": {
+    "description": "Detailed message that reason is required"
+  },
+
+  "retry": "重試",
+  "@retry": {
+    "description": "Retry button label"
+  }
+}
