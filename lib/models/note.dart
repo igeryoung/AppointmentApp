@@ -7,6 +7,7 @@ class Note {
   final List<Stroke> strokes;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final bool isDirty; // Indicates unsaved changes not synced to server
 
   const Note({
     this.id,
@@ -14,6 +15,7 @@ class Note {
     required this.strokes,
     required this.createdAt,
     required this.updatedAt,
+    this.isDirty = false,
   });
 
   Note copyWith({
@@ -22,6 +24,7 @@ class Note {
     List<Stroke>? strokes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    bool? isDirty,
   }) {
     return Note(
       id: id ?? this.id,
@@ -29,6 +32,7 @@ class Note {
       strokes: strokes ?? this.strokes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      isDirty: isDirty ?? this.isDirty,
     );
   }
 
@@ -61,6 +65,7 @@ class Note {
       'strokes_data': jsonEncode(strokes.map((s) => s.toMap()).toList()),
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
+      'is_dirty': isDirty ? 1 : 0,
     };
   }
 
@@ -77,6 +82,7 @@ class Note {
       strokes: strokes,
       createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000),
       updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
+      isDirty: (map['is_dirty'] ?? 0) == 1,
     );
   }
 
@@ -85,7 +91,7 @@ class Note {
 
   @override
   String toString() {
-    return 'Note(id: $id, eventId: $eventId, strokeCount: ${strokes.length})';
+    return 'Note(id: $id, eventId: $eventId, strokeCount: ${strokes.length}, isDirty: $isDirty)';
   }
 
   @override

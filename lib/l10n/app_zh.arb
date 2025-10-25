@@ -621,5 +621,148 @@
   "treatment": "治療",
   "@treatment": {
     "description": "Treatment event type"
+  },
+
+  "heavyLoadTest": "重量测试",
+  "@heavyLoadTest": {
+    "description": "Heavy load test button label"
+  },
+
+  "heavyLoadTestWarning": "此测试将产生 2,928 个活动与约 8,800 万个数据点，可能需要数分钟时间。",
+  "@heavyLoadTestWarning": {
+    "description": "Warning message for heavy load test"
+  },
+
+  "heavyLoadTestConfirm": "开始重量测试",
+  "@heavyLoadTestConfirm": {
+    "description": "Confirm button for heavy load test"
+  },
+
+  "heavyLoadTestProgress": "产生中：{count}/{total} ({percent}%)",
+  "@heavyLoadTestProgress": {
+    "description": "Progress message for heavy load test",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      },
+      "total": {
+        "type": "int"
+      },
+      "percent": {
+        "type": "int"
+      }
+    }
+  },
+
+  "heavyLoadTestComplete": "已产生 {events} 个活动，共 {strokes} 个笔画，耗时 {time}",
+  "@heavyLoadTestComplete": {
+    "description": "Completion message for heavy load test",
+    "placeholders": {
+      "events": {
+        "type": "int"
+      },
+      "strokes": {
+        "type": "int"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "clearExistingEvents": "清除现有活动",
+  "@clearExistingEvents": {
+    "description": "Checkbox label to clear existing events"
+  },
+
+  "generatingEvents": "产生活动中...",
+  "@generatingEvents": {
+    "description": "Dialog title during event generation"
+  },
+
+  "stage1Creating": "阶段 1/2：建立活动",
+  "@stage1Creating": {
+    "description": "Stage 1 label for creating events"
+  },
+
+  "stage2AddingStrokes": "阶段 2/2：加入笔画",
+  "@stage2AddingStrokes": {
+    "description": "Stage 2 label for adding strokes"
+  },
+
+  "heavyLoadStage1Only": "重量测试 - 阶段1",
+  "@heavyLoadStage1Only": {
+    "description": "Button label for Stage 1 only"
+  },
+
+  "heavyLoadStage2Only": "重量测试 - 阶段2",
+  "@heavyLoadStage2Only": {
+    "description": "Button label for Stage 2 only"
+  },
+
+  "stage1OnlyWarning": "建立 11,712 个空白活动（不含笔画）\n每个格子4个活动",
+  "@stage1OnlyWarning": {
+    "description": "Warning message for Stage 1 only"
+  },
+
+  "stage2OnlyWarning": "为现有 HEAVY- 活动加入笔画（750笔画/活动）",
+  "@stage2OnlyWarning": {
+    "description": "Warning message for Stage 2 only"
+  },
+
+  "stage1Complete": "阶段1完成：已建立 {events} 个活动",
+  "@stage1Complete": {
+    "description": "Completion message for Stage 1",
+    "placeholders": {
+      "events": {
+        "type": "int"
+      }
+    }
+  },
+
+  "stage2Complete": "阶段2完成：已加入 {strokes} 个笔画到 {events} 个活动，耗时 {time}",
+  "@stage2Complete": {
+    "description": "Completion message for Stage 2",
+    "placeholders": {
+      "events": {
+        "type": "int"
+      },
+      "strokes": {
+        "type": "int"
+      },
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
+  "offlineMode": "离线模式",
+  "@offlineMode": {
+    "description": "Offline mode indicator"
+  },
+
+  "showingCachedData": "显示已缓存的数据",
+  "@showingCachedData": {
+    "description": "Message shown when displaying cached data"
+  },
+
+  "syncingToServer": "正在同步到服务器...",
+  "@syncingToServer": {
+    "description": "Message shown when syncing data to server"
+  },
+
+  "noteSaved": "笔记已保存",
+  "@noteSaved": {
+    "description": "Message shown when note is saved successfully"
+  },
+
+  "errorSavingNote": "保存笔记时出错：{error}",
+  "@errorSavingNote": {
+    "description": "Error message when saving note fails",
+    "placeholders": {
+      "error": {
+        "type": "String"
+      }
+    }
   }
 }

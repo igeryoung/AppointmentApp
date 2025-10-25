@@ -1014,6 +1014,126 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'變更活動時間時發生錯誤：{error}'**
   String errorChangingEventTimeMessage(String error);
+
+  /// Heavy load test button label
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重量測試'**
+  String get heavyLoadTest;
+
+  /// Warning message for heavy load test
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'此測試將產生 2,928 個活動與約 8,800 萬個資料點，可能需要數分鐘時間。'**
+  String get heavyLoadTestWarning;
+
+  /// Confirm button for heavy load test
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'開始重量測試'**
+  String get heavyLoadTestConfirm;
+
+  /// Progress message for heavy load test
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'產生中：{count}/{total} ({percent}%)'**
+  String heavyLoadTestProgress(int count, int total, int percent);
+
+  /// Completion message for heavy load test
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已產生 {events} 個活動，共 {strokes} 個筆畫，耗時 {time}'**
+  String heavyLoadTestComplete(int events, int strokes, String time);
+
+  /// Checkbox label to clear existing events
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'清除現有活動'**
+  String get clearExistingEvents;
+
+  /// Dialog title during event generation
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'產生活動中...'**
+  String get generatingEvents;
+
+  /// Stage 1 label for creating events
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'階段 1/2：建立活動'**
+  String get stage1Creating;
+
+  /// Stage 2 label for adding strokes
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'階段 2/2：加入筆畫'**
+  String get stage2AddingStrokes;
+
+  /// Button label for Stage 1 only
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重量測試 - 階段1'**
+  String get heavyLoadStage1Only;
+
+  /// Button label for Stage 2 only
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'重量測試 - 階段2'**
+  String get heavyLoadStage2Only;
+
+  /// Warning message for Stage 1 only
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'建立 11,712 個空白活動（不含筆畫）\n每個格子4個活動'**
+  String get stage1OnlyWarning;
+
+  /// Warning message for Stage 2 only
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'為現有 HEAVY- 活動加入筆畫（750筆畫/活動）'**
+  String get stage2OnlyWarning;
+
+  /// Completion message for Stage 1
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'階段1完成：已建立 {events} 個活動'**
+  String stage1Complete(int events);
+
+  /// Completion message for Stage 2
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'階段2完成：已加入 {strokes} 個筆畫到 {events} 個活動，耗時 {time}'**
+  String stage2Complete(int events, int strokes, String time);
+
+  /// Offline mode indicator
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'離線模式'**
+  String get offlineMode;
+
+  /// Message shown when displaying cached data
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'顯示已快取的資料'**
+  String get showingCachedData;
+
+  /// Message shown when syncing data to server
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在同步到伺服器...'**
+  String get syncingToServer;
+
+  /// Message shown when note is saved successfully
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'筆記已儲存'**
+  String get noteSaved;
+
+  /// Error message when saving note fails
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'儲存筆記時發生錯誤：{error}'**
+  String errorSavingNote(String error);
 }
 
 class _AppLocalizationsDelegate

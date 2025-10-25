@@ -3,8 +3,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/book.dart';
+import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
 import '../services/web_prd_database_service.dart';
+import '../services/book_backup_service.dart';
+import '../services/server_config_service.dart';
 import 'schedule_screen.dart';
 
 /// Book List Screen - Top-level containers as per PRD
@@ -20,9 +23,16 @@ class _BookListScreenState extends State<BookListScreen> {
   bool _isLoading = false;
 
   // Use appropriate database service based on platform
-  dynamic get _dbService => kIsWeb
+  IDatabaseService get _dbService => kIsWeb
       ? WebPRDDatabaseService()
       : PRDDatabaseService();
+
+  // Book backup service (mobile only)
+  BookBackupService? get _backupService => kIsWeb
+      ? null
+      : BookBackupService(
+          dbService: _dbService as PRDDatabaseService,
+        );
 
   @override
   void initState() {
@@ -58,6 +68,17 @@ class _BookListScreenState extends State<BookListScreen> {
       setState(() => _isLoading = true);
       try {
         await _dbService.createBook(result);
+
+        // Get the newly created book to auto-register it on server
+        final books = await _dbService.getAllBooks();
+        final newBook = books.firstWhere(
+          (book) => book.name == result,
+          orElse: () => books.last, // Fallback to most recent book
+        );
+
+        // Auto-register book on server (non-blocking)
+        _autoRegisterBookOnServer(newBook);
+
         _loadBooks();
       } catch (e) {
         setState(() => _isLoading = false);
@@ -172,6 +193,172 @@ class _BookListScreenState extends State<BookListScreen> {
     );
   }
 
+  Future<void> _uploadBookToServer(Book book) async {
+    if (_backupService == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Book backup is not available on web')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final backupId = await _backupService!.uploadBook(book.id!);
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Book "${book.name}" uploaded successfully (Backup ID: $backupId)')),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to upload book: $e')),
+        );
+      }
+    }
+  }
+
+  /// Auto-register newly created book on server (runs in background)
+  Future<void> _autoRegisterBookOnServer(Book book) async {
+    // Skip if on web platform
+    if (_backupService == null) {
+      return;
+    }
+
+    // Run upload in background without blocking UI
+    try {
+      await _backupService!.uploadBook(book.id!);
+      debugPrint('✅ Book "${book.name}" auto-registered on server');
+    } catch (e) {
+      debugPrint('⚠️  Failed to auto-register book on server: $e');
+      // Show warning to user but don't block the flow
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Book created locally but not registered on server. You can upload it manually later.'),
+            duration: const Duration(seconds: 5),
+            backgroundColor: Colors.orange,
+            action: SnackBarAction(
+              label: 'Upload Now',
+              textColor: Colors.white,
+              onPressed: () => _uploadBookToServer(book),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showRestoreDialog() async {
+    if (_backupService == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Book backup is not available on web')),
+        );
+      }
+      return;
+    }
+
+    setState(() => _isLoading = true);
+    try {
+      final backups = await _backupService!.listBackups();
+      setState(() => _isLoading = false);
+
+      if (backups.isEmpty) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('No backups available')),
+          );
+        }
+        return;
+      }
+
+      if (mounted) {
+        final selectedBackupId = await showDialog<int>(
+          context: context,
+          builder: (context) => _RestoreBackupDialog(backups: backups),
+        );
+
+        if (selectedBackupId != null) {
+          _restoreBookFromServer(selectedBackupId);
+        }
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to load backups: $e')),
+        );
+      }
+    }
+  }
+
+  Future<void> _restoreBookFromServer(int backupId) async {
+    setState(() => _isLoading = true);
+    try {
+      final message = await _backupService!.restoreBook(backupId);
+
+      // Refresh the book list to show the restored book
+      await _loadBooks();
+
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(message),
+            duration: const Duration(seconds: 3),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (e) {
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to restore book: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showServerSettings() async {
+    if (kIsWeb) return;
+
+    final serverConfigService = ServerConfigService(_dbService as PRDDatabaseService);
+    final currentUrl = await serverConfigService.getServerUrlOrDefault();
+
+    if (!mounted) return;
+
+    final newUrl = await showDialog<String>(
+      context: context,
+      builder: (context) => _ServerSettingsDialog(currentUrl: currentUrl),
+    );
+
+    if (newUrl != null && newUrl.isNotEmpty) {
+      try {
+        await serverConfigService.setServerUrl(newUrl);
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Server URL updated to: $newUrl')),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Failed to update server URL: $e')),
+          );
+        }
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -182,6 +369,20 @@ class _BookListScreenState extends State<BookListScreen> {
             icon: const Icon(Icons.refresh),
             onPressed: _loadBooks,
           ),
+          // Restore from Server
+          if (!kIsWeb)
+            IconButton(
+              icon: const Icon(Icons.cloud_download),
+              tooltip: 'Restore from Server',
+              onPressed: _showRestoreDialog,
+            ),
+          // Server Settings
+          if (!kIsWeb)
+            IconButton(
+              icon: const Icon(Icons.settings),
+              tooltip: 'Server Settings',
+              onPressed: _showServerSettings,
+            ),
         ],
       ),
       body: _isLoading
@@ -238,6 +439,7 @@ class _BookListScreenState extends State<BookListScreen> {
           onRename: () => _renameBook(book),
           onArchive: () => _archiveBook(book),
           onDelete: () => _deleteBook(book),
+          onUploadToServer: kIsWeb ? null : () => _uploadBookToServer(book),
         );
       },
     );
@@ -251,6 +453,7 @@ class _BookCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
+  final VoidCallback? onUploadToServer;
 
   const _BookCard({
     required this.book,
@@ -258,6 +461,7 @@ class _BookCard extends StatelessWidget {
     required this.onRename,
     required this.onArchive,
     required this.onDelete,
+    this.onUploadToServer,
   });
 
   @override
@@ -317,6 +521,9 @@ class _BookCard extends StatelessWidget {
               case 'archive':
                 onArchive();
                 break;
+              case 'upload':
+                if (onUploadToServer != null) onUploadToServer!();
+                break;
               case 'delete':
                 onDelete();
                 break;
@@ -338,6 +545,15 @@ class _BookCard extends StatelessWidget {
                 child: ListTile(
                   leading: const Icon(Icons.archive),
                   title: Text(AppLocalizations.of(context)!.archive),
+                  contentPadding: EdgeInsets.zero,
+                ),
+              ),
+            if (!book.isArchived && onUploadToServer != null)
+              const PopupMenuItem(
+                value: 'upload',
+                child: ListTile(
+                  leading: Icon(Icons.cloud_upload),
+                  title: Text('Upload to Server'),
                   contentPadding: EdgeInsets.zero,
                 ),
               ),
@@ -423,6 +639,81 @@ class _CreateBookDialogState extends State<_CreateBookDialog> {
   }
 }
 
+/// Restore Backup Dialog
+class _RestoreBackupDialog extends StatelessWidget {
+  final List<Map<String, dynamic>> backups;
+
+  const _RestoreBackupDialog({required this.backups});
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Restore Book from Server'),
+      content: SizedBox(
+        width: double.maxFinite,
+        child: backups.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(16.0),
+                child: Text('No backups available'),
+              )
+            : ListView.builder(
+                shrinkWrap: true,
+                itemCount: backups.length,
+                itemBuilder: (context, index) {
+                  final backup = backups[index];
+                  final backupId = backup['id'] as int;
+                  final bookUuid = backup['bookUuid'] as String?;
+                  final backupName = backup['backupName'] as String;
+                  final createdAt = DateTime.parse(backup['createdAt'] as String);
+                  final backupSize = backup['backupSize'] as int;
+                  final restoredAt = backup['restoredAt'] as String?;
+
+                  return Card(
+                    child: ListTile(
+                      leading: Icon(
+                        Icons.cloud_download,
+                        color: Theme.of(context).primaryColor,
+                        size: 32,
+                      ),
+                      title: Text(
+                        backupName,
+                        style: const TextStyle(fontWeight: FontWeight.bold),
+                      ),
+                      subtitle: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const SizedBox(height: 4),
+                          if (bookUuid != null)
+                            Text(
+                              'UUID: ${bookUuid.substring(0, 8)}...',
+                              style: TextStyle(color: Colors.grey[600], fontSize: 12),
+                            ),
+                          Text('Backup date: ${DateFormat('MMM d, y HH:mm').format(createdAt)}'),
+                          Text('Size: ${(backupSize / 1024).toStringAsFixed(1)} KB'),
+                          if (restoredAt != null)
+                            Text(
+                              'Last restored: ${DateFormat('MMM d, y HH:mm').format(DateTime.parse(restoredAt))}',
+                              style: const TextStyle(color: Colors.green, fontSize: 12),
+                            ),
+                        ],
+                      ),
+                      trailing: const Icon(Icons.download),
+                      onTap: () => Navigator.pop(context, backupId),
+                    ),
+                  );
+                },
+              ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+      ],
+    );
+  }
+}
+
 /// Rename Book Dialog
 class _RenameBookDialog extends StatefulWidget {
   final Book book;
@@ -484,6 +775,93 @@ class _RenameBookDialogState extends State<_RenameBookDialog> {
         ElevatedButton(
           onPressed: _submit,
           child: Text(l10n.save),
+        ),
+      ],
+    );
+  }
+
+  void _submit() {
+    if (_formKey.currentState!.validate()) {
+      Navigator.pop(context, _controller.text.trim());
+    }
+  }
+}
+
+/// Server Settings Dialog
+class _ServerSettingsDialog extends StatefulWidget {
+  final String currentUrl;
+
+  const _ServerSettingsDialog({required this.currentUrl});
+
+  @override
+  State<_ServerSettingsDialog> createState() => _ServerSettingsDialogState();
+}
+
+class _ServerSettingsDialogState extends State<_ServerSettingsDialog> {
+  late final TextEditingController _controller;
+  final _formKey = GlobalKey<FormState>();
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController(text: widget.currentUrl);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('Server Settings'),
+      content: Form(
+        key: _formKey,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Configure the server URL for sync and backup operations.',
+              style: TextStyle(fontSize: 14, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _controller,
+              decoration: const InputDecoration(
+                labelText: 'Server URL',
+                hintText: 'http://192.168.1.100:8080',
+                border: OutlineInputBorder(),
+                helperText: 'Example: http://your-mac-ip:8080',
+              ),
+              validator: (value) {
+                if (value == null || value.trim().isEmpty) {
+                  return 'Server URL is required';
+                }
+                final uri = Uri.tryParse(value.trim());
+                if (uri == null || (!uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https'))) {
+                  return 'Invalid URL format (must start with http:// or https://)';
+                }
+                return null;
+              },
+              autofocus: true,
+              keyboardType: TextInputType.url,
+              textInputAction: TextInputAction.done,
+              onFieldSubmitted: (_) => _submit(),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        ElevatedButton(
+          onPressed: _submit,
+          child: const Text('Save'),
         ),
       ],
     );

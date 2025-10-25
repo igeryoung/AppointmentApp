@@ -44,8 +44,19 @@ dependencies:
   # State management
   provider: ^6.1.0
 
+  # Network
+  http: ^1.1.0
+  connectivity_plus: ^5.0.2
+
+  # Storage
+  shared_preferences: ^2.2.2
+
+  # JSON serialization
+  json_annotation: ^4.8.1
+
   # Utilities
   intl: ^0.20.2
+  uuid: ^4.5.1
 
 dev_dependencies:
   flutter_test:
@@ -56,6 +67,9 @@ dev_dependencies:
   mockito: ^5.4.4
   build_runner: ^2.4.9
   sqflite_common_ffi: ^2.3.0
+
+  # JSON serialization codegen
+  json_serializable: ^6.7.1
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec

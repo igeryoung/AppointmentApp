@@ -544,6 +544,77 @@ class AppLocalizationsZh extends AppLocalizations {
   String errorChangingEventTimeMessage(String error) {
     return '變更活動時間時發生錯誤：$error';
   }
+
+  @override
+  String get heavyLoadTest => '重量测试';
+
+  @override
+  String get heavyLoadTestWarning =>
+      '此测试将产生 2,928 个活动与约 8,800 万个数据点，可能需要数分钟时间。';
+
+  @override
+  String get heavyLoadTestConfirm => '开始重量测试';
+
+  @override
+  String heavyLoadTestProgress(int count, int total, int percent) {
+    return '产生中：$count/$total ($percent%)';
+  }
+
+  @override
+  String heavyLoadTestComplete(int events, int strokes, String time) {
+    return '已产生 $events 个活动，共 $strokes 个笔画，耗时 $time';
+  }
+
+  @override
+  String get clearExistingEvents => '清除现有活动';
+
+  @override
+  String get generatingEvents => '产生活动中...';
+
+  @override
+  String get stage1Creating => '阶段 1/2：建立活动';
+
+  @override
+  String get stage2AddingStrokes => '阶段 2/2：加入笔画';
+
+  @override
+  String get heavyLoadStage1Only => '重量测试 - 阶段1';
+
+  @override
+  String get heavyLoadStage2Only => '重量测试 - 阶段2';
+
+  @override
+  String get stage1OnlyWarning => '建立 11,712 个空白活动（不含笔画）\n每个格子4个活动';
+
+  @override
+  String get stage2OnlyWarning => '为现有 HEAVY- 活动加入笔画（750笔画/活动）';
+
+  @override
+  String stage1Complete(int events) {
+    return '阶段1完成：已建立 $events 个活动';
+  }
+
+  @override
+  String stage2Complete(int events, int strokes, String time) {
+    return '阶段2完成：已加入 $strokes 个笔画到 $events 个活动，耗时 $time';
+  }
+
+  @override
+  String get offlineMode => '离线模式';
+
+  @override
+  String get showingCachedData => '显示已缓存的数据';
+
+  @override
+  String get syncingToServer => '正在同步到服务器...';
+
+  @override
+  String get noteSaved => '笔记已保存';
+
+  @override
+  String errorSavingNote(String error) {
+    return '保存笔记时出错：$error';
+  }
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1085,5 +1156,76 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   @override
   String errorChangingEventTimeMessage(String error) {
     return '變更活動時間時發生錯誤：$error';
+  }
+
+  @override
+  String get heavyLoadTest => '重量測試';
+
+  @override
+  String get heavyLoadTestWarning =>
+      '此測試將產生 2,928 個活動與約 8,800 萬個資料點，可能需要數分鐘時間。';
+
+  @override
+  String get heavyLoadTestConfirm => '開始重量測試';
+
+  @override
+  String heavyLoadTestProgress(int count, int total, int percent) {
+    return '產生中：$count/$total ($percent%)';
+  }
+
+  @override
+  String heavyLoadTestComplete(int events, int strokes, String time) {
+    return '已產生 $events 個活動，共 $strokes 個筆畫，耗時 $time';
+  }
+
+  @override
+  String get clearExistingEvents => '清除現有活動';
+
+  @override
+  String get generatingEvents => '產生活動中...';
+
+  @override
+  String get stage1Creating => '階段 1/2：建立活動';
+
+  @override
+  String get stage2AddingStrokes => '階段 2/2：加入筆畫';
+
+  @override
+  String get heavyLoadStage1Only => '重量測試 - 階段1';
+
+  @override
+  String get heavyLoadStage2Only => '重量測試 - 階段2';
+
+  @override
+  String get stage1OnlyWarning => '建立 11,712 個空白活動（不含筆畫）\n每個格子4個活動';
+
+  @override
+  String get stage2OnlyWarning => '為現有 HEAVY- 活動加入筆畫（750筆畫/活動）';
+
+  @override
+  String stage1Complete(int events) {
+    return '階段1完成：已建立 $events 個活動';
+  }
+
+  @override
+  String stage2Complete(int events, int strokes, String time) {
+    return '階段2完成：已加入 $strokes 個筆畫到 $events 個活動，耗時 $time';
+  }
+
+  @override
+  String get offlineMode => '離線模式';
+
+  @override
+  String get showingCachedData => '顯示已快取的資料';
+
+  @override
+  String get syncingToServer => '正在同步到伺服器...';
+
+  @override
+  String get noteSaved => '筆記已儲存';
+
+  @override
+  String errorSavingNote(String error) {
+    return '儲存筆記時發生錯誤：$error';
   }
 }

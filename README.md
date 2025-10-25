@@ -104,31 +104,85 @@ flutter test integration_test/
 
 ```
 lib/
-├── models/          # Data models (Book, Event, Note)
-├── services/        # Database services
-├── screens/         # UI screens
-├── widgets/         # Reusable widgets
-├── app.dart         # Main app configuration
-└── main.dart        # App entry point
+├── models/                  # Data models (Book, Event, Note, ScheduleDrawing)
+├── services/                # Database services
+│   ├── database_service_interface.dart  # Interface for type safety
+│   ├── prd_database_service.dart        # SQLite implementation
+│   └── web_prd_database_service.dart    # Web in-memory implementation
+├── screens/                 # UI screens
+│   ├── book_list_screen.dart
+│   ├── schedule_screen.dart
+│   └── event_detail_screen.dart
+├── widgets/                 # Reusable widgets
+│   └── handwriting_canvas.dart
+├── legacy/                  # ⚠️ Legacy code (not in use)
+│   ├── README_LEGACY.md     # Legacy code documentation
+│   ├── screens/             # Old screen implementations
+│   ├── providers/           # Old Provider-based state management
+│   ├── services/            # Old service layer
+│   └── models/              # Old Appointment model
+├── app.dart                 # Main app configuration
+└── main.dart                # App entry point
 
 doc/
-└── appointmentApp_PRD.md  # Product Requirements Document
+└── appointmentApp_PRD.md    # Product Requirements Document
 
 test/
-└── unit/            # Unit tests
+├── diagnostics/             # Debugging and diagnosis tests
+├── models/                  # Model tests
+├── screens/                 # Screen tests
+└── widgets/                 # Widget tests
 ```
 
 ## Database
 
-- **Mobile/Desktop**: Uses SQLite with sqflite package
-- **Web**: Uses in-memory storage for compatibility
+### Active Implementation
+- **Mobile/Desktop**: SQLite with sqflite package (`PRDDatabaseService`)
+- **Web**: In-memory storage (`WebPRDDatabaseService`)
+- **Interface**: Both implement `IDatabaseService` for type safety
+
+### Schema
+```sql
+books (id, name, created_at, archived_at)
+events (id, book_id, name, record_number, event_type, start_time, end_time, ...)
+notes (id, event_id, strokes_data, ...)
+schedule_drawings (id, book_id, date, view_mode, strokes_data, ...)
+```
 
 ## Architecture
 
-The app follows a hierarchical structure:
-- **Books** → **Schedule** → **Events** → **Notes**
+### Data Flow (Current Implementation)
+```
+BookListScreen → ScheduleScreen → EventDetailScreen
+       ↓                ↓                ↓
+   IDatabaseService (interface)
+       ↓                ↓
+PRDDatabaseService ← (mobile/desktop)
+WebPRDDatabaseService ← (web)
+```
 
-Each appointment book contains a schedule with events, and each event can have handwritten notes.
+### Hierarchy
+**Books** → **Events** → **Notes**
+- Each Book contains multiple Events
+- Each Event can have one Note (handwriting)
+- Schedule Drawings are overlay annotations on schedule views
+
+### Key Principles
+1. **Direct Data Access**: Screens directly use database services (no intermediate service layer)
+2. **Type Safety**: All services implement `IDatabaseService` interface
+3. **Platform Adaptation**: Automatic selection of appropriate database implementation
+4. **Simplicity**: Minimal abstraction layers for maintainability
+
+## Legacy Code
+
+The `lib/legacy/` directory contains an older implementation that is **not currently in use**. This code is preserved for:
+- Historical reference
+- Potential future feature extraction
+- Understanding project evolution
+
+⚠️ **Do not use code from `lib/legacy/`** - it is not maintained and may contain bugs.
+
+See `lib/legacy/README_LEGACY.md` for details.
 
 ## Development
 

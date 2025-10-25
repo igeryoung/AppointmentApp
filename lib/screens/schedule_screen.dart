@@ -1,19 +1,26 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/book.dart';
 import '../models/event.dart';
+import '../models/note.dart';
 import '../models/schedule_drawing.dart';
+import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
 import '../services/web_prd_database_service.dart';
 import '../services/time_service.dart';
+import '../services/content_service.dart';
+import '../services/cache_manager.dart';
+import '../services/api_client.dart';
+import '../services/server_config_service.dart';
 import '../widgets/handwriting_canvas.dart';
 import 'event_detail_screen.dart';
 
-/// Schedule screen implementing PRD requirements: Day, 3-Day, Week views
+/// Schedule screen implementing 3-Day view only
 class ScheduleScreen extends StatefulWidget {
   final Book book;
 
@@ -27,11 +34,19 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObserver {
-  int _selectedViewMode = 1; // 0: Day, 1: 3-Day (default), 2: Week
   late TransformationController _transformationController;
   DateTime _selectedDate = TimeService.instance.now();
   List<Event> _events = [];
   bool _isLoading = false;
+
+  // ContentService for server sync
+  ContentService? _contentService;
+
+  // Network connectivity monitoring
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  bool _wasOfflineLastCheck = false;
+  bool _isOffline = false;
+  bool _isSyncing = false;
 
   // Date change detection
   DateTime _lastActiveDate = TimeService.instance.now();
@@ -47,6 +62,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Event? _selectedEventForMenu;
   Offset? _menuPosition;
 
+  // Heavy load test progress stream
+  final StreamController<Map<String, dynamic>> _progressController = StreamController<Map<String, dynamic>>.broadcast();
+  Stream<Map<String, dynamic>> get _progressStream => _progressController.stream;
+
+  // Stage 2 cancellation flag and event count controller
+  bool _isCancelled = false;
+  late TextEditingController _stage2EventCountController;
+
   // Time range settings
   static const double _baseSlotHeight = 60.0; // Base slot height for readable size
   static const int _startHour = 9;  // 9:00 AM
@@ -54,7 +77,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   static const int _totalSlots = (_endHour - _startHour) * 4; // 48 slots
 
   // Use appropriate database service based on platform
-  dynamic get _dbService => kIsWeb
+  IDatabaseService get _dbService => kIsWeb
       ? WebPRDDatabaseService()
       : PRDDatabaseService();
 
@@ -62,6 +85,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     _transformationController = TransformationController();
+    _stage2EventCountController = TextEditingController();
 
     // Register lifecycle observer
     WidgetsBinding.instance.addObserver(this);
@@ -69,8 +93,193 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Start periodic date checking (every minute)
     _startDateCheckTimer();
 
+    // Initialize ContentService for server sync and auto-sync dirty notes
+    _initializeContentService();
+
+    // Setup network connectivity monitoring for automatic sync retry
+    _setupConnectivityMonitoring();
+
     _loadEvents();
     _loadDrawing();
+  }
+
+  /// Initialize ContentService for server sync
+  Future<void> _initializeContentService() async {
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final serverConfig = ServerConfigService(prdDb);
+      final serverUrl = await serverConfig.getServerUrlOrDefault(
+        defaultUrl: 'http://localhost:8080',
+      );
+      final apiClient = ApiClient(baseUrl: serverUrl);
+      final cacheManager = CacheManager(prdDb);
+      _contentService = ContentService(apiClient, cacheManager, _dbService);
+      debugPrint('✅ ScheduleScreen: ContentService initialized');
+
+      // Check server connectivity
+      final serverReachable = await _checkServerConnectivity();
+      setState(() {
+        _isOffline = !serverReachable;
+        _wasOfflineLastCheck = !serverReachable;
+      });
+      debugPrint('✅ ScheduleScreen: Initial connectivity check - offline: $_isOffline');
+
+      // Auto-sync dirty notes for this book if online
+      if (serverReachable) {
+        _autoSyncDirtyNotes();
+      }
+    } catch (e) {
+      debugPrint('❌ ScheduleScreen: Failed to initialize ContentService: $e');
+      // Continue without ContentService - sync will not work but UI remains functional
+      setState(() {
+        _isOffline = true;
+      });
+    }
+  }
+
+  /// Setup network connectivity monitoring for automatic sync retry
+  void _setupConnectivityMonitoring() {
+    debugPrint('🌐 ScheduleScreen: Setting up connectivity monitoring...');
+
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+      (ConnectivityResult result) {
+        _onConnectivityChanged(result);
+      },
+    );
+
+    // Also check initial connectivity state
+    Connectivity().checkConnectivity().then((result) {
+      _onConnectivityChanged(result);
+    });
+  }
+
+  /// Check actual server connectivity using health check
+  /// Returns true if server is reachable, false otherwise
+  Future<bool> _checkServerConnectivity() async {
+    if (_contentService == null) {
+      debugPrint('⚠️ ScheduleScreen: Cannot check server - ContentService not initialized');
+      return false;
+    }
+
+    try {
+      debugPrint('🔍 ScheduleScreen: Checking server connectivity via health check...');
+      final isHealthy = await _contentService!.healthCheck();
+      debugPrint(isHealthy
+        ? '✅ ScheduleScreen: Server is reachable'
+        : '❌ ScheduleScreen: Server health check returned false');
+      return isHealthy;
+    } catch (e) {
+      debugPrint('❌ ScheduleScreen: Server health check failed: $e');
+      return false;
+    }
+  }
+
+  /// Handle connectivity changes - automatically retry sync when network returns
+  void _onConnectivityChanged(ConnectivityResult result) {
+    final hasConnection = result != ConnectivityResult.none;
+
+    debugPrint('🌐 ScheduleScreen: Connectivity changed - hasConnection: $hasConnection, result: $result');
+
+    // Verify actual server connectivity, not just network interface status
+    Future.microtask(() async {
+      final serverReachable = await _checkServerConnectivity();
+      final wasOfflineBefore = _wasOfflineLastCheck;
+
+      if (mounted) {
+        setState(() {
+          _isOffline = !serverReachable;
+          _wasOfflineLastCheck = !serverReachable;
+        });
+
+        debugPrint('🌐 ScheduleScreen: Offline state updated based on server check: $_isOffline');
+
+        // Network just came back online - auto-sync dirty notes
+        if (serverReachable && wasOfflineBefore) {
+          debugPrint('🌐 ScheduleScreen: Server restored! Auto-syncing dirty notes...');
+
+          // Wait a bit for network to stabilize
+          Future.delayed(const Duration(seconds: 1), () {
+            if (mounted && !_isSyncing) {
+              _autoSyncDirtyNotes();
+            }
+          });
+        }
+      }
+    });
+  }
+
+  /// Auto-sync dirty notes for this book in background
+  Future<void> _autoSyncDirtyNotes() async {
+    if (_contentService == null || _isSyncing || widget.book.id == null) return;
+
+    setState(() {
+      _isSyncing = true;
+    });
+
+    try {
+      debugPrint('🔄 ScheduleScreen: Auto-syncing dirty notes for book ${widget.book.id}...');
+
+      final result = await _contentService!.syncDirtyNotesForBook(widget.book.id!);
+
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+
+        // Show user feedback
+        if (result.nothingToSync) {
+          debugPrint('✅ ScheduleScreen: No dirty notes to sync');
+        } else if (result.allSucceeded) {
+          debugPrint('✅ ScheduleScreen: All ${result.total} notes synced successfully');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Synced ${result.total} offline note${result.total > 1 ? 's' : ''}'),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        } else if (result.hasFailures) {
+          debugPrint('⚠️ ScheduleScreen: ${result.success}/${result.total} notes synced, ${result.failed} failed');
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Synced ${result.success}/${result.total} notes. ${result.failed} failed - check if book is backed up'),
+              backgroundColor: Colors.orange,
+              duration: const Duration(seconds: 5),
+              action: SnackBarAction(
+                label: 'Details',
+                textColor: Colors.white,
+                onPressed: () {
+                  // Show dialog with more info
+                  showDialog(
+                    context: context,
+                    builder: (context) => AlertDialog(
+                      title: const Text('Sync Failed'),
+                      content: const Text(
+                        'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
+                        'Solution: Use the book backup feature to sync the book to the server first.',
+                      ),
+                      actions: [
+                        TextButton(
+                          onPressed: () => Navigator.pop(context),
+                          child: const Text('OK'),
+                        ),
+                      ],
+                    ),
+                  );
+                },
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint('❌ ScheduleScreen: Auto-sync failed: $e');
+      if (mounted) {
+        setState(() {
+          _isSyncing = false;
+        });
+      }
+    }
   }
 
   @override
@@ -78,10 +287,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Unregister lifecycle observer
     WidgetsBinding.instance.removeObserver(this);
 
+    // Cancel network connectivity subscription
+    _connectivitySubscription?.cancel();
+
     // Cancel date check timer
     _dateCheckTimer?.cancel();
 
+    // Close progress stream controller
+    _progressController.close();
+
     _transformationController.dispose();
+    _stage2EventCountController.dispose();
     super.dispose();
   }
 
@@ -117,30 +333,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (currentDate != lastActiveDate) {
       debugPrint('📅 Date changed detected: $lastActiveDate → $currentDate');
 
-      // Check if user is viewing a window that contains "today" (the new current date)
-      // This handles multi-day views (3-Day, Week) correctly
-      bool isViewingWindowContainingToday = false;
-
-      switch (_selectedViewMode) {
-        case 0: // Day View
-          final selectedDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-          isViewingWindowContainingToday = selectedDate == lastActiveDate;
-          break;
-        case 1: // 3-Day View
-          final windowStart = _get3DayWindowStart(_selectedDate);
-          final windowEnd = windowStart.add(const Duration(days: 3));
-          // Check if the old "today" (lastActiveDate) is in the current viewing window
-          isViewingWindowContainingToday = lastActiveDate.isAfter(windowStart.subtract(const Duration(days: 1))) &&
+      // Check if user is viewing a 3-day window that contains "today" (the new current date)
+      final windowStart = _get3DayWindowStart(_selectedDate);
+      final windowEnd = windowStart.add(const Duration(days: 3));
+      // Check if the old "today" (lastActiveDate) is in the current viewing window
+      final isViewingWindowContainingToday = lastActiveDate.isAfter(windowStart.subtract(const Duration(days: 1))) &&
                                           lastActiveDate.isBefore(windowEnd);
-          break;
-        case 2: // Week View
-          final weekStart = _getWeekStart(_selectedDate);
-          final weekEnd = weekStart.add(const Duration(days: 7));
-          // Check if the old "today" (lastActiveDate) is in the current viewing week
-          isViewingWindowContainingToday = lastActiveDate.isAfter(weekStart.subtract(const Duration(days: 1))) &&
-                                          lastActiveDate.isBefore(weekEnd);
-          break;
-      }
 
       if (isViewingWindowContainingToday) {
         debugPrint('📅 User was viewing window containing "today" - auto-updating to new today');
@@ -177,38 +375,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _onViewChanged(int? newMode) async {
-    if (newMode != null && newMode != _selectedViewMode) {
-      // Save current drawing before switching
-      if (_isDrawingMode) {
-        await _saveDrawing();
-      }
-
-      setState(() {
-        _selectedViewMode = newMode;
-        _selectedDate = TimeService.instance.now(); // Reset to current day when switching modes
-      });
-      _loadEvents();
-
-      // Always load drawing for new view (canvas is always visible)
-      await _loadDrawing();
-
-      // Pan/zoom to current time after view switch
-      _panToCurrentTime();
-    }
-  }
-
   /// Get unique page identifier for the current view and date
   String _getPageId() {
-    // Normalize date to midnight for consistent keys
-    DateTime normalizedDate;
-    if (_selectedViewMode == 1) {
-      // For 3-day mode, use window start to keep same page across days in window
-      normalizedDate = _get3DayWindowStart(_selectedDate);
-    } else {
-      normalizedDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    }
-    return '${_selectedViewMode}_${normalizedDate.millisecondsSinceEpoch}';
+    // For 3-day view, use window start to keep same page across days in window
+    final normalizedDate = _get3DayWindowStart(_selectedDate);
+    return '3day_${normalizedDate.millisecondsSinceEpoch}';
   }
 
   /// Get or create canvas key for the current page
@@ -220,46 +391,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return _canvasKeys[pageId]!;
   }
 
-  /// Get canvas key for a specific view mode (used by view builders)
-  GlobalKey<HandwritingCanvasState> _getCanvasKeyForView(int viewMode) {
-    // Temporarily compute page ID for the given view mode
-    DateTime normalizedDate;
-    if (viewMode == 1) {
-      // For 3-day mode, use window start to keep same page across days in window
-      normalizedDate = _get3DayWindowStart(_selectedDate);
-    } else {
-      normalizedDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    }
-    final pageId = '${viewMode}_${normalizedDate.millisecondsSinceEpoch}';
-    if (!_canvasKeys.containsKey(pageId)) {
-      _canvasKeys[pageId] = GlobalKey<HandwritingCanvasState>();
-    }
-    return _canvasKeys[pageId]!;
-  }
-
   Future<void> _loadEvents() async {
     setState(() => _isLoading = true);
 
     try {
       // Use effective date to ensure consistency with UI rendering
+      // effectiveDate is the 3-day window start from _get3DayWindowStart()
       final effectiveDate = _getEffectiveDate();
-
-      List<Event> events;
-      switch (_selectedViewMode) {
-        case 0: // Day View
-          events = await _dbService.getEventsByDay(widget.book.id!, effectiveDate);
-          break;
-        case 1: // 3-Day View
-          // effectiveDate is already the window start from _get3DayWindowStart()
-          events = await _dbService.getEventsBy3Days(widget.book.id!, effectiveDate);
-          break;
-        case 2: // Week View
-          // effectiveDate is already the week start from _getWeekStart()
-          events = await _dbService.getEventsByWeek(widget.book.id!, effectiveDate);
-          break;
-        default:
-          events = [];
-      }
+      final events = await _dbService.getEventsBy3Days(widget.book.id!, effectiveDate);
 
       setState(() {
         _events = events;
@@ -286,10 +425,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       // For 3-Day View, this uses the window start date
       final effectiveDate = _getEffectiveDate();
 
-      final drawing = await _dbService.getScheduleDrawing(
+      final drawing = await _dbService.getCachedDrawing(
         widget.book.id!,
         effectiveDate,
-        _selectedViewMode,
+        1, // Always 3-day view (viewMode = 1)
       );
 
       setState(() {
@@ -334,7 +473,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       DateTime? createdAt;
       if (_currentDrawing != null &&
           _currentDrawing!.bookId == widget.book.id! &&
-          _currentDrawing!.viewMode == _selectedViewMode &&
+          _currentDrawing!.viewMode == 1 && // Always 3-day view (viewMode = 1)
           _currentDrawing!.date.year == effectiveDate.year &&
           _currentDrawing!.date.month == effectiveDate.month &&
           _currentDrawing!.date.day == effectiveDate.day) {
@@ -346,14 +485,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         id: drawingId,
         bookId: widget.book.id!,
         date: effectiveDate,
-        viewMode: _selectedViewMode,
+        viewMode: 1, // Always 3-day view (viewMode = 1)
         strokes: strokes,
         createdAt: createdAt ?? now,
         updatedAt: now,
       );
 
       debugPrint('💾 Saving ${strokes.length} strokes for page ${_getPageId()} (effectiveDate: $effectiveDate, id: $drawingId)');
-      final savedDrawing = await _dbService.updateScheduleDrawing(drawing);
+      final savedDrawing = await _dbService.saveCachedDrawing(drawing);
       setState(() {
         _currentDrawing = savedDrawing;
       });
@@ -395,26 +534,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return DateTime(windowStart.year, windowStart.month, windowStart.day);
   }
 
-  DateTime _getWeekStart(DateTime date) {
-    // Calculate Monday of the week, normalized to start of day (midnight)
-    final daysFromMonday = date.weekday - 1;
-    final monday = date.subtract(Duration(days: daysFromMonday));
-    return DateTime(monday.year, monday.month, monday.day);
-  }
 
   /// Get the effective date for data operations (loading/saving events and drawings)
   /// This ensures consistency between UI rendering and data layer
   DateTime _getEffectiveDate() {
-    switch (_selectedViewMode) {
-      case 0: // Day View
-        return DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-      case 1: // 3-Day View
-        return _get3DayWindowStart(_selectedDate);
-      case 2: // Week View
-        return _getWeekStart(_selectedDate);
-      default:
-        return DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
-    }
+    return _get3DayWindowStart(_selectedDate); // Always 3-day view
   }
 
   void _panToCurrentTime() {
@@ -427,16 +551,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   Duration _getNavigationIncrement() {
-    switch (_selectedViewMode) {
-      case 0: // Day View
-        return const Duration(days: 1);
-      case 1: // 3-Day View
-        return const Duration(days: 3);
-      case 2: // Week View
-        return const Duration(days: 7);
-      default:
-        return const Duration(days: 1);
-    }
+    return const Duration(days: 3); // Always 3-day view
   }
 
   /// Check if currently viewing today's date
@@ -576,9 +691,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           newEndTime = newStartTime.add(duration);
         }
 
-        await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
+        final newEvent = await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
         _closeEventMenu();
         _loadEvents();
+
+        // Sync to server in background (best effort, no error handling needed)
+        _syncEventToServer(newEvent);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -594,6 +712,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       }
     } else {
       _closeEventMenu();
+    }
+  }
+
+  /// Sync event and note to server in background (best effort)
+  Future<void> _syncEventToServer(Event event) async {
+    if (_contentService == null) {
+      debugPrint('⚠️ ScheduleScreen: ContentService not available, cannot sync event ${event.id}');
+      return;
+    }
+
+    if (event.id == null) {
+      debugPrint('⚠️ ScheduleScreen: Event ID is null, cannot sync');
+      return;
+    }
+
+    try {
+      debugPrint('🔄 ScheduleScreen: Syncing event ${event.id} and note to server...');
+      await _contentService!.syncNote(event.id!);
+      debugPrint('✅ ScheduleScreen: Event ${event.id} synced to server successfully');
+    } catch (e) {
+      // Silent failure - data is already saved locally and marked as dirty
+      // It will be synced when the user opens the event detail screen
+      debugPrint('⚠️ ScheduleScreen: Background sync failed (will retry later): $e');
     }
   }
 
@@ -940,6 +1081,27 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     await _loadEvents();
   }
 
+  /// Clear all events in the current book (not just those in view)
+  Future<void> _clearAllEventsInBook() async {
+    // Get all events in the book
+    final allEvents = await _dbService.getAllEventsByBook(widget.book.id!);
+
+    if (allEvents.isEmpty) return;
+
+    // Delete all events
+    for (final event in allEvents) {
+      if (event.id != null) {
+        try {
+          await _dbService.deleteEvent(event.id!);
+        } catch (e) {
+          debugPrint('Error deleting event ${event.id}: $e');
+        }
+      }
+    }
+
+    await _loadEvents();
+  }
+
   Future<void> _generateRandomEvents(
     int count, {
     bool clearAll = false,
@@ -947,7 +1109,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }) async {
     // Clear existing events if requested
     if (clearAll) {
-      await _clearAllEventsInView();
+      await _clearAllEventsInBook();
     }
 
     final l10n = AppLocalizations.of(context)!;
@@ -964,23 +1126,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       l10n.treatment,
     ];
 
-    // Get date range based on current view
-    List<DateTime> availableDates;
-    switch (_selectedViewMode) {
-      case 0: // Day View
-        availableDates = [_selectedDate];
-        break;
-      case 1: // 3-Day View
-        final windowStart = _get3DayWindowStart(_selectedDate);
-        availableDates = List.generate(3, (i) => windowStart.add(Duration(days: i)));
-        break;
-      case 2: // Week View
-        final weekStart = _getWeekStart(_selectedDate);
-        availableDates = List.generate(7, (i) => weekStart.add(Duration(days: i)));
-        break;
-      default:
-        availableDates = [_selectedDate];
-    }
+    // Get date range for 3-day view
+    final windowStart = _get3DayWindowStart(_selectedDate);
+    final availableDates = List.generate(3, (i) => windowStart.add(Duration(days: i)));
 
     int created = 0;
     int attempts = 0;
@@ -1083,35 +1231,831 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
   }
 
+  /// Show heavy load test confirmation dialog
+  Future<void> _showHeavyLoadTestDialog() async {
+    final l10n = AppLocalizations.of(context)!;
+    bool clearAll = false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(l10n.heavyLoadTest),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.heavyLoadTestWarning),
+              const SizedBox(height: 16),
+              CheckboxListTile(
+                title: Text(l10n.clearExistingEvents),
+                value: clearAll,
+                onChanged: (value) => setState(() => clearAll = value ?? false),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.deepOrange,
+              ),
+              child: Text(l10n.heavyLoadTestConfirm),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      await _generateHeavyLoadTest(clearAll: clearAll);
+    }
+  }
+
+  /// Show Stage 1 Only confirmation dialog
+  Future<void> _showHeavyLoadStage1Dialog() async {
+    final l10n = AppLocalizations.of(context)!;
+    bool clearAll = false;
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) => AlertDialog(
+          title: Text(l10n.heavyLoadStage1Only),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(l10n.stage1OnlyWarning),
+              const SizedBox(height: 16),
+              CheckboxListTile(
+                title: Text(l10n.clearExistingEvents),
+                value: clearAll,
+                onChanged: (value) => setState(() => clearAll = value ?? false),
+                contentPadding: EdgeInsets.zero,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: Text(l10n.cancel),
+            ),
+            ElevatedButton(
+              onPressed: () => Navigator.pop(context, true),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.blue,
+              ),
+              child: Text(l10n.heavyLoadTestConfirm),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    if (result == true) {
+      await _generateHeavyLoadStage1(clearAll: clearAll);
+    }
+  }
+
+  /// Show Stage 2 Only confirmation dialog
+  Future<void> _showHeavyLoadStage2Dialog() async {
+    final l10n = AppLocalizations.of(context)!;
+    _stage2EventCountController.clear(); // Clear previous input
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.heavyLoadStage2Only),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(l10n.stage2OnlyWarning),
+            const SizedBox(height: 8),
+            const Text(
+              '提示：此功能將查詢所有記錄編號以 HEAVY- 開頭的活動，並為其添加筆畫。',
+              style: TextStyle(fontSize: 12, color: Colors.grey),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _stage2EventCountController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: '事件數量 (留空=全部)',
+                hintText: '輸入要處理的事件數量',
+                border: OutlineInputBorder(),
+                helperText: '留空將處理所有 HEAVY- 事件',
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.indigo,
+            ),
+            child: Text(l10n.heavyLoadTestConfirm),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      // Parse event count
+      int? maxEvents;
+      final inputText = _stage2EventCountController.text.trim();
+      if (inputText.isNotEmpty) {
+        maxEvents = int.tryParse(inputText);
+        if (maxEvents == null || maxEvents <= 0) {
+          // Show error message
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('請輸入有效的正整數'),
+                duration: Duration(seconds: 2),
+              ),
+            );
+          }
+          return;
+        }
+      }
+
+      await _generateHeavyLoadStage2(maxEvents: maxEvents);
+    }
+  }
+
+  /// Show Clear All Events confirmation dialog
+  Future<void> _showClearAllEventsDialog() async {
+    final l10n = AppLocalizations.of(context)!;
+
+    // Get event count for confirmation
+    final allEvents = await _dbService.getAllEventsByBook(widget.book.id!);
+    final eventCount = allEvents.length;
+
+    if (eventCount == 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('目前沒有任何活動'),
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+      return;
+    }
+
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('清除所有活動'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Icon(
+              Icons.warning_amber_rounded,
+              color: Colors.red,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              '確定要刪除本子中的所有 $eventCount 個活動嗎？',
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            const Text(
+              '此操作無法復原！所有活動及其筆記將被永久刪除。',
+              style: TextStyle(
+                fontSize: 14,
+                color: Colors.red,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.cancel),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+            ),
+            child: const Text('確定刪除'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == true) {
+      await _clearAllEventsInBook();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('已刪除 $eventCount 個活動'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Generate heavy load test data using two-stage approach
+  Future<void> _generateHeavyLoadTest({bool clearAll = false}) async {
+    final l10n = AppLocalizations.of(context)!;
+    final startTime = DateTime.now();
+
+    // Clear existing events if requested
+    if (clearAll) {
+      await _clearAllEventsInBook();
+    }
+
+    // Constants
+    const daysRange = 61; // 30 previous + today + 30 next
+    const startHour = 9;
+    const endHour = 20; // 9-20 (12 hours)
+    const eventsPerHour = 4;
+    const strokesPerEvent = 750;
+    const totalEvents = daysRange * (endHour - startHour + 1) * eventsPerHour;
+
+    final random = Random();
+    final now = TimeService.instance.now();
+
+    // Get available event types
+    final eventTypes = [
+      l10n.consultation,
+      l10n.surgery,
+      l10n.followUp,
+      l10n.emergency,
+      l10n.checkUp,
+      l10n.treatment,
+    ];
+
+    // Show progress dialog
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          title: Text(l10n.generatingEvents),
+          content: StreamBuilder<Map<String, dynamic>>(
+            stream: _progressStream,
+            builder: (context, snapshot) {
+              final data = snapshot.data ?? {
+                'stage': 1,
+                'count': 0,
+                'total': totalEvents,
+              };
+              final stage = data['stage'] as int;
+              final count = data['count'] as int;
+              final total = data['total'] as int;
+              final percent = total > 0 ? (count * 100 ~/ total) : 0;
+
+              final stageLabel = stage == 1 ? l10n.stage1Creating : l10n.stage2AddingStrokes;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    stageLabel,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                  const SizedBox(height: 12),
+                  LinearProgressIndicator(value: count / total),
+                  const SizedBox(height: 16),
+                  Text(l10n.heavyLoadTestProgress(count, total, percent)),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    // ======================
+    // STAGE 1: Create Events
+    // ======================
+    debugPrint('🚀 Heavy Load Test - Stage 1: Creating $totalEvents events...');
+    int createdEventsCount = 0;
+    final createdEventIds = <int>[];
+    final startDate = now.subtract(const Duration(days: 30));
+
+    for (int day = 0; day < daysRange; day++) {
+      final date = startDate.add(Duration(days: day));
+
+      for (int hour = startHour; hour <= endHour; hour++) {
+        for (int eventIndex = 0; eventIndex < eventsPerHour; eventIndex++) {
+          final minute = eventIndex * 15;
+          final eventStartTime = DateTime(date.year, date.month, date.day, hour, minute);
+
+          // Random name
+          final names = [
+            '王小明', '李小華', '張美玲', '陳志豪',
+            '林淑芬', '黃建國', '吳雅婷', '鄭明哲',
+            '劉佳穎', '許文祥', '楊淑惠', '蔡明道',
+          ];
+          final name = names[random.nextInt(names.length)];
+          final recordNumber = 'HEAVY-${createdEventsCount + 1}';
+          final eventType = eventTypes[random.nextInt(eventTypes.length)];
+
+          final event = Event(
+            bookId: widget.book.id!,
+            name: name,
+            recordNumber: recordNumber,
+            eventType: eventType,
+            startTime: eventStartTime,
+            endTime: null, // Open-ended
+            createdAt: now,
+            updatedAt: now,
+          );
+
+          try {
+            final createdEvent = await _dbService.createEvent(event);
+            createdEventIds.add(createdEvent.id!);
+            createdEventsCount++;
+
+            // Update progress
+            _progressController.add({
+              'stage': 1,
+              'count': createdEventsCount,
+              'total': totalEvents,
+            });
+          } catch (e) {
+            debugPrint('❌ Error creating event: $e');
+          }
+        }
+      }
+    }
+
+    debugPrint('✅ Stage 1 Complete: Created $createdEventsCount events');
+
+    // ==========================
+    // STAGE 2: Add Strokes
+    // ==========================
+    debugPrint('🚀 Heavy Load Test - Stage 2: Adding strokes to $createdEventsCount events...');
+    int strokesAddedCount = 0;
+    int totalStrokes = 0;
+
+    for (int i = 0; i < createdEventIds.length; i++) {
+      final eventId = createdEventIds[i];
+
+      try {
+        // Generate random strokes
+        final strokes = _generateRandomStrokes(strokesPerEvent);
+        totalStrokes += strokes.length;
+
+        // Create note with strokes
+        final note = Note(
+          eventId: eventId,
+          strokes: strokes,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await _dbService.saveCachedNote(note);
+        strokesAddedCount++;
+
+        // Update progress
+        _progressController.add({
+          'stage': 2,
+          'count': strokesAddedCount,
+          'total': createdEventsCount,
+        });
+
+        // Yield to UI thread every 5 events
+        if (strokesAddedCount % 5 == 0) {
+          await Future.delayed(Duration.zero);
+        }
+      } catch (e) {
+        debugPrint('❌ Error adding strokes to event $eventId: $e');
+      }
+    }
+
+    debugPrint('✅ Stage 2 Complete: Added strokes to $strokesAddedCount events');
+
+    // Close progress dialog
+    if (mounted) {
+      Navigator.pop(context);
+    }
+
+    // Reload events
+    await _loadEvents();
+
+    // Calculate elapsed time
+    final elapsed = DateTime.now().difference(startTime);
+    final elapsedSeconds = elapsed.inSeconds;
+    final timeStr = elapsedSeconds >= 60
+        ? '${elapsedSeconds ~/ 60}分${elapsedSeconds % 60}秒'
+        : '${elapsedSeconds}秒';
+
+    // Show completion message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.heavyLoadTestComplete(createdEventsCount, totalStrokes, timeStr)),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+
+    debugPrint('🎉 Heavy Load Test Complete: $createdEventsCount events, $totalStrokes strokes, $timeStr');
+  }
+
+  /// Stage 1 Only: Create events without strokes
+  Future<void> _generateHeavyLoadStage1({bool clearAll = false}) async {
+    final l10n = AppLocalizations.of(context)!;
+    final startTime = DateTime.now();
+
+    // Clear existing events if requested
+    if (clearAll) {
+      await _clearAllEventsInBook();
+    }
+
+    // Constants
+    const daysRange = 61; // 30 previous + today + 30 next
+    const startHour = 9;
+    const endHour = 20; // 9-20 (12 hours)
+    const gridsPerHour = 4; // 4 grids per hour (0, 15, 30, 45 minutes)
+    const eventsPerGrid = 4; // 4 events per grid
+    const totalEvents = daysRange * (endHour - startHour + 1) * gridsPerHour * eventsPerGrid;
+
+    final random = Random();
+    final now = TimeService.instance.now();
+
+    // Get available event types
+    final eventTypes = [
+      l10n.consultation,
+      l10n.surgery,
+      l10n.followUp,
+      l10n.emergency,
+      l10n.checkUp,
+      l10n.treatment,
+    ];
+
+    // Show progress dialog
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          title: Text(l10n.stage1Creating),
+          content: StreamBuilder<Map<String, dynamic>>(
+            stream: _progressStream,
+            builder: (context, snapshot) {
+              final data = snapshot.data ?? {'count': 0, 'total': totalEvents};
+              final count = data['count'] as int;
+              final total = data['total'] as int;
+              final percent = total > 0 ? (count * 100 ~/ total) : 0;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: count / total),
+                  const SizedBox(height: 16),
+                  Text(l10n.heavyLoadTestProgress(count, total, percent)),
+                ],
+              );
+            },
+          ),
+        ),
+      ),
+    );
+
+    debugPrint('🚀 Stage 1: Creating $totalEvents events...');
+    int createdEventsCount = 0;
+    final startDate = now.subtract(const Duration(days: 30));
+
+    for (int day = 0; day < daysRange; day++) {
+      final date = startDate.add(Duration(days: day));
+
+      for (int hour = startHour; hour <= endHour; hour++) {
+        for (int gridIndex = 0; gridIndex < gridsPerHour; gridIndex++) {
+          final minute = gridIndex * 15; // 0, 15, 30, 45
+          final eventStartTime = DateTime(date.year, date.month, date.day, hour, minute);
+
+          // Create 4 events for this grid (all with same start time)
+          for (int eventIndex = 0; eventIndex < eventsPerGrid; eventIndex++) {
+            // Random name
+            final names = [
+              '王小明', '李小華', '張美玲', '陳志豪',
+              '林淑芬', '黃建國', '吳雅婷', '鄭明哲',
+              '劉佳穎', '許文祥', '楊淑惠', '蔡明道',
+            ];
+            final name = names[random.nextInt(names.length)];
+            final recordNumber = 'HEAVY-${createdEventsCount + 1}';
+            final eventType = eventTypes[random.nextInt(eventTypes.length)];
+
+            final event = Event(
+              bookId: widget.book.id!,
+              name: name,
+              recordNumber: recordNumber,
+              eventType: eventType,
+              startTime: eventStartTime,
+              endTime: null, // Open-ended
+              createdAt: now,
+              updatedAt: now,
+            );
+
+            try {
+              await _dbService.createEvent(event);
+              createdEventsCount++;
+
+              // Update progress
+              _progressController.add({
+                'count': createdEventsCount,
+                'total': totalEvents,
+              });
+            } catch (e) {
+              debugPrint('❌ Error creating event: $e');
+            }
+          }
+        }
+      }
+    }
+
+    debugPrint('✅ Stage 1 Complete: Created $createdEventsCount events');
+
+    // Close progress dialog
+    if (mounted) {
+      Navigator.pop(context);
+    }
+
+    // Reload events
+    await _loadEvents();
+
+    // Calculate elapsed time
+    final elapsed = DateTime.now().difference(startTime);
+    final elapsedSeconds = elapsed.inSeconds;
+    final timeStr = elapsedSeconds >= 60
+        ? '${elapsedSeconds ~/ 60}分${elapsedSeconds % 60}秒'
+        : '${elapsedSeconds}秒';
+
+    // Show completion message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(l10n.stage1Complete(createdEventsCount) + ' ($timeStr)'),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+
+    debugPrint('🎉 Stage 1 Complete: $createdEventsCount events, $timeStr');
+  }
+
+  /// Stage 2 Only: Add strokes to existing HEAVY- events
+  Future<void> _generateHeavyLoadStage2({int? maxEvents}) async {
+    final l10n = AppLocalizations.of(context)!;
+    final startTime = DateTime.now();
+
+    // Reset cancellation flag
+    _isCancelled = false;
+
+    const strokesPerEvent = 750;
+    final now = TimeService.instance.now();
+
+    debugPrint('🔍 Stage 2: Querying existing HEAVY- events...');
+
+    // Query all events in the book
+    final allEvents = await _dbService.getAllEventsByBook(widget.book.id!);
+
+    var heavyEvents = allEvents.where((e) => e.recordNumber.startsWith('HEAVY-')).toList();
+
+    if (heavyEvents.isEmpty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('找不到 HEAVY- 活動。請先執行階段1。'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return;
+    }
+
+    // Limit events if maxEvents is specified
+    if (maxEvents != null && maxEvents < heavyEvents.length) {
+      heavyEvents = heavyEvents.sublist(0, maxEvents);
+      debugPrint('📋 Found ${allEvents.where((e) => e.recordNumber.startsWith('HEAVY-')).length} HEAVY- events, processing first $maxEvents');
+    } else {
+      debugPrint('📋 Found ${heavyEvents.length} HEAVY- events');
+    }
+
+    // Show progress dialog
+    if (!mounted) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => WillPopScope(
+        onWillPop: () async => false,
+        child: AlertDialog(
+          title: Text(l10n.stage2AddingStrokes),
+          content: StreamBuilder<Map<String, dynamic>>(
+            stream: _progressStream,
+            builder: (context, snapshot) {
+              final data = snapshot.data ?? {'count': 0, 'total': heavyEvents.length};
+              final count = data['count'] as int;
+              final total = data['total'] as int;
+              final percent = total > 0 ? (count * 100 ~/ total) : 0;
+
+              return Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  LinearProgressIndicator(value: count / total),
+                  const SizedBox(height: 16),
+                  Text(l10n.heavyLoadTestProgress(count, total, percent)),
+                ],
+              );
+            },
+          ),
+          actions: [
+            TextButton(
+              onPressed: () {
+                _isCancelled = true;
+              },
+              child: const Text('取消'),
+            ),
+          ],
+        ),
+      ),
+    );
+
+    debugPrint('🚀 Stage 2: Adding strokes to ${heavyEvents.length} events...');
+    int strokesAddedCount = 0;
+    int totalStrokes = 0;
+
+    for (int i = 0; i < heavyEvents.length; i++) {
+      // Check for cancellation
+      if (_isCancelled) {
+        debugPrint('⚠️ Stage 2 cancelled by user');
+        break;
+      }
+
+      final event = heavyEvents[i];
+
+      try {
+        // Generate random strokes
+        final strokes = _generateRandomStrokes(strokesPerEvent);
+        totalStrokes += strokes.length;
+
+        // Create note with strokes
+        final note = Note(
+          eventId: event.id!,
+          strokes: strokes,
+          createdAt: now,
+          updatedAt: now,
+        );
+
+        await _dbService.saveCachedNote(note);
+        strokesAddedCount++;
+
+        // Update event recordNumber: HEAVY-xxx -> DONE-HEAVY-xxx
+        final updatedEvent = event.copyWith(
+          recordNumber: event.recordNumber.replaceFirst('HEAVY-', 'DONE-HEAVY-'),
+        );
+        await _dbService.updateEvent(updatedEvent);
+
+        // Update progress
+        _progressController.add({
+          'count': strokesAddedCount,
+          'total': heavyEvents.length,
+        });
+
+        // Yield to UI thread every 5 events
+        if (strokesAddedCount % 5 == 0) {
+          await Future.delayed(Duration.zero);
+        }
+      } catch (e) {
+        debugPrint('❌ Error adding strokes to event ${event.id}: $e');
+      }
+    }
+
+    final wasCancelled = _isCancelled;
+    debugPrint(wasCancelled
+      ? '⚠️ Stage 2 Cancelled: Added strokes to $strokesAddedCount events before cancellation'
+      : '✅ Stage 2 Complete: Added strokes to $strokesAddedCount events');
+
+    // Close progress dialog
+    if (mounted) {
+      Navigator.pop(context);
+    }
+
+    // Reload events
+    await _loadEvents();
+
+    // Calculate elapsed time
+    final elapsed = DateTime.now().difference(startTime);
+    final elapsedSeconds = elapsed.inSeconds;
+    final timeStr = elapsedSeconds >= 60
+        ? '${elapsedSeconds ~/ 60}分${elapsedSeconds % 60}秒'
+        : '${elapsedSeconds}秒';
+
+    // Show completion message
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(wasCancelled
+            ? '⚠️ 已取消：已處理 $strokesAddedCount 個事件 (共 $totalStrokes 筆畫)，耗時 $timeStr'
+            : l10n.stage2Complete(strokesAddedCount, totalStrokes, timeStr)),
+          duration: const Duration(seconds: 5),
+        ),
+      );
+    }
+
+    debugPrint(wasCancelled
+      ? '⚠️ Stage 2 Cancelled: $strokesAddedCount events, $totalStrokes strokes, $timeStr'
+      : '🎉 Stage 2 Complete: $strokesAddedCount events, $totalStrokes strokes, $timeStr');
+  }
+
+  /// Generate random strokes for handwriting notes
+  List<Stroke> _generateRandomStrokes(int count) {
+    final random = Random();
+    final strokes = <Stroke>[];
+
+    // Define canvas dimensions for note area
+    const canvasWidth = 300.0;
+    const canvasHeight = 400.0;
+
+    // Color palette for strokes
+    final colors = [
+      0xFF000000, // Black
+      0xFF0000FF, // Blue
+      0xFFFF0000, // Red
+      0xFF00AA00, // Green
+      0xFF800080, // Purple
+    ];
+
+    for (int i = 0; i < count; i++) {
+      // Random number of points per stroke (20-50)
+      final pointCount = 20 + random.nextInt(31);
+      final points = <StrokePoint>[];
+
+      // Generate a curved stroke path
+      final startX = random.nextDouble() * canvasWidth;
+      final startY = random.nextDouble() * canvasHeight;
+
+      // Create points that follow a smooth curve
+      for (int j = 0; j < pointCount; j++) {
+        final t = j / pointCount; // Progress along the stroke (0 to 1)
+
+        // Use sine wave for natural curve
+        final offsetX = (random.nextDouble() - 0.5) * 20; // Small random variation
+        final offsetY = (random.nextDouble() - 0.5) * 20;
+
+        final x = startX + (t * 50) + offsetX; // Move across canvas
+        final y = startY + (sin(t * pi * 2) * 10) + offsetY; // Sinusoidal curve
+
+        // Clamp to canvas bounds
+        final clampedX = x.clamp(0.0, canvasWidth);
+        final clampedY = y.clamp(0.0, canvasHeight);
+
+        final pressure = 0.5 + (random.nextDouble() * 0.5); // Vary pressure
+
+        points.add(StrokePoint(clampedX, clampedY, pressure: pressure));
+      }
+
+      // Random color and width
+      final color = colors[random.nextInt(colors.length)];
+      final strokeWidth = 1.0 + random.nextDouble() * 2.0; // 1.0 to 3.0
+
+      strokes.add(Stroke(
+        points: points,
+        strokeWidth: strokeWidth,
+        color: color,
+      ));
+    }
+
+    return strokes;
+  }
+
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final viewModeOptions = [l10n.day, l10n.threeDays, l10n.week];
 
     return Scaffold(
       appBar: AppBar(
         title: Row(
           children: [
-            // View mode dropdown
-            DropdownButton<int>(
-              value: _selectedViewMode,
-              onChanged: _onViewChanged,
-              underline: const SizedBox(),
-              dropdownColor: Theme.of(context).primaryColor,
-              style: const TextStyle(
-                color: Colors.black,
-                fontSize: 14,
-                fontWeight: FontWeight.w500,
-              ),
-              items: List.generate(viewModeOptions.length, (index) {
-                return DropdownMenuItem<int>(
-                  value: index,
-                  child: Text(viewModeOptions[index]),
-                );
-              }),
-            ),
-            const SizedBox(width: 8),
             // Date navigation - Previous button
             IconButton(
               onPressed: () async {
@@ -1197,14 +2141,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
-                    : IndexedStack(
-                        index: _selectedViewMode,
-                        children: [
-                          _buildDayView(),
-                          _build3DayView(),
-                          _buildWeekView(),
-                        ],
-                      ),
+                    : _build3DayView(),
               ),
             ],
           ),
@@ -1267,6 +2204,42 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             backgroundColor: _isDrawingMode ? Colors.grey : Colors.purple,
             child: const Icon(Icons.science),
             tooltip: _isDrawingMode ? null : 'Generate Random Events',
+          ),
+          const SizedBox(height: 12),
+          // Clear all events FAB (disabled in drawing mode)
+          FloatingActionButton(
+            heroTag: 'clear_all_events',
+            onPressed: _isDrawingMode ? null : _showClearAllEventsDialog,
+            backgroundColor: _isDrawingMode ? Colors.grey : Colors.red.shade700,
+            child: const Icon(Icons.delete_sweep),
+            tooltip: _isDrawingMode ? null : '清除所有活動',
+          ),
+          const SizedBox(height: 12),
+          // Heavy load test Stage 1 FAB (disabled in drawing mode)
+          FloatingActionButton(
+            heroTag: 'heavy_load_stage1',
+            onPressed: _isDrawingMode ? null : _showHeavyLoadStage1Dialog,
+            backgroundColor: _isDrawingMode ? Colors.grey : Colors.blue,
+            child: const Icon(Icons.create),
+            tooltip: _isDrawingMode ? null : l10n.heavyLoadStage1Only,
+          ),
+          const SizedBox(height: 12),
+          // Heavy load test Stage 2 FAB (disabled in drawing mode)
+          FloatingActionButton(
+            heroTag: 'heavy_load_stage2',
+            onPressed: _isDrawingMode ? null : _showHeavyLoadStage2Dialog,
+            backgroundColor: _isDrawingMode ? Colors.grey : Colors.indigo,
+            child: const Icon(Icons.draw),
+            tooltip: _isDrawingMode ? null : l10n.heavyLoadStage2Only,
+          ),
+          const SizedBox(height: 12),
+          // Heavy load test FAB (disabled in drawing mode)
+          FloatingActionButton(
+            heroTag: 'heavy_load_test',
+            onPressed: _isDrawingMode ? null : _showHeavyLoadTestDialog,
+            backgroundColor: _isDrawingMode ? Colors.grey : Colors.deepOrange,
+            child: const Icon(Icons.warning_amber),
+            tooltip: _isDrawingMode ? null : l10n.heavyLoadTest,
           ),
           const SizedBox(height: 12),
           // Drawing mode toggle FAB
@@ -1365,36 +2338,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   String _getDateDisplayText() {
-    switch (_selectedViewMode) {
-      case 0: // Day
-        return DateFormat('EEEE, MMM d, y').format(_selectedDate);
-      case 1: // 3-Day
-        final endDate = _selectedDate.add(const Duration(days: 2));
-        return '${DateFormat('MMM d').format(_selectedDate)} - ${DateFormat('MMM d, y').format(endDate)}';
-      case 2: // Week
-        final weekStart = _getWeekStart(_selectedDate);
-        final weekEnd = weekStart.add(const Duration(days: 6));
-        return '${DateFormat('MMM d').format(weekStart)} - ${DateFormat('MMM d, y').format(weekEnd)}';
-      default:
-        return DateFormat('MMM d, y').format(_selectedDate);
-    }
-  }
-
-  Widget _buildDayView() {
-    return _buildTimeSlotView([_selectedDate], _getCanvasKeyForView(0));
+    // Always show 3-day range
+    final windowStart = _get3DayWindowStart(_selectedDate);
+    final windowEnd = windowStart.add(const Duration(days: 2));
+    return '${DateFormat('MMM d').format(windowStart)} - ${DateFormat('MMM d, y').format(windowEnd)}';
   }
 
   Widget _build3DayView() {
     // Use stable 3-day window instead of _selectedDate to prevent page changes on date changes
     final windowStart = _get3DayWindowStart(_selectedDate);
     final dates = List.generate(3, (index) => windowStart.add(Duration(days: index)));
-    return _buildTimeSlotView(dates, _getCanvasKeyForView(1));
-  }
-
-  Widget _buildWeekView() {
-    final weekStart = _getWeekStart(_selectedDate);
-    final dates = List.generate(7, (index) => weekStart.add(Duration(days: index)));
-    return _buildTimeSlotView(dates, _getCanvasKeyForView(2));
+    return _buildTimeSlotView(dates, _getCanvasKeyForCurrentPage());
   }
 
   Widget _buildTimeSlotView(
@@ -1414,7 +2368,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         final contentWidth = constraints.maxWidth;
         final contentHeight = constraints.maxHeight;
 
-        debugPrint('📐 Schedule Layout: constraints=(${constraints.maxWidth.toStringAsFixed(2)}, ${constraints.maxHeight.toStringAsFixed(2)}) dateHeader=${dateHeaderHeight.toStringAsFixed(2)} availableForSlots=${availableHeightForSlots.toStringAsFixed(2)} viewMode=$_selectedViewMode drawingMode=$_isDrawingMode');
+        debugPrint('📐 Schedule Layout: constraints=(${constraints.maxWidth.toStringAsFixed(2)}, ${constraints.maxHeight.toStringAsFixed(2)}) dateHeader=${dateHeaderHeight.toStringAsFixed(2)} availableForSlots=${availableHeightForSlots.toStringAsFixed(2)} viewMode=3day drawingMode=$_isDrawingMode');
 
         return InteractiveViewer(
           transformationController: _transformationController,
@@ -1630,9 +2584,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             child: LayoutBuilder(
               builder: (context, constraints) {
                 final availableWidth = constraints.maxWidth - 4; // Account for padding/borders
-                final eventWidth = availableWidth / 4;
 
-                // Build slot occupancy map: slot index -> set of occupied horizontal positions (0-3)
+                // Build slot occupancy map: slot index -> set of occupied horizontal positions
                 final Map<int, Set<int>> slotOccupancy = {};
 
                 // Group events by start time slot
@@ -1640,6 +2593,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 for (final event in dateEvents) {
                   final slotIndex = _getSlotIndexForTime(event.startTime);
                   eventsBySlot.putIfAbsent(slotIndex, () => []).add(event);
+                }
+
+                // Calculate concurrent event count per time slot
+                final Map<int, int> slotEventCount = {};
+
+                for (final event in dateEvents) {
+                  final slotIndex = _getSlotIndexForTime(event.startTime);
+                  final durationInMinutes = _getDisplayDurationInMinutes(event);
+                  final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 48);
+
+                  // Increment count for all slots this event occupies
+                  for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
+                    final occupiedSlot = slotIndex + spanOffset;
+                    slotEventCount[occupiedSlot] = (slotEventCount[occupiedSlot] ?? 0) + 1;
+                  }
                 }
 
                 // Build positioned widgets
@@ -1667,11 +2635,22 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                     final durationInMinutes = _getDisplayDurationInMinutes(event);
                     final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 48);
 
+                    // Calculate max concurrent events for this specific event across all slots it spans
+                    int maxConcurrentForThisEvent = 4; // Default minimum of 4
+                    for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
+                      final checkSlot = slotIndex + spanOffset;
+                      final concurrentInSlot = slotEventCount[checkSlot] ?? 0;
+                      maxConcurrentForThisEvent = max(maxConcurrentForThisEvent, concurrentInSlot);
+                    }
+
+                    // Calculate event width: keep 25% for up to 4 events, adjust for this event's specific grid
+                    final eventWidth = availableWidth / maxConcurrentForThisEvent;
+
                     // Find leftmost available horizontal position across all spanned slots
                     int horizontalPosition = 0;
                     bool positionFound = false;
 
-                    for (int pos = 0; pos < 4; pos++) {
+                    for (int pos = 0; pos < maxConcurrentForThisEvent; pos++) {
                       bool positionAvailable = true;
 
                       // Check if this position is available in all spanned slots
@@ -1690,9 +2669,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                       }
                     }
 
-                    // If no position found, skip this event (shouldn't happen with max 4 events)
+                    // If no position found, skip this event (should not happen with dynamic positioning)
                     if (!positionFound) {
-                      debugPrint('⚠️ No position found for event ${event.id} at slot $slotIndex');
+                      debugPrint('⚠️ No position found for event ${event.id} at slot $slotIndex (max concurrent: $maxConcurrentForThisEvent)');
                       continue;
                     }
 
@@ -1704,7 +2683,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
                     // Calculate position and height
                     final topPosition = _calculateEventTopPosition(event, slotHeight);
-                    final tileHeight = (slotsSpanned * slotHeight) - 2; // Subtract margin
+                    final tileHeight = (slotsSpanned * slotHeight) - 1; // Subtract margin
 
                     // Create positioned widget
                     positionedWidgets.add(
@@ -1714,8 +2693,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                         width: eventWidth,
                         height: tileHeight,
                         child: Padding(
-                          padding: const EdgeInsets.all(1),
-                          child: _buildEventTile(event, slotHeight),
+                          padding: const EdgeInsets.only(left: 1, right: 1, top: 1),
+                          child: _buildEventTile(context, event, slotHeight),
                         ),
                       ),
                     );
@@ -1783,11 +2762,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return '→ ${DateFormat('MMM d, HH:mm').format(newEvent.startTime)}';
   }
 
-  Widget _buildEventTile(Event event, double slotHeight) {
+  Widget _buildEventTile(BuildContext context, Event event, double slotHeight) {
     // Calculate how many 15-minute slots this event spans
     final durationInMinutes = _getDisplayDurationInMinutes(event);
     final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 16); // Max 4 hours
-    final tileHeight = (slotsSpanned * slotHeight) - 2; // Subtract margin
+    final tileHeight = (slotsSpanned * slotHeight) - 1; // Subtract margin
 
     final isMenuOpen = _selectedEventForMenu?.id == event.id;
 
@@ -1800,18 +2779,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       },
       child: Container(
         height: tileHeight,
-        margin: const EdgeInsets.all(1),
+        margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
         padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
         decoration: BoxDecoration(
           color: event.isRemoved
-              ? _getEventTypeColor(event.eventType).withOpacity(0.3)
-              : _getEventTypeColor(event.eventType),
+              ? _getEventTypeColor(context, event.eventType).withOpacity(0.3)
+              : _getEventTypeColor(context, event.eventType).withOpacity(0.75),
           borderRadius: BorderRadius.circular(2),
           border: isMenuOpen
               ? Border.all(color: Colors.white, width: 2)
               : event.isRemoved
               ? Border.all(
-                  color: _getEventTypeColor(event.eventType).withOpacity(0.6),
+                  color: _getEventTypeColor(context, event.eventType).withOpacity(0.6),
                   width: 1,
                   style: BorderStyle.solid,
                 )
@@ -1824,7 +2803,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               Positioned.fill(
                 child: CustomPaint(
                   painter: DottedBorderPainter(
-                    color: _getEventTypeColor(event.eventType).withOpacity(0.8),
+                    color: _getEventTypeColor(context, event.eventType).withOpacity(0.8),
                     strokeWidth: 1,
                   ),
                 ),
@@ -1850,7 +2829,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               height: tileHeight,
               padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
               decoration: BoxDecoration(
-                color: _getEventTypeColor(event.eventType),
+                color: _getEventTypeColor(context, event.eventType),
                 borderRadius: BorderRadius.circular(2),
               ),
               child: _buildEventTileContent(event, tileHeight),
@@ -2139,20 +3118,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
   }
 
-  Color _getEventTypeColor(String eventType) {
-    // Simple color coding based on event type
-    switch (eventType.toLowerCase()) {
-      case 'consultation':
-        return Colors.blue;
-      case 'surgery':
-        return Colors.red;
-      case 'follow-up':
-        return Colors.green;
-      case 'emergency':
-        return Colors.orange;
-      default:
-        return Colors.purple;
+  Color _getEventTypeColor(BuildContext context, String eventType) {
+    final l10n = AppLocalizations.of(context)!;
+
+    Color baseColor;
+
+    // Color coding based on localized event type
+    if (eventType == l10n.consultation) {
+      baseColor = Colors.blue;
+    } else if (eventType == l10n.surgery) {
+      baseColor = Colors.red;
+    } else if (eventType == l10n.followUp) {
+      baseColor = Colors.green;
+    } else if (eventType == l10n.emergency) {
+      baseColor = Colors.orange;
+    } else if (eventType == l10n.checkUp) {
+      baseColor = Colors.purple;
+    } else if (eventType == l10n.treatment) {
+      baseColor = Colors.cyan;
+    } else {
+      // Default color for unknown types
+      baseColor = Colors.grey;
     }
+
+    // Reduce saturation to 60%
+    final hslColor = HSLColor.fromColor(baseColor);
+    return hslColor.withSaturation(0.60).toColor();
   }
 
   Widget? _buildEventContextMenuOverlay() {

@@ -1,11 +1,13 @@
 import 'package:flutter/foundation.dart';
+import 'package:uuid/uuid.dart';
 import '../models/book.dart';
 import '../models/event.dart';
 import '../models/note.dart';
 import '../models/schedule_drawing.dart';
+import 'database_service_interface.dart';
 
 /// Simple in-memory database for web platform testing
-class WebPRDDatabaseService {
+class WebPRDDatabaseService implements IDatabaseService {
   static WebPRDDatabaseService? _instance;
 
   // In-memory storage
@@ -56,6 +58,7 @@ class WebPRDDatabaseService {
 
     final book = Book(
       id: _nextBookId++,
+      uuid: const Uuid().v4(),
       name: name.trim(),
       createdAt: DateTime.now(),
     );
@@ -153,6 +156,17 @@ class WebPRDDatabaseService {
             e.bookId == bookId &&
             e.startTime.isAfter(weekStart.subtract(const Duration(milliseconds: 1))) &&
             e.startTime.isBefore(weekEnd))
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  }
+
+  /// Get all events for a book (regardless of date)
+  @override
+  Future<List<Event>> getAllEventsByBook(int bookId) async {
+    await Future.delayed(const Duration(milliseconds: 10));
+
+    return _events
+        .where((e) => e.bookId == bookId)
         .toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
@@ -305,9 +319,9 @@ class WebPRDDatabaseService {
   // Note Operations
   // ===================
 
-  Future<Note?> getNoteByEventId(int eventId) async {
+  Future<Note?> getCachedNote(int eventId) async {
     await Future.delayed(const Duration(milliseconds: 5));
-    debugPrint('🗄️ WebDB: getNoteByEventId($eventId) - searching in ${_notes.length} notes');
+    debugPrint('🗄️ WebDB: getCachedNote($eventId) - searching in ${_notes.length} notes');
 
     try {
       final note = _notes.firstWhere((n) => n.eventId == eventId);
@@ -326,9 +340,9 @@ class WebPRDDatabaseService {
     }
   }
 
-  Future<Note> updateNote(Note note) async {
+  Future<Note> saveCachedNote(Note note) async {
     await Future.delayed(const Duration(milliseconds: 10));
-    debugPrint('🗄️ WebDB: updateNote() called for event ${note.eventId} with ${note.strokes.length} strokes');
+    debugPrint('🗄️ WebDB: saveCachedNote() called for event ${note.eventId} with ${note.strokes.length} strokes');
 
     // Log stroke details before storing
     for (int i = 0; i < note.strokes.length && i < 3; i++) {
@@ -375,7 +389,7 @@ class WebPRDDatabaseService {
   /// - Day view: the selected date
   /// - 3-Day view: the window start date (calculated by _get3DayWindowStart)
   /// - Week view: the week start date (calculated by _getWeekStart)
-  Future<ScheduleDrawing?> getScheduleDrawing(int bookId, DateTime date, int viewMode) async {
+  Future<ScheduleDrawing?> getCachedDrawing(int bookId, DateTime date, int viewMode) async {
     await Future.delayed(const Duration(milliseconds: 5));
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
@@ -399,12 +413,12 @@ class WebPRDDatabaseService {
   /// - Day view: the selected date
   /// - 3-Day view: the window start date (calculated by _get3DayWindowStart)
   /// - Week view: the week start date (calculated by _getWeekStart)
-  Future<ScheduleDrawing> updateScheduleDrawing(ScheduleDrawing drawing) async {
+  Future<ScheduleDrawing> saveCachedDrawing(ScheduleDrawing drawing) async {
     await Future.delayed(const Duration(milliseconds: 10));
     final normalizedDate = DateTime(drawing.date.year, drawing.date.month, drawing.date.day);
     final now = DateTime.now();
 
-    debugPrint('🎨 Web: updateScheduleDrawing called with ${drawing.strokes.length} strokes');
+    debugPrint('🎨 Web: saveCachedDrawing called with ${drawing.strokes.length} strokes');
 
     // Find existing drawing
     final index = _scheduleDrawings.indexWhere(
@@ -438,7 +452,7 @@ class WebPRDDatabaseService {
     }
   }
 
-  Future<void> deleteScheduleDrawing(int bookId, DateTime date, int viewMode) async {
+  Future<void> deleteCachedDrawing(int bookId, DateTime date, int viewMode) async {
     await Future.delayed(const Duration(milliseconds: 5));
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
@@ -450,6 +464,55 @@ class WebPRDDatabaseService {
           d.date.day == normalizedDate.day &&
           d.viewMode == viewMode,
     );
+  }
+
+  Future<void> deleteCachedNote(int eventId) async {
+    await Future.delayed(const Duration(milliseconds: 5));
+    _notes.removeWhere((n) => n.eventId == eventId);
+  }
+
+  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds) async {
+    await Future.delayed(const Duration(milliseconds: 10));
+    final result = <int, Note>{};
+    for (final eventId in eventIds) {
+      final note = await getCachedNote(eventId);
+      if (note != null) {
+        result[eventId] = note;
+      }
+    }
+    return result;
+  }
+
+  Future<void> batchSaveCachedNotes(Map<int, Note> notes) async {
+    await Future.delayed(const Duration(milliseconds: 10));
+    for (final entry in notes.entries) {
+      await saveCachedNote(entry.value);
+    }
+  }
+
+  Future<List<ScheduleDrawing>> batchGetCachedDrawings({
+    required int bookId,
+    required DateTime startDate,
+    required DateTime endDate,
+    int? viewMode,
+  }) async {
+    await Future.delayed(const Duration(milliseconds: 10));
+    final normalizedStart = DateTime(startDate.year, startDate.month, startDate.day);
+    final normalizedEnd = DateTime(endDate.year, endDate.month, endDate.day);
+
+    return _scheduleDrawings.where((d) {
+      if (d.bookId != bookId) return false;
+      if (viewMode != null && d.viewMode != viewMode) return false;
+      final normalized = DateTime(d.date.year, d.date.month, d.date.day);
+      return !normalized.isBefore(normalizedStart) && !normalized.isAfter(normalizedEnd);
+    }).toList();
+  }
+
+  Future<void> batchSaveCachedDrawings(List<ScheduleDrawing> drawings) async {
+    await Future.delayed(const Duration(milliseconds: 10));
+    for (final drawing in drawings) {
+      await saveCachedDrawing(drawing);
+    }
   }
 
   Future<void> clearAllData() async {

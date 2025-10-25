@@ -1,11 +1,18 @@
+import 'dart:async';
+import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/event.dart';
 import '../models/note.dart';
+import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
 import '../services/web_prd_database_service.dart';
+import '../services/content_service.dart';
+import '../services/cache_manager.dart';
+import '../services/api_client.dart';
+import '../services/server_config_service.dart';
 import '../widgets/handwriting_canvas.dart';
 
 /// Event Detail screen with handwriting notes as per PRD
@@ -33,10 +40,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _isLoading = false;
   bool _hasChanges = false;
 
+  // Offline-first state variables
+  bool _isLoadingFromServer = false;
+  bool _isOffline = false;
+  bool _hasUnsyncedChanges = false;
+  bool _isServicesReady = false; // Track if ContentService is initialized
+
   // Use appropriate database service based on platform
-  dynamic get _dbService => kIsWeb
+  IDatabaseService get _dbService => kIsWeb
       ? WebPRDDatabaseService()
       : PRDDatabaseService();
+
+  // ContentService for cache-first and offline-first operations
+  ContentService? _contentService; // Make nullable to handle initialization race
+
   final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
 
   // Cache for new event when displaying time change info
@@ -47,6 +64,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   // Control panel visibility state
   bool _isControlPanelExpanded = false;
+
+  // Network connectivity monitoring
+  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  bool _wasOfflineLastCheck = false;
 
   // Common event types for quick selection
   List<String> get _commonEventTypes => [
@@ -71,10 +92,87 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _recordNumberController.addListener(_onChanged);
     _eventTypeController.addListener(_onChanged);
 
-    if (!widget.isNew) {
-      _loadNote();
-      if (widget.event.hasNewTime) {
-        _loadNewEvent();
+    // Initialize services and load data asynchronously
+    _initialize();
+
+    // Setup network connectivity monitoring for automatic sync retry
+    _setupConnectivityMonitoring();
+  }
+
+  /// Initialize ContentService and load initial data
+  Future<void> _initialize() async {
+    try {
+      debugPrint('🔧 EventDetail: Starting ContentService initialization...');
+
+      // Step 1: Initialize ContentService with correct server URL
+      final prdDb = _dbService as PRDDatabaseService;
+      final serverConfig = ServerConfigService(prdDb);
+
+      // Get server URL from device settings (or use localhost:8080 as fallback)
+      final serverUrl = await serverConfig.getServerUrlOrDefault(
+        defaultUrl: 'http://localhost:8080',
+      );
+
+      debugPrint('🔧 EventDetail: Initializing ContentService with server URL: $serverUrl');
+
+      // Get device credentials for logging
+      final credentials = await prdDb.getDeviceCredentials();
+      if (credentials != null) {
+        debugPrint('🔧 EventDetail: Device registered - ID: ${credentials.deviceId.substring(0, 8)}..., Token: ${credentials.deviceToken.substring(0, 16)}...');
+      } else {
+        debugPrint('⚠️ EventDetail: No device credentials found! User needs to register device first.');
+      }
+
+      final apiClient = ApiClient(baseUrl: serverUrl);
+      final cacheManager = CacheManager(prdDb);
+      _contentService = ContentService(apiClient, cacheManager, _dbService);
+
+      // Mark services as ready
+      if (mounted) {
+        setState(() {
+          _isServicesReady = true;
+        });
+      }
+
+      debugPrint('✅ EventDetail: ContentService initialized successfully');
+
+      // Step 1.5: Check actual server connectivity on startup
+      debugPrint('🔍 EventDetail: Checking initial server connectivity...');
+      final serverReachable = await _checkServerConnectivity();
+      if (mounted) {
+        setState(() {
+          _isOffline = !serverReachable;
+          _wasOfflineLastCheck = !serverReachable;
+        });
+        debugPrint('✅ EventDetail: Initial connectivity check complete - offline: $_isOffline');
+      }
+
+      // Step 2: Load initial data (now that ContentService is ready)
+      if (!widget.isNew) {
+        await _loadNote();
+        if (widget.event.hasNewTime) {
+          await _loadNewEvent();
+        }
+      }
+    } catch (e, stackTrace) {
+      debugPrint('❌ EventDetail: Failed to initialize ContentService: $e');
+      debugPrint('❌ EventDetail: Stack trace: $stackTrace');
+
+      // Mark services as ready anyway to avoid blocking UI forever
+      if (mounted) {
+        setState(() {
+          _isServicesReady = true;
+          _isOffline = true; // Mark as offline since initialization failed
+        });
+
+        // Show error to user
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize services. Some features may not work. Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
       }
     }
   }
@@ -91,11 +189,89 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
+  /// Setup network connectivity monitoring for automatic sync retry
+  void _setupConnectivityMonitoring() {
+    debugPrint('🌐 EventDetail: Setting up connectivity monitoring...');
+
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
+      (ConnectivityResult result) {
+        _onConnectivityChanged(result);
+      },
+    );
+
+    // Also check initial connectivity state
+    Connectivity().checkConnectivity().then((result) {
+      _onConnectivityChanged(result);
+    });
+  }
+
+  /// Check actual server connectivity using health check
+  /// Returns true if server is reachable, false otherwise
+  Future<bool> _checkServerConnectivity() async {
+    if (_contentService == null) {
+      debugPrint('⚠️ EventDetail: Cannot check server - ContentService not initialized');
+      return false;
+    }
+
+    try {
+      debugPrint('🔍 EventDetail: Checking server connectivity via health check...');
+      final isHealthy = await _contentService!.healthCheck();
+      debugPrint(isHealthy
+        ? '✅ EventDetail: Server is reachable'
+        : '❌ EventDetail: Server health check returned false');
+      return isHealthy;
+    } catch (e) {
+      debugPrint('❌ EventDetail: Server health check failed: $e');
+      return false;
+    }
+  }
+
+  /// Handle connectivity changes - automatically retry sync when network returns
+  void _onConnectivityChanged(ConnectivityResult result) {
+    final hasConnection = result != ConnectivityResult.none;
+
+    debugPrint('🌐 EventDetail: Connectivity changed - hasConnection: $hasConnection, result: $result');
+
+    // Verify actual server connectivity, not just network interface status
+    // connectivity_plus can give false negatives/positives
+    Future.microtask(() async {
+      final serverReachable = await _checkServerConnectivity();
+      final wasOfflineBefore = _wasOfflineLastCheck;
+
+      if (mounted) {
+        setState(() {
+          _isOffline = !serverReachable;
+          _wasOfflineLastCheck = !serverReachable;
+        });
+
+        debugPrint('🌐 EventDetail: Offline state updated based on server check: $_isOffline');
+
+        // Network just came back online
+        if (serverReachable && wasOfflineBefore) {
+          debugPrint('🌐 EventDetail: Server restored! Checking for unsynced changes...');
+
+          // If we have unsynced changes, automatically retry sync
+          if (_hasUnsyncedChanges && widget.event.id != null) {
+            debugPrint('🌐 EventDetail: Auto-retrying sync after server restoration...');
+
+            // Wait a bit for network to stabilize
+            Future.delayed(const Duration(seconds: 1), () {
+              if (mounted && _hasUnsyncedChanges) {
+                _syncNoteInBackground(widget.event.id!);
+              }
+            });
+          }
+        }
+      }
+    });
+  }
+
   @override
   void dispose() {
     _nameController.dispose();
     _recordNumberController.dispose();
     _eventTypeController.dispose();
+    _connectivitySubscription?.cancel();
     super.dispose();
   }
 
@@ -127,66 +303,128 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _onChanged();
   }
 
+  /// Load note with cache-first strategy
+  ///
+  /// Phase 4-01 Implementation:
+  /// 1. Load from cache immediately (instant display)
+  /// 2. Background refresh from server (don't block UI)
+  /// 3. Handle offline gracefully with status indicators
   Future<void> _loadNote() async {
     if (widget.event.id == null) {
       debugPrint('🔍 EventDetail: Cannot load note - event ID is null');
       return;
     }
 
-    debugPrint('🔍 EventDetail: Starting note load for event ID: ${widget.event.id}');
-    setState(() => _isLoading = true);
-    try {
-      final note = await _dbService.getNoteByEventId(widget.event.id!);
-      debugPrint('📖 EventDetail: Database query completed');
+    if (_contentService == null) {
+      debugPrint('⚠️ EventDetail: Cannot load note - ContentService not initialized');
+      return;
+    }
 
-      if (note != null) {
-        debugPrint('📖 EventDetail: Note found with ${note.strokes.length} strokes');
-        // Log first few strokes for debugging
-        for (int i = 0; i < note.strokes.length && i < 3; i++) {
-          final stroke = note.strokes[i];
-          debugPrint('📖 EventDetail: Loaded stroke $i has ${stroke.points.length} points, color: ${stroke.color}');
-        }
-      } else {
-        debugPrint('📖 EventDetail: No note found for event ID: ${widget.event.id}');
-      }
+    debugPrint('📖 EventDetail: Loading note for event ${widget.event.id}');
 
+    // **Step 1: Load from cache immediately (不阻塞UI)**
+    final cachedNote = await _contentService!.getCachedNote(widget.event.id!);
+    if (cachedNote != null) {
       setState(() {
-        _note = note;
-        _isLoading = false;
+        _note = cachedNote;
+        _hasUnsyncedChanges = cachedNote.isDirty; // 显示"未同步"提示
       });
-      debugPrint('📖 EventDetail: Set _note state and triggered rebuild');
+      debugPrint('✅ EventDetail: Loaded from cache (${cachedNote.strokes.length} strokes, isDirty: ${cachedNote.isDirty})');
 
       // Validate canvas state after note load
       WidgetsBinding.instance.addPostFrameCallback((_) {
         final canvasState = _canvasKey.currentState;
         if (canvasState != null) {
-          debugPrint('📖 EventDetail: Validating canvas state after note load...');
           canvasState.validateState();
-
           final stateInfo = canvasState.getStateInfo();
-          debugPrint('📖 EventDetail: Canvas state after load: $stateInfo');
-
-          // If canvas doesn't have the expected strokes, try to force refresh
-          final expectedStrokes = note?.strokes.length ?? 0;
+          final expectedStrokes = cachedNote.strokes.length;
           final actualStrokes = stateInfo['strokeCount'] as int;
           if (actualStrokes != expectedStrokes) {
             debugPrint('⚠️ EventDetail: Canvas stroke mismatch! Expected: $expectedStrokes, Actual: $actualStrokes');
-            if (note != null) {
-              debugPrint('🔄 EventDetail: Force refreshing canvas with loaded strokes...');
-              canvasState.forceRefreshState(note.strokes);
-            }
+            canvasState.forceRefreshState(cachedNote.strokes);
           }
         }
       });
+    }
 
-      // Note: Canvas will automatically update via didUpdateWidget
-      // when _note changes and widget rebuilds with new initialStrokes
-    } catch (e) {
-      debugPrint('❌ EventDetail: Error loading note: $e');
-      setState(() => _isLoading = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.errorLoadingNoteMessage(e.toString()))),
+    // **Step 2: Background refresh from server (不阻塞UI)**
+    // BUT: If cached note is dirty, prioritize local changes and push to server instead
+    if (cachedNote != null && cachedNote.isDirty) {
+      debugPrint('📤 EventDetail: Cached note is dirty, syncing to server instead of fetching');
+      setState(() => _isLoadingFromServer = true);
+
+      // Push local changes to server instead of fetching
+      try {
+        await _contentService!.syncNote(widget.event.id!);
+        if (mounted) {
+          setState(() {
+            _hasUnsyncedChanges = false;
+            _isLoadingFromServer = false;
+            _isOffline = false;
+          });
+        }
+        debugPrint('✅ EventDetail: Dirty note synced to server successfully');
+      } catch (e) {
+        debugPrint('⚠️ EventDetail: Failed to sync dirty note: $e');
+        if (mounted) {
+          setState(() {
+            _isLoadingFromServer = false;
+            _isOffline = true;
+          });
+        }
+      }
+      return; // Don't fetch from server - we just pushed our changes
+    }
+
+    // Normal flow: Fetch from server (only if note is not dirty)
+    setState(() => _isLoadingFromServer = true);
+
+    try {
+      final serverNote = await _contentService!.getNote(
+        widget.event.id!,
+        forceRefresh: true, // 跳过cache，强制fetch
       );
+
+      if (serverNote != null && mounted) {
+        setState(() {
+          _note = serverNote;
+          _hasUnsyncedChanges = false; // Server数据是最新的
+          _isLoadingFromServer = false;
+          _isOffline = false;
+        });
+        debugPrint('✅ EventDetail: Refreshed from server');
+
+        // Refresh canvas with server data
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          final canvasState = _canvasKey.currentState;
+          if (canvasState != null) {
+            canvasState.forceRefreshState(serverNote.strokes);
+          }
+        });
+      } else if (mounted) {
+        setState(() {
+          _isLoadingFromServer = false;
+        });
+      }
+    } catch (e) {
+      // Network failure → 继续使用cache
+      if (mounted) {
+        setState(() {
+          _isLoadingFromServer = false;
+          _isOffline = true; // 标记离线模式
+        });
+        debugPrint('⚠️ EventDetail: Server fetch failed, using cache: $e');
+
+        // 显示友好提示（不是错误）
+        if (cachedNote != null) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(AppLocalizations.of(context)!.showingCachedData),
+              duration: const Duration(seconds: 2),
+            ),
+          );
+        }
+      }
     }
   }
 
@@ -230,51 +468,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         savedEvent = await _dbService.updateEvent(eventToSave);
       }
 
-      // Always save handwriting note (including empty ones)
+      // **Data Safety First**: Always save handwriting note using offline-first strategy
       try {
-        debugPrint('💾 EventDetail: Starting note save process for event ID: ${savedEvent.id}');
-        final canvasState = _canvasKey.currentState;
-        debugPrint('💾 EventDetail: Canvas state is ${canvasState != null ? "available" : "null"}');
-
-        // Validate canvas state before saving
-        if (canvasState != null) {
-          canvasState.validateState();
-          final stateInfo = canvasState.getStateInfo();
-          debugPrint('💾 EventDetail: Canvas state before save: $stateInfo');
-        }
-
-        List<Stroke> strokes;
-        if (canvasState != null) {
-          strokes = canvasState.getStrokes();
-          debugPrint('💾 EventDetail: Retrieved ${strokes.length} strokes from canvas');
-        } else {
-          strokes = List<Stroke>.from(_lastKnownStrokes);
-          debugPrint('💾 EventDetail: Canvas state null, using backup strokes (${strokes.length} strokes)');
-        }
-
-        // Log detailed stroke information
-        for (int i = 0; i < strokes.length && i < 3; i++) {
-          final stroke = strokes[i];
-          debugPrint('💾 EventDetail: Stroke $i has ${stroke.points.length} points, color: ${stroke.color}');
-        }
-
-        final noteToSave = Note(
-          eventId: savedEvent.id!,
-          strokes: strokes,
-          createdAt: _note?.createdAt ?? DateTime.now(),
-          updatedAt: DateTime.now(),
-        );
-        debugPrint('💾 EventDetail: Created Note object with ${noteToSave.strokes.length} strokes');
-
-        await _dbService.updateNote(noteToSave);
-        debugPrint('✅ EventDetail: Note saved successfully to database with ${strokes.length} strokes');
+        await _saveNoteWithOfflineFirst(savedEvent.id!);
       } catch (e) {
         // Log error but don't fail the entire save operation
         debugPrint('❌ Failed to save note: $e');
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text(AppLocalizations.of(context)!.eventSavedButNoteFailed),
+              content: Text(AppLocalizations.of(context)!.errorSavingNote(e.toString())),
               backgroundColor: Colors.orange,
             ),
           );
@@ -289,6 +492,240 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.errorSavingEventMessage(e.toString()))),
       );
+    }
+  }
+
+  /// Save note with offline-first strategy (Phase 4-01 Implementation)
+  ///
+  /// **Data Safety First Principle**:
+  /// 1. Save locally first (always succeeds unless disk full)
+  /// 2. Show immediate success feedback to user
+  /// 3. Sync to server in background (best effort)
+  Future<void> _saveNoteWithOfflineFirst(int eventId) async {
+    debugPrint('💾 EventDetail: Starting offline-first note save for event $eventId');
+
+    // Check if services are ready
+    if (_contentService == null) {
+      throw Exception('ContentService not initialized. Cannot save note.');
+    }
+
+    final canvasState = _canvasKey.currentState;
+
+    // Validate canvas state before saving
+    if (canvasState != null) {
+      canvasState.validateState();
+    }
+
+    // Get strokes from canvas or backup
+    List<Stroke> strokes;
+    if (canvasState != null) {
+      strokes = canvasState.getStrokes();
+      debugPrint('💾 EventDetail: Retrieved ${strokes.length} strokes from canvas');
+    } else {
+      strokes = List<Stroke>.from(_lastKnownStrokes);
+      debugPrint('💾 EventDetail: Canvas state null, using backup strokes (${strokes.length} strokes)');
+    }
+
+    // Log stroke details for debugging
+    debugPrint('💾 EventDetail: Saving note with ${strokes.length} strokes');
+    for (int i = 0; i < strokes.length && i < 3; i++) {
+      final stroke = strokes[i];
+      debugPrint('   Stroke $i: ${stroke.points.length} points, width: ${stroke.strokeWidth}, color: ${stroke.color}');
+    }
+
+    // Create note object
+    final noteToSave = Note(
+      eventId: eventId,
+      strokes: strokes,
+      createdAt: _note?.createdAt ?? DateTime.now(),
+      updatedAt: DateTime.now(),
+    );
+
+    try {
+      // **数据安全第一原则**: 先保存到本地
+      debugPrint('💾 EventDetail: Calling ContentService.saveNote()...');
+      await _contentService!.saveNote(eventId, noteToSave);
+      debugPrint('✅ EventDetail: ContentService.saveNote() completed');
+
+      // **CRITICAL: Verify local save succeeded by reading back**
+      debugPrint('🔍 EventDetail: Verifying local save by reading back from cache...');
+      final verifyNote = await _contentService!.getCachedNote(eventId);
+
+      if (verifyNote == null) {
+        throw Exception('Local save verification failed: Note not found in cache after save');
+      }
+
+      if (verifyNote.strokes.length != strokes.length) {
+        throw Exception('Local save verification failed: Expected ${strokes.length} strokes but found ${verifyNote.strokes.length}');
+      }
+
+      debugPrint('✅ EventDetail: Local save verified - ${verifyNote.strokes.length} strokes in cache, isDirty: ${verifyNote.isDirty}');
+
+      setState(() {
+        _note = noteToSave;
+        _hasChanges = false;
+        _hasUnsyncedChanges = true; // 标记为dirty，等待同步
+      });
+
+      // 立即给用户反馈 - 明确说明是本地保存
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    _isOffline
+                      ? 'Saved locally (offline - will sync when online)'
+                      : 'Saved locally (syncing to server...)',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      debugPrint('✅ EventDetail: Note saved locally with ${strokes.length} strokes');
+
+      // 后台同步到server（best effort）
+      _syncNoteInBackground(eventId);
+
+    } catch (e, stackTrace) {
+      debugPrint('❌ EventDetail: Failed to save note: $e');
+      debugPrint('❌ EventDetail: Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  /// Background sync note to server (不阻塞UI，静默失败)
+  ///
+  /// Phase 4-01: Best-effort sync, doesn't show errors to user
+  /// Keeps dirty flag if sync fails for later retry
+  ///
+  /// IMPORTANT: This method learns from actual sync results to update
+  /// connectivity status, not relying solely on connectivity_plus
+  Future<void> _syncNoteInBackground(int eventId) async {
+    if (_contentService == null) {
+      debugPrint('⚠️ EventDetail: Cannot sync note - ContentService not initialized');
+      return;
+    }
+
+    try {
+      debugPrint('🔄 EventDetail: Starting background sync for note $eventId...');
+      await _contentService!.syncNote(eventId);
+      debugPrint('✅ EventDetail: Background sync completed successfully');
+
+      if (mounted) {
+        setState(() {
+          _hasUnsyncedChanges = false; // 同步成功
+          // Learn from success: if sync worked, server is definitely reachable
+          _isOffline = false;
+          _wasOfflineLastCheck = false;
+        });
+      }
+
+      debugPrint('✅ EventDetail: Note synced to server (eventId: $eventId), offline status updated');
+    } catch (e) {
+      // 同步失败？没关系，保留dirty标记，后续重试
+      debugPrint('⚠️ EventDetail: Background sync failed (will retry later): $e');
+
+      // Learn from failure: if sync failed, verify server connectivity
+      // (Don't immediately assume offline - could be auth issue, version conflict, etc.)
+      final serverReachable = await _checkServerConnectivity();
+
+      if (mounted) {
+        setState(() {
+          _isOffline = !serverReachable;
+          _wasOfflineLastCheck = !serverReachable;
+        });
+      }
+
+      debugPrint('ℹ️ EventDetail: Verified connectivity after sync failure - offline: $_isOffline');
+      // 不显示错误给用户，因为本地数据已安全保存
+    }
+  }
+
+  /// Manual retry sync - triggered by user pressing "Retry Sync" button
+  Future<void> _manualRetrySync(int eventId) async {
+    if (_contentService == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cannot sync - Services not initialized'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return;
+    }
+
+    // Show loading indicator
+    setState(() => _isLoadingFromServer = true);
+
+    try {
+      debugPrint('🔄 EventDetail: Manual retry sync requested for note $eventId...');
+      await _contentService!.syncNote(eventId);
+
+      if (mounted) {
+        setState(() {
+          _hasUnsyncedChanges = false;
+          // Learn from success: server is reachable
+          _isOffline = false;
+          _wasOfflineLastCheck = false;
+          _isLoadingFromServer = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white, size: 20),
+                SizedBox(width: 8),
+                Text('Successfully synced to server!'),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+
+      debugPrint('✅ EventDetail: Manual sync succeeded');
+    } catch (e) {
+      debugPrint('❌ EventDetail: Manual sync failed: $e');
+
+      // Verify actual server connectivity after failure
+      final serverReachable = await _checkServerConnectivity();
+
+      if (mounted) {
+        setState(() {
+          _isOffline = !serverReachable;
+          _wasOfflineLastCheck = !serverReachable;
+          _isLoadingFromServer = false;
+        });
+
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Sync failed: ${e.toString()}')),
+              ],
+            ),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: 'Retry',
+              textColor: Colors.white,
+              onPressed: () => _manualRetrySync(eventId),
+            ),
+          ),
+        );
+      }
     }
   }
 
@@ -653,6 +1090,27 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       appBar: AppBar(
         title: Text(widget.isNew ? l10n.newEvent : l10n.editEvent),
         actions: [
+          // Phase 4-01: Sync status indicators in AppBar
+          if (_hasUnsyncedChanges)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Icon(
+                Icons.cloud_upload,
+                color: Colors.orange,
+                semanticLabel: 'Unsynced changes',
+                size: 24,
+              ),
+            ),
+          if (_isOffline && !_hasUnsyncedChanges)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: Icon(
+                Icons.cloud_off,
+                color: Colors.grey,
+                semanticLabel: 'Offline',
+                size: 24,
+              ),
+            ),
           if (!widget.isNew && !widget.event.isRemoved) ...[
             PopupMenuButton<String>(
               enabled: !_isLoading,
@@ -733,7 +1191,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           ],
           IconButton(
             icon: const Icon(Icons.save),
-            onPressed: _isLoading ? null : _saveEvent,
+            onPressed: (_isLoading || !_isServicesReady) ? null : _saveEvent,
+            tooltip: _isServicesReady ? 'Save' : 'Initializing...',
           ),
         ],
       ),
@@ -762,6 +1221,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
                 return Column(
                   children: [
+                    // Phase 4-01: Status bar for offline/syncing indicators
+                    _buildStatusBar(),
                     // Event metadata section with flexible, content-aware layout
                     Flexible(
                       flex: 0, // Don't expand, just take what's needed
@@ -784,6 +1245,85 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 );
               },
             ),
+    );
+  }
+
+  /// Phase 4-01: Status bar for offline/syncing indicators
+  Widget _buildStatusBar() {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Offline banner with retry button
+        if (_isOffline)
+          Material(
+            color: Colors.orange.shade700,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const Icon(Icons.cloud_off, color: Colors.white, size: 18),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _hasUnsyncedChanges
+                        ? 'Offline - Changes not synced'
+                        : AppLocalizations.of(context)!.offlineMode,
+                      style: const TextStyle(color: Colors.white),
+                    ),
+                  ),
+                  if (_hasUnsyncedChanges && widget.event.id != null)
+                    TextButton(
+                      onPressed: () => _manualRetrySync(widget.event.id!),
+                      style: TextButton.styleFrom(
+                        backgroundColor: Colors.white.withOpacity(0.2),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.refresh, color: Colors.white, size: 16),
+                          SizedBox(width: 4),
+                          Text('Retry Sync', style: TextStyle(color: Colors.white, fontSize: 13)),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ),
+
+        // Unsynced changes banner
+        if (_hasUnsyncedChanges && !_isOffline)
+          Material(
+            color: Colors.blue.shade700,
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              child: Row(
+                children: [
+                  const SizedBox(
+                    width: 16,
+                    height: 16,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 2,
+                      valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    AppLocalizations.of(context)!.syncingToServer,
+                    style: const TextStyle(color: Colors.white, fontSize: 14),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+        // Background loading indicator
+        if (_isLoadingFromServer && !_hasUnsyncedChanges)
+          const LinearProgressIndicator(minHeight: 2),
+      ],
     );
   }
 
@@ -1053,7 +1593,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       children: [
                         InkWell(
                           onTap: () {
-                            canvasState?.setErasing(false);
+                            _canvasKey.currentState?.setErasing(false);
                             setState(() {});
                           },
                           borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
@@ -1087,7 +1627,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         Container(width: 1, height: 24, color: Colors.grey.shade300),
                         InkWell(
                           onTap: () {
-                            canvasState?.setErasing(true);
+                            _canvasKey.currentState?.setErasing(true);
                             setState(() {});
                           },
                           borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
@@ -1161,21 +1701,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   const SizedBox(width: 8),
                   IconButton(
                     icon: const Icon(Icons.undo, size: 20),
-                    onPressed: () => canvasState?.undo(),
+                    onPressed: () => _canvasKey.currentState?.undo(),
                     tooltip: 'Undo',
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                   IconButton(
                     icon: const Icon(Icons.redo, size: 20),
-                    onPressed: () => canvasState?.redo(),
+                    onPressed: () => _canvasKey.currentState?.redo(),
                     tooltip: 'Redo',
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                   IconButton(
                     icon: const Icon(Icons.clear, size: 20),
-                    onPressed: () => canvasState?.clear(),
+                    onPressed: () => _canvasKey.currentState?.clear(),
                     tooltip: 'Clear All',
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -1246,9 +1786,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 onChanged: (value) {
                                   setState(() {
                                     if (isErasing) {
-                                      canvasState?.setEraserRadius(value);
+                                      _canvasKey.currentState?.setEraserRadius(value);
                                     } else {
-                                      canvasState?.setStrokeWidth(value);
+                                      _canvasKey.currentState?.setStrokeWidth(value);
                                     }
                                   });
                                 },
@@ -1298,7 +1838,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 child: Row(
                                   children: _buildColorPalette(currentColor, (color) {
                                     setState(() {
-                                      canvasState?.setStrokeColor(color);
+                                      _canvasKey.currentState?.setStrokeColor(color);
                                     });
                                   }),
                                 ),
