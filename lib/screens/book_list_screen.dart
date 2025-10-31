@@ -8,6 +8,8 @@ import '../services/prd_database_service.dart';
 import '../services/web_prd_database_service.dart';
 import '../services/book_backup_service.dart';
 import '../services/server_config_service.dart';
+import '../services/book_order_service.dart';
+import '../services/api_client.dart';
 import 'schedule_screen.dart';
 
 /// Book List Screen - Top-level containers as per PRD
@@ -21,6 +23,7 @@ class BookListScreen extends StatefulWidget {
 class _BookListScreenState extends State<BookListScreen> {
   List<Book> _books = [];
   bool _isLoading = false;
+  final _bookOrderService = BookOrderService();
 
   // Use appropriate database service based on platform
   IDatabaseService get _dbService => kIsWeb
@@ -44,8 +47,13 @@ class _BookListScreenState extends State<BookListScreen> {
     setState(() => _isLoading = true);
     try {
       final books = await _dbService.getAllBooks();
+
+      // Apply custom order from SharedPreferences
+      final savedOrder = await _bookOrderService.loadBookOrder();
+      final orderedBooks = _bookOrderService.applyOrder(books, savedOrder);
+
       setState(() {
-        _books = books;
+        _books = orderedBooks;
         _isLoading = false;
       });
     } catch (e) {
@@ -182,6 +190,23 @@ class _BookListScreenState extends State<BookListScreen> {
         }
       }
     }
+  }
+
+  /// Handle book reordering
+  Future<void> _onReorderBooks(int oldIndex, int newIndex) async {
+    setState(() {
+      // Adjust newIndex if moving down the list
+      if (newIndex > oldIndex) {
+        newIndex -= 1;
+      }
+
+      // Reorder the books list
+      final book = _books.removeAt(oldIndex);
+      _books.insert(newIndex, book);
+    });
+
+    // Save the new order
+    await _bookOrderService.saveCurrentOrder(_books);
   }
 
   void _openSchedule(Book book) {
@@ -428,12 +453,29 @@ class _BookListScreenState extends State<BookListScreen> {
   }
 
   Widget _buildBookList() {
-    return ListView.builder(
+    return ReorderableListView.builder(
       padding: const EdgeInsets.all(16),
       itemCount: _books.length,
+      onReorder: _onReorderBooks,
+      proxyDecorator: (child, index, animation) {
+        // Customize the appearance of the dragged item
+        return AnimatedBuilder(
+          animation: animation,
+          builder: (context, child) {
+            return Material(
+              elevation: 8.0,
+              shadowColor: Colors.black.withOpacity(0.3),
+              borderRadius: BorderRadius.circular(12),
+              child: child,
+            );
+          },
+          child: child,
+        );
+      },
       itemBuilder: (context, index) {
         final book = _books[index];
         return _BookCard(
+          key: ValueKey(book.uuid), // Important: key is required for ReorderableListView
           book: book,
           onTap: () => _openSchedule(book),
           onRename: () => _renameBook(book),
@@ -456,6 +498,7 @@ class _BookCard extends StatelessWidget {
   final VoidCallback? onUploadToServer;
 
   const _BookCard({
+    super.key, // Add key parameter for ReorderableListView
     required this.book,
     required this.onTap,
     required this.onRename,
@@ -498,14 +541,14 @@ class _BookCard extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              '${AppLocalizations.of(context)!.createdLabel}${DateFormat('MMM d, y').format(book.createdAt)}',
+              '${AppLocalizations.of(context)!.createdLabel}${DateFormat('MMM d, y', Localizations.localeOf(context).toString()).format(book.createdAt)}',
               style: Theme.of(context).textTheme.bodySmall?.copyWith(
                 color: Colors.grey[600],
               ),
             ),
             if (book.isArchived)
               Text(
-                '${AppLocalizations.of(context)!.archivedLabel}${DateFormat('MMM d, y').format(book.archivedAt!)}',
+                '${AppLocalizations.of(context)!.archivedLabel}${DateFormat('MMM d, y', Localizations.localeOf(context).toString()).format(book.archivedAt!)}',
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
                   color: Colors.grey[500],
                 ),
@@ -688,11 +731,11 @@ class _RestoreBackupDialog extends StatelessWidget {
                               'UUID: ${bookUuid.substring(0, 8)}...',
                               style: TextStyle(color: Colors.grey[600], fontSize: 12),
                             ),
-                          Text('Backup date: ${DateFormat('MMM d, y HH:mm').format(createdAt)}'),
+                          Text('Backup date: ${DateFormat('MMM d, y HH:mm', Localizations.localeOf(context).toString()).format(createdAt)}'),
                           Text('Size: ${(backupSize / 1024).toStringAsFixed(1)} KB'),
                           if (restoredAt != null)
                             Text(
-                              'Last restored: ${DateFormat('MMM d, y HH:mm').format(DateTime.parse(restoredAt))}',
+                              'Last restored: ${DateFormat('MMM d, y HH:mm', Localizations.localeOf(context).toString()).format(DateTime.parse(restoredAt))}',
                               style: const TextStyle(color: Colors.green, fontSize: 12),
                             ),
                         ],
@@ -787,7 +830,7 @@ class _RenameBookDialogState extends State<_RenameBookDialog> {
   }
 }
 
-/// Server Settings Dialog
+/// Server Settings Dialog - Two-step flow with registration
 class _ServerSettingsDialog extends StatefulWidget {
   final String currentUrl;
 
@@ -797,79 +840,229 @@ class _ServerSettingsDialog extends StatefulWidget {
   State<_ServerSettingsDialog> createState() => _ServerSettingsDialogState();
 }
 
+enum _DialogStep { urlInput, registration }
+
 class _ServerSettingsDialogState extends State<_ServerSettingsDialog> {
-  late final TextEditingController _controller;
+  late final TextEditingController _urlController;
+  late final TextEditingController _passwordController;
   final _formKey = GlobalKey<FormState>();
+
+  _DialogStep _currentStep = _DialogStep.urlInput;
+  bool _isLoading = false;
+  String? _errorMessage;
 
   @override
   void initState() {
     super.initState();
-    _controller = TextEditingController(text: widget.currentUrl);
+    _urlController = TextEditingController(text: widget.currentUrl);
+    _passwordController = TextEditingController();
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    _urlController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: const Text('Server Settings'),
+      title: Text(_currentStep == _DialogStep.urlInput ? 'Server Settings' : 'Device Registration'),
       content: Form(
         key: _formKey,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const Text(
-              'Configure the server URL for sync and backup operations.',
-              style: TextStyle(fontSize: 14, color: Colors.grey),
-            ),
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _controller,
-              decoration: const InputDecoration(
-                labelText: 'Server URL',
-                hintText: 'http://192.168.1.100:8080',
-                border: OutlineInputBorder(),
-                helperText: 'Example: http://your-mac-ip:8080',
+            if (_currentStep == _DialogStep.urlInput) ..._buildUrlStep()
+            else ..._buildRegistrationStep(),
+            if (_errorMessage != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _errorMessage!,
+                style: const TextStyle(color: Colors.red, fontSize: 14),
               ),
-              validator: (value) {
-                if (value == null || value.trim().isEmpty) {
-                  return 'Server URL is required';
-                }
-                final uri = Uri.tryParse(value.trim());
-                if (uri == null || (!uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https'))) {
-                  return 'Invalid URL format (must start with http:// or https://)';
-                }
-                return null;
-              },
-              autofocus: true,
-              keyboardType: TextInputType.url,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _submit(),
-            ),
+            ],
+            if (_isLoading) ...[
+              const SizedBox(height: 12),
+              const LinearProgressIndicator(),
+            ],
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        ElevatedButton(
-          onPressed: _submit,
-          child: const Text('Save'),
-        ),
-      ],
+      actions: _buildActions(),
     );
   }
 
-  void _submit() {
-    if (_formKey.currentState!.validate()) {
-      Navigator.pop(context, _controller.text.trim());
+  List<Widget> _buildUrlStep() {
+    return [
+      const Text(
+        'Configure the server URL for sync and backup operations.',
+        style: TextStyle(fontSize: 14, color: Colors.grey),
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _urlController,
+        decoration: const InputDecoration(
+          labelText: 'Server URL',
+          hintText: 'http://192.168.1.100:8080',
+          border: OutlineInputBorder(),
+          helperText: 'Example: http://your-mac-ip:8080',
+        ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Server URL is required';
+          }
+          final uri = Uri.tryParse(value.trim());
+          if (uri == null || (!uri.hasScheme || (uri.scheme != 'http' && uri.scheme != 'https'))) {
+            return 'Invalid URL format (must start with http:// or https://)';
+          }
+          return null;
+        },
+        enabled: !_isLoading,
+        autofocus: true,
+        keyboardType: TextInputType.url,
+        textInputAction: TextInputAction.next,
+      ),
+    ];
+  }
+
+  List<Widget> _buildRegistrationStep() {
+    return [
+      const Text(
+        'This device is not registered with the server. Please enter the registration password to continue.',
+        style: TextStyle(fontSize: 14, color: Colors.grey),
+      ),
+      const SizedBox(height: 16),
+      TextFormField(
+        controller: _passwordController,
+        decoration: const InputDecoration(
+          labelText: 'Registration Password',
+          hintText: 'Enter password',
+          border: OutlineInputBorder(),
+          helperText: 'Contact your server administrator for the password',
+        ),
+        validator: (value) {
+          if (value == null || value.trim().isEmpty) {
+            return 'Password is required';
+          }
+          return null;
+        },
+        enabled: !_isLoading,
+        obscureText: true,
+        autofocus: true,
+        textInputAction: TextInputAction.done,
+        onFieldSubmitted: (_) => _handleRegistration(),
+      ),
+    ];
+  }
+
+  List<Widget> _buildActions() {
+    return [
+      TextButton(
+        onPressed: _isLoading ? null : () => Navigator.pop(context),
+        child: const Text('Cancel'),
+      ),
+      if (_currentStep == _DialogStep.urlInput)
+        ElevatedButton(
+          onPressed: _isLoading ? null : _handleUrlSubmit,
+          child: const Text('Next'),
+        )
+      else
+        ElevatedButton(
+          onPressed: _isLoading ? null : _handleRegistration,
+          child: const Text('Register'),
+        ),
+    ];
+  }
+
+  Future<void> _handleUrlSubmit() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final serverUrl = _urlController.text.trim();
+      final dbService = PRDDatabaseService();
+
+      // Check if device is already registered
+      final credentials = await dbService.getDeviceCredentials();
+
+      if (credentials != null) {
+        // Device already registered, just save URL and close
+        if (mounted) {
+          Navigator.pop(context, serverUrl);
+        }
+        return;
+      }
+
+      // Device not registered, move to registration step
+      setState(() {
+        _currentStep = _DialogStep.registration;
+        _isLoading = false;
+      });
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error checking device registration: $e';
+        _isLoading = false;
+      });
+    }
+  }
+
+  Future<void> _handleRegistration() async {
+    if (!_formKey.currentState!.validate()) return;
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final serverUrl = _urlController.text.trim();
+      final password = _passwordController.text.trim();
+      final dbService = PRDDatabaseService();
+
+      // Import dart:io to get platform info
+      final platform = Theme.of(context).platform.name;
+      final deviceName = '$platform Device';
+
+      // Create API client and register device
+      final apiClient = ApiClient(baseUrl: serverUrl);
+      final response = await apiClient.registerDevice(
+        deviceName: deviceName,
+        password: password,
+        platform: platform,
+      );
+
+      // Save device credentials
+      final deviceId = response['deviceId'] as String;
+      final deviceToken = response['deviceToken'] as String;
+      await dbService.saveDeviceCredentials(
+        deviceId: deviceId,
+        deviceToken: deviceToken,
+        deviceName: deviceName,
+        platform: platform,
+      );
+
+      // Clean up and return URL
+      apiClient.dispose();
+
+      if (mounted) {
+        Navigator.pop(context, serverUrl);
+      }
+    } catch (e) {
+      setState(() {
+        if (e.toString().contains('Invalid registration password')) {
+          _errorMessage = 'Invalid password. Please try again.';
+        } else {
+          _errorMessage = 'Registration failed: $e';
+        }
+        _isLoading = false;
+      });
     }
   }
 }

@@ -95,8 +95,8 @@ DATE_2="2025-11-02"
 DATE_3="2025-11-03"
 VIEW_MODE=1  # 3-Day view
 
-echo "📋 Test 1: GET non-existent drawing → 404"
-echo "-------------------------------------------"
+echo "📋 Test 1: GET non-existent drawing → 200, drawing: null"
+echo "---------------------------------------------------------"
 GET_NONEXISTENT=$(curl -s --insecure -w "\n%{http_code}" -X GET \
   "$BASE_URL/api/books/$BOOK_ID/drawings?date=$DATE_1&viewMode=$VIEW_MODE" \
   -H "X-Device-ID: $DEVICE_ID" \
@@ -105,8 +105,8 @@ GET_NONEXISTENT=$(curl -s --insecure -w "\n%{http_code}" -X GET \
 HTTP_CODE=$(echo "$GET_NONEXISTENT" | tail -n 1)
 RESPONSE=$(echo "$GET_NONEXISTENT" | sed '$d')
 
-print_test "GET non-existent drawing returns 404" "404" "$HTTP_CODE"
-print_test "Response indicates not found" '"success":false' "$RESPONSE"
+print_test "GET non-existent drawing returns 200" "200" "$HTTP_CODE"
+print_test "Response has success:true and drawing:null" '"success":true.*"drawing":null' "$RESPONSE"
 echo ""
 
 echo "📋 Test 2: POST create new drawing → 200, version=1"
@@ -227,7 +227,9 @@ GET_DELETED=$(curl -s --insecure -w "\n%{http_code}" -X GET \
   -H "X-Device-Token: $DEVICE_TOKEN")
 
 HTTP_CODE=$(echo "$GET_DELETED" | tail -n 1)
-print_test "GET deleted drawing returns 404" "404" "$HTTP_CODE"
+RESPONSE=$(echo "$GET_DELETED" | sed '$d')
+print_test "GET deleted drawing returns 200" "200" "$HTTP_CODE"
+print_test "Response has drawing:null" '"drawing":null' "$RESPONSE"
 echo ""
 
 echo "📋 Test 9: Batch get after delete → 6 drawings"

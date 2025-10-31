@@ -55,8 +55,7 @@ class DrawingRoutes {
   ///   viewMode: Integer (0: Day, 1: 3-Day, 2: Week)
   ///
   /// Response:
-  ///   200: { success: true, drawing: {...} }
-  ///   404: { success: false, message: "Drawing not found" }
+  ///   200: { success: true, drawing: {...} } or { success: true, drawing: null } if not exists
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _getDrawing(Request request) async {
     try {
@@ -120,16 +119,7 @@ class DrawingRoutes {
       // Get the drawing
       final drawing = await drawingService.getDrawing(bookId, date, viewMode);
 
-      if (drawing == null) {
-        return Response.notFound(
-          jsonEncode({
-            'success': false,
-            'message': 'Drawing not found',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
-
+      // Return 200 with null if drawing doesn't exist (not an error)
       return Response.ok(
         jsonEncode({
           'success': true,

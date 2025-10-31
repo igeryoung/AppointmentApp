@@ -93,12 +93,13 @@ ORDER BY date ASC;
 
 ### 测试用例
 
-1. **GET**: 获取指定日期的drawing
-2. **POST**: 创建新drawing
-3. **POST**: 更新已存在的drawing（upsert）
-4. **DELETE**: 删除drawing
-5. **批量GET**: 获取一周的drawings（7个日期）
-6. **权限**: 无权限访问其他Book（403）
+1. **GET**: 获取指定日期的drawing → 200, drawing: {...}
+2. **GET**: 获取不存在的drawing → 200, drawing: null
+3. **POST**: 创建新drawing → 200, version=1
+4. **POST**: 更新已存在的drawing（upsert）→ 200, version+1
+5. **DELETE**: 删除drawing → 200
+6. **批量GET**: 获取一周的drawings（7个日期）→ 200
+7. **权限**: 无权限访问其他Book → 403
 
 ### 性能目标
 
@@ -161,9 +162,9 @@ ORDER BY date ASC;
 - 文件: `server/test_drawings_api.sh`
 - 12个测试用例覆盖所有场景:
   - ✅ Health check
-  - ✅ GET non-existent drawing → 404
+  - ✅ GET non-existent drawing → 200, drawing: null
   - ✅ POST create drawing → 200, version=1
-  - ✅ GET existing drawing → 200
+  - ✅ GET existing drawing → 200, drawing: {...}
   - ✅ POST update (correct version) → 200, version+1
   - ✅ POST update (wrong version) → 409 Conflict
   - ✅ Batch GET drawings (7 days) → 200
@@ -213,8 +214,7 @@ ORDER BY d.date ASC
 - 单次查询，高性能
 
 **3. 与Notes API一致的模式**
-- 200: 成功
-- 404: 资源不存在
+- 200: 成功 (包括资源不存在时返回 null)
 - 409: 版本冲突 (含服务器当前状态)
 - 403: 无权限
 - 401: 缺少认证信息

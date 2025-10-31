@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/note.dart';
 import '../models/schedule_drawing.dart';
@@ -17,6 +18,10 @@ class ContentService {
   final ApiClient _apiClient;
   final dynamic _cacheManager;  // CacheManager or mock
   final dynamic _db;  // PRDDatabaseService or mock
+
+  // RACE CONDITION FIX: Save operation queue to serialize drawing saves
+  final List<Future<void> Function()> _drawingSaveQueue = [];
+  bool _isProcessingDrawingSaveQueue = false;
 
   ContentService(this._apiClient, this._cacheManager, this._db);
 
@@ -227,39 +232,108 @@ class ContentService {
 
   /// Preload multiple notes in background (for performance)
   ///
+  /// Strategy:
+  /// 1. Filter out already-cached notes
+  /// 2. Batch fetch from server (max 50 per request)
+  /// 3. Save to cache
+  ///
+  /// [onProgress] callback reports (loaded, total) progress
   /// Does not block, returns immediately
   /// Failures are logged but don't throw
-  Future<void> preloadNotes(List<int> eventIds) async {
-    if (eventIds.isEmpty) return;
+  Future<void> preloadNotes(
+    List<int> eventIds, {
+    Function(int loaded, int total)? onProgress,
+  }) async {
+    if (eventIds.isEmpty) {
+      onProgress?.call(0, 0);
+      return;
+    }
 
-    debugPrint('🔄 ContentService: Preloading ${eventIds.length} notes...');
+    final startTime = DateTime.now();
+    debugPrint('🔄 ContentService: [${startTime.toIso8601String()}] Preload STARTED for ${eventIds.length} notes [eventIds: ${eventIds.join(', ')}]');
 
     // Run in background, don't block caller
     Future.microtask(() async {
       try {
-        final credentials = await _db.getDeviceCredentials();
-        if (credentials == null) return;
-
-        final serverNotes = await _apiClient.batchFetchNotes(
-          eventIds: eventIds,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
-
-        // Save each to cache
-        for (final noteData in serverNotes) {
-          try {
-            final note = Note.fromMap(noteData);
-            final eventId = note.eventId;
-            await _cacheManager.saveNote(eventId, note);
-          } catch (e) {
-            debugPrint('⚠️ ContentService: Failed to preload note: $e');
+        // Step 1: Filter out already-cached notes
+        debugPrint('📦 ContentService: Checking cache for ${eventIds.length} notes...');
+        final uncachedIds = <int>[];
+        for (final id in eventIds) {
+          final cached = await _cacheManager.getNote(id);
+          if (cached == null) {
+            uncachedIds.add(id);
           }
         }
 
-        debugPrint('✅ ContentService: Preloaded ${serverNotes.length} notes');
+        if (uncachedIds.isEmpty) {
+          debugPrint('✅ ContentService: All ${eventIds.length} notes already cached - preload complete');
+          onProgress?.call(eventIds.length, eventIds.length);
+          return;
+        }
+
+        debugPrint('📦 ContentService: Found ${eventIds.length - uncachedIds.length} cached, ${uncachedIds.length} uncached');
+        debugPrint('🔄 ContentService: Need to fetch ${uncachedIds.length} notes from server: [${uncachedIds.join(', ')}]');
+
+        // Get credentials once
+        debugPrint('🔐 ContentService: Checking device credentials...');
+        final credentials = await _db.getDeviceCredentials();
+        if (credentials == null) {
+          debugPrint('❌ ContentService: Device not registered, cannot preload from server');
+          debugPrint('   → Register device to enable preloading');
+          onProgress?.call(eventIds.length - uncachedIds.length, eventIds.length);
+          return;
+        }
+        debugPrint('✅ ContentService: Device credentials found (deviceId: ${credentials.deviceId.substring(0, 8)}...)');
+
+        // Step 2: Batch fetch (max 50 per request to avoid timeout)
+        const batchSize = 50;
+        int loaded = eventIds.length - uncachedIds.length; // Already cached
+        final totalBatches = (uncachedIds.length / batchSize).ceil();
+
+        debugPrint('🌐 ContentService: Starting batch fetch (${uncachedIds.length} notes in $totalBatches batch${totalBatches > 1 ? 'es' : ''})');
+
+        for (int i = 0; i < uncachedIds.length; i += batchSize) {
+          final batch = uncachedIds.skip(i).take(batchSize).toList();
+          final batchNumber = (i ~/ batchSize) + 1;
+
+          try {
+            // Batch fetch from server
+            debugPrint('🌐 ContentService: Calling POST /api/notes/batch for batch $batchNumber/${totalBatches} (${batch.length} notes: [${batch.join(', ')}])');
+            final serverNotes = await _apiClient.batchFetchNotes(
+              eventIds: batch,
+              deviceId: credentials.deviceId,
+              deviceToken: credentials.deviceToken,
+            );
+            debugPrint('✅ ContentService: Batch API returned ${serverNotes.length} notes');
+
+            // Step 3: Save each to cache
+            for (final noteData in serverNotes) {
+              try {
+                final note = Note.fromMap(noteData);
+                await _cacheManager.saveNote(note.eventId, note, dirty: false);
+                loaded++;
+              } catch (e) {
+                debugPrint('⚠️ ContentService: Failed to parse/save note: $e');
+              }
+            }
+
+            // Report progress after each batch
+            onProgress?.call(loaded, eventIds.length);
+
+            debugPrint('✅ ContentService: Batch $batchNumber/${totalBatches} completed ($loaded/${eventIds.length} total)');
+          } catch (e) {
+            debugPrint('❌ ContentService: Batch $batchNumber fetch failed (skipping): $e');
+            // Continue with next batch, don't fail entire preload
+          }
+        }
+
+        final endTime = DateTime.now();
+        final duration = endTime.difference(startTime);
+        debugPrint('✅ ContentService: Preload COMPLETED - $loaded/${eventIds.length} notes loaded in ${duration.inMilliseconds}ms');
       } catch (e) {
-        debugPrint('❌ ContentService: Preload notes failed: $e');
+        final endTime = DateTime.now();
+        final duration = endTime.difference(startTime);
+        debugPrint('❌ ContentService: Preload FAILED after ${duration.inMilliseconds}ms: $e');
       }
     });
   }
@@ -483,8 +557,57 @@ class ContentService {
     }
   }
 
+  /// Process the drawing save queue to serialize save operations
+  /// RACE CONDITION FIX: Ensures saves are processed sequentially
+  Future<void> _processDrawingSaveQueue() async {
+    if (_isProcessingDrawingSaveQueue || _drawingSaveQueue.isEmpty) {
+      return;
+    }
+
+    _isProcessingDrawingSaveQueue = true;
+    try {
+      while (_drawingSaveQueue.isNotEmpty) {
+        final saveOperation = _drawingSaveQueue.removeAt(0);
+        try {
+          await saveOperation();
+        } catch (e) {
+          debugPrint('❌ ContentService: Queue save operation failed: $e');
+          // Continue processing queue even if one operation fails
+        }
+      }
+    } finally {
+      _isProcessingDrawingSaveQueue = false;
+    }
+  }
+
   /// Save drawing (update server and cache)
+  /// RACE CONDITION FIX: Uses queue to serialize save operations
   Future<void> saveDrawing(ScheduleDrawing drawing) async {
+    // Create a completer to wait for the queued operation to complete
+    final completer = Completer<void>();
+
+    // Add save operation to queue
+    _drawingSaveQueue.add(() async {
+      try {
+        await _saveDrawingInternal(drawing);
+        completer.complete();
+      } catch (e) {
+        completer.completeError(e);
+      }
+    });
+
+    // Start processing queue if not already processing
+    _processDrawingSaveQueue();
+
+    // Wait for this specific save to complete
+    return completer.future;
+  }
+
+  /// Internal save drawing implementation (called from queue)
+  /// RACE CONDITION FIX: Handles version conflicts with retry logic
+  Future<void> _saveDrawingInternal(ScheduleDrawing drawing, {int retryCount = 0}) async {
+    const maxRetries = 3;
+
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
@@ -495,20 +618,71 @@ class ContentService {
       }
 
       // Save to server
+      // Transform drawing data to server API format
+      // Server expects: { date: "YYYY-MM-DD", viewMode: int, strokesData: string, version?: int }
       final drawingData = drawing.toMap();
+      final serverDrawingData = {
+        'date': drawing.date.toIso8601String().split('T')[0], // Convert to ISO date string (YYYY-MM-DD)
+        'viewMode': drawing.viewMode,
+        'strokesData': drawingData['strokes_data'], // Server expects camelCase
+        if (drawing.id != null) 'version': drawing.version, // Include current version for updates (optimistic locking)
+      };
 
-      await _apiClient.saveDrawing(
+      debugPrint('📤 ContentService: Saving drawing (bookId: ${drawing.bookId}, version: ${drawing.version}, retry: $retryCount)');
+
+      final serverResponse = await _apiClient.saveDrawing(
         bookId: drawing.bookId,
-        drawingData: drawingData,
+        drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
 
-      // Save to cache
-      await _cacheManager.saveDrawing(drawing);
+      // Update drawing with new version from server response
+      final newVersion = serverResponse['version'] as int? ?? drawing.version;
+      final updatedDrawing = drawing.copyWith(version: newVersion);
 
-      debugPrint('✅ ContentService: Drawing saved to server and cache');
+      // Save to cache with updated version
+      await _cacheManager.saveDrawing(updatedDrawing);
+
+      debugPrint('✅ ContentService: Drawing saved to server (version: $newVersion) and cached');
     } catch (e) {
+      // RACE CONDITION FIX: Detect version conflicts and retry with server version
+      if (e is ApiConflictException && retryCount < maxRetries) {
+        debugPrint('⚠️ ContentService: Version conflict detected (attempt ${retryCount + 1}/$maxRetries)');
+
+        try {
+          // Extract server version from 409 response
+          final serverVersion = e.serverVersion;
+
+          if (serverVersion != null) {
+            debugPrint('   Server version: $serverVersion, Client version: ${drawing.version}');
+
+            // Fetch drawing from cache to preserve metadata (id, createdAt)
+            final latestDrawing = await _db.getCachedDrawing(
+              drawing.bookId,
+              drawing.date,
+              drawing.viewMode,
+            );
+
+            // Last-write-wins: Use server version but keep client strokes
+            final mergedDrawing = drawing.copyWith(
+              id: latestDrawing?.id,
+              version: serverVersion, // Use server version (authoritative)
+              createdAt: latestDrawing?.createdAt,
+            );
+
+            debugPrint('🔄 ContentService: Retrying with server version: $serverVersion');
+
+            // Retry with server version
+            return await _saveDrawingInternal(mergedDrawing, retryCount: retryCount + 1);
+          } else {
+            debugPrint('⚠️ ContentService: Server version not available in conflict response');
+          }
+        } catch (retryError) {
+          debugPrint('❌ ContentService: Failed to prepare retry: $retryError');
+        }
+      }
+
       debugPrint('❌ ContentService: Error saving drawing to server: $e');
 
       // Still save to cache for offline access

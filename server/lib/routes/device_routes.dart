@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import 'package:crypto/crypto.dart';
@@ -29,6 +30,20 @@ class DeviceRoutes {
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
       final registerRequest = DeviceRegisterRequest.fromJson(json);
+
+      // Validate registration password
+      final expectedPassword = Platform.environment['REGISTRATION_PASSWORD'] ?? 'password';
+      if (registerRequest.password != expectedPassword) {
+        print('❌ Device registration failed: Invalid password');
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Invalid registration password',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       // Generate unique device ID and token
       final deviceId = _uuid.v4();

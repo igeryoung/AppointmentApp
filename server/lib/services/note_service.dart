@@ -382,7 +382,7 @@ class NoteService {
           'bookId': eventData['book_id'],
           'deviceId': deviceId,
           'name': eventData['name'] ?? '',
-          'recordNumber': eventData['record_number'] ?? '',
+          'recordNumber': eventData['record_number'],
           'eventType': eventData['event_type'] ?? '',
           'startTime': startTime,
           'endTime': endTime,

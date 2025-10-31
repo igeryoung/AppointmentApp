@@ -42,6 +42,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   // ContentService for server sync
   ContentService? _contentService;
 
+  // CacheManager for experimental cache operations
+  CacheManager? _cacheManager;
+
   // Network connectivity monitoring
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
   bool _wasOfflineLastCheck = false;
@@ -58,6 +61,17 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   // Cache of canvas keys for each unique page (viewMode + date combination)
   final Map<String, GlobalKey<HandwritingCanvasState>> _canvasKeys = {};
 
+  // Race condition prevention for drawing saves
+  Timer? _saveDebounceTimer;
+  bool _isSaving = false;
+  int _lastSavedCanvasVersion = 0;
+
+  // FAB menu visibility state
+  bool _isFabMenuVisible = false;
+
+  // Old events visibility toggle (removed events and time-changed old versions)
+  bool _showOldEvents = true;
+
   // Event menu and drag state
   Event? _selectedEventForMenu;
   Offset? _menuPosition;
@@ -71,10 +85,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   late TextEditingController _stage2EventCountController;
 
   // Time range settings
-  static const double _baseSlotHeight = 60.0; // Base slot height for readable size
   static const int _startHour = 9;  // 9:00 AM
   static const int _endHour = 21;   // 9:00 PM
   static const int _totalSlots = (_endHour - _startHour) * 4; // 48 slots
+
+  // Large screen detection threshold for text scaling
+  // When slotHeight >= this value, apply 1.8x scaling to event names
+  // This threshold corresponds to ~13-inch iPad screen size
+  static const double _largeScreenSlotHeightThreshold = 15.0;
 
   // Use appropriate database service based on platform
   IDatabaseService get _dbService => kIsWeb
@@ -112,8 +130,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         defaultUrl: 'http://localhost:8080',
       );
       final apiClient = ApiClient(baseUrl: serverUrl);
-      final cacheManager = CacheManager(prdDb);
-      _contentService = ContentService(apiClient, cacheManager, _dbService);
+      _cacheManager = CacheManager(prdDb);
+      _contentService = ContentService(apiClient, _cacheManager!, _dbService);
       debugPrint('✅ ScheduleScreen: ContentService initialized');
 
       // Check server connectivity
@@ -128,6 +146,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       if (serverReachable) {
         _autoSyncDirtyNotes();
       }
+
+      // Wait for events to load, then trigger preload
+      _waitForEventsAndPreload();
     } catch (e) {
       debugPrint('❌ ScheduleScreen: Failed to initialize ContentService: $e');
       // Continue without ContentService - sync will not work but UI remains functional
@@ -135,6 +156,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         _isOffline = true;
       });
     }
+  }
+
+  /// Wait for events to load, then trigger preload
+  Future<void> _waitForEventsAndPreload() async {
+    // Poll for events to be loaded (max 5 seconds)
+    const maxWaitTime = Duration(seconds: 5);
+    const pollInterval = Duration(milliseconds: 100);
+    final startTime = DateTime.now();
+
+    while (_events.isEmpty) {
+      if (DateTime.now().difference(startTime) > maxWaitTime) {
+        debugPrint('⚠️ ScheduleScreen: Timeout waiting for events to load (waited ${maxWaitTime.inMilliseconds}ms), skipping preload');
+        return;
+      }
+      await Future.delayed(pollInterval);
+    }
+
+    final waitTime = DateTime.now().difference(startTime);
+    debugPrint('✅ ScheduleScreen: Events loaded after ${waitTime.inMilliseconds}ms (${_events.length} events), triggering preload...');
+    _preloadNotesInBackground();
   }
 
   /// Setup network connectivity monitoring for automatic sync retry
@@ -293,6 +334,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Cancel date check timer
     _dateCheckTimer?.cancel();
 
+    // Cancel debounced save timer
+    _saveDebounceTimer?.cancel();
+
     // Close progress stream controller
     _progressController.close();
 
@@ -425,11 +469,26 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       // For 3-Day View, this uses the window start date
       final effectiveDate = _getEffectiveDate();
 
-      final drawing = await _dbService.getCachedDrawing(
-        widget.book.id!,
-        effectiveDate,
-        1, // Always 3-day view (viewMode = 1)
-      );
+      // Use ContentService for cache-first strategy with server fallback
+      // This enables automatic server fetch when cache is empty
+      ScheduleDrawing? drawing;
+      if (_contentService != null) {
+        debugPrint('📖 Loading drawing via ContentService (cache-first with server fallback)...');
+        drawing = await _contentService!.getDrawing(
+          bookId: widget.book.id!,
+          date: effectiveDate,
+          viewMode: 1, // Always 3-day view (viewMode = 1)
+          forceRefresh: false, // Use cache if available
+        );
+      } else {
+        // Fallback to direct database access if ContentService not initialized
+        debugPrint('⚠️ ContentService not available, loading drawing from cache only');
+        drawing = await _dbService.getCachedDrawing(
+          widget.book.id!,
+          effectiveDate,
+          1, // Always 3-day view (viewMode = 1)
+        );
+      }
 
       setState(() {
         _currentDrawing = drawing;
@@ -452,13 +511,91 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
   }
 
+  /// Preload notes for all events in current 3-day window (background, non-blocking)
+  ///
+  /// This method is called by _waitForEventsAndPreload() after both ContentService
+  /// and events are ready. It improves UX by preloading notes so they're instantly
+  /// available when user taps events.
+  Future<void> _preloadNotesInBackground() async {
+    if (_events.isEmpty) {
+      debugPrint('📦 ScheduleScreen: No events to preload');
+      return;
+    }
+
+    if (_contentService == null) {
+      debugPrint('⚠️ ScheduleScreen: Cannot preload - ContentService not initialized');
+      return;
+    }
+
+    final preloadStartTime = DateTime.now();
+    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${_events.length} events');
+
+    // Extract all event IDs (filter out null IDs)
+    final eventIds = _events
+        .where((e) => e.id != null)
+        .map((e) => e.id!)
+        .toList();
+
+    if (eventIds.isEmpty) {
+      debugPrint('📦 ScheduleScreen: No valid event IDs to preload');
+      return;
+    }
+
+    debugPrint('📦 ScheduleScreen: Calling ContentService.preloadNotes with ${eventIds.length} event IDs');
+
+    try {
+      // Call ContentService to preload notes with progress callback
+      await _contentService!.preloadNotes(
+        eventIds,
+        onProgress: (loaded, total) {
+          // Log progress for debugging
+          debugPrint('📦 ScheduleScreen: Progress update - $loaded/$total notes loaded');
+        },
+      );
+
+      final preloadEndTime = DateTime.now();
+      final preloadDuration = preloadEndTime.difference(preloadStartTime);
+      debugPrint('✅ ScheduleScreen: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes)');
+    } catch (e) {
+      // Preload failure is non-critical - user can still use the app
+      // Notes will be fetched on-demand when user taps events
+      final preloadEndTime = DateTime.now();
+      final preloadDuration = preloadEndTime.difference(preloadStartTime);
+      debugPrint('⚠️ ScheduleScreen: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical): $e');
+    }
+  }
+
+  /// Schedule a debounced save to reduce save frequency during fast drawing
+  /// RACE CONDITION FIX: Debounce saves by 500ms to prevent excessive saves
+  void _scheduleSaveDrawing() {
+    _saveDebounceTimer?.cancel();
+    _saveDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+      _saveDrawing();
+    });
+    debugPrint('⏱️ Scheduled debounced save (500ms)');
+  }
+
   Future<void> _saveDrawing() async {
+    // RACE CONDITION FIX: Prevent concurrent saves
+    if (_isSaving) {
+      debugPrint('⚠️ Save already in progress, skipping...');
+      return;
+    }
+
     final canvasState = _getCanvasKeyForCurrentPage().currentState;
     if (canvasState == null) {
       debugPrint('⚠️ Cannot save: canvas state is null');
       return;
     }
 
+    // Check if canvas version has changed since last save
+    final currentCanvasVersion = canvasState.canvasVersion;
+    if (currentCanvasVersion == _lastSavedCanvasVersion) {
+      debugPrint('⏩ Canvas unchanged (version: $currentCanvasVersion), skipping save');
+      return;
+    }
+
+    _isSaving = true;
     try {
       final strokes = canvasState.getStrokes();
       final now = TimeService.instance.now();
@@ -467,10 +604,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       // For 3-Day View, this uses the window start date
       final effectiveDate = _getEffectiveDate();
 
-      // Only use existing ID if it matches the current page
-      // This prevents reusing old IDs when switching pages
+      // Only use existing ID, createdAt, and version if it matches the current page
+      // This prevents reusing old values when switching pages
       int? drawingId;
       DateTime? createdAt;
+      int version = 1; // Default version for new drawings
       if (_currentDrawing != null &&
           _currentDrawing!.bookId == widget.book.id! &&
           _currentDrawing!.viewMode == 1 && // Always 3-day view (viewMode = 1)
@@ -479,6 +617,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           _currentDrawing!.date.day == effectiveDate.day) {
         drawingId = _currentDrawing!.id;
         createdAt = _currentDrawing!.createdAt;
+        version = _currentDrawing!.version; // Preserve version for optimistic locking
       }
 
       final drawing = ScheduleDrawing(
@@ -487,16 +626,60 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         date: effectiveDate,
         viewMode: 1, // Always 3-day view (viewMode = 1)
         strokes: strokes,
+        version: version, // Use preserved version from current drawing
         createdAt: createdAt ?? now,
         updatedAt: now,
       );
 
-      debugPrint('💾 Saving ${strokes.length} strokes for page ${_getPageId()} (effectiveDate: $effectiveDate, id: $drawingId)');
-      final savedDrawing = await _dbService.saveCachedDrawing(drawing);
-      setState(() {
-        _currentDrawing = savedDrawing;
-      });
-      debugPrint('✅ Save successful, new id: ${savedDrawing.id}');
+      debugPrint('💾 Saving ${strokes.length} strokes for page ${_getPageId()} (effectiveDate: $effectiveDate, id: $drawingId, version: $version)');
+
+      // Use ContentService to save drawing (syncs to server and cache)
+      // Falls back to direct database save if ContentService not available
+      if (_contentService != null) {
+        debugPrint('💾 Saving drawing via ContentService (syncs to server + cache)...');
+        await _contentService!.saveDrawing(drawing);
+
+        // RACE CONDITION FIX: Check if canvas changed during async save
+        final currentStateAfterSave = _getCanvasKeyForCurrentPage().currentState;
+        if (currentStateAfterSave != null &&
+            currentStateAfterSave.canvasVersion != currentCanvasVersion) {
+          debugPrint('⚠️ Canvas changed during save (v$currentCanvasVersion → v${currentStateAfterSave.canvasVersion}), skipping state update');
+          return; // Don't update _currentDrawing with stale data
+        }
+
+        // Update current drawing state - fetch back from cache to get server-assigned ID
+        final savedDrawing = await _dbService.getCachedDrawing(
+          widget.book.id!,
+          effectiveDate,
+          1,
+        );
+        if (mounted) {
+          setState(() {
+            _currentDrawing = savedDrawing ?? drawing;
+          });
+        }
+      } else {
+        debugPrint('⚠️ ContentService not available, saving to cache only');
+        final savedDrawing = await _dbService.saveCachedDrawing(drawing);
+
+        // RACE CONDITION FIX: Check if canvas changed during async save
+        final currentStateAfterSave = _getCanvasKeyForCurrentPage().currentState;
+        if (currentStateAfterSave != null &&
+            currentStateAfterSave.canvasVersion != currentCanvasVersion) {
+          debugPrint('⚠️ Canvas changed during save (v$currentCanvasVersion → v${currentStateAfterSave.canvasVersion}), skipping state update');
+          return; // Don't update _currentDrawing with stale data
+        }
+
+        if (mounted) {
+          setState(() {
+            _currentDrawing = savedDrawing;
+          });
+        }
+      }
+
+      debugPrint('✅ Save successful, id: ${_currentDrawing?.id}');
+      // Update last saved version to prevent redundant saves
+      _lastSavedCanvasVersion = currentCanvasVersion;
     } catch (e) {
       debugPrint('❌ Error saving drawing: $e');
       if (mounted) {
@@ -504,12 +687,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           SnackBar(content: Text(AppLocalizations.of(context)!.errorSavingDrawing(e.toString()))),
         );
       }
+    } finally {
+      _isSaving = false;
     }
   }
 
   Future<void> _toggleDrawingMode() async {
     if (_isDrawingMode) {
-      // Exiting drawing mode - save drawing first
+      // Exiting drawing mode - cancel pending debounced save and save immediately
+      _saveDebounceTimer?.cancel();
       await _saveDrawing();
       setState(() {
         _isDrawingMode = false;
@@ -522,6 +708,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       // Load drawing after state update
       await _loadDrawing();
     }
+  }
+
+  void _toggleFabMenu() {
+    setState(() {
+      _isFabMenuVisible = !_isFabMenuVisible;
+    });
   }
 
   DateTime _get3DayWindowStart(DateTime date) {
@@ -625,6 +817,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Future<void> _handleMenuAction(String action, Event event) async {
     if (action == 'changeType') {
       await _changeEventType(event);
+      _closeEventMenu();
+    } else if (action == 'changeTime') {
+      await _changeEventTimeFromSchedule(event);
       _closeEventMenu();
     } else if (action == 'remove') {
       await _removeEventFromSchedule(event);
@@ -793,6 +988,196 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             SnackBar(content: Text(l10n.errorUpdatingEvent(e.toString()))),
           );
         }
+      }
+    }
+  }
+
+  Future<void> _changeEventTimeFromSchedule(Event event) async {
+    final l10n = AppLocalizations.of(context)!;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (context) {
+        DateTime newStartTime = event.startTime;
+        DateTime? newEndTime = event.endTime;
+        final reasonController = TextEditingController();
+        bool showReasonError = false;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final bool hasValidReason = reasonController.text.trim().isNotEmpty;
+
+            return AlertDialog(
+              title: Text(l10n.changeEventTime),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(l10n.changeTimeMessage),
+                  const SizedBox(height: 16),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: newStartTime,
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (date == null) return;
+
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(newStartTime),
+                            );
+                            if (time == null) return;
+
+                            setState(() {
+                              newStartTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                            });
+                          },
+                          child: Text(
+                            'Start: ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newStartTime)}',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: TextButton(
+                          onPressed: () async {
+                            final date = await showDatePicker(
+                              context: context,
+                              initialDate: newEndTime ?? newStartTime,
+                              firstDate: newStartTime,
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (date == null) return;
+
+                            final time = await showTimePicker(
+                              context: context,
+                              initialTime: TimeOfDay.fromDateTime(newEndTime ?? newStartTime.add(const Duration(hours: 1))),
+                            );
+                            if (time == null) return;
+
+                            setState(() {
+                              newEndTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                            });
+                          },
+                          child: Text(
+                            newEndTime != null
+                                ? 'End: ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newEndTime!)}'
+                                : 'Set End Time (Optional)',
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ),
+                      ),
+                      if (newEndTime != null)
+                        IconButton(
+                          onPressed: () => setState(() => newEndTime = null),
+                          icon: const Icon(Icons.clear, size: 16),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Text(l10n.reasonForTimeChangeField, style: const TextStyle(fontWeight: FontWeight.w500)),
+                  const SizedBox(height: 8),
+                  TextField(
+                    controller: reasonController,
+                    decoration: InputDecoration(
+                      hintText: l10n.enterReasonForTimeChange,
+                      border: const OutlineInputBorder(),
+                      errorText: showReasonError ? l10n.reasonRequired : null,
+                      errorBorder: showReasonError
+                          ? const OutlineInputBorder(borderSide: BorderSide(color: Colors.red))
+                          : null,
+                    ),
+                    maxLines: 2,
+                    autofocus: true,
+                    onChanged: (value) {
+                      setState(() {
+                        showReasonError = false;
+                      });
+                    },
+                  ),
+                  if (showReasonError)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        l10n.reasonRequiredMessage,
+                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                      ),
+                    ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context, null),
+                  child: Text(l10n.cancel),
+                ),
+                TextButton(
+                  onPressed: () {
+                    final reason = reasonController.text.trim();
+                    if (reason.isEmpty) {
+                      setState(() {
+                        showReasonError = true;
+                      });
+                      return;
+                    }
+                    Navigator.pop(context, {
+                      'startTime': newStartTime,
+                      'endTime': newEndTime,
+                      'reason': reason,
+                    });
+                  },
+                  style: TextButton.styleFrom(
+                    backgroundColor: hasValidReason ? Theme.of(context).primaryColor : Colors.grey.shade300,
+                    foregroundColor: hasValidReason ? Colors.white : Colors.grey.shade600,
+                  ),
+                  child: Text(l10n.changeTimeButton),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (result == null) return;
+
+    try {
+      await _dbService.changeEventTime(
+        event,
+        result['startTime'],
+        result['endTime'],
+        result['reason'],
+      );
+
+      _loadEvents();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.eventTimeChangedSuccess),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.errorChangingEventTime(e.toString())),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
       }
     }
   }
@@ -994,7 +1379,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         builder: (context) => AlertDialog(
           title: Text(l10n.testTimeActive),
           content: Text(
-            l10n.currentTestTime(DateFormat('yyyy-MM-dd HH:mm:ss').format(TimeService.instance.overrideTime!)),
+            l10n.currentTestTime(DateFormat('yyyy-MM-dd HH:mm:ss', Localizations.localeOf(context).toString()).format(TimeService.instance.overrideTime!)),
           ),
           actions: [
             TextButton(
@@ -1058,27 +1443,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (mounted) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(l10n.testTimeSetTo(DateFormat('yyyy-MM-dd HH:mm').format(testTime))),
+          content: Text(l10n.testTimeSetTo(DateFormat('yyyy-MM-dd HH:mm', Localizations.localeOf(context).toString()).format(testTime))),
           backgroundColor: Colors.red,
         ),
       );
     }
-  }
-
-  Future<void> _clearAllEventsInView() async {
-    if (_events.isEmpty) return;
-
-    final eventIds = _events.where((e) => e.id != null).map((e) => e.id!).toList();
-
-    for (final id in eventIds) {
-      try {
-        await _dbService.deleteEvent(id);
-      } catch (e) {
-        debugPrint('Error deleting event $id: $e');
-      }
-    }
-
-    await _loadEvents();
   }
 
   /// Clear all events in the current book (not just those in view)
@@ -1194,8 +1563,28 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       );
 
       try {
-        await _dbService.createEvent(event);
+        final createdEvent = await _dbService.createEvent(event);
         created++;
+
+        // Generate and save random handwriting note for this event
+        if (createdEvent.id != null) {
+          try {
+            // Generate 3-15 random strokes for the note
+            final strokeCount = 3 + random.nextInt(13);
+            final strokes = _generateRandomStrokes(strokeCount);
+            final note = Note(
+              eventId: createdEvent.id!,
+              strokes: strokes,
+              createdAt: now,
+              updatedAt: now,
+              isDirty: true, // Mark as dirty so it syncs to server when first opened
+            );
+            await _dbService.saveCachedNote(note);
+            debugPrint('✅ Generated note with ${strokes.length} strokes for event ${createdEvent.id}');
+          } catch (e) {
+            debugPrint('⚠️ Error creating random note for event ${createdEvent.id}: $e');
+          }
+        }
       } catch (e) {
         debugPrint('Error creating random event: $e');
       }
@@ -1468,6 +1857,214 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('已刪除 $eventCount 個活動'),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Show Clear Cache dialog with cached event names
+  Future<void> _showClearCacheDialog() async {
+    if (_cacheManager == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Cache Manager not initialized'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+      return;
+    }
+
+    // Get cache stats
+    final stats = await _cacheManager!.getStats();
+    final cacheSize = (stats.notesSizeBytes + stats.drawingsSizeBytes) / (1024 * 1024);
+    final notesSizeMB = stats.notesSizeBytes / (1024 * 1024);
+    final drawingsSizeMB = stats.drawingsSizeBytes / (1024 * 1024);
+
+    // Get cached event names for current events
+    final cachedEventNames = <String>[];
+    for (final event in _events) {
+      if (event.id != null) {
+        final cachedNote = await _cacheManager!.getNote(event.id!);
+        if (cachedNote != null) {
+          cachedEventNames.add(event.name);
+        }
+      }
+    }
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Clear Cache (Experimental)'),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Icon(
+                Icons.cached,
+                color: Colors.amber,
+                size: 48,
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Cache Stats:',
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text('• ${stats.notesCount} cached notes (${notesSizeMB.toStringAsFixed(2)} MB)'),
+              Text('• ${stats.drawingsCount} cached drawings (${drawingsSizeMB.toStringAsFixed(2)} MB)'),
+              Text('• Total Size: ${cacheSize.toStringAsFixed(2)} MB'),
+              const SizedBox(height: 12),
+              if (cachedEventNames.isNotEmpty) ...[
+                Text(
+                  'Cached events in current view:',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                ...cachedEventNames.map((name) => Text('  • $name')),
+                const SizedBox(height: 12),
+              ],
+              const Text(
+                'Choose what to clear:',
+                style: TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, 'drawings_only'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.blue,
+            ),
+            child: const Text('Clear Drawings Only'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, 'all'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.amber.shade700,
+            ),
+            child: const Text('Clear All Cache'),
+          ),
+        ],
+      ),
+    );
+
+    if (result == 'drawings_only') {
+      await _clearDrawingsCacheAndReload();
+    } else if (result == 'all') {
+      await _clearCacheAndReload();
+    }
+  }
+
+  /// Clear all cache and optionally trigger preload
+  Future<void> _clearCacheAndReload() async {
+    if (_cacheManager == null) return;
+
+    try {
+      // Get stats before clearing
+      final statsBefore = await _cacheManager!.getStats();
+      final totalItemsBefore = statsBefore.notesCount + statsBefore.drawingsCount;
+
+      // Clear all cache
+      debugPrint('🗑️ ScheduleScreen: Clearing all cache...');
+      await _cacheManager!.clearAll();
+      debugPrint('✅ ScheduleScreen: Cache cleared');
+
+      // Get stats after clearing to confirm
+      final statsAfter = await _cacheManager!.getStats();
+      final totalItemsAfter = statsAfter.notesCount + statsAfter.drawingsCount;
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Cache cleared: $totalItemsBefore items → $totalItemsAfter items'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+      // Optionally trigger preload again to test
+      debugPrint('🔄 ScheduleScreen: Triggering preload to test cache mechanism...');
+      _preloadNotesInBackground();
+
+    } catch (e) {
+      debugPrint('❌ ScheduleScreen: Failed to clear cache: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to clear cache: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Clear drawings cache only and reload current drawing from server
+  Future<void> _clearDrawingsCacheAndReload() async {
+    if (_cacheManager == null) return;
+
+    try {
+      // Get stats before clearing
+      final statsBefore = await _cacheManager!.getStats();
+      final drawingsCountBefore = statsBefore.drawingsCount;
+
+      // Clear drawings cache only
+      debugPrint('🗑️ ScheduleScreen: Clearing drawings cache...');
+      await _cacheManager!.deleteDrawing(
+        widget.book.id!,
+        _getEffectiveDate(),
+        1, // viewMode for 3-day view
+      );
+
+      // Actually clear all drawings cache to properly test
+      final db = _dbService as PRDDatabaseService;
+      await db.clearDrawingsCache();
+      debugPrint('✅ ScheduleScreen: Drawings cache cleared');
+
+      // Get stats after clearing to confirm
+      final statsAfter = await _cacheManager!.getStats();
+      final drawingsCountAfter = statsAfter.drawingsCount;
+
+      // Reload current drawing - this will trigger server fetch via ContentService
+      debugPrint('🔄 ScheduleScreen: Reloading drawing from server...');
+      await _loadDrawing();
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Drawings cache cleared: $drawingsCountBefore → $drawingsCountAfter\nReloaded from server'),
+            backgroundColor: Colors.blue,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+
+    } catch (e) {
+      debugPrint('❌ ScheduleScreen: Failed to clear drawings cache: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to clear drawings cache: $e'),
+            backgroundColor: Colors.red,
             duration: const Duration(seconds: 3),
           ),
         );
@@ -1838,7 +2435,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Query all events in the book
     final allEvents = await _dbService.getAllEventsByBook(widget.book.id!);
 
-    var heavyEvents = allEvents.where((e) => e.recordNumber.startsWith('HEAVY-')).toList();
+    var heavyEvents = allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).toList();
 
     if (heavyEvents.isEmpty) {
       if (mounted) {
@@ -1855,7 +2452,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Limit events if maxEvents is specified
     if (maxEvents != null && maxEvents < heavyEvents.length) {
       heavyEvents = heavyEvents.sublist(0, maxEvents);
-      debugPrint('📋 Found ${allEvents.where((e) => e.recordNumber.startsWith('HEAVY-')).length} HEAVY- events, processing first $maxEvents');
+      debugPrint('📋 Found ${allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).length} HEAVY- events, processing first $maxEvents');
     } else {
       debugPrint('📋 Found ${heavyEvents.length} HEAVY- events');
     }
@@ -1930,7 +2527,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
         // Update event recordNumber: HEAVY-xxx -> DONE-HEAVY-xxx
         final updatedEvent = event.copyWith(
-          recordNumber: event.recordNumber.replaceFirst('HEAVY-', 'DONE-HEAVY-'),
+          recordNumber: event.recordNumber?.replaceFirst('HEAVY-', 'DONE-HEAVY-'),
         );
         await _dbService.updateEvent(updatedEvent);
 
@@ -2052,14 +2649,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+
+        // Auto-save drawing before navigating back
+        if (_isDrawingMode) {
+          await _saveDrawing();
+        }
+
+        if (mounted) {
+          Navigator.of(context).pop();
+        }
+      },
+      child: Scaffold(
       appBar: AppBar(
         title: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Date navigation - Previous button
             IconButton(
               onPressed: () async {
-                if (_isDrawingMode) await _saveDrawing();
+                if (_isDrawingMode) {
+                  _saveDebounceTimer?.cancel();
+                  await _saveDrawing();
+                }
                 setState(() {
                   _selectedDate = _selectedDate.subtract(_getNavigationIncrement());
                 });
@@ -2071,41 +2686,47 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               padding: EdgeInsets.zero,
             ),
+            const SizedBox(width: 4),
             // Date display
-            Expanded(
-              child: GestureDetector(
-                onTap: () async {
-                  final date = await showDatePicker(
-                    context: context,
-                    initialDate: _selectedDate,
-                    firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                    lastDate: DateTime.now().add(const Duration(days: 365)),
-                  );
-                  if (date != null) {
-                    if (_isDrawingMode) await _saveDrawing();
-                    setState(() {
-                      _selectedDate = date;
-                    });
-                    _loadEvents();
-                    await _loadDrawing();
+            GestureDetector(
+              onTap: () async {
+                final date = await showDatePicker(
+                  context: context,
+                  initialDate: _selectedDate,
+                  firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                  lastDate: DateTime.now().add(const Duration(days: 365)),
+                );
+                if (date != null) {
+                  if (_isDrawingMode) {
+                    _saveDebounceTimer?.cancel();
+                    await _saveDrawing();
                   }
-                },
-                child: Text(
-                  _getDateDisplayText(),
-                  style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 13,
-                  ),
-                  textAlign: TextAlign.center,
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
+                  setState(() {
+                    _selectedDate = date;
+                  });
+                  _loadEvents();
+                  await _loadDrawing();
+                }
+              },
+              child: Text(
+                _getDateDisplayText(),
+                style: const TextStyle(
+                  color: Colors.black,
+                  fontSize: 13,
                 ),
+                textAlign: TextAlign.center,
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
               ),
             ),
+            const SizedBox(width: 4),
             // Date navigation - Next button
             IconButton(
               onPressed: () async {
-                if (_isDrawingMode) await _saveDrawing();
+                if (_isDrawingMode) {
+                  _saveDebounceTimer?.cancel();
+                  await _saveDrawing();
+                }
                 setState(() {
                   _selectedDate = _selectedDate.add(_getNavigationIncrement());
                 });
@@ -2120,14 +2741,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           ],
         ),
         actions: [
+          // Toggle old events visibility
+          IconButton(
+            icon: Icon(_showOldEvents ? Icons.visibility : Icons.visibility_off),
+            onPressed: () {
+              setState(() {
+                _showOldEvents = !_showOldEvents;
+              });
+            },
+            tooltip: _showOldEvents ? l10n.hideOldEvents : l10n.showOldEvents,
+          ),
+          // Go to today button
           IconButton(
             icon: const Icon(Icons.today),
-            onPressed: () {
+            onPressed: () async {
+              if (_isDrawingMode) {
+                _saveDebounceTimer?.cancel();
+                await _saveDrawing();
+              }
               setState(() {
                 _selectedDate = TimeService.instance.now();
                 _lastActiveDate = TimeService.instance.now();
               });
               _loadEvents();
+              if (_isDrawingMode) {
+                await _loadDrawing();
+              }
               _panToCurrentTime();
             },
             tooltip: l10n.goToToday,
@@ -2158,25 +2797,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             _buildEventContextMenuOverlay()!,
         ],
       ),
-      floatingActionButton: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          // Test Time FAB (for testing time change behavior)
-          Builder(
-            builder: (context) {
-              final l10n = AppLocalizations.of(context)!;
-              return FloatingActionButton.small(
-                heroTag: 'test_time',
-                onPressed: _showTestTimeDialog,
-                backgroundColor: TimeService.instance.isTestMode ? Colors.red : Colors.grey.shade700,
-                child: Icon(
-                  TimeService.instance.isTestMode ? Icons.schedule : Icons.access_time,
-                  size: 20,
-                ),
-                tooltip: TimeService.instance.isTestMode ? l10n.resetToRealTime : l10n.testTimeActive,
-              );
-            },
-          ),
+      floatingActionButton: _isFabMenuVisible
+        ? Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Toggle FAB to hide menu
+              FloatingActionButton(
+                heroTag: 'toggle_fab_menu',
+                onPressed: _toggleFabMenu,
+                backgroundColor: Colors.grey.shade600,
+                child: const Icon(Icons.close),
+                tooltip: 'Hide menu',
+              ),
+              const SizedBox(height: 12),
+              // Test Time FAB (for testing time change behavior)
+              Builder(
+                builder: (context) {
+                  final l10n = AppLocalizations.of(context)!;
+                  return FloatingActionButton(
+                    heroTag: 'test_time',
+                    onPressed: _showTestTimeDialog,
+                    backgroundColor: TimeService.instance.isTestMode ? Colors.red : Colors.grey.shade700,
+                    child: Icon(
+                      TimeService.instance.isTestMode ? Icons.schedule : Icons.access_time,
+                    ),
+                    tooltip: TimeService.instance.isTestMode ? l10n.resetToRealTime : l10n.testTimeActive,
+                  );
+                },
+              ),
           const SizedBox(height: 12),
           // Go to Today FAB (only show when not viewing today)
           if (!_isViewingToday())
@@ -2242,6 +2890,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             tooltip: _isDrawingMode ? null : l10n.heavyLoadTest,
           ),
           const SizedBox(height: 12),
+          // Clear Cache FAB (experimental - for testing cache mechanism)
+          FloatingActionButton(
+            heroTag: 'clear_cache',
+            onPressed: _isDrawingMode ? null : _showClearCacheDialog,
+            backgroundColor: _isDrawingMode ? Colors.grey : Colors.amber.shade700,
+            child: const Icon(Icons.cached),
+            tooltip: _isDrawingMode ? null : 'Clear Cache (Test)',
+          ),
+          const SizedBox(height: 12),
           // Drawing mode toggle FAB
           FloatingActionButton(
             heroTag: 'drawing_toggle',
@@ -2260,88 +2917,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             tooltip: l10n.createEvent,
           ),
         ],
-      ),
-    );
-  }
-
-  Widget _buildDateSelector() {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8.0, vertical: 4.0),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-        children: [
-          IconButton(
-            onPressed: () async {
-              // Save current drawing before navigating
-              if (_isDrawingMode) {
-                await _saveDrawing();
-              }
-              setState(() {
-                _selectedDate = _selectedDate.subtract(_getNavigationIncrement());
-              });
-              _loadEvents();
-              // Always load drawing for new date (canvas is always visible)
-              await _loadDrawing();
-            },
-            icon: const Icon(Icons.chevron_left, size: 20),
-            iconSize: 20,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            padding: EdgeInsets.zero,
+      )
+        : FloatingActionButton(
+            heroTag: 'toggle_fab_menu',
+            onPressed: _toggleFabMenu,
+            backgroundColor: Colors.grey.shade600,
+            child: const Icon(Icons.menu),
+            tooltip: 'Show menu',
           ),
-          GestureDetector(
-            onTap: () async {
-              final date = await showDatePicker(
-                context: context,
-                initialDate: _selectedDate,
-                firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                lastDate: DateTime.now().add(const Duration(days: 365)),
-              );
-              if (date != null) {
-                // Save current drawing before changing date
-                if (_isDrawingMode) {
-                  await _saveDrawing();
-                }
-                setState(() {
-                  _selectedDate = date;
-                });
-                _loadEvents();
-                // Always load drawing for new date (canvas is always visible)
-                await _loadDrawing();
-              }
-            },
-            child: Text(
-              _getDateDisplayText(),
-              style: Theme.of(context).textTheme.titleMedium,
-            ),
-          ),
-          IconButton(
-            onPressed: () async {
-              // Save current drawing before navigating
-              if (_isDrawingMode) {
-                await _saveDrawing();
-              }
-              setState(() {
-                _selectedDate = _selectedDate.add(_getNavigationIncrement());
-              });
-              _loadEvents();
-              // Always load drawing for new date (canvas is always visible)
-              await _loadDrawing();
-            },
-            icon: const Icon(Icons.chevron_right, size: 20),
-            iconSize: 20,
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-            padding: EdgeInsets.zero,
-          ),
-        ],
-      ),
-    );
+    ), // Scaffold
+  ); // PopScope
   }
 
   String _getDateDisplayText() {
     // Always show 3-day range
     final windowStart = _get3DayWindowStart(_selectedDate);
     final windowEnd = windowStart.add(const Duration(days: 2));
-    return '${DateFormat('MMM d').format(windowStart)} - ${DateFormat('MMM d, y').format(windowEnd)}';
+    return '${DateFormat('MMM d', Localizations.localeOf(context).toString()).format(windowStart)} - ${DateFormat('MMM d, y', Localizations.localeOf(context).toString()).format(windowEnd)}';
   }
 
   Widget _build3DayView() {
@@ -2397,7 +2989,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                               border: Border.all(color: Colors.grey.shade300),
                             ),
                             child: Text(
-                              DateFormat('EEE d').format(date),
+                              DateFormat('EEE d', Localizations.localeOf(context).toString()).format(date),
                               style: Theme.of(context).textTheme.titleSmall,
                             ),
                           ),
@@ -2437,10 +3029,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                           key: canvasKey,
                           initialStrokes: _currentDrawing?.strokes ?? [],
                           onStrokesChanged: () {
-                            // Auto-save on stroke changes
-                            if (_isDrawingMode) {
-                              _saveDrawing();
-                            }
+                            setState(() {}); // Rebuild toolbar to update undo/redo/clear buttons
+                            // RACE CONDITION FIX: Schedule debounced save instead of immediate save
+                            // This reduces server load and prevents race conditions during fast drawing
+                            _scheduleSaveDrawing();
                           },
                         ),
                       ),
@@ -2719,23 +3311,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return minutesFromStart ~/ 15;
   }
 
-  List<Event> _getEventsForTimeSlot(DateTime date, int hour, int minute) {
-    return _events.where((event) {
-      return event.startTime.year == date.year &&
-             event.startTime.month == date.month &&
-             event.startTime.day == date.day &&
-             event.startTime.hour == hour &&
-             event.startTime.minute >= minute &&
-             event.startTime.minute < minute + 15;
-    }).toList();
-  }
-
   /// Get all events for a specific date (used for overlay rendering)
   List<Event> _getEventsForDate(DateTime date) {
     return _events.where((event) {
-      return event.startTime.year == date.year &&
-             event.startTime.month == date.month &&
-             event.startTime.day == date.day;
+      // Filter by date
+      final matchesDate = event.startTime.year == date.year &&
+                          event.startTime.month == date.month &&
+                          event.startTime.day == date.day;
+
+      if (!matchesDate) return false;
+
+      // Filter out old events if toggle is off
+      // Old events = removed events or time-changed old versions
+      if (!_showOldEvents && (event.isRemoved || event.hasNewTime)) {
+        return false;
+      }
+
+      return true;
     }).toList();
   }
 
@@ -2759,7 +3351,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   /// Format the new time info for display
   String _getNewTimeDisplay(Event? newEvent) {
     if (newEvent == null) return '';
-    return '→ ${DateFormat('MMM d, HH:mm').format(newEvent.startTime)}';
+    return '→ ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newEvent.startTime)}';
   }
 
   Widget _buildEventTile(BuildContext context, Event event, double slotHeight) {
@@ -2809,7 +3401,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 ),
               ),
             // Content with height-adaptive rendering
-            _buildEventTileContent(event, tileHeight),
+            _buildEventTileContent(event, tileHeight, slotHeight),
           ],
         ),
       ),
@@ -2832,7 +3424,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 color: _getEventTypeColor(context, event.eventType),
                 borderRadius: BorderRadius.circular(2),
               ),
-              child: _buildEventTileContent(event, tileHeight),
+              child: _buildEventTileContent(event, tileHeight, slotHeight),
             ),
           ),
         ),
@@ -2850,7 +3442,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return eventWidget;
   }
 
-  Widget _buildEventTileContent(Event event, double tileHeight) {
+  /// Helper method to calculate event name font size based on slot height
+  /// Returns scaled font size (1.8x) for large screens, or original size for smaller screens
+  double _getEventNameFontSize(double slotHeight, double baseFontSize) {
+    if (slotHeight >= _largeScreenSlotHeightThreshold) {
+      return baseFontSize * 1.8;
+    }
+    return baseFontSize;
+  }
+
+  Widget _buildEventTileContent(Event event, double tileHeight, double slotHeight) {
     // For closed-end events (with both start and end times), always show simplified content
     // Open-end events get height-adaptive rendering
     final isClosedEnd = !_shouldDisplayAsOpenEnd(event);
@@ -2858,7 +3459,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (isClosedEnd) {
       // Closed-end events: Always show just the name with consistent styling
       // Use fixed small font size to match open-end events (not calculated from tileHeight)
-      final fontSize = 9.0;
+      final fontSize = _getEventNameFontSize(slotHeight, 9.0);
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -2884,7 +3485,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Height breakpoints for adaptive rendering
     if (tileHeight < 20) {
       // Very small: Only show name with tiny font
-      final fontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
+      final baseFontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
+      final fontSize = _getEventNameFontSize(slotHeight, baseFontSize);
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -2906,7 +3508,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       );
     } else if (tileHeight < 35) {
       // Small: Only show name with small font
-      final fontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
+      final baseFontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
+      final fontSize = _getEventNameFontSize(slotHeight, baseFontSize);
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -2952,7 +3555,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 child: Text(
                   event.name,
                   style: TextStyle(
-                    fontSize: 12.6,
+                    fontSize: _getEventNameFontSize(slotHeight, 12.6),
                     color: event.isRemoved ? Colors.white70 : Colors.white,
                     height: 1.3,
                     decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -2991,7 +3594,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 child: Text(
                   event.name,
                   style: TextStyle(
-                    fontSize: 14.4,
+                    fontSize: _getEventNameFontSize(slotHeight, 14.4),
                     color: event.isRemoved ? Colors.white70 : Colors.white,
                     height: 1.3,
                     decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -3002,7 +3605,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 ),
               ),
             ),
-          if (event.recordNumber.isNotEmpty)
+          if (event.recordNumber?.isNotEmpty ?? false)
             Builder(
               builder: (context) => Text(
                 '${AppLocalizations.of(context)!.record}${event.recordNumber}',
@@ -3045,7 +3648,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 child: Text(
                   event.name,
                   style: TextStyle(
-                    fontSize: 16.2,
+                    fontSize: _getEventNameFontSize(slotHeight, 16.2),
                     color: event.isRemoved ? Colors.white70 : Colors.white,
                     height: 1.3,
                     decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -3056,7 +3659,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 ),
               ),
             ),
-          if (event.recordNumber.isNotEmpty)
+          if (event.recordNumber?.isNotEmpty ?? false)
             Builder(
               builder: (context) => Text(
                 '${AppLocalizations.of(context)!.record}${event.recordNumber}',
@@ -3206,6 +3809,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 leading: const Icon(Icons.category, size: 20),
                 title: Text(l10n.changeEventType, style: const TextStyle(fontSize: 14)),
                 onTap: () => _handleMenuAction('changeType', event),
+              ),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.access_time, size: 20),
+                title: Text(l10n.changeEventTime, style: const TextStyle(fontSize: 14)),
+                onTap: () => _handleMenuAction('changeTime', event),
               ),
               ListTile(
                 dense: true,

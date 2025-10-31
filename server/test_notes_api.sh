@@ -111,8 +111,8 @@ echo "  Book ID: $BOOK_ID"
 echo "  Event IDs: $EVENT_ID_1, $EVENT_ID_2, $EVENT_ID_3"
 echo ""
 
-echo "📋 Test 1: GET non-existent note → 404"
-echo "----------------------------------------"
+echo "📋 Test 1: GET non-existent note → 200, note: null"
+echo "---------------------------------------------------"
 GET_NONEXISTENT=$(curl -s --insecure -w "\n%{http_code}" -X GET \
   "$BASE_URL/api/books/$BOOK_ID/events/$EVENT_ID_1/note" \
   -H "X-Device-ID: $DEVICE_ID" \
@@ -121,8 +121,8 @@ GET_NONEXISTENT=$(curl -s --insecure -w "\n%{http_code}" -X GET \
 HTTP_CODE=$(echo "$GET_NONEXISTENT" | tail -n 1)
 RESPONSE=$(echo "$GET_NONEXISTENT" | sed '$d')
 
-print_test "GET non-existent note returns 404" "404" "$HTTP_CODE"
-print_test "Response indicates not found" '"success":false' "$RESPONSE"
+print_test "GET non-existent note returns 200" "200" "$HTTP_CODE"
+print_test "Response has success:true and note:null" '"success":true.*"note":null' "$RESPONSE"
 echo ""
 
 echo "📋 Test 2: POST create new note → 200, version=1"
@@ -248,7 +248,9 @@ GET_DELETED=$(curl -s --insecure -w "\n%{http_code}" -X GET \
   -H "X-Device-Token: $DEVICE_TOKEN")
 
 HTTP_CODE=$(echo "$GET_DELETED" | tail -n 1)
-print_test "GET deleted note returns 404" "404" "$HTTP_CODE"
+RESPONSE=$(echo "$GET_DELETED" | sed '$d')
+print_test "GET deleted note returns 200" "200" "$HTTP_CODE"
+print_test "Response has note:null" '"note":null' "$RESPONSE"
 echo ""
 
 echo "📋 Test 9: Unauthorized access → 403"

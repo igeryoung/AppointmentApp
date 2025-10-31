@@ -124,6 +124,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get goToToday => '前往今天';
 
   @override
+  String get toggleOldEvents => '切換舊事件顯示';
+
+  @override
+  String get showOldEvents => '顯示舊事件';
+
+  @override
+  String get hideOldEvents => '隱藏舊事件';
+
+  @override
   String get createEvent => '建立活動';
 
   @override
@@ -160,7 +169,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get eventNameRequired => '活動名稱為必填項目';
 
   @override
-  String get recordNumber => '紀錄編號 *';
+  String get recordNumber => '紀錄編號';
 
   @override
   String get recordNumberRequired => '紀錄編號為必填項目';
@@ -181,13 +190,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get openEnded => '不設結束時間';
 
   @override
-  String get deleteEvent => '刪除活動';
+  String get deleteEvent => '刪除約診';
 
   @override
   String get deleteEventConfirmation => '您確定要刪除此活動及其筆記嗎？';
 
   @override
-  String get removeEvent => '移除活動';
+  String get removeEvent => '取消約診';
 
   @override
   String get removeEventDescription => '此活動將被標記為已移除，但仍會以刪除線顯示。';
@@ -202,10 +211,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get remove => '移除';
 
   @override
-  String get changeEventTime => '變更活動時間';
+  String get changeEventTime => '變更約診時間';
 
   @override
-  String get changeEventType => '變更活動類型';
+  String get changeEventType => '變更約診類型';
 
   @override
   String get eventTypeChanged => '活動類型已更新';
@@ -503,7 +512,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get deleteEventTitle => '刪除活動';
+  String get deleteEventTitle => '刪除約診';
 
   @override
   String get deleteEventConfirmMessage => '您確定要刪除此活動及其筆記嗎？';
@@ -517,7 +526,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get removeEventTitle => '移除活動';
+  String get removeEventTitle => '取消約診';
 
   @override
   String get removeEventMessage => '此活動將被標記為已移除，但仍會以刪除線顯示。';
@@ -529,7 +538,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get removeButton => '移除';
 
   @override
-  String get changeEventTimeTitle => '變更活動時間';
+  String get changeEventTimeTitle => '變更約診時間';
 
   @override
   String get changeTimeMessage => '這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。';
@@ -615,6 +624,18 @@ class AppLocalizationsZh extends AppLocalizations {
   String errorSavingNote(String error) {
     return '保存笔记时出错：$error';
   }
+
+  @override
+  String get unsavedChanges => '未保存的更改';
+
+  @override
+  String get unsavedChangesMessage => '您有未保存的更改。确定要离开吗？';
+
+  @override
+  String get discard => '舍弃';
+
+  @override
+  String get keepEditing => '继续编辑';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -737,6 +758,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get goToToday => '前往今天';
 
   @override
+  String get toggleOldEvents => '切換舊事件顯示';
+
+  @override
+  String get showOldEvents => '顯示舊事件';
+
+  @override
+  String get hideOldEvents => '隱藏舊事件';
+
+  @override
   String get createEvent => '建立活動';
 
   @override
@@ -761,28 +791,28 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get newEvent => '新活動';
+  String get newEvent => '新約診';
 
   @override
   String get editEvent => '編輯活動';
 
   @override
-  String get eventName => '活動名稱 *';
+  String get eventName => '姓名 *';
 
   @override
-  String get eventNameRequired => '活動名稱為必填項目';
+  String get eventNameRequired => '姓名為必填項目';
 
   @override
-  String get recordNumber => '紀錄編號 *';
+  String get recordNumber => '病例號';
 
   @override
-  String get recordNumberRequired => '紀錄編號為必填項目';
+  String get recordNumberRequired => '病例號為必填項目';
 
   @override
-  String get eventType => '活動類型 *';
+  String get eventType => '約診類型 *';
 
   @override
-  String get eventTypeRequired => '活動類型為必填項目';
+  String get eventTypeRequired => '約診類型為必填項目';
 
   @override
   String get startTime => '開始時間';
@@ -794,13 +824,13 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get openEnded => '不設結束時間';
 
   @override
-  String get deleteEvent => '刪除活動';
+  String get deleteEvent => '刪除約診';
 
   @override
   String get deleteEventConfirmation => '您確定要刪除此活動及其筆記嗎？';
 
   @override
-  String get removeEvent => '移除活動';
+  String get removeEvent => '取消約診';
 
   @override
   String get removeEventDescription => '此活動將被標記為已移除，但仍會以刪除線顯示。';
@@ -815,10 +845,10 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get remove => '移除';
 
   @override
-  String get changeEventTime => '變更活動時間';
+  String get changeEventTime => '變更約診時間';
 
   @override
-  String get changeEventType => '變更活動類型';
+  String get changeEventType => '變更約診類型';
 
   @override
   String get eventTypeChanged => '活動類型已更新';
@@ -1116,7 +1146,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get deleteEventTitle => '刪除活動';
+  String get deleteEventTitle => '刪除約診';
 
   @override
   String get deleteEventConfirmMessage => '您確定要刪除此活動及其筆記嗎？';
@@ -1130,7 +1160,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get removeEventTitle => '移除活動';
+  String get removeEventTitle => '取消約診';
 
   @override
   String get removeEventMessage => '此活動將被標記為已移除，但仍會以刪除線顯示。';
@@ -1142,7 +1172,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get removeButton => '移除';
 
   @override
-  String get changeEventTimeTitle => '變更活動時間';
+  String get changeEventTimeTitle => '變更約診時間';
 
   @override
   String get changeTimeMessage => '這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。';
@@ -1228,4 +1258,16 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String errorSavingNote(String error) {
     return '儲存筆記時發生錯誤：$error';
   }
+
+  @override
+  String get unsavedChanges => '未儲存的變更';
+
+  @override
+  String get unsavedChangesMessage => '您有未儲存的變更。確定要離開嗎？';
+
+  @override
+  String get discard => '捨棄';
+
+  @override
+  String get keepEditing => '繼續編輯';
 }

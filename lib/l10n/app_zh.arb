@@ -206,6 +206,21 @@
     "description": "Tooltip for go to today button"
   },
 
+  "toggleOldEvents": "切換舊事件顯示",
+  "@toggleOldEvents": {
+    "description": "Tooltip for toggle old events visibility button"
+  },
+
+  "showOldEvents": "顯示舊事件",
+  "@showOldEvents": {
+    "description": "Text for showing old events"
+  },
+
+  "hideOldEvents": "隱藏舊事件",
+  "@hideOldEvents": {
+    "description": "Text for hiding old events"
+  },
+
   "createEvent": "建立活動",
   "@createEvent": {
     "description": "Tooltip for create event button"
@@ -271,14 +286,14 @@
     "description": "Validation error for empty event name"
   },
 
-  "recordNumber": "紀錄編號 *",
+  "recordNumber": "紀錄編號",
   "@recordNumber": {
     "description": "Label for record number field"
   },
 
   "recordNumberRequired": "紀錄編號為必填項目",
   "@recordNumberRequired": {
-    "description": "Validation error for empty record number"
+    "description": "Validation error for empty record number (deprecated - field is now optional)"
   },
 
   "eventType": "活動類型 *",
@@ -306,7 +321,7 @@
     "description": "Label for open-ended event"
   },
 
-  "deleteEvent": "刪除活動",
+  "deleteEvent": "刪除約診",
   "@deleteEvent": {
     "description": "Title for delete event dialog"
   },
@@ -316,7 +331,7 @@
     "description": "Confirmation message for deleting event"
   },
 
-  "removeEvent": "移除活動",
+  "removeEvent": "取消約診",
   "@removeEvent": {
     "description": "Title for remove event dialog and menu item"
   },
@@ -341,12 +356,12 @@
     "description": "Remove button text"
   },
 
-  "changeEventTime": "變更活動時間",
+  "changeEventTime": "變更約診時間",
   "@changeEventTime": {
     "description": "Title for change event time dialog and menu item"
   },
 
-  "changeEventType": "變更活動類型",
+  "changeEventType": "變更約診類型",
   "@changeEventType": {
     "description": "Title for change event type dialog and menu item"
   },
@@ -764,5 +779,25 @@
         "type": "String"
       }
     }
+  },
+
+  "unsavedChanges": "未保存的更改",
+  "@unsavedChanges": {
+    "description": "Title for unsaved changes dialog"
+  },
+
+  "unsavedChangesMessage": "您有未保存的更改。确定要离开吗？",
+  "@unsavedChangesMessage": {
+    "description": "Message for unsaved changes confirmation dialog"
+  },
+
+  "discard": "舍弃",
+  "@discard": {
+    "description": "Discard changes button text"
+  },
+
+  "keepEditing": "继续编辑",
+  "@keepEditing": {
+    "description": "Keep editing button text"
   }
 }

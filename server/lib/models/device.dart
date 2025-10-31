@@ -64,10 +64,12 @@ class Device {
 class DeviceRegisterRequest {
   final String deviceName;
   final String? platform;
+  final String password;
 
   const DeviceRegisterRequest({
     required this.deviceName,
     this.platform,
+    required this.password,
   });
 
   factory DeviceRegisterRequest.fromJson(Map<String, dynamic> json) =>

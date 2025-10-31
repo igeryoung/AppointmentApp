@@ -1,14 +1,74 @@
 # Phase 4-03: Offline UX & Auto-Sync
 
 > **优先级**: P1 - Phase 4
-> **状态**: 🟡 Not Started
+> **状态**: ✅ Partially Complete
 > **估计时间**: 4小时
 > **依赖**: Phase 4-01, 4-02完成
-> **完成时间**: TBD
+> **完成时间**: 2025-10-24 (部分功能)
+> **实际时间**: ~3小时
+>
+> **注**: 核心功能已实现但采用了不同的架构方案（详见下方说明）
 
 ---
 
-## 📋 任务描述
+## 🎯 实际实现总结
+
+### 已实现功能 ✅
+
+**1. 网络状态监听**
+- **位置**: `schedule_screen.dart:166-180`, `event_detail_screen.dart:192-208`
+- **实现**: 直接使用 `connectivity_plus` (已在 pubspec.yaml:49)
+- **架构**: 每个screen独立监听，无全局NetworkService单例
+- **特性**: 实时检测网络变化 + 服务器健康检查
+
+**2. 自动同步**
+- **位置**: `schedule_screen.dart:237-309`, `event_detail_screen.dart:229-270`
+- **实现**: ContentService.syncDirtyNotesForBook() (content_service.dart:415)
+- **触发时机**:
+  - ✅ 网络恢复时自动触发 (schedule_screen.dart:223-232)
+  - ✅ App进入前台时检查 (event_detail_screen.dart:250)
+  - ❌ 定时检查(每5分钟) - 未实现
+- **架构**: 无全局SyncService单例，由ContentService提供sync方法
+
+**3. 离线UI指示**
+- **EventDetailScreen**:
+  - 离线banner (event_detail_screen.dart:1258-1294) - 橙色banner显示"Offline - Changes not synced"
+  - 未同步banner (event_detail_screen.dart:1298-1324) - 蓝色banner显示"Syncing..."
+  - AppBar图标指示 (cloud_off/cloud_upload) (event_detail_screen.dart:1105-1114)
+- **ScheduleScreen**:
+  - Snackbar提示同步结果 (schedule_screen.dart:260-298)
+  - ❌ 无持久化的离线banner
+
+**4. 数据安全**
+- **离线保存策略** ✅
+  - EventDetail: `_saveNoteWithOfflineFirst()` (event_detail_screen.dart:505)
+  - 本地优先保存，标记dirty，后台同步
+- **Cache保护** ⚠️
+  - ❌ 离线时禁用cache淘汰 - 未明确实现
+  - ✅ Dirty数据不被删除 (通过CacheManager逻辑保护)
+
+### 架构差异：计划 vs 实际
+
+| 组件 | 计划方案 | 实际实现 | 原因 |
+|------|---------|---------|------|
+| NetworkService | 全局单例 | 每个screen独立监听 | ✅ 简化架构，避免全局状态 |
+| SyncService | 全局单例 | ContentService方法 | ✅ 功能聚合，减少服务层 |
+| OfflineBanner | 全局widget包裹App | 每个screen独立实现 | ✅ 灵活控制不同screen的UI |
+| 定时同步 | 每5分钟检查 | 仅网络恢复时触发 | ⚠️ 简化逻辑，减少后台活动 |
+| Cache淘汰保护 | 离线时完全禁用 | Dirty数据受保护 | ⚠️ 部分实现 |
+
+**为什么采用不同架构？**
+
+1. **简单性优先**: 直接在screen中处理网络逻辑比全局单例更直观
+2. **避免过度抽象**: NetworkService/SyncService增加复杂度但价值有限
+3. **测试友好**: 每个screen的网络逻辑独立，容易mock和测试
+4. **灵活性**: 不同screen可以有不同的离线策略和UI
+
+**Linus哲学**: "Good code is simple code. Don't create abstractions until you need them."
+
+---
+
+## 📋 任务描述 (原始规划)
 
 ### 目标
 
@@ -70,11 +130,13 @@ if (isOnline) {
 
 ---
 
-## ✅ 实施方案
+## ✅ 实施方案 (参考 - 采用了不同架构)
 
-### 方案1: 网络状态监听
+> **注意**: 以下是原始计划方案，实际实现采用了更简化的架构（见上方"实际实现总结"）
 
-**创建NetworkService**:
+### 方案1: 网络状态监听 (❌ 未使用此方案)
+
+**原计划: 创建NetworkService单例** (未实现):
 ```dart
 // lib/services/network_service.dart
 
@@ -149,9 +211,9 @@ dependencies:
 
 ---
 
-### 方案2: 自动同步服务
+### 方案2: 自动同步服务 (❌ 未使用此方案)
 
-**创建SyncService**:
+**原计划: 创建SyncService单例** (未实现，改用ContentService方法):
 ```dart
 // lib/services/sync_service.dart
 
@@ -326,9 +388,9 @@ Future<List<ScheduleDrawing>> getDirtyDrawings() async {
 
 ---
 
-### 方案3: 离线时禁用Cache淘汰
+### 方案3: 离线时禁用Cache淘汰 (⚠️ 部分实现)
 
-**更新CacheManager**:
+**原计划: 更新CacheManager禁用淘汰** (未完全实现此逻辑):
 ```dart
 // lib/services/cache_manager.dart
 
@@ -397,9 +459,12 @@ class CacheManager {
 
 ---
 
-### 方案4: 全局离线Banner
+### 方案4: 全局离线Banner (❌ 未使用全局方案)
 
-**创建OfflineBanner Widget**:
+**原计划: 创建全局OfflineBanner Widget** (未实现，各screen独立实现banner):
+
+**实际实现**: EventDetailScreen已有离线banner (event_detail_screen.dart:1258-1294)
+
 ```dart
 // lib/widgets/offline_banner.dart
 
@@ -651,42 +716,51 @@ CREATE INDEX idx_drawings_dirty ON schedule_drawings(is_dirty) WHERE is_dirty = 
 
 ## ✅ 验收标准
 
-- [ ] NetworkService正确检测在线/离线
-- [ ] 离线时保存成功（标记dirty）
-- [ ] 恢复网络后自动sync（2秒内）
-- [ ] Dirty数据永不被cache淘汰
-- [ ] 全局OfflineBanner正确显示
-- [ ] 所有集成测试通过（3个场景）
-- [ ] 单元测试通过
+- [x] 网络状态监听工作正常（connectivity_plus + health check）✅
+- [x] 离线时保存成功（标记dirty）✅
+- [x] 恢复网络后自动sync ✅ (schedule_screen.dart:223-232)
+- [x] Dirty数据受到保护不被cache淘汰 ✅
+- [x] 离线UI指示正确显示 ✅ (EventDetailScreen有banner)
+- [ ] ScheduleScreen也有离线banner ❌ (仅有snackbar)
+- [ ] 所有集成测试通过（3个场景）⚠️ 待验证
+- [ ] 单元测试通过 ⚠️ 待验证
 
 ---
 
 ## 📝 修复检查清单
 
-### 新增服务
-- [ ] 创建`lib/services/network_service.dart`
-- [ ] 创建`lib/services/sync_service.dart`
-- [ ] 创建`lib/widgets/offline_banner.dart`
+### 新增服务 (采用不同架构)
+- [ ] ~~创建`lib/services/network_service.dart`~~ ❌ 未创建（直接在screens中使用connectivity_plus）
+- [ ] ~~创建`lib/services/sync_service.dart`~~ ❌ 未创建（使用ContentService方法）
+- [ ] ~~创建`lib/widgets/offline_banner.dart`~~ ❌ 未创建（各screen独立实现）
 
 ### Schema变更
-- [ ] 添加`is_dirty`列到notes和schedule_drawings
-- [ ] 创建dirty索引
+- [x] 添加`is_dirty`列到notes和schedule_drawings ✅
+- [x] 创建dirty索引 ✅
 
 ### 现有服务更新
-- [ ] CacheManager: 离线时跳过淘汰
-- [ ] CacheManager: 永不删除dirty数据
-- [ ] PRDDatabaseService: 添加`getDirtyNotes()`
-- [ ] PRDDatabaseService: 添加`getDirtyDrawings()`
-- [ ] ContentService: 添加`syncNote()`
-- [ ] ContentService: 添加`syncDrawing()`
+- [x] CacheManager: 永不删除dirty数据 ✅
+- [ ] CacheManager: 离线时跳过淘汰 ⚠️ 未明确实现
+- [x] PRDDatabaseService: 添加`getDirtyNotes()` ✅
+- [ ] PRDDatabaseService: 添加`getDirtyDrawings()` ⚠️ 需确认
+- [x] ContentService: 添加`syncNote()` ✅ (content_service.dart:150)
+- [x] ContentService: 添加`syncDirtyNotesForBook()` ✅ (content_service.dart:415)
+- [ ] ContentService: 添加`syncDrawing()` ❌ 未实现
 
-### App初始化
-- [ ] main.dart: 初始化NetworkService
-- [ ] main.dart: 初始化SyncService
-- [ ] main.dart: 用OfflineBanner包裹App
+### Screen更新
+- [x] ScheduleScreen: 集成connectivity监听 ✅
+- [x] ScheduleScreen: 实现auto-sync ✅
+- [x] EventDetailScreen: 集成connectivity监听 ✅
+- [x] EventDetailScreen: 实现offline-first保存 ✅
+- [x] EventDetailScreen: 实现离线banner UI ✅
+
+### App初始化 (采用不同架构)
+- [ ] ~~main.dart: 初始化NetworkService~~ ❌ 不需要
+- [ ] ~~main.dart: 初始化SyncService~~ ❌ 不需要
+- [ ] ~~main.dart: 用OfflineBanner包裹App~~ ❌ 不需要
 
 ### 依赖添加
-- [ ] pubspec.yaml: 添加`connectivity_plus: ^5.0.0`
+- [x] pubspec.yaml: 添加`connectivity_plus: ^5.0.0` ✅ (已有:49)
 
 ---
 
@@ -698,6 +772,44 @@ CREATE INDEX idx_drawings_dirty ON schedule_drawings(is_dirty) WHERE is_dirty = 
 
 ---
 
+## 🔮 Future Enhancements (未实现功能)
+
+以下功能在原始规划中但未在当前版本实现，可作为未来优化方向：
+
+### 1. 全局NetworkService单例
+- **好处**: 统一网络状态管理，减少重复代码
+- **当前方案**: 各screen独立监听，简单直接
+- **是否需要**: 低优先级（当前方案已足够）
+
+### 2. 定时自动同步
+- **计划**: 每5分钟检查并同步dirty数据
+- **当前方案**: 仅在网络恢复和App进入前台时同步
+- **是否需要**: 中优先级（可提高数据同步及时性）
+
+### 3. ScheduleScreen离线Banner
+- **计划**: 持久化banner提示离线状态
+- **当前方案**: 仅有Snackbar临时提示
+- **是否需要**: 低优先级（用户主要在EventDetail编辑）
+
+### 4. 离线时禁用Cache淘汰
+- **计划**: 离线时完全禁用cache清理
+- **当前方案**: Dirty数据受保护，但非dirty过期数据可能被清理
+- **是否需要**: 中优先级（提高离线可用性）
+
+### 5. Drawing同步
+- **计划**: 实现drawing的dirty标记和同步
+- **当前方案**: Drawing仅本地存储
+- **是否需要**: 高优先级（如果需要多设备同步drawing）
+
+### 6. 全局OfflineBanner组件
+- **计划**: 可复用的widget包裹整个App
+- **当前方案**: 各screen独立实现
+- **是否需要**: 低优先级（当前各screen需求不同）
+
+---
+
 **Linus说**: "The network is unreliable. Design for it. Users shouldn't have to think about 'online' vs 'offline' - that's the app's job, not theirs."
 
 **数据安全第一原则**: "Dirty data is sacred. Never delete it, never ignore it, always sync it. The user trusts you with their work - don't break that trust."
+
+**实际架构哲学**: "Premature abstraction is the root of all complexity. Build what you need, when you need it."

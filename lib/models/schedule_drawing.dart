@@ -8,6 +8,7 @@ class ScheduleDrawing {
   final DateTime date; // Reference date for the drawing
   final int viewMode; // 0: Day, 1: 3-Day, 2: Week
   final List<Stroke> strokes;
+  final int version; // Optimistic locking version
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -17,6 +18,7 @@ class ScheduleDrawing {
     required this.date,
     required this.viewMode,
     required this.strokes,
+    this.version = 1,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -27,6 +29,7 @@ class ScheduleDrawing {
     DateTime? date,
     int? viewMode,
     List<Stroke>? strokes,
+    int? version,
     DateTime? createdAt,
     DateTime? updatedAt,
   }) {
@@ -36,6 +39,7 @@ class ScheduleDrawing {
       date: date ?? this.date,
       viewMode: viewMode ?? this.viewMode,
       strokes: strokes ?? this.strokes,
+      version: version ?? this.version,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
     );
@@ -48,26 +52,57 @@ class ScheduleDrawing {
       'date': date.millisecondsSinceEpoch ~/ 1000,
       'view_mode': viewMode,
       'strokes_data': jsonEncode(strokes.map((s) => s.toMap()).toList()),
+      'version': version,
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
     };
   }
 
   factory ScheduleDrawing.fromMap(Map<String, dynamic> map) {
+    // Handle both camelCase (from server API) and snake_case (from local DB)
     List<Stroke> strokes = [];
-    if (map['strokes_data'] != null) {
-      final strokesJson = jsonDecode(map['strokes_data']) as List;
+
+    // Check for strokesData (server) or strokes_data (local DB)
+    final strokesDataRaw = map['strokesData'] ?? map['strokes_data'];
+    if (strokesDataRaw != null) {
+      // Handle both pre-decoded list and JSON string
+      final strokesJson = strokesDataRaw is String
+          ? jsonDecode(strokesDataRaw) as List
+          : strokesDataRaw as List;
       strokes = strokesJson.map((s) => Stroke.fromMap(s)).toList();
+    }
+
+    // Parse timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
+    DateTime parseTimestamp(dynamic value, {required DateTime fallback}) {
+      if (value == null) return fallback;
+      if (value is String) {
+        // ISO 8601 string from server
+        return DateTime.parse(value);
+      } else if (value is int) {
+        // Unix seconds from local DB
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+      }
+      return fallback;
     }
 
     return ScheduleDrawing(
       id: map['id']?.toInt(),
-      bookId: map['book_id']?.toInt() ?? 0,
-      date: DateTime.fromMillisecondsSinceEpoch((map['date'] ?? 0) * 1000),
-      viewMode: map['view_mode']?.toInt() ?? 0,
+      bookId: (map['bookId'] ?? map['book_id'])?.toInt() ?? 0,
+      date: parseTimestamp(
+        map['date'],
+        fallback: DateTime.now(),
+      ),
+      viewMode: (map['viewMode'] ?? map['view_mode'])?.toInt() ?? 0,
       strokes: strokes,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
+      version: map['version']?.toInt() ?? 1,
+      createdAt: parseTimestamp(
+        map['createdAt'] ?? map['created_at'],
+        fallback: DateTime.now(),
+      ),
+      updatedAt: parseTimestamp(
+        map['updatedAt'] ?? map['updated_at'],
+        fallback: DateTime.now(),
+      ),
     );
   }
 

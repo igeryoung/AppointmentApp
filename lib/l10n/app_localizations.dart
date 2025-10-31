@@ -295,6 +295,24 @@ abstract class AppLocalizations {
   /// **'前往今天'**
   String get goToToday;
 
+  /// Tooltip for toggle old events visibility button
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'切換舊事件顯示'**
+  String get toggleOldEvents;
+
+  /// Text for showing old events
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'顯示舊事件'**
+  String get showOldEvents;
+
+  /// Text for hiding old events
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'隱藏舊事件'**
+  String get hideOldEvents;
+
   /// Tooltip for create event button
   ///
   /// In zh_TW, this message translates to:
@@ -334,7 +352,7 @@ abstract class AppLocalizations {
   /// Title for new event screen
   ///
   /// In zh_TW, this message translates to:
-  /// **'新活動'**
+  /// **'新約診'**
   String get newEvent;
 
   /// Title for edit event screen
@@ -346,37 +364,37 @@ abstract class AppLocalizations {
   /// Label for event name field
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動名稱 *'**
+  /// **'姓名 *'**
   String get eventName;
 
   /// Validation error for empty event name
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動名稱為必填項目'**
+  /// **'姓名為必填項目'**
   String get eventNameRequired;
 
   /// Label for record number field
   ///
   /// In zh_TW, this message translates to:
-  /// **'紀錄編號 *'**
+  /// **'病例號'**
   String get recordNumber;
 
-  /// Validation error for empty record number
+  /// Validation error for empty record number (deprecated - field is now optional)
   ///
   /// In zh_TW, this message translates to:
-  /// **'紀錄編號為必填項目'**
+  /// **'病例號為必填項目'**
   String get recordNumberRequired;
 
   /// Label for event type field
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動類型 *'**
+  /// **'約診類型 *'**
   String get eventType;
 
   /// Validation error for empty event type
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動類型為必填項目'**
+  /// **'約診類型為必填項目'**
   String get eventTypeRequired;
 
   /// Simple label for start time (no parameters)
@@ -400,7 +418,7 @@ abstract class AppLocalizations {
   /// Title for delete event dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'刪除活動'**
+  /// **'刪除約診'**
   String get deleteEvent;
 
   /// Confirmation message for deleting event
@@ -412,7 +430,7 @@ abstract class AppLocalizations {
   /// Title for remove event dialog and menu item
   ///
   /// In zh_TW, this message translates to:
-  /// **'移除活動'**
+  /// **'取消約診'**
   String get removeEvent;
 
   /// Description for remove event action
@@ -442,13 +460,13 @@ abstract class AppLocalizations {
   /// Title for change event time dialog and menu item
   ///
   /// In zh_TW, this message translates to:
-  /// **'變更活動時間'**
+  /// **'變更約診時間'**
   String get changeEventTime;
 
   /// Title for change event type dialog and menu item
   ///
   /// In zh_TW, this message translates to:
-  /// **'變更活動類型'**
+  /// **'變更約診類型'**
   String get changeEventType;
 
   /// Success message after changing event type
@@ -940,7 +958,7 @@ abstract class AppLocalizations {
   /// Title for delete event dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'刪除活動'**
+  /// **'刪除約診'**
   String get deleteEventTitle;
 
   /// Confirmation message for deleting event
@@ -964,7 +982,7 @@ abstract class AppLocalizations {
   /// Title for remove event dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'移除活動'**
+  /// **'取消約診'**
   String get removeEventTitle;
 
   /// Message explaining remove action
@@ -988,7 +1006,7 @@ abstract class AppLocalizations {
   /// Title for change event time dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'變更活動時間'**
+  /// **'變更約診時間'**
   String get changeEventTimeTitle;
 
   /// Message explaining time change action
@@ -1134,6 +1152,30 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'儲存筆記時發生錯誤：{error}'**
   String errorSavingNote(String error);
+
+  /// Title for unsaved changes dialog
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'未儲存的變更'**
+  String get unsavedChanges;
+
+  /// Message for unsaved changes confirmation dialog
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'您有未儲存的變更。確定要離開嗎？'**
+  String get unsavedChangesMessage;
+
+  /// Discard changes button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'捨棄'**
+  String get discard;
+
+  /// Keep editing button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'繼續編輯'**
+  String get keepEditing;
 }
 
 class _AppLocalizationsDelegate

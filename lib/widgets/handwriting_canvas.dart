@@ -2,6 +2,75 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/note.dart';
 
+/// Base class for canvas operations that can be undone/redone
+abstract class CanvasOperation {
+  void undo(List<Stroke> strokes);
+  void redo(List<Stroke> strokes);
+}
+
+/// Operation for adding a stroke (drawing)
+class DrawOperation extends CanvasOperation {
+  final Stroke stroke;
+
+  DrawOperation(this.stroke);
+
+  @override
+  void undo(List<Stroke> strokes) {
+    // Remove the last stroke (most recently drawn)
+    strokes.removeLast();
+  }
+
+  @override
+  void redo(List<Stroke> strokes) {
+    // Add the stroke back
+    strokes.add(stroke);
+  }
+}
+
+/// Operation for erasing (which may remove/modify multiple strokes)
+class EraseOperation extends CanvasOperation {
+  final List<Stroke> strokesBefore;
+  final List<Stroke> strokesAfter;
+
+  EraseOperation({
+    required this.strokesBefore,
+    required this.strokesAfter,
+  });
+
+  @override
+  void undo(List<Stroke> strokes) {
+    // Restore strokes to state before erase
+    strokes.clear();
+    strokes.addAll(strokesBefore);
+  }
+
+  @override
+  void redo(List<Stroke> strokes) {
+    // Apply erase result again
+    strokes.clear();
+    strokes.addAll(strokesAfter);
+  }
+}
+
+/// Operation for clearing all strokes
+class ClearOperation extends CanvasOperation {
+  final List<Stroke> clearedStrokes;
+
+  ClearOperation(this.clearedStrokes);
+
+  @override
+  void undo(List<Stroke> strokes) {
+    // Restore all cleared strokes
+    strokes.addAll(clearedStrokes);
+  }
+
+  @override
+  void redo(List<Stroke> strokes) {
+    // Clear all strokes again
+    strokes.clear();
+  }
+}
+
 /// Handwriting Canvas Widget for PRD-compliant handwriting-only notes
 class HandwritingCanvas extends StatefulWidget {
   final List<Stroke> initialStrokes;
@@ -19,12 +88,12 @@ class HandwritingCanvas extends StatefulWidget {
 
 class HandwritingCanvasState extends State<HandwritingCanvas> {
   List<Stroke> _strokes = [];
-  List<Stroke> _undoStack = [];
+  List<CanvasOperation> _operationHistory = []; // Track all completed operations
+  List<CanvasOperation> _redoStack = []; // Track operations that can be redone
   Stroke? _currentStroke;
 
-  // Clear operation undo support
-  List<Stroke>? _lastClearedStrokes;
-  bool _isClearPending = false;
+  // Track erase operation state
+  List<Stroke>? _strokesBeforeErase;
 
   // Drawing settings
   Color _strokeColor = Colors.black;
@@ -35,8 +104,17 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   // Canvas bounds tracking
   Size _canvasSize = Size.zero;
 
+  // Pointer tracking for multi-touch detection
+  final Set<int> _activePointers = {}; // Track all active pointer IDs
+
   // Pointer tracking for eraser visualization
   Offset? _currentPointerPosition;
+
+  // Race condition prevention: Synchronization flags
+  bool _isUndoRedoInProgress = false;
+
+  // Canvas version tracking to prevent stale data overwrites
+  int _canvasVersion = 0;
 
   @override
   void initState() {
@@ -98,7 +176,10 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         validateState();
 
         _strokes = List<Stroke>.from(widget.initialStrokes);
-        _undoStack.clear();
+        // RACE CONDITION FIX: NEVER clear undo history on widget updates
+        // This preserves user's ability to undo/redo across widget rebuilds
+        // _operationHistory.clear();  // REMOVED - causes undo history loss
+        // _redoStack.clear();          // REMOVED - causes undo history loss
 
         // CRITICAL: Only clear _currentStroke when actually loading saved content
         // Don't clear it on widget rebuilds (AnimatedBuilder) - user might be actively drawing!
@@ -140,14 +221,14 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     debugPrint('🎨 Canvas: loadStrokes() called with ${strokes.length} strokes');
     setState(() {
       _strokes = List<Stroke>.from(strokes);
-      _undoStack.clear();
+      // RACE CONDITION FIX: Preserve undo history even when loading
+      // _operationHistory.clear();  // REMOVED
+      // _redoStack.clear();          // REMOVED
       _currentStroke = null;
-
-      // Reset clear operation state when loading strokes
-      _isClearPending = false;
-      _lastClearedStrokes = null;
+      _strokesBeforeErase = null;
+      _canvasVersion++; // Increment version when loading new content
     });
-    debugPrint('🎨 Canvas: loadStrokes() completed. Internal _strokes now has ${_strokes.length} strokes');
+    debugPrint('🎨 Canvas: loadStrokes() completed. Internal _strokes now has ${_strokes.length} strokes, version: $_canvasVersion');
   }
 
   /// Get current drawing settings
@@ -157,14 +238,17 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   double get eraserRadius => _eraserRadius;
 
   /// Check if undo is available
-  bool get canUndo => _strokes.isNotEmpty || _isClearPending;
+  bool get canUndo => _operationHistory.isNotEmpty;
 
   /// Check if redo is available
-  bool get canRedo => _undoStack.isNotEmpty;
+  bool get canRedo => _redoStack.isNotEmpty;
+
+  /// Get current canvas version
+  int get canvasVersion => _canvasVersion;
 
   /// Validate canvas internal state
   void validateState() {
-    debugPrint('🔍 Canvas: State validation - _strokes: ${_strokes.length}, _undoStack: ${_undoStack.length}');
+    debugPrint('🔍 Canvas: State validation - _strokes: ${_strokes.length}, _operationHistory: ${_operationHistory.length}, _redoStack: ${_redoStack.length}');
     debugPrint('🔍 Canvas: Current stroke: ${_currentStroke != null ? "${_currentStroke!.points.length} points" : "null"}');
 
     // Validate stroke integrity
@@ -181,7 +265,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     debugPrint('🔄 Canvas: Force refresh with ${strokes.length} strokes');
     setState(() {
       _strokes = List<Stroke>.from(strokes);
-      _undoStack.clear();
+      _operationHistory.clear();
+      _redoStack.clear();
       _currentStroke = null;
     });
     debugPrint('🔄 Canvas: Force refresh completed. Internal state: ${_strokes.length} strokes');
@@ -191,7 +276,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   Map<String, dynamic> getStateInfo() {
     return {
       'strokeCount': _strokes.length,
-      'undoStackCount': _undoStack.length,
+      'operationHistoryCount': _operationHistory.length,
+      'redoStackCount': _redoStack.length,
       'hasCurrentStroke': _currentStroke != null,
       'currentStrokePoints': _currentStroke?.points.length ?? 0,
     };
@@ -207,7 +293,20 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   }
 
   /// Start a new stroke
-  void _startStroke(Offset point) {
+  void _startStroke(Offset point, int pointerId) {
+    // Add pointer to active set
+    _activePointers.add(pointerId);
+
+    // ONLY start drawing if this is a SINGLE-finger touch
+    if (_activePointers.length > 1) {
+      debugPrint('🚫 Multi-touch detected (${_activePointers.length} fingers) - ignoring draw');
+      // Cancel any in-progress stroke
+      _currentStroke = null;
+      _currentPointerPosition = null;
+      setState(() {});
+      return;
+    }
+
     debugPrint('👆 TOUCH: raw localPosition=(${point.dx.toStringAsFixed(2)}, ${point.dy.toStringAsFixed(2)})');
 
     final clippedPoint = _clipPointToBounds(point);
@@ -217,9 +316,13 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     _currentPointerPosition = point;
 
     if (_isErasing) {
-      // For eraser mode, start erasing immediately at this point
+      // For eraser mode, save state before erasing
+      _strokesBeforeErase = List<Stroke>.from(_strokes);
       _eraseStrokesAtPoint(clippedPoint);
       _currentStroke = null; // No stroke to create in eraser mode
+
+      // Clear redo stack when starting new erase operation (standard undo/redo behavior)
+      _redoStack.clear();
     } else {
       // For drawing mode, create a new stroke with the first point
       // onPanUpdate will add subsequent points if user drags
@@ -230,10 +333,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       );
       debugPrint('✏️ STROKE: firstPoint=(${clippedPoint.dx.toStringAsFixed(2)}, ${clippedPoint.dy.toStringAsFixed(2)}) strokeWidth=$_strokeWidth');
 
-      // Clear redo stack and clear operation state when starting new stroke
-      _undoStack.clear();
-      _isClearPending = false;
-      _lastClearedStrokes = null;
+      // Clear redo stack when starting new drawing operation (standard undo/redo behavior)
+      _redoStack.clear();
       debugPrint('🎨 Canvas: Current stroke created with 1 point');
     }
 
@@ -242,6 +343,18 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
   /// Add point to current stroke
   void _addPointToStroke(Offset point) {
+    // If multi-touch is active, stop drawing
+    if (_activePointers.length > 1) {
+      // Cancel current stroke if one exists
+      if (_currentStroke != null) {
+        debugPrint('🚫 Second finger detected - canceling current stroke');
+        _currentStroke = null;
+        _currentPointerPosition = null;
+        setState(() {});
+      }
+      return;
+    }
+
     final clippedPoint = _clipPointToBounds(point);
 
     // Update pointer position for eraser visualization
@@ -261,29 +374,84 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   }
 
   /// End current stroke
-  void _endStroke() {
-    if (_currentStroke != null && _currentStroke!.points.isNotEmpty) {
-      debugPrint('🎨 Canvas: Ending stroke with ${_currentStroke!.points.length} points');
-      _strokes.add(_currentStroke!);
-      debugPrint('🎨 Canvas: Added stroke to _strokes. Total strokes now: ${_strokes.length}');
-      _currentStroke = null;
-      _currentPointerPosition = null; // Clear pointer position when done
+  void _endStroke(int pointerId) {
+    // Remove pointer from active set
+    _activePointers.remove(pointerId);
 
-      // Reset clear operation state when new stroke is added
-      _isClearPending = false;
-      _lastClearedStrokes = null;
+    // Only complete stroke if this was a single-touch gesture
+    if (_activePointers.isEmpty) {
+      if (_currentStroke != null && _currentStroke!.points.isNotEmpty) {
+        debugPrint('🎨 Canvas: Ending stroke with ${_currentStroke!.points.length} points');
 
-      widget.onStrokesChanged?.call();
-      debugPrint('🎨 Canvas: Called onStrokesChanged callback');
-      setState(() {});
-    } else {
-      debugPrint('🎨 Canvas: _endStroke called but no valid current stroke to add');
-      _currentPointerPosition = null; // Clear pointer position
-      // If we were erasing, notify changes
-      if (_isErasing) {
+        // Add stroke to canvas
+        _strokes.add(_currentStroke!);
+
+        // Create and record DrawOperation for undo/redo
+        final operation = DrawOperation(_currentStroke!);
+        _operationHistory.add(operation);
+
+        // Increment canvas version to track state changes
+        _canvasVersion++;
+
+        debugPrint('🎨 Canvas: Added stroke to _strokes. Total strokes now: ${_strokes.length}, Version: $_canvasVersion');
+        _currentStroke = null;
+        _currentPointerPosition = null; // Clear pointer position when done
+
         widget.onStrokesChanged?.call();
+        debugPrint('🎨 Canvas: Called onStrokesChanged callback');
+        setState(() {});
+      } else {
+        debugPrint('🎨 Canvas: _endStroke called but no valid current stroke to add');
+        _currentPointerPosition = null; // Clear pointer position
+        // If we were erasing, create EraseOperation
+        if (_isErasing && _strokesBeforeErase != null) {
+          final strokesAfter = List<Stroke>.from(_strokes);
+          // Only record if something actually changed
+          if (_strokesBeforeErase!.length != strokesAfter.length ||
+              !_strokesEqual(_strokesBeforeErase!, strokesAfter)) {
+            final operation = EraseOperation(
+              strokesBefore: _strokesBeforeErase!,
+              strokesAfter: strokesAfter,
+            );
+            _operationHistory.add(operation);
+            // Increment canvas version to track state changes
+            _canvasVersion++;
+            debugPrint('🎨 Canvas: Recorded EraseOperation, Version: $_canvasVersion');
+          }
+          _strokesBeforeErase = null;
+          widget.onStrokesChanged?.call();
+        }
       }
+    } else {
+      // Other fingers still down - just clear current stroke without saving
+      debugPrint('🚫 Finger lifted but ${_activePointers.length} fingers remain - discarding stroke');
+      _currentStroke = null;
+      _currentPointerPosition = null;
+      setState(() {});
     }
+  }
+
+  /// Cancel stroke (when gesture is taken over by another widget)
+  void _cancelStroke(int pointerId) {
+    // Handle pointer cancel events (when gesture is taken over by another widget)
+    _activePointers.remove(pointerId);
+
+    if (_activePointers.isEmpty) {
+      _currentStroke = null;
+      _currentPointerPosition = null;
+      _strokesBeforeErase = null;
+      setState(() {});
+      debugPrint('🚫 Pointer $pointerId canceled - cleared stroke');
+    }
+  }
+
+  /// Helper to compare two stroke lists
+  bool _strokesEqual(List<Stroke> a, List<Stroke> b) {
+    if (a.length != b.length) return false;
+    for (int i = 0; i < a.length; i++) {
+      if (a[i] != b[i]) return false;
+    }
+    return true;
   }
 
   /// Erase strokes at the given point using eraser radius (vector-based)
@@ -400,38 +568,73 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     return distanceSquared <= (circleRadius * circleRadius);
   }
 
-  /// Undo last stroke or clear operation
-  void undo() {
-    if (_isClearPending && _lastClearedStrokes != null) {
-      // Undo clear operation - restore all cleared strokes
+  /// Undo last operation
+  void undo() async {
+    // RACE CONDITION FIX: Prevent concurrent undo operations
+    if (_isUndoRedoInProgress || _operationHistory.isEmpty) {
+      debugPrint('⚠️ Canvas: Undo blocked (inProgress: $_isUndoRedoInProgress, historyEmpty: ${_operationHistory.isEmpty})');
+      return;
+    }
+
+    _isUndoRedoInProgress = true;
+    try {
       setState(() {
-        _strokes = List<Stroke>.from(_lastClearedStrokes!);
-        _lastClearedStrokes = null;
-        _isClearPending = false;
-        _undoStack.clear();
+        // Pop the last operation from history
+        final operation = _operationHistory.removeLast();
+
+        // Undo the operation (modifies _strokes)
+        operation.undo(_strokes);
+
+        // Add to redo stack so it can be redone
+        _redoStack.add(operation);
+
+        // Increment canvas version to track state changes
+        _canvasVersion++;
+
+        debugPrint('🎨 Canvas: Undid operation (${operation.runtimeType}). History: ${_operationHistory.length}, Redo: ${_redoStack.length}, Version: $_canvasVersion');
       });
+
+      // Wait for setState to complete before allowing next operation
+      await Future.delayed(Duration.zero);
+
       widget.onStrokesChanged?.call();
-    } else if (_strokes.isNotEmpty) {
-      // Undo individual stroke
-      final lastStroke = _strokes.removeLast();
-      _undoStack.add(lastStroke);
-      widget.onStrokesChanged?.call();
-      setState(() {});
+    } finally {
+      _isUndoRedoInProgress = false;
     }
   }
 
-  /// Redo last undone stroke
-  void redo() {
-    if (_undoStack.isNotEmpty) {
-      final stroke = _undoStack.removeLast();
-      _strokes.add(stroke);
+  /// Redo last undone operation
+  void redo() async {
+    // RACE CONDITION FIX: Prevent concurrent redo operations
+    if (_isUndoRedoInProgress || _redoStack.isEmpty) {
+      debugPrint('⚠️ Canvas: Redo blocked (inProgress: $_isUndoRedoInProgress, redoEmpty: ${_redoStack.isEmpty})');
+      return;
+    }
 
-      // Reset clear operation state when redoing
-      _isClearPending = false;
-      _lastClearedStrokes = null;
+    _isUndoRedoInProgress = true;
+    try {
+      setState(() {
+        // Pop from redo stack
+        final operation = _redoStack.removeLast();
+
+        // Redo the operation (modifies _strokes)
+        operation.redo(_strokes);
+
+        // Add back to history
+        _operationHistory.add(operation);
+
+        // Increment canvas version to track state changes
+        _canvasVersion++;
+
+        debugPrint('🎨 Canvas: Redid operation (${operation.runtimeType}). History: ${_operationHistory.length}, Redo: ${_redoStack.length}, Version: $_canvasVersion');
+      });
+
+      // Wait for setState to complete before allowing next operation
+      await Future.delayed(Duration.zero);
 
       widget.onStrokesChanged?.call();
-      setState(() {});
+    } finally {
+      _isUndoRedoInProgress = false;
     }
   }
 
@@ -440,14 +643,21 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     if (_strokes.isEmpty) return; // Nothing to clear
 
     setState(() {
-      // Save current strokes for undo
-      _lastClearedStrokes = List<Stroke>.from(_strokes);
-      _isClearPending = true;
+      // Save current strokes and create ClearOperation
+      final clearedStrokes = List<Stroke>.from(_strokes);
+      final operation = ClearOperation(clearedStrokes);
+      _operationHistory.add(operation);
+
+      // Clear redo stack (standard undo/redo behavior)
+      _redoStack.clear();
 
       // Clear strokes
       _strokes.clear();
-      _undoStack.clear();
       _currentStroke = null;
+
+      // Increment canvas version to track state changes
+      _canvasVersion++;
+      debugPrint('🎨 Canvas: Cleared all strokes, Version: $_canvasVersion');
     });
     widget.onStrokesChanged?.call();
   }
@@ -493,11 +703,13 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
           return Listener(
             // Listener uses raw pointer events - no gesture arena delay!
             // onPointerDown fires IMMEDIATELY on touch
-            onPointerDown: (event) => _startStroke(event.localPosition),
+            onPointerDown: (event) => _startStroke(event.localPosition, event.pointer),
             // onPointerMove fires for EVERY pixel of movement - no threshold
             onPointerMove: (event) => _addPointToStroke(event.localPosition),
             // onPointerUp fires when finger lifts
-            onPointerUp: (event) => _endStroke(),
+            onPointerUp: (event) => _endStroke(event.pointer),
+            // onPointerCancel fires when gesture is taken over by another widget
+            onPointerCancel: (event) => _cancelStroke(event.pointer),
             child: ClipRect(
               child: CustomPaint(
                 painter: HandwritingPainter(

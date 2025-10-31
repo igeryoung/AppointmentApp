@@ -39,6 +39,7 @@ paths:
               type: object
               required:
                 - deviceName
+                - password
               properties:
                 deviceName:
                   type: string
@@ -46,6 +47,10 @@ paths:
                 platform:
                   type: string
                   example: "iOS"
+                password:
+                  type: string
+                  description: Registration password (configured on server)
+                  example: "password"
       responses:
         '200':
           description: Device registered successfully
@@ -61,6 +66,19 @@ paths:
                     type: string
                   message:
                     type: string
+        '401':
+          description: Invalid registration password
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: false
+                  message:
+                    type: string
+                    example: "Invalid registration password"
 
   /api/devices/{deviceId}:
     get:
@@ -539,7 +557,7 @@ paths:
         - deviceAuth: []
       responses:
         '200':
-          description: Note retrieved successfully
+          description: Note retrieved successfully, or note is null if it doesn't exist
           content:
             application/json:
               schema:
@@ -548,9 +566,9 @@ paths:
                   success:
                     type: boolean
                   note:
-                    $ref: '#/components/schemas/Note'
-        '404':
-          description: Note not found
+                    oneOf:
+                      - $ref: '#/components/schemas/Note'
+                      - type: 'null'
         '403':
           description: Unauthorized access
 
@@ -707,7 +725,7 @@ paths:
         - deviceAuth: []
       responses:
         '200':
-          description: Drawing retrieved successfully
+          description: Drawing retrieved successfully, or drawing is null if it doesn't exist
           content:
             application/json:
               schema:
@@ -716,9 +734,9 @@ paths:
                   success:
                     type: boolean
                   drawing:
-                    $ref: '#/components/schemas/Drawing'
-        '404':
-          description: Drawing not found
+                    oneOf:
+                      - $ref: '#/components/schemas/Drawing'
+                      - type: 'null'
         '403':
           description: Unauthorized access
 

@@ -377,12 +377,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
 
     // Normal flow: Fetch from server (only if note is not dirty)
+    // Use cache-first strategy - if note was preloaded, use it immediately
     setState(() => _isLoadingFromServer = true);
 
     try {
       final serverNote = await _contentService!.getNote(
         widget.event.id!,
-        forceRefresh: true, // 跳过cache，强制fetch
+        forceRefresh: false, // Use cache-first (preloaded notes will be instant)
       );
 
       if (serverNote != null && mounted) {
@@ -436,13 +437,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return;
     }
 
-    if (_recordNumberController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.recordNumberRequired)),
-      );
-      return;
-    }
-
     if (_eventTypeController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.eventTypeRequired)),
@@ -453,9 +447,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     setState(() => _isLoading = true);
 
     try {
+      final recordNumberText = _recordNumberController.text.trim();
       final eventToSave = widget.event.copyWith(
         name: _nameController.text.trim(),
-        recordNumber: _recordNumberController.text.trim(),
+        recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
         eventType: _eventTypeController.text.trim(),
         startTime: _startTime,
         endTime: _endTime,
@@ -650,84 +645,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  /// Manual retry sync - triggered by user pressing "Retry Sync" button
-  Future<void> _manualRetrySync(int eventId) async {
-    if (_contentService == null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Cannot sync - Services not initialized'),
-          backgroundColor: Colors.red,
-        ),
-      );
-      return;
-    }
-
-    // Show loading indicator
-    setState(() => _isLoadingFromServer = true);
-
-    try {
-      debugPrint('🔄 EventDetail: Manual retry sync requested for note $eventId...');
-      await _contentService!.syncNote(eventId);
-
-      if (mounted) {
-        setState(() {
-          _hasUnsyncedChanges = false;
-          // Learn from success: server is reachable
-          _isOffline = false;
-          _wasOfflineLastCheck = false;
-          _isLoadingFromServer = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Row(
-              children: [
-                Icon(Icons.check_circle, color: Colors.white, size: 20),
-                SizedBox(width: 8),
-                Text('Successfully synced to server!'),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
-      }
-
-      debugPrint('✅ EventDetail: Manual sync succeeded');
-    } catch (e) {
-      debugPrint('❌ EventDetail: Manual sync failed: $e');
-
-      // Verify actual server connectivity after failure
-      final serverReachable = await _checkServerConnectivity();
-
-      if (mounted) {
-        setState(() {
-          _isOffline = !serverReachable;
-          _wasOfflineLastCheck = !serverReachable;
-          _isLoadingFromServer = false;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.error, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(child: Text('Sync failed: ${e.toString()}')),
-              ],
-            ),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 4),
-            action: SnackBarAction(
-              label: 'Retry',
-              textColor: Colors.white,
-              onPressed: () => _manualRetrySync(eventId),
-            ),
-          ),
-        );
-      }
-    }
-  }
 
   Future<void> _deleteEvent() async {
     if (widget.isNew) return;
@@ -874,7 +791,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             });
                           },
                           child: Text(
-                            'Start: ${DateFormat('MMM d, HH:mm').format(newStartTime)}',
+                            'Start: ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newStartTime)}',
                             style: const TextStyle(fontSize: 12),
                           ),
                         ),
@@ -906,7 +823,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           },
                           child: Text(
                             newEndTime != null
-                                ? 'End: ${DateFormat('MMM d, HH:mm').format(newEndTime!)}'
+                                ? 'End: ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newEndTime!)}'
                                 : 'Set End Time (Optional)',
                             style: const TextStyle(fontSize: 12),
                           ),
@@ -1083,10 +1000,45 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     });
   }
 
+  /// Handle back navigation with unsaved changes confirmation
+  Future<bool> _onWillPop() async {
+    // If no changes, allow navigation
+    if (!_hasChanges) {
+      return true;
+    }
+
+    // Show confirmation dialog
+    final l10n = AppLocalizations.of(context)!;
+    final shouldPop = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(l10n.unsavedChanges),
+        content: Text(l10n.unsavedChangesMessage),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: Text(l10n.keepEditing),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(
+              foregroundColor: Colors.red,
+            ),
+            child: Text(l10n.discard),
+          ),
+        ],
+      ),
+    );
+
+    return shouldPop ?? false; // Default to not popping if dialog is dismissed
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    return Scaffold(
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
       appBar: AppBar(
         title: Text(widget.isNew ? l10n.newEvent : l10n.editEvent),
         actions: [
@@ -1245,6 +1197,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 );
               },
             ),
+      ),
     );
   }
 
@@ -1253,45 +1206,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Offline banner with retry button
-        if (_isOffline)
-          Material(
-            color: Colors.orange.shade700,
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              child: Row(
-                children: [
-                  const Icon(Icons.cloud_off, color: Colors.white, size: 18),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      _hasUnsyncedChanges
-                        ? 'Offline - Changes not synced'
-                        : AppLocalizations.of(context)!.offlineMode,
-                      style: const TextStyle(color: Colors.white),
-                    ),
-                  ),
-                  if (_hasUnsyncedChanges && widget.event.id != null)
-                    TextButton(
-                      onPressed: () => _manualRetrySync(widget.event.id!),
-                      style: TextButton.styleFrom(
-                        backgroundColor: Colors.white.withOpacity(0.2),
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.refresh, color: Colors.white, size: 16),
-                          SizedBox(width: 4),
-                          Text('Retry Sync', style: TextStyle(color: Colors.white, fontSize: 13)),
-                        ],
-                      ),
-                    ),
-                ],
-              ),
-            ),
-          ),
+        // Offline banner removed - status shown only via AppBar icon
 
         // Unsynced changes banner
         if (_hasUnsyncedChanges && !_isOffline)
@@ -1392,7 +1307,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
-                              'Moved to: ${DateFormat('EEEE, MMM d, y - HH:mm').format(_newEvent!.startTime)}',
+                              'Moved to: ${DateFormat('EEEE, MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(_newEvent!.startTime)}',
                               style: TextStyle(
                                 color: Colors.red.shade700,
                                 fontSize: 13,
@@ -1413,10 +1328,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           // Name field
           TextField(
             controller: _nameController,
-            decoration: const InputDecoration(
-              labelText: 'Event Name *',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: InputDecoration(
+              labelText: AppLocalizations.of(context)!.eventName,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
           ),
           const SizedBox(height: 8),
@@ -1424,10 +1339,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           // Record Number field
           TextField(
             controller: _recordNumberController,
-            decoration: const InputDecoration(
-              labelText: 'Record Number *',
-              border: OutlineInputBorder(),
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: InputDecoration(
+              labelText: AppLocalizations.of(context)!.recordNumber,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
             ),
           ),
           const SizedBox(height: 8),
@@ -1438,10 +1353,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               Expanded(
                 child: TextField(
                   controller: _eventTypeController,
-                  decoration: const InputDecoration(
-                    labelText: 'Event Type *',
-                    border: OutlineInputBorder(),
-                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  decoration: InputDecoration(
+                    labelText: AppLocalizations.of(context)!.eventType,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
                 ),
               ),
@@ -1474,7 +1389,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
                           title: Text(AppLocalizations.of(context)!.startTime, style: const TextStyle(fontSize: 13)),
                           subtitle: Text(
-                            DateFormat('MMM d, y - HH:mm').format(_startTime),
+                            DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(_startTime),
                             style: const TextStyle(fontSize: 11),
                           ),
                           trailing: const Icon(Icons.access_time, size: 18),
@@ -1504,7 +1419,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ),
                           subtitle: Text(
                             _endTime != null
-                                ? DateFormat('MMM d, y - HH:mm').format(_endTime!)
+                                ? DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(_endTime!)
                                 : AppLocalizations.of(context)!.openEnded,
                             style: const TextStyle(fontSize: 11),
                           ),
@@ -1521,7 +1436,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     Card(
                       child: ListTile(
                         title: Text(AppLocalizations.of(context)!.startTime),
-                        subtitle: Text(DateFormat('MMM d, y - HH:mm').format(_startTime)),
+                        subtitle: Text(DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(_startTime)),
                         trailing: const Icon(Icons.access_time),
                         onTap: _selectStartTime,
                       ),
@@ -1540,7 +1455,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           ],
                         ),
                         subtitle: Text(_endTime != null
-                            ? DateFormat('MMM d, y - HH:mm').format(_endTime!)
+                            ? DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(_endTime!)
                             : 'Open-ended'),
                         trailing: const Icon(Icons.access_time),
                         onTap: _selectEndTime,
@@ -1559,7 +1474,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Widget _buildHandwritingToolbar(StateSetter setState) {
     final canvasState = _canvasKey.currentState;
     final isErasing = canvasState?.isErasing ?? false;
-    final currentColor = canvasState?.strokeColor ?? Colors.black;
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -1576,9 +1490,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
               ),
               child: Row(
                 children: [
-                  const Text(
-                    'Handwriting Notes',
-                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  Text(
+                    AppLocalizations.of(context)!.handwritingNotes,
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                   ),
                   const Spacer(),
                   // Pen/Eraser toggle
@@ -1613,7 +1527,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'Pen',
+                                  AppLocalizations.of(context)!.pen,
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: !isErasing ? Colors.blue.shade700 : Colors.grey.shade600,
@@ -1647,7 +1561,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 ),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'Eraser',
+                                  AppLocalizations.of(context)!.eraser,
                                   style: TextStyle(
                                     fontSize: 12,
                                     color: isErasing ? Colors.orange.shade700 : Colors.grey.shade600,
@@ -1681,7 +1595,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            'Controls',
+                            AppLocalizations.of(context)!.controls,
                             style: TextStyle(
                               fontSize: 12,
                               color: Colors.grey.shade700,
@@ -1702,21 +1616,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                   IconButton(
                     icon: const Icon(Icons.undo, size: 20),
                     onPressed: () => _canvasKey.currentState?.undo(),
-                    tooltip: 'Undo',
+                    tooltip: AppLocalizations.of(context)!.undo,
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                   IconButton(
                     icon: const Icon(Icons.redo, size: 20),
                     onPressed: () => _canvasKey.currentState?.redo(),
-                    tooltip: 'Redo',
+                    tooltip: AppLocalizations.of(context)!.redo,
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
                   IconButton(
                     icon: const Icon(Icons.clear, size: 20),
                     onPressed: () => _canvasKey.currentState?.clear(),
-                    tooltip: 'Clear All',
+                    tooltip: AppLocalizations.of(context)!.clearAll,
                     padding: const EdgeInsets.all(4),
                     constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
                   ),
@@ -1768,7 +1682,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              isErasing ? 'Eraser Size:' : 'Pen Width:',
+                              isErasing ? AppLocalizations.of(context)!.eraserSize : AppLocalizations.of(context)!.penWidth,
                               style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w500,
@@ -1825,7 +1739,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                             mainAxisSize: MainAxisSize.min,
                             children: [
                               Text(
-                                'Color:',
+                                AppLocalizations.of(context)!.color,
                                 style: TextStyle(
                                   fontSize: 13,
                                   fontWeight: FontWeight.w500,
@@ -1906,24 +1820,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
       );
     }).toList();
-  }
-
-  String _getColorName(Color color) {
-    if (color == Colors.black) return 'Black';
-    if (color == Colors.grey.shade700) return 'Gray';
-    if (color == Colors.blue.shade700) return 'Dark Blue';
-    if (color == Colors.blue.shade300) return 'Light Blue';
-    if (color == Colors.red.shade700) return 'Dark Red';
-    if (color == Colors.red.shade300) return 'Light Red';
-    if (color == Colors.green.shade700) return 'Dark Green';
-    if (color == Colors.green.shade300) return 'Light Green';
-    if (color == Colors.orange.shade700) return 'Dark Orange';
-    if (color == Colors.amber.shade600) return 'Amber';
-    if (color == Colors.purple.shade700) return 'Purple';
-    if (color == Colors.pink.shade400) return 'Pink';
-    if (color == Colors.brown.shade600) return 'Brown';
-    if (color == Colors.teal.shade600) return 'Teal';
-    return 'Custom';
   }
 
   Widget _buildHandwritingSection() {

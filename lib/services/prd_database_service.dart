@@ -34,7 +34,7 @@ class PRDDatabaseService implements IDatabaseService {
 
     return await openDatabase(
       path,
-      version: 8, // New version for Server-Store cache support
+      version: 9, // New version for optional record_number
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -190,6 +190,63 @@ class PRDDatabaseService implements IDatabaseService {
       debugPrint('✅ Cache indexes created');
       debugPrint('✅ Database upgraded to version 8 (Server-Store cache support)');
     }
+    if (oldVersion < 9) {
+      // Make record_number optional in events table
+      debugPrint('🔄 Upgrading to database version 9 (optional record_number)...');
+
+      // SQLite doesn't support ALTER COLUMN to remove NOT NULL, so we need to recreate the table
+      await db.execute('PRAGMA foreign_keys = OFF');
+
+      // Create new events table with optional record_number
+      await db.execute('''
+        CREATE TABLE events_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          record_number TEXT,
+          event_type TEXT NOT NULL,
+          start_time INTEGER NOT NULL,
+          end_time INTEGER,
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          is_removed INTEGER DEFAULT 0,
+          removal_reason TEXT,
+          original_event_id INTEGER,
+          new_event_id INTEGER,
+          version INTEGER DEFAULT 1,
+          is_dirty INTEGER DEFAULT 0,
+          FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+        )
+      ''');
+
+      // Copy data from old table to new table
+      await db.execute('''
+        INSERT INTO events_new (
+          id, book_id, name, record_number, event_type, start_time, end_time,
+          created_at, updated_at, is_removed, removal_reason, original_event_id,
+          new_event_id, version, is_dirty
+        )
+        SELECT
+          id, book_id, name, record_number, event_type, start_time, end_time,
+          created_at, updated_at, is_removed, removal_reason, original_event_id,
+          new_event_id, version, is_dirty
+        FROM events
+      ''');
+
+      // Drop old table
+      await db.execute('DROP TABLE events');
+
+      // Rename new table to original name
+      await db.execute('ALTER TABLE events_new RENAME TO events');
+
+      // Recreate indexes
+      await db.execute('CREATE INDEX idx_events_book ON events(book_id)');
+      await db.execute('CREATE INDEX idx_events_start_time ON events(start_time)');
+
+      await db.execute('PRAGMA foreign_keys = ON');
+
+      debugPrint('✅ Database upgraded to version 9 (record_number is now optional)');
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -215,7 +272,7 @@ class PRDDatabaseService implements IDatabaseService {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         book_id INTEGER NOT NULL,
         name TEXT NOT NULL,
-        record_number TEXT NOT NULL,
+        record_number TEXT,
         event_type TEXT NOT NULL,
         start_time INTEGER NOT NULL,
         end_time INTEGER,
@@ -1075,6 +1132,28 @@ class PRDDatabaseService implements IDatabaseService {
     return DeviceCredentials(
       deviceId: row['device_id'] as String,
       deviceToken: row['device_token'] as String,
+    );
+  }
+
+  /// Save device credentials after registration
+  Future<void> saveDeviceCredentials({
+    required String deviceId,
+    required String deviceToken,
+    required String deviceName,
+    String? platform,
+  }) async {
+    final db = await database;
+    await db.insert(
+      'device_info',
+      {
+        'id': 1,
+        'device_id': deviceId,
+        'device_token': deviceToken,
+        'device_name': deviceName,
+        'platform': platform,
+        'registered_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      },
+      conflictAlgorithm: ConflictAlgorithm.replace,
     );
   }
 

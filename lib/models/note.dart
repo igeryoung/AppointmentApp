@@ -70,19 +70,45 @@ class Note {
   }
 
   factory Note.fromMap(Map<String, dynamic> map) {
+    // Handle both camelCase (from server API) and snake_case (from local DB)
     List<Stroke> strokes = [];
-    if (map['strokes_data'] != null) {
-      final strokesJson = jsonDecode(map['strokes_data']) as List;
+
+    // Check for strokesData (server) or strokes_data (local DB)
+    final strokesDataRaw = map['strokesData'] ?? map['strokes_data'];
+    if (strokesDataRaw != null) {
+      // Handle both pre-decoded list and JSON string
+      final strokesJson = strokesDataRaw is String
+          ? jsonDecode(strokesDataRaw) as List
+          : strokesDataRaw as List;
       strokes = strokesJson.map((s) => Stroke.fromMap(s)).toList();
+    }
+
+    // Parse timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
+    DateTime parseTimestamp(dynamic value, {required DateTime fallback}) {
+      if (value == null) return fallback;
+      if (value is String) {
+        // ISO 8601 string from server
+        return DateTime.parse(value);
+      } else if (value is int) {
+        // Unix seconds from local DB
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+      }
+      return fallback;
     }
 
     return Note(
       id: map['id']?.toInt(),
-      eventId: map['event_id']?.toInt() ?? 0,
+      eventId: (map['eventId'] ?? map['event_id'])?.toInt() ?? 0,
       strokes: strokes,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
-      isDirty: (map['is_dirty'] ?? 0) == 1,
+      createdAt: parseTimestamp(
+        map['createdAt'] ?? map['created_at'],
+        fallback: DateTime.now(),
+      ),
+      updatedAt: parseTimestamp(
+        map['updatedAt'] ?? map['updated_at'],
+        fallback: DateTime.now(),
+      ),
+      isDirty: (map['isDirty'] ?? map['is_dirty'] ?? 0) == 1,
     );
   }
 

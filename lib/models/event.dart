@@ -3,7 +3,7 @@ class Event {
   final int? id;
   final int bookId;
   final String name;
-  final String recordNumber;
+  final String? recordNumber;
   final String eventType;
   final DateTime startTime;
   final DateTime? endTime; // Optional as per PRD
@@ -18,7 +18,7 @@ class Event {
     this.id,
     required this.bookId,
     required this.name,
-    required this.recordNumber,
+    this.recordNumber,
     required this.eventType,
     required this.startTime,
     this.endTime,
@@ -85,7 +85,7 @@ class Event {
       id: map['id']?.toInt(),
       bookId: map['book_id']?.toInt() ?? 0,
       name: map['name'] ?? '',
-      recordNumber: map['record_number'] ?? '',
+      recordNumber: map['record_number'],
       eventType: map['event_type'] ?? '',
       startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
       endTime: map['end_time'] != null

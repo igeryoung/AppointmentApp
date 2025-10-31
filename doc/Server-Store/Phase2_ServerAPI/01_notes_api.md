@@ -74,6 +74,7 @@ Server响应: { note for Event 123 }
 GET  /api/books/{bookId}/events/{eventId}/note
   Headers: X-Device-ID, X-Device-Token
   Response: { success, note: { eventId, strokesData, version, ... } }
+           or { success, note: null } if note doesn't exist
 
 POST /api/books/{bookId}/events/{eventId}/note
   Body: { strokesData, version? }
@@ -132,8 +133,8 @@ WHERE event_id = ANY(?);
 
 ### 功能测试
 
-1. **GET**: 获取存在的note → 200
-2. **GET**: 获取不存在的note → 404
+1. **GET**: 获取存在的note → 200, note: {...}
+2. **GET**: 获取不存在的note → 200, note: null
 3. **POST**: 创建新note → 200, version=1
 4. **POST**: 更新note（正确version）→ 200, version+1
 5. **POST**: 更新note（错误version）→ 409 Conflict
@@ -220,9 +221,9 @@ WHERE event_id = ANY(?);
 - 文件: `server/test_notes_api.sh`
 - 10个测试用例覆盖所有场景:
   - ✅ Health check
-  - ✅ GET non-existent note → 404
+  - ✅ GET non-existent note → 200, note: null
   - ✅ POST create note → 200, version=1
-  - ✅ GET existing note → 200
+  - ✅ GET existing note → 200, note: {...}
   - ✅ POST update (correct version) → 200, version+1
   - ✅ POST update (wrong version) → 409 Conflict
   - ✅ Batch GET notes → 200
@@ -259,8 +260,7 @@ WHERE n.event_id = ANY(@eventIds)
 - 单次查询，高性能
 
 **3. 清晰的错误处理**
-- 200: 成功
-- 404: 资源不存在
+- 200: 成功 (包括资源不存在时返回 null)
 - 409: 版本冲突 (含服务器当前状态)
 - 403: 无权限
 - 401: 缺少认证信息

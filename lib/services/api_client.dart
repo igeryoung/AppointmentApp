@@ -68,10 +68,8 @@ class ApiClient {
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
+        // Server returns { success: true, note: null } when note doesn't exist
         return json['note'] as Map<String, dynamic>?;
-      } else if (response.statusCode == 404) {
-        // Note doesn't exist on server
-        return null;
       } else {
         throw ApiException(
           'Fetch note failed: ${response.statusCode}',
@@ -233,10 +231,8 @@ class ApiClient {
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
+        // Server returns { success: true, drawing: null } when drawing doesn't exist
         return json['drawing'] as Map<String, dynamic>?;
-      } else if (response.statusCode == 404) {
-        // Drawing doesn't exist on server
-        return null;
       } else {
         throw ApiException(
           'Fetch drawing failed: ${response.statusCode}',
@@ -373,6 +369,67 @@ class ApiClient {
       rethrow;
     }
   }
+
+  // ===================
+  // Device Registration API
+  // ===================
+
+  /// Check if a device is registered on the server
+  Future<bool> checkDeviceRegistration({
+    required String deviceId,
+  }) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/devices/$deviceId'),
+      ).timeout(timeout);
+
+      return response.statusCode == 200;
+    } catch (e) {
+      debugPrint('❌ Check device registration failed: $e');
+      return false;
+    }
+  }
+
+  /// Register a new device with password
+  Future<Map<String, dynamic>> registerDevice({
+    required String deviceName,
+    required String password,
+    String? platform,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/devices/register'),
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: jsonEncode({
+          'deviceName': deviceName,
+          'platform': platform,
+          'password': password,
+        }),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Invalid registration password',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Device registration failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Device registration failed: $e');
+      rethrow;
+    }
+  }
 }
 
 /// API Exception with details
@@ -408,5 +465,29 @@ class ApiConflictException extends ApiException {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Extract server version from conflict response
+  /// Returns null if not available
+  int? get serverVersion {
+    final state = serverState;
+    if (state == null) return null;
+    return state['serverVersion'] as int?;
+  }
+
+  /// Extract server drawing data from conflict response
+  /// Returns null if not available
+  Map<String, dynamic>? get serverDrawing {
+    final state = serverState;
+    if (state == null) return null;
+    return state['serverDrawing'] as Map<String, dynamic>?;
+  }
+
+  /// Extract server note data from conflict response
+  /// Returns null if not available
+  Map<String, dynamic>? get serverNote {
+    final state = serverState;
+    if (state == null) return null;
+    return state['serverNote'] as Map<String, dynamic>?;
   }
 }

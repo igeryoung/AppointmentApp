@@ -33,6 +33,7 @@ DeviceRegisterRequest _$DeviceRegisterRequestFromJson(
 ) => DeviceRegisterRequest(
   deviceName: json['deviceName'] as String,
   platform: json['platform'] as String?,
+  password: json['password'] as String,
 );
 
 Map<String, dynamic> _$DeviceRegisterRequestToJson(
@@ -40,6 +41,7 @@ Map<String, dynamic> _$DeviceRegisterRequestToJson(
 ) => <String, dynamic>{
   'deviceName': instance.deviceName,
   'platform': instance.platform,
+  'password': instance.password,
 };
 
 DeviceRegisterResponse _$DeviceRegisterResponseFromJson(

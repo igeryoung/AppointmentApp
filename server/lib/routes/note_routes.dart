@@ -50,8 +50,7 @@ class NoteRoutes {
   ///   X-Device-Token: Authentication token
   ///
   /// Response:
-  ///   200: { success: true, note: {...} }
-  ///   404: { success: false, message: "Note not found" }
+  ///   200: { success: true, note: {...} } or { success: true, note: null } if not exists
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _getNote(Request request) async {
     try {
@@ -122,16 +121,7 @@ class NoteRoutes {
       // Get the note
       final note = await noteService.getNote(eventId);
 
-      if (note == null) {
-        return Response.notFound(
-          jsonEncode({
-            'success': false,
-            'message': 'Note not found',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
-
+      // Return 200 with null if note doesn't exist (not an error)
       return Response.ok(
         jsonEncode({
           'success': true,
