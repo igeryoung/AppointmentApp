@@ -1,6 +1,8 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../cubits/schedule_cubit.dart';
 import '../l10n/app_localizations.dart';
 import '../models/book.dart';
 import '../services/database_service_interface.dart';
@@ -9,6 +11,7 @@ import '../services/web_prd_database_service.dart';
 import '../services/book_backup_service.dart';
 import '../services/server_config_service.dart';
 import '../services/book_order_service.dart';
+import '../services/service_locator.dart';
 import '../services/api_client.dart';
 import 'schedule_screen.dart';
 
@@ -213,7 +216,11 @@ class _BookListScreenState extends State<BookListScreen> {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => ScheduleScreen(book: book),
+        builder: (context) => BlocProvider(
+          // Phase 2: Initialize cubit with bookId (parallel run, old code still active)
+          create: (context) => getIt<ScheduleCubit>()..initialize(book.id!),
+          child: ScheduleScreen(book: book),
+        ),
       ),
     );
   }

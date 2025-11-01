@@ -105,32 +105,68 @@ flutter test integration_test/
 ```
 lib/
 ├── models/                  # Data models (Book, Event, Note, ScheduleDrawing)
-├── services/                # Database services
-│   ├── database_service_interface.dart  # Interface for type safety
-│   ├── prd_database_service.dart        # SQLite implementation
-│   └── web_prd_database_service.dart    # Web in-memory implementation
+├── repositories/            # Data access layer (Repository pattern)
+│   ├── book_repository.dart           # Book repository interface
+│   ├── book_repository_impl.dart      # SQLite implementation
+│   ├── event_repository.dart          # Event repository interface
+│   ├── event_repository_impl.dart     # SQLite implementation
+│   ├── note_repository.dart           # Note repository interface
+│   ├── note_repository_impl.dart      # SQLite implementation
+│   ├── drawing_repository.dart        # Drawing repository interface
+│   ├── drawing_repository_impl.dart   # SQLite implementation
+│   ├── device_repository.dart         # Device credentials interface
+│   └── device_repository_impl.dart    # SQLite implementation
+├── services/                # Business logic and external services
+│   ├── database_service_interface.dart  # Database interface
+│   ├── prd_database_service.dart        # SQLite database service
+│   ├── web_prd_database_service.dart    # Web database service
+│   ├── note_content_service.dart        # Note operations
+│   ├── drawing_content_service.dart     # Drawing operations
+│   ├── sync_coordinator.dart            # Bulk sync operations
+│   ├── api_client.dart                  # Server API client
+│   ├── book_backup_service.dart         # Book backup/restore
+│   ├── book_order_service.dart          # Book ordering
+│   ├── time_service.dart                # Time utilities
+│   └── service_locator.dart             # Dependency injection
+├── cubits/                  # State management (BLoC pattern)
+│   ├── book_list_cubit.dart       # Book list state management
+│   ├── book_list_state.dart       # Book list states
+│   ├── schedule_cubit.dart        # Schedule state management
+│   ├── schedule_state.dart        # Schedule states
+│   ├── event_detail_cubit.dart    # Event detail state management
+│   └── event_detail_state.dart    # Event detail states
 ├── screens/                 # UI screens
-│   ├── book_list_screen.dart
-│   ├── schedule_screen.dart
-│   └── event_detail_screen.dart
+│   ├── book_list/                 # Book list screen (refactored)
+│   │   ├── book_list_screen_bloc.dart  # BLoC version (276 lines)
+│   │   ├── book_card.dart              # Book card widget
+│   │   ├── create_book_dialog.dart     # Create dialog
+│   │   └── rename_book_dialog.dart     # Rename dialog
+│   ├── book_list_screen.dart      # Original version (832 lines)
+│   ├── schedule_screen.dart       # Schedule view (2500 lines)
+│   └── event_detail_screen.dart   # Event details (1000 lines)
 ├── widgets/                 # Reusable widgets
 │   └── handwriting_canvas.dart
-├── legacy/                  # ⚠️ Legacy code (not in use)
-│   ├── README_LEGACY.md     # Legacy code documentation
-│   ├── screens/             # Old screen implementations
-│   ├── providers/           # Old Provider-based state management
-│   ├── services/            # Old service layer
-│   └── models/              # Old Appointment model
+├── l10n/                    # Localization files
 ├── app.dart                 # Main app configuration
 └── main.dart                # App entry point
 
 doc/
-└── appointmentApp_PRD.md    # Product Requirements Document
+├── appointmentApp_PRD.md    # Product Requirements Document
+└── refactor/                # Refactoring documentation
+    ├── 00_overview.md       # Refactoring overview
+    ├── phase1_foundation.md
+    ├── phase2_database_layer.md
+    ├── phase3_service_layer.md
+    ├── phase4_state_management.md
+    ├── phase5_screen_refactor.md
+    ├── phase6_cleanup.md
+    └── phase7_validation.md
 
 test/
-├── diagnostics/             # Debugging and diagnosis tests
-├── models/                  # Model tests
-├── screens/                 # Screen tests
+├── characterization/        # Behavior preservation tests
+├── repositories/            # Repository unit tests
+├── cubits/                  # Cubit unit tests
+├── screens/                 # Screen widget tests
 └── widgets/                 # Widget tests
 ```
 
@@ -151,38 +187,96 @@ schedule_drawings (id, book_id, date, view_mode, strokes_data, ...)
 
 ## Architecture
 
-### Data Flow (Current Implementation)
+### Current Architecture (Clean Architecture + BLoC Pattern)
+
 ```
-BookListScreen → ScheduleScreen → EventDetailScreen
-       ↓                ↓                ↓
-   IDatabaseService (interface)
-       ↓                ↓
-PRDDatabaseService ← (mobile/desktop)
-WebPRDDatabaseService ← (web)
+┌─────────────────────────────────────────────────────────────┐
+│                     Presentation Layer                      │
+│  ┌────────────┐  ┌────────────┐  ┌────────────────┐        │
+│  │ BookList   │  │ Schedule   │  │ EventDetail    │        │
+│  │ Screen     │  │ Screen     │  │ Screen         │        │
+│  └─────┬──────┘  └─────┬──────┘  └────────┬───────┘        │
+│        │                │                  │                 │
+│        v                v                  v                 │
+│  ┌────────────┐  ┌────────────┐  ┌────────────────┐        │
+│  │ BookList   │  │ Schedule   │  │ EventDetail    │        │
+│  │ Cubit      │  │ Cubit      │  │ Cubit          │        │
+│  └─────┬──────┘  └─────┬──────┘  └────────┬───────┘        │
+└────────┼────────────────┼───────────────────┼────────────────┘
+         │                │                   │
+┌────────┼────────────────┼───────────────────┼────────────────┐
+│        │    Business Logic Layer            │                │
+│        v                v                   v                │
+│  ┌─────────────────────────────────────────────────┐        │
+│  │  NoteContentService                             │        │
+│  │  DrawingContentService                          │        │
+│  │  SyncCoordinator                                │        │
+│  │  BookOrderService                               │        │
+│  └─────────┬───────────────────────────────────────┘        │
+└────────────┼──────────────────────────────────────────────────┘
+             │
+┌────────────┼──────────────────────────────────────────────────┐
+│            │       Data Access Layer (Repository Pattern)     │
+│            v                                                   │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐        │
+│  │ Book         │  │ Event        │  │ Note         │        │
+│  │ Repository   │  │ Repository   │  │ Repository   │        │
+│  └──────┬───────┘  └──────┬───────┘  └──────┬───────┘        │
+│         │                  │                  │                │
+│         v                  v                  v                │
+│  ┌────────────────────────────────────────────────────┐       │
+│  │         PRDDatabaseService / IDatabaseService      │       │
+│  └────────────────────────┬───────────────────────────┘       │
+└───────────────────────────┼─────────────────────────────────────┘
+                            │
+┌───────────────────────────┼─────────────────────────────────────┐
+│                           │        Infrastructure Layer         │
+│                           v                                     │
+│  ┌──────────────────┐  ┌──────────────────┐                   │
+│  │ SQLite           │  │ Web Storage      │                   │
+│  │ (Mobile/Desktop) │  │ (Browser)        │                   │
+│  └──────────────────┘  └──────────────────┘                   │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-### Hierarchy
+### Data Hierarchy
 **Books** → **Events** → **Notes**
 - Each Book contains multiple Events
 - Each Event can have one Note (handwriting)
 - Schedule Drawings are overlay annotations on schedule views
 
 ### Key Principles
-1. **Direct Data Access**: Screens directly use database services (no intermediate service layer)
-2. **Type Safety**: All services implement `IDatabaseService` interface
-3. **Platform Adaptation**: Automatic selection of appropriate database implementation
-4. **Simplicity**: Minimal abstraction layers for maintainability
+
+1. **Separation of Concerns**: Clear boundaries between presentation, business logic, and data access
+2. **Dependency Injection**: Using `get_it` for service locator pattern
+3. **State Management**: BLoC/Cubit pattern for predictable state handling
+4. **Repository Pattern**: Abstract data access behind repository interfaces
+5. **Type Safety**: Interfaces for all major components (repositories, services)
+6. **Testability**: All layers can be tested independently with mocks
+7. **Platform Adaptation**: Automatic selection of appropriate implementations
+
+### Refactoring Progress
+
+This app has undergone a comprehensive refactoring:
+- **Phase 1**: Foundation setup (dependency injection, repository interfaces)
+- **Phase 2**: Database layer extraction (repository implementations)
+- **Phase 3**: Service layer cleanup (focused services)
+- **Phase 4**: BLoC/Cubit state management ✅
+- **Phase 5**: Screen refactoring (BookListScreen complete) ⏳
+- **Phase 6**: Cleanup and standardization (legacy code removed) ✅
+- **Phase 7**: Final validation (pending)
+
+**Code Reduction**: ~4,239 lines of legacy code removed
 
 ## Legacy Code
 
-The `lib/legacy/` directory contains an older implementation that is **not currently in use**. This code is preserved for:
-- Historical reference
-- Potential future feature extraction
-- Understanding project evolution
+The legacy code directory has been removed as part of Phase 6 cleanup. Approximately 4,239 lines of outdated code were deleted, including:
+- Old Provider-based state management
+- Deprecated service implementations
+- Unused screen implementations
+- Old Appointment model
 
-⚠️ **Do not use code from `lib/legacy/`** - it is not maintained and may contain bugs.
-
-See `lib/legacy/README_LEGACY.md` for details.
+All functionality has been replaced with the new Clean Architecture + BLoC implementation.
 
 ## Development
 

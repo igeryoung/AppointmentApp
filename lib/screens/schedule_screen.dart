@@ -3,7 +3,10 @@ import 'dart:math';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
+import '../cubits/schedule_cubit.dart';
+import '../cubits/schedule_state.dart';
 import '../l10n/app_localizations.dart';
 import '../models/book.dart';
 import '../models/event.dart';
@@ -36,8 +39,7 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObserver {
   late TransformationController _transformationController;
   DateTime _selectedDate = TimeService.instance.now();
-  List<Event> _events = [];
-  bool _isLoading = false;
+  List<Event> _events = []; // OLD: Still used by preloading logic, will remove in Phase 7
 
   // ContentService for server sync
   ContentService? _contentService;
@@ -117,6 +119,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Setup network connectivity monitoring for automatic sync retry
     _setupConnectivityMonitoring();
 
+    // === PHASE 2: Cubit is initialized in BlocProvider (parallel run) ===
+    // Cubit initialization happens in book_list_screen_bloc.dart
+    // We don't need to call it here - it's automatic
+
+    // OLD CODE: Keep existing event loading (still works)
     _loadEvents();
     _loadDrawing();
   }
@@ -140,6 +147,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         _isOffline = !serverReachable;
         _wasOfflineLastCheck = !serverReachable;
       });
+
+      // === PHASE 5: Update cubit offline status in parallel ===
+      context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
+
       debugPrint('✅ ScheduleScreen: Initial connectivity check - offline: $_isOffline');
 
       // Auto-sync dirty notes for this book if online
@@ -155,6 +166,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       setState(() {
         _isOffline = true;
       });
+
+      // === PHASE 5: Update cubit offline status in parallel ===
+      if (mounted) {
+        context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
+      }
     }
   }
 
@@ -231,6 +247,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           _isOffline = !serverReachable;
           _wasOfflineLastCheck = !serverReachable;
         });
+
+        // === PHASE 5: Update cubit offline status in parallel ===
+        context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
 
         debugPrint('🌐 ScheduleScreen: Offline state updated based on server check: $_isOffline');
 
@@ -398,6 +417,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           _lastActiveDate = now;
         });
 
+        // === PHASE 5: Update cubit date in parallel (auto date change) ===
+        if (mounted) {
+          context.read<ScheduleCubit>().selectDate(_selectedDate);
+        }
+
         // Reload events and drawing for new date
         await _loadEvents();
         await _loadDrawing();
@@ -436,8 +460,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   Future<void> _loadEvents() async {
-    setState(() => _isLoading = true);
-
+    // OLD CODE: Still loads events into _events for preloading logic
+    // Phase 6: Loading state now managed by cubit (state is ScheduleLoading)
     try {
       // Use effective date to ensure consistency with UI rendering
       // effectiveDate is the 3-day window start from _get3DayWindowStart()
@@ -446,10 +470,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
       setState(() {
         _events = events;
-        _isLoading = false;
       });
     } catch (e) {
-      setState(() => _isLoading = false);
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context)!.errorLoadingEvents(e.toString()))),
@@ -493,6 +515,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       setState(() {
         _currentDrawing = drawing;
       });
+
+      // === PHASE 4: Load drawing to cubit in parallel ===
+      context.read<ScheduleCubit>().loadDrawing(viewMode: 1, forceRefresh: false);
 
       // Load strokes into canvas if drawing exists
       // Use post-frame callback to ensure canvas is ready
@@ -658,6 +683,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             _currentDrawing = savedDrawing ?? drawing;
           });
         }
+
+        // === PHASE 4: Save drawing to cubit in parallel ===
+        if (mounted) {
+          context.read<ScheduleCubit>().saveDrawing(savedDrawing ?? drawing);
+        }
       } else {
         debugPrint('⚠️ ContentService not available, saving to cache only');
         final savedDrawing = await _dbService.saveCachedDrawing(drawing);
@@ -674,6 +704,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           setState(() {
             _currentDrawing = savedDrawing;
           });
+        }
+
+        // === PHASE 4: Save drawing to cubit in parallel (cache-only path) ===
+        if (mounted) {
+          context.read<ScheduleCubit>().saveDrawing(savedDrawing);
         }
       }
 
@@ -780,7 +815,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     );
 
     if (result == true) {
+      // OLD CODE: Load events from database (still active)
       _loadEvents();
+
+      // === PHASE 3: Reload cubit state in parallel ===
+      context.read<ScheduleCubit>().loadEvents();
     }
   }
 
@@ -796,7 +835,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     );
 
     if (result == true) {
+      // OLD CODE: Load events from database (still active)
       _loadEvents();
+
+      // === PHASE 3: Reload cubit state in parallel ===
+      context.read<ScheduleCubit>().loadEvents();
     }
   }
 
@@ -975,8 +1018,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           eventType: selectedType,
           updatedAt: TimeService.instance.now(),
         );
+
+        // OLD CODE: Update event in database (still active)
         await _dbService.updateEvent(updatedEvent);
         _loadEvents();
+
+        // === PHASE 3: Update event in cubit in parallel ===
+        context.read<ScheduleCubit>().updateEvent(updatedEvent);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.eventTypeChanged)),
@@ -1151,6 +1200,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (result == null) return;
 
     try {
+      // OLD CODE: Change event time (creates new event, soft-deletes old, still active)
       await _dbService.changeEventTime(
         event,
         result['startTime'],
@@ -1159,6 +1209,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       );
 
       _loadEvents();
+
+      // === PHASE 3: Reload cubit state in parallel ===
+      // TODO: Add changeEventTime() support to ScheduleCubit
+      // (changeEventTime creates new event + soft-deletes old event)
+      // For now, just reload to sync state
+      context.read<ScheduleCubit>().loadEvents();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1229,8 +1285,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
     if (reason != null && reason.isNotEmpty) {
       try {
+        // OLD CODE: Remove event from database (soft delete, still active)
         await _dbService.removeEvent(event.id!, reason);
         _loadEvents();
+
+        // === PHASE 3: Remove event in cubit in parallel ===
+        context.read<ScheduleCubit>().deleteEvent(event.id!, reason: reason);
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.eventRemovedSuccessfully)),
@@ -1270,8 +1331,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
     if (confirmed == true) {
       try {
+        // OLD CODE: Hard delete event from database (still active)
         await _dbService.deleteEvent(event.id!);
         _loadEvents();
+
+        // === PHASE 3: Reload cubit state in parallel ===
+        // TODO: Add hard delete support to ScheduleCubit (currently only has soft delete)
+        // For now, just reload to sync state
+        context.read<ScheduleCubit>().loadEvents();
+
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(l10n.eventDeleted)),
@@ -1401,6 +1469,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           _selectedDate = TimeService.instance.now();
           _lastActiveDate = TimeService.instance.now();
         });
+
+        // === PHASE 5: Update cubit date in parallel (reset to real time) ===
+        if (mounted) {
+          context.read<ScheduleCubit>().selectDate(_selectedDate);
+        }
+
         await _loadEvents();
         await _loadDrawing();
       }
@@ -1437,6 +1511,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       _selectedDate = TimeService.instance.now();
       _lastActiveDate = TimeService.instance.now();
     });
+
+    // === PHASE 5: Update cubit date in parallel (set test time) ===
+    if (mounted) {
+      context.read<ScheduleCubit>().selectDate(_selectedDate);
+    }
+
     await _loadEvents();
     await _loadDrawing();
 
@@ -2649,7 +2729,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return PopScope(
+    // === PHASE 2: Add BlocListener to monitor cubit state (parallel run) ===
+    // TODO: Eventually use cubit state for rendering instead of _events
+    return BlocListener<ScheduleCubit, ScheduleState>(
+      listener: (context, state) {
+        // Monitor cubit state changes (debugging - can remove later)
+        if (state is ScheduleLoaded) {
+          debugPrint('🔷 PHASE2: Cubit loaded ${state.events.length} events (old code still rendering)');
+        } else if (state is ScheduleError) {
+          debugPrint('🔷 PHASE2: Cubit error: ${state.message}');
+        }
+      },
+      child: PopScope(
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
         if (didPop) return;
@@ -2678,6 +2769,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 setState(() {
                   _selectedDate = _selectedDate.subtract(_getNavigationIncrement());
                 });
+
+                // === PHASE 5: Update cubit date in parallel ===
+                context.read<ScheduleCubit>().selectDate(_selectedDate);
+
                 _loadEvents();
                 await _loadDrawing();
               },
@@ -2704,6 +2799,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                   setState(() {
                     _selectedDate = date;
                   });
+
+                  // === PHASE 5: Update cubit date in parallel ===
+                  context.read<ScheduleCubit>().selectDate(_selectedDate);
+
                   _loadEvents();
                   await _loadDrawing();
                 }
@@ -2730,6 +2829,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 setState(() {
                   _selectedDate = _selectedDate.add(_getNavigationIncrement());
                 });
+
+                // === PHASE 5: Update cubit date in parallel ===
+                context.read<ScheduleCubit>().selectDate(_selectedDate);
+
                 _loadEvents();
                 await _loadDrawing();
               },
@@ -2748,6 +2851,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               setState(() {
                 _showOldEvents = !_showOldEvents;
               });
+
+              // === PHASE 5: Toggle old events in cubit in parallel ===
+              context.read<ScheduleCubit>().toggleOldEvents();
             },
             tooltip: _showOldEvents ? l10n.hideOldEvents : l10n.showOldEvents,
           ),
@@ -2763,27 +2869,36 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 _selectedDate = TimeService.instance.now();
                 _lastActiveDate = TimeService.instance.now();
               });
+
+              // === PHASE 5: Update cubit date to today in parallel ===
+              context.read<ScheduleCubit>().selectDate(_selectedDate);
+
               _loadEvents();
-              if (_isDrawingMode) {
-                await _loadDrawing();
-              }
+              await _loadDrawing();
               _panToCurrentTime();
             },
             tooltip: l10n.goToToday,
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          Column(
+      body: BlocBuilder<ScheduleCubit, ScheduleState>(
+        builder: (context, state) {
+          // === PHASE 6: Use cubit state for rendering ===
+          final isLoading = state is ScheduleLoading;
+          final events = state is ScheduleLoaded ? state.events : <Event>[];
+          final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
+
+          return Stack(
             children: [
-              Expanded(
-                child: _isLoading
-                    ? const Center(child: CircularProgressIndicator())
-                    : _build3DayView(),
+              Column(
+                children: [
+                  Expanded(
+                    child: isLoading
+                        ? const Center(child: CircularProgressIndicator())
+                        : _build3DayView(events, showOldEvents),
+                  ),
+                ],
               ),
-            ],
-          ),
           // Drawing toolbar overlay (positioned on top of date header)
           if (_isDrawingMode)
             Positioned(
@@ -2793,10 +2908,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               child: _buildDrawingToolbar(),
             ),
           // Event context menu overlay
-          if (_buildEventContextMenuOverlay() != null)
-            _buildEventContextMenuOverlay()!,
-        ],
-      ),
+          if (_buildEventContextMenuOverlay(events) != null)
+            _buildEventContextMenuOverlay(events)!,
+            ],
+          );
+        },
+      ), // BlocBuilder
       floatingActionButton: _isFabMenuVisible
         ? Column(
             mainAxisSize: MainAxisSize.min,
@@ -2836,8 +2953,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                   _selectedDate = TimeService.instance.now();
                   _lastActiveDate = TimeService.instance.now();
                 });
+
+                // === PHASE 5: Update cubit date to today in parallel (FAB) ===
+                context.read<ScheduleCubit>().selectDate(_selectedDate);
+
                 _loadEvents();
-                _loadDrawing();
+                await _loadDrawing();
               },
               backgroundColor: Colors.green,
               child: const Icon(Icons.today),
@@ -2926,7 +3047,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             tooltip: 'Show menu',
           ),
     ), // Scaffold
-  ); // PopScope
+  ), // PopScope
+  ); // BlocListener (PHASE 2: monitoring cubit state)
   }
 
   String _getDateDisplayText() {
@@ -2936,16 +3058,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return '${DateFormat('MMM d', Localizations.localeOf(context).toString()).format(windowStart)} - ${DateFormat('MMM d, y', Localizations.localeOf(context).toString()).format(windowEnd)}';
   }
 
-  Widget _build3DayView() {
+  Widget _build3DayView(List<Event> events, bool showOldEvents) {
     // Use stable 3-day window instead of _selectedDate to prevent page changes on date changes
     final windowStart = _get3DayWindowStart(_selectedDate);
     final dates = List.generate(3, (index) => windowStart.add(Duration(days: index)));
-    return _buildTimeSlotView(dates, _getCanvasKeyForCurrentPage());
+    return _buildTimeSlotView(dates, _getCanvasKeyForCurrentPage(), events, showOldEvents);
   }
 
   Widget _buildTimeSlotView(
     List<DateTime> dates,
     GlobalKey<HandwritingCanvasState> canvasKey,
+    List<Event> events,
+    bool showOldEvents,
   ) {
     final now = TimeService.instance.now();
 
@@ -3017,7 +3141,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                               // Current time indicator
                               _buildCurrentTimeIndicator(dates, now, slotHeight),
                               // Events overlay - positioned absolutely to span multiple slots
-                              _buildEventsOverlay(dates, slotHeight, dateHeaderHeight),
+                              _buildEventsOverlay(dates, slotHeight, dateHeaderHeight, events, showOldEvents),
                             ],
                           ),
                         ),
@@ -3165,12 +3289,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Build events overlay with absolute positioning to allow spanning multiple time slots
-  Widget _buildEventsOverlay(List<DateTime> dates, double slotHeight, double dateHeaderHeight) {
+  Widget _buildEventsOverlay(List<DateTime> dates, double slotHeight, double dateHeaderHeight, List<Event> events, bool showOldEvents) {
     return Row(
       children: [
         const SizedBox(width: 60), // Time column width
         ...dates.map((date) {
-          final dateEvents = _getEventsForDate(date);
+          final dateEvents = _getEventsForDate(date, events, showOldEvents);
 
           return Expanded(
             child: LayoutBuilder(
@@ -3286,7 +3410,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                         height: tileHeight,
                         child: Padding(
                           padding: const EdgeInsets.only(left: 1, right: 1, top: 1),
-                          child: _buildEventTile(context, event, slotHeight),
+                          child: _buildEventTile(context, event, slotHeight, events),
                         ),
                       ),
                     );
@@ -3312,8 +3436,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Get all events for a specific date (used for overlay rendering)
-  List<Event> _getEventsForDate(DateTime date) {
-    return _events.where((event) {
+  List<Event> _getEventsForDate(DateTime date, List<Event> events, bool showOldEvents) {
+    return events.where((event) {
       // Filter by date
       final matchesDate = event.startTime.year == date.year &&
                           event.startTime.month == date.month &&
@@ -3323,7 +3447,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
       // Filter out old events if toggle is off
       // Old events = removed events or time-changed old versions
-      if (!_showOldEvents && (event.isRemoved || event.hasNewTime)) {
+      if (!showOldEvents && (event.isRemoved || event.hasNewTime)) {
         return false;
       }
 
@@ -3339,10 +3463,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Get the new event that this event was moved to (if it has a newEventId)
-  Event? _getNewEventForTimeChange(Event event) {
+  Event? _getNewEventForTimeChange(Event event, List<Event> events) {
     if (event.newEventId == null) return null;
     try {
-      return _events.firstWhere((e) => e.id == event.newEventId);
+      return events.firstWhere((e) => e.id == event.newEventId);
     } catch (e) {
       return null;
     }
@@ -3354,7 +3478,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return '→ ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newEvent.startTime)}';
   }
 
-  Widget _buildEventTile(BuildContext context, Event event, double slotHeight) {
+  Widget _buildEventTile(BuildContext context, Event event, double slotHeight, List<Event> events) {
     // Calculate how many 15-minute slots this event spans
     final durationInMinutes = _getDisplayDurationInMinutes(event);
     final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 16); // Max 4 hours
@@ -3401,7 +3525,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 ),
               ),
             // Content with height-adaptive rendering
-            _buildEventTileContent(event, tileHeight, slotHeight),
+            _buildEventTileContent(event, tileHeight, slotHeight, events),
           ],
         ),
       ),
@@ -3424,7 +3548,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 color: _getEventTypeColor(context, event.eventType),
                 borderRadius: BorderRadius.circular(2),
               ),
-              child: _buildEventTileContent(event, tileHeight, slotHeight),
+              child: _buildEventTileContent(event, tileHeight, slotHeight, events),
             ),
           ),
         ),
@@ -3451,7 +3575,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return baseFontSize;
   }
 
-  Widget _buildEventTileContent(Event event, double tileHeight, double slotHeight) {
+  Widget _buildEventTileContent(Event event, double tileHeight, double slotHeight, List<Event> events) {
     // For closed-end events (with both start and end times), always show simplified content
     // Open-end events get height-adaptive rendering
     final isClosedEnd = !_shouldDisplayAsOpenEnd(event);
@@ -3678,7 +3802,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           if (event.hasNewTime)
             Builder(
               builder: (context) {
-                final newEvent = _getNewEventForTimeChange(event);
+                final newEvent = _getNewEventForTimeChange(event, events);
                 final newTimeDisplay = _getNewTimeDisplay(newEvent);
                 return Padding(
                   padding: const EdgeInsets.only(top: 2),
@@ -3749,7 +3873,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return hslColor.withSaturation(0.60).toColor();
   }
 
-  Widget? _buildEventContextMenuOverlay() {
+  Widget? _buildEventContextMenuOverlay(List<Event> events) {
     if (_selectedEventForMenu == null || _menuPosition == null) return null;
 
     final l10n = AppLocalizations.of(context)!;

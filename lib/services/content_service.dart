@@ -6,6 +6,14 @@ import 'api_client.dart';
 
 /// ContentService - Unified content management with cache-first strategy
 ///
+/// **DEPRECATED**: This class is being replaced by focused services:
+/// - [NoteContentService] for note operations
+/// - [DrawingContentService] for drawing operations
+/// - [SyncCoordinator] for bulk sync operations
+///
+/// This class is kept for backward compatibility during refactoring.
+/// New code should use the replacement services above.
+///
 /// Handles Notes and Drawings with intelligent caching and network fallback
 ///
 /// Architecture:
@@ -14,6 +22,7 @@ import 'api_client.dart';
 ///                             Hide complexity from UI
 ///
 /// Linus说: "Abstraction layers should hide complexity, not add it."
+@Deprecated('Use NoteContentService, DrawingContentService, and SyncCoordinator instead')
 class ContentService {
   final ApiClient _apiClient;
   final dynamic _cacheManager;  // CacheManager or mock
