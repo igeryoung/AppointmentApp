@@ -13,7 +13,7 @@ import '../models/event.dart';
 import '../models/schedule_drawing.dart';
 import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
-import '../services/web_prd_database_service.dart';
+import '../services/service_locator.dart';
 import '../services/time_service.dart';
 import '../services/content_service.dart';
 import '../services/cache_manager.dart';
@@ -21,6 +21,7 @@ import '../services/api_client.dart';
 import '../services/server_config_service.dart';
 import '../widgets/handwriting_canvas.dart';
 import '../utils/schedule/schedule_layout_utils.dart';
+import '../utils/datetime_picker_utils.dart';
 import '../painters/schedule_painters.dart';
 import '../widgets/schedule/test_menu.dart';
 import '../widgets/schedule/event_tile.dart';
@@ -84,10 +85,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   static const int _endHour = ScheduleLayoutUtils.endHour;
   static const int _totalSlots = ScheduleLayoutUtils.totalSlots;
 
-  // Use appropriate database service based on platform
-  IDatabaseService get _dbService => kIsWeb
-      ? WebPRDDatabaseService()
-      : PRDDatabaseService();
+  // Get database service from service locator
+  final IDatabaseService _dbService = getIt<IDatabaseService>();
 
   @override
   void initState() {
@@ -993,22 +992,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                       Expanded(
                         child: TextButton(
                           onPressed: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: newStartTime,
-                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            final result = await DateTimePickerUtils.pickDateTime(
+                              context,
+                              initialDateTime: newStartTime,
                             );
-                            if (date == null) return;
-
-                            final time = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(newStartTime),
-                            );
-                            if (time == null) return;
+                            if (result == null) return;
 
                             setState(() {
-                              newStartTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                              newStartTime = result;
                             });
                           },
                           child: Text(
@@ -1024,22 +1015,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                       Expanded(
                         child: TextButton(
                           onPressed: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: newEndTime ?? newStartTime,
+                            final result = await DateTimePickerUtils.pickDateTime(
+                              context,
+                              initialDateTime: newEndTime ?? newStartTime,
                               firstDate: newStartTime,
                               lastDate: DateTime.now().add(const Duration(days: 365)),
                             );
-                            if (date == null) return;
-
-                            final time = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(newEndTime ?? newStartTime.add(const Duration(hours: 1))),
-                            );
-                            if (time == null) return;
+                            if (result == null) return;
 
                             setState(() {
-                              newEndTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                              newEndTime = result;
                             });
                           },
                           child: Text(

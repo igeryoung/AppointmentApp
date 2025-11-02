@@ -8,11 +8,12 @@ import '../models/event.dart';
 import '../models/note.dart';
 import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
-import '../services/web_prd_database_service.dart';
+import '../services/service_locator.dart';
 import '../services/content_service.dart';
 import '../services/cache_manager.dart';
 import '../services/api_client.dart';
 import '../services/server_config_service.dart';
+import '../utils/datetime_picker_utils.dart';
 import '../widgets/handwriting_canvas.dart';
 
 /// Event Detail screen with handwriting notes as per PRD
@@ -46,10 +47,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _hasUnsyncedChanges = false;
   bool _isServicesReady = false; // Track if ContentService is initialized
 
-  // Use appropriate database service based on platform
-  IDatabaseService get _dbService => kIsWeb
-      ? WebPRDDatabaseService()
-      : PRDDatabaseService();
+  // Get database service from service locator
+  final IDatabaseService _dbService = getIt<IDatabaseService>();
 
   // ContentService for cache-first and offline-first operations
   ContentService? _contentService; // Make nullable to handle initialization race
@@ -772,22 +771,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       Expanded(
                         child: TextButton(
                           onPressed: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: newStartTime,
-                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            final result = await DateTimePickerUtils.pickDateTime(
+                              context,
+                              initialDateTime: newStartTime,
                             );
-                            if (date == null) return;
-
-                            final time = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(newStartTime),
-                            );
-                            if (time == null) return;
+                            if (result == null) return;
 
                             setState(() {
-                              newStartTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                              newStartTime = result;
                             });
                           },
                           child: Text(
@@ -803,22 +794,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       Expanded(
                         child: TextButton(
                           onPressed: () async {
-                            final date = await showDatePicker(
-                              context: context,
-                              initialDate: newEndTime ?? newStartTime,
+                            final result = await DateTimePickerUtils.pickDateTime(
+                              context,
+                              initialDateTime: newEndTime ?? newStartTime,
                               firstDate: newStartTime,
                               lastDate: DateTime.now().add(const Duration(days: 365)),
                             );
-                            if (date == null) return;
-
-                            final time = await showTimePicker(
-                              context: context,
-                              initialTime: TimeOfDay.fromDateTime(newEndTime ?? newStartTime.add(const Duration(hours: 1))),
-                            );
-                            if (time == null) return;
+                            if (result == null) return;
 
                             setState(() {
-                              newEndTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+                              newEndTime = result;
                             });
                           },
                           child: Text(
@@ -948,47 +933,31 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<void> _selectStartTime() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _startTime,
-      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+    final result = await DateTimePickerUtils.pickDateTime(
+      context,
+      initialDateTime: _startTime,
     );
 
-    if (date == null) return;
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_startTime),
-    );
-
-    if (time == null) return;
+    if (result == null) return;
 
     setState(() {
-      _startTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _startTime = result;
       _hasChanges = true;
     });
   }
 
   Future<void> _selectEndTime() async {
-    final date = await showDatePicker(
-      context: context,
-      initialDate: _endTime ?? _startTime,
+    final result = await DateTimePickerUtils.pickDateTime(
+      context,
+      initialDateTime: _endTime ?? _startTime,
       firstDate: _startTime,
       lastDate: DateTime.now().add(const Duration(days: 365)),
     );
 
-    if (date == null) return;
-
-    final time = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(_endTime ?? _startTime.add(const Duration(hours: 1))),
-    );
-
-    if (time == null) return;
+    if (result == null) return;
 
     setState(() {
-      _endTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+      _endTime = result;
       _hasChanges = true;
     });
   }

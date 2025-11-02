@@ -2,39 +2,37 @@ import 'package:sqflite/sqflite.dart';
 import '../models/event.dart';
 import '../models/note.dart';
 import 'event_repository.dart';
+import 'base_repository.dart';
 
 /// Implementation of EventRepository using SQLite
-class EventRepositoryImpl implements IEventRepository {
-  final Future<Database> Function() _getDatabaseFn;
+class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRepository {
   final Future<Note?> Function(int eventId) _getCachedNoteFn;
 
-  EventRepositoryImpl(this._getDatabaseFn, this._getCachedNoteFn);
+  EventRepositoryImpl(Future<Database> Function() getDatabaseFn, this._getCachedNoteFn)
+      : super(getDatabaseFn);
 
   @override
-  Future<List<Event>> getAll() async {
-    final db = await _getDatabaseFn();
-    final maps = await db.query('events', orderBy: 'start_time ASC');
-    return maps.map((map) => Event.fromMap(map)).toList();
-  }
+  String get tableName => 'events';
 
   @override
-  Future<Event?> getById(int id) async {
-    final db = await _getDatabaseFn();
-    final maps = await db.query('events', where: 'id = ?', whereArgs: [id], limit: 1);
-    if (maps.isEmpty) return null;
-    return Event.fromMap(maps.first);
-  }
+  Event fromMap(Map<String, dynamic> map) => Event.fromMap(map);
 
   @override
-  Future<List<Event>> getByBookId(int bookId) async {
-    final db = await _getDatabaseFn();
-    final maps = await db.query(
-      'events',
+  Map<String, dynamic> toMap(Event entity) => entity.toMap();
+
+  @override
+  Future<List<Event>> getAll() => queryAll(orderBy: 'start_time ASC');
+
+  @override
+  Future<Event?> getById(int id) => super.getById(id);
+
+  @override
+  Future<List<Event>> getByBookId(int bookId) {
+    return query(
       where: 'book_id = ?',
       whereArgs: [bookId],
       orderBy: 'start_time ASC',
     );
-    return maps.map((map) => Event.fromMap(map)).toList();
   }
 
   @override
@@ -42,10 +40,8 @@ class EventRepositoryImpl implements IEventRepository {
     int bookId,
     DateTime startDate,
     DateTime endDate,
-  ) async {
-    final db = await _getDatabaseFn();
-    final maps = await db.query(
-      'events',
+  ) {
+    return query(
       where: 'book_id = ? AND start_time >= ? AND start_time < ?',
       whereArgs: [
         bookId,
@@ -54,7 +50,6 @@ class EventRepositoryImpl implements IEventRepository {
       ],
       orderBy: 'start_time ASC',
     );
-    return maps.map((map) => Event.fromMap(map)).toList();
   }
 
   /// Get events for Day view
@@ -79,11 +74,11 @@ class EventRepositoryImpl implements IEventRepository {
 
   @override
   Future<Event> create(Event event) async {
-    final db = await _getDatabaseFn();
+    final db = await getDatabaseFn();
     final now = DateTime.now();
 
     final eventToCreate = event.copyWith(createdAt: now, updatedAt: now);
-    final id = await db.insert('events', eventToCreate.toMap());
+    final id = await insert(eventToCreate.toMap());
 
     // Create associated empty note
     await db.insert('notes', {
@@ -100,29 +95,19 @@ class EventRepositoryImpl implements IEventRepository {
   Future<Event> update(Event event) async {
     if (event.id == null) throw ArgumentError('Event ID cannot be null');
 
-    final db = await _getDatabaseFn();
     final now = DateTime.now();
     final updatedEvent = event.copyWith(updatedAt: now);
-    final updateData = updatedEvent.toMap();
+    final updateData = toMap(updatedEvent);
     updateData.remove('id');
 
-    final updatedRows = await db.update(
-      'events',
-      updateData,
-      where: 'id = ?',
-      whereArgs: [event.id],
-    );
-
+    final updatedRows = await updateById(event.id!, updateData);
     if (updatedRows == 0) throw Exception('Event not found');
+
     return updatedEvent;
   }
 
   @override
-  Future<void> delete(int id) async {
-    final db = await _getDatabaseFn();
-    final deletedRows = await db.delete('events', where: 'id = ?', whereArgs: [id]);
-    if (deletedRows == 0) throw Exception('Event not found');
-  }
+  Future<void> delete(int id) => deleteById(id);
 
   /// Soft remove an event with a reason
   @override
@@ -131,13 +116,11 @@ class EventRepositoryImpl implements IEventRepository {
       throw ArgumentError('Removal reason cannot be empty');
     }
 
-    final db = await _getDatabaseFn();
+    final db = await getDatabaseFn();
 
     // Get the current event
-    final maps = await db.query('events', where: 'id = ?', whereArgs: [eventId], limit: 1);
-    if (maps.isEmpty) throw Exception('Event not found');
-
-    final event = Event.fromMap(maps.first);
+    final event = await getById(eventId);
+    if (event == null) throw Exception('Event not found');
     if (event.isRemoved) throw Exception('Event is already removed');
 
     // Update the event with removal information
@@ -147,7 +130,7 @@ class EventRepositoryImpl implements IEventRepository {
       updatedAt: DateTime.now(),
     );
 
-    final updateData = updatedEvent.toMap();
+    final updateData = toMap(updatedEvent);
     updateData.remove('id');
 
     await db.update(
@@ -175,7 +158,7 @@ class EventRepositoryImpl implements IEventRepository {
       throw ArgumentError('Original event must have an ID');
     }
 
-    final db = await _getDatabaseFn();
+    final db = await getDatabaseFn();
     final now = DateTime.now();
 
     // First, soft remove the original event
@@ -193,7 +176,7 @@ class EventRepositoryImpl implements IEventRepository {
     );
 
     // Insert the new event (remove id to let DB auto-generate)
-    final newEventMap = newEvent.toMap();
+    final newEventMap = toMap(newEvent);
     newEventMap.remove('id');
     newEventMap['is_dirty'] = 1; // Mark as dirty to trigger server sync
     final newEventId = await db.insert('events', newEventMap);
@@ -234,7 +217,7 @@ class EventRepositoryImpl implements IEventRepository {
 
   /// Get event count by book
   Future<int> getEventCountByBook(int bookId) async {
-    final db = await _getDatabaseFn();
+    final db = await getDatabaseFn();
     final result = await db.rawQuery(
       'SELECT COUNT(*) as count FROM events WHERE book_id = ?',
       [bookId],

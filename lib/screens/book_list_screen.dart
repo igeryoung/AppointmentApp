@@ -7,7 +7,6 @@ import '../l10n/app_localizations.dart';
 import '../models/book.dart';
 import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
-import '../services/web_prd_database_service.dart';
 import '../services/book_backup_service.dart';
 import '../services/server_config_service.dart';
 import '../services/book_order_service.dart';
@@ -28,10 +27,8 @@ class _BookListScreenState extends State<BookListScreen> {
   bool _isLoading = false;
   final _bookOrderService = BookOrderService();
 
-  // Use appropriate database service based on platform
-  IDatabaseService get _dbService => kIsWeb
-      ? WebPRDDatabaseService()
-      : PRDDatabaseService();
+  // Get database service from service locator
+  final IDatabaseService _dbService = getIt<IDatabaseService>();
 
   // Book backup service (mobile only)
   BookBackupService? get _backupService => kIsWeb
