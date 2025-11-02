@@ -44,7 +44,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Load events for the selected date (using 3-day window)
-  Future<void> loadEvents({DateTime? date, bool showOldEvents = true}) async {
+  Future<void> loadEvents({DateTime? date, bool? showOldEvents}) async {
     if (_currentBookId == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot load events - no book selected');
       emit(const ScheduleError('No book selected'));
@@ -54,6 +54,13 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final currentState = state;
     final selectedDate = date ??
         (currentState is ScheduleLoaded ? currentState.selectedDate : _timeService.now());
+
+    // Preserve showOldEvents from current state if not explicitly provided
+    final effectiveShowOldEvents = showOldEvents ??
+        (currentState is ScheduleLoaded ? currentState.showOldEvents : true);
+
+    // Preserve drawing from current state to prevent it from being cleared
+    final currentDrawing = currentState is ScheduleLoaded ? currentState.drawing : null;
 
     emit(const ScheduleLoading());
 
@@ -70,16 +77,17 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       );
 
       // Filter old events if needed
-      // Old events are those that are removed or are old versions (have originalEventId)
-      final filteredEvents = showOldEvents
+      // Old events are those that are removed or have been rescheduled (have newEventId)
+      final filteredEvents = effectiveShowOldEvents
           ? events
-          : events.where((e) => !e.isRemoved && e.originalEventId == null).toList();
+          : events.where((e) => !e.isRemoved && e.newEventId == null).toList();
 
       emit(ScheduleLoaded(
         selectedDate: selectedDate,
         events: filteredEvents,
+        drawing: currentDrawing,
         isOffline: currentState is ScheduleLoaded ? currentState.isOffline : false,
-        showOldEvents: showOldEvents,
+        showOldEvents: effectiveShowOldEvents,
       ));
 
       debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for 3-day window starting $windowStart');

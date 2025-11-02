@@ -54,9 +54,14 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
     try {
       // Try to update existing drawing
+      // Remove id and created_at from update to avoid PRIMARY KEY constraint violation
+      final updateMap = Map<String, dynamic>.from(drawingMap);
+      updateMap.remove('id');
+      updateMap.remove('created_at');
+
       final updatedRows = await db.update(
         'schedule_drawings',
-        drawingMap,
+        updateMap,
         where: 'book_id = ? AND date = ? AND view_mode = ?',
         whereArgs: [
           drawing.bookId,
