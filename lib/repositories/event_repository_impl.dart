@@ -161,6 +161,7 @@ class EventRepositoryImpl implements IEventRepository {
   }
 
   /// Change event time - creates new event and soft deletes original
+  @override
   Future<Event> changeEventTime(
     Event originalEvent,
     DateTime newStartTime,

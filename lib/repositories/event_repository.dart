@@ -36,4 +36,13 @@ abstract class IEventRepository {
   /// Remove an event (soft delete with reason)
   /// Returns the updated event with isRemoved flag set
   Future<Event> removeEvent(int eventId, String reason);
+
+  /// Change event time - creates new event and soft deletes original
+  /// Returns the newly created event with updated time
+  Future<Event> changeEventTime(
+    Event originalEvent,
+    DateTime newStartTime,
+    DateTime? newEndTime,
+    String reason,
+  );
 }

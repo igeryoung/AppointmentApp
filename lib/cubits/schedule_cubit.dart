@@ -170,6 +170,46 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     }
   }
 
+  /// Hard delete an event (permanent deletion)
+  Future<void> hardDeleteEvent(int eventId) async {
+    try {
+      await _eventRepository.delete(eventId);
+      debugPrint('✅ ScheduleCubit: Hard deleted event (id: $eventId)');
+
+      // Reload events to update UI
+      await loadEvents();
+    } catch (e) {
+      debugPrint('❌ ScheduleCubit: Failed to hard delete event: $e');
+      emit(ScheduleError('Failed to hard delete event: $e'));
+    }
+  }
+
+  /// Change event time - creates new event and soft deletes original
+  Future<Event?> changeEventTime(
+    Event originalEvent,
+    DateTime newStartTime,
+    DateTime? newEndTime,
+    String reason,
+  ) async {
+    try {
+      final newEvent = await _eventRepository.changeEventTime(
+        originalEvent,
+        newStartTime,
+        newEndTime,
+        reason,
+      );
+      debugPrint('✅ ScheduleCubit: Changed event time for "${originalEvent.name}" (old id: ${originalEvent.id}, new id: ${newEvent.id})');
+
+      // Reload events to update UI
+      await loadEvents();
+      return newEvent;
+    } catch (e) {
+      debugPrint('❌ ScheduleCubit: Failed to change event time: $e');
+      emit(ScheduleError('Failed to change event time: $e'));
+      return null;
+    }
+  }
+
   // ===================
   // Drawing Operations
   // ===================
@@ -291,13 +331,5 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final windowIndex = daysSinceAnchor ~/ 3;
     final windowStart = anchor.add(Duration(days: windowIndex * 3));
     return DateTime(windowStart.year, windowStart.month, windowStart.day);
-  }
-
-  DateTime _getStartOfDay(DateTime date) {
-    return DateTime(date.year, date.month, date.day);
-  }
-
-  DateTime _getEndOfDay(DateTime date) {
-    return DateTime(date.year, date.month, date.day, 23, 59, 59);
   }
 }

@@ -42,7 +42,6 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObserver {
   late TransformationController _transformationController;
   DateTime _selectedDate = TimeService.instance.now();
-  List<Event> _events = []; // OLD: Still used by preloading logic, will remove in Phase 7
 
   // ContentService for server sync
   ContentService? _contentService;
@@ -109,9 +108,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Setup network connectivity monitoring for automatic sync retry
     _setupConnectivityMonitoring();
 
-    // Cubit is initialized in BlocProvider - it automatically loads events for UI
-    // But we still need _loadEvents() for preloading logic (uses _events variable)
-    _loadEvents();
+    // Cubit is initialized in BlocProvider - it automatically loads events
     _loadDrawing();
   }
 
@@ -144,8 +141,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         _autoSyncDirtyNotes();
       }
 
-      // Wait for events to load, then trigger preload
-      _waitForEventsAndPreload();
+      // Preloading is now triggered automatically by BlocListener when events are loaded
     } catch (e) {
       debugPrint('❌ ScheduleScreen: Failed to initialize ContentService: $e');
       // Continue without ContentService - sync will not work but UI remains functional
@@ -157,26 +153,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
       }
     }
-  }
-
-  /// Wait for events to load, then trigger preload
-  Future<void> _waitForEventsAndPreload() async {
-    // Poll for events to be loaded (max 5 seconds)
-    const maxWaitTime = Duration(seconds: 5);
-    const pollInterval = Duration(milliseconds: 100);
-    final startTime = DateTime.now();
-
-    while (_events.isEmpty) {
-      if (DateTime.now().difference(startTime) > maxWaitTime) {
-        debugPrint('⚠️ ScheduleScreen: Timeout waiting for events to load (waited ${maxWaitTime.inMilliseconds}ms), skipping preload');
-        return;
-      }
-      await Future.delayed(pollInterval);
-    }
-
-    final waitTime = DateTime.now().difference(startTime);
-    debugPrint('✅ ScheduleScreen: Events loaded after ${waitTime.inMilliseconds}ms (${_events.length} events), triggering preload...');
-    _preloadNotesInBackground();
   }
 
   /// Setup network connectivity monitoring for automatic sync retry
@@ -440,27 +416,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return _canvasKeys[pageId]!;
   }
 
-  Future<void> _loadEvents() async {
-    // OLD CODE: Still loads events into _events for preloading logic
-    // Phase 6: Loading state now managed by cubit (state is ScheduleLoading)
-    try {
-      // Use effective date to ensure consistency with UI rendering
-      // effectiveDate is the 3-day window start from _get3DayWindowStart_LOCAL()
-      final effectiveDate = _getEffectiveDate_LOCAL();
-      final events = await _dbService.getEventsBy3Days(widget.book.id!, effectiveDate);
-
-      setState(() {
-        _events = events;
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorLoadingEvents(e.toString()))),
-        );
-      }
-    }
-  }
-
   Future<void> _loadDrawing() async {
     try {
       // Reset current drawing to avoid carrying old IDs
@@ -518,11 +473,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   /// Preload notes for all events in current 3-day window (background, non-blocking)
   ///
-  /// This method is called by _waitForEventsAndPreload() after both ContentService
-  /// and events are ready. It improves UX by preloading notes so they're instantly
+  /// This method is automatically triggered by BlocListener when events are loaded
+  /// from the ScheduleCubit. It improves UX by preloading notes so they're instantly
   /// available when user taps events.
-  Future<void> _preloadNotesInBackground() async {
-    if (_events.isEmpty) {
+  Future<void> _preloadNotesInBackground(List<Event> events) async {
+    if (events.isEmpty) {
       debugPrint('📦 ScheduleScreen: No events to preload');
       return;
     }
@@ -533,10 +488,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
 
     final preloadStartTime = DateTime.now();
-    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${_events.length} events');
+    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events');
 
     // Extract all event IDs (filter out null IDs)
-    final eventIds = _events
+    final eventIds = events
         .where((e) => e.id != null)
         .map((e) => e.id!)
         .toList();
@@ -1167,17 +1122,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (result == null) return;
 
     try {
-      await _dbService.changeEventTime(
+      // Use cubit method to change event time (creates new event + soft-deletes old)
+      await context.read<ScheduleCubit>().changeEventTime(
         event,
         result['startTime'],
         result['endTime'],
         result['reason'],
       );
-
-      // TODO: Add changeEventTime() support to ScheduleCubit
-      // (changeEventTime creates new event + soft-deletes old event)
-      // For now, just reload to sync state
-      context.read<ScheduleCubit>().loadEvents();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1289,11 +1240,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
     if (confirmed == true) {
       try {
-        await _dbService.deleteEvent(event.id!);
-
-        // TODO: Add hard delete support to ScheduleCubit (currently only has soft delete)
-        // For now, just reload to sync state
-        await context.read<ScheduleCubit>().loadEvents();
+        // Use cubit method for hard delete (permanent deletion)
+        await context.read<ScheduleCubit>().hardDeleteEvent(event.id!);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1532,7 +1480,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       final startTime = DateTime(date.year, date.month, date.day, hour, minute);
 
       // Check if this time slot already has 4 events
-      final eventsAtSlot = _events.where((e) {
+      final cubitState = context.read<ScheduleCubit>().state;
+      final currentEvents = cubitState is ScheduleLoaded ? cubitState.events : <Event>[];
+      final eventsAtSlot = currentEvents.where((e) {
         return e.startTime.year == startTime.year &&
                e.startTime.month == startTime.month &&
                e.startTime.day == startTime.day &&
@@ -1675,15 +1625,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   /// Show Clear Cache dialog with cached event names
   Future<void> _showClearCacheDialog() async {
+    // Get events from cubit state
+    final cubitState = context.read<ScheduleCubit>().state;
+    final events = cubitState is ScheduleLoaded ? cubitState.events : <Event>[];
+
     await ScheduleCacheUtils.showClearCacheDialog(
       context: context,
       cacheManager: _cacheManager,
-      events: _events,
+      events: events,
       dbService: _dbService,
       bookId: widget.book.id!,
       effectiveDate: _getEffectiveDate_LOCAL(),
       onReloadDrawing: _loadDrawing,
-      onPreloadNotes: _preloadNotesInBackground,
+      onPreloadNotes: () {
+        // Wrapper to get events from cubit and pass to preload function
+        final state = context.read<ScheduleCubit>().state;
+        if (state is ScheduleLoaded) {
+          _preloadNotesInBackground(state.events);
+        }
+      },
     );
   }
 
@@ -1692,21 +1652,28 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (didPop) return;
-
-        // Auto-save drawing before navigating back
-        if (_isDrawingMode) {
-          await _saveDrawing();
-        }
-
-        if (mounted) {
-          Navigator.of(context).pop();
+    return BlocListener<ScheduleCubit, ScheduleState>(
+      listener: (context, state) {
+        // Trigger preloading when events are loaded
+        if (state is ScheduleLoaded) {
+          _preloadNotesInBackground(state.events);
         }
       },
-      child: Scaffold(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, dynamic result) async {
+          if (didPop) return;
+
+          // Auto-save drawing before navigating back
+          if (_isDrawingMode) {
+            await _saveDrawing();
+          }
+
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -2003,7 +1970,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             tooltip: 'Show menu',
           ),
     ), // Scaffold
-  ); // PopScope
+    ), // PopScope
+    ); // BlocListener
   }
 
   String _getDateDisplayText() {
