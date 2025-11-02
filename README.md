@@ -2,6 +2,10 @@
 
 A Flutter appointment scheduling application with handwriting notes capability.
 
+**Version:** 2.1.0
+**Total Dart Files:** 98 (58 in lib/, 18 tests)
+**Architecture:** Clean Architecture + BLoC Pattern
+
 ## Overview
 
 This is a cross-platform appointment scheduling app built with Flutter that allows users to:
@@ -104,8 +108,8 @@ flutter test integration_test/
 
 ```
 lib/
-├── models/                  # Data models (Book, Event, Note, ScheduleDrawing)
-├── repositories/            # Data access layer (Repository pattern)
+├── models/                  # Data models (8 files - Book, Event, Note, ScheduleDrawing)
+├── repositories/            # Data access layer (12 files - Repository pattern)
 │   ├── book_repository.dart           # Book repository interface
 │   ├── book_repository_impl.dart      # SQLite implementation
 │   ├── event_repository.dart          # Event repository interface
@@ -116,7 +120,7 @@ lib/
 │   ├── drawing_repository_impl.dart   # SQLite implementation
 │   ├── device_repository.dart         # Device credentials interface
 │   └── device_repository_impl.dart    # SQLite implementation
-├── services/                # Business logic and external services
+├── services/                # Business logic and external services (17 files, 216 KB)
 │   ├── database_service_interface.dart  # Database interface
 │   ├── prd_database_service.dart        # SQLite database service
 │   ├── web_prd_database_service.dart    # Web database service
@@ -128,24 +132,39 @@ lib/
 │   ├── book_order_service.dart          # Book ordering
 │   ├── time_service.dart                # Time utilities
 │   └── service_locator.dart             # Dependency injection
-├── cubits/                  # State management (BLoC pattern)
+├── cubits/                  # State management (8 files - BLoC pattern)
 │   ├── book_list_cubit.dart       # Book list state management
 │   ├── book_list_state.dart       # Book list states
 │   ├── schedule_cubit.dart        # Schedule state management
 │   ├── schedule_state.dart        # Schedule states
 │   ├── event_detail_cubit.dart    # Event detail state management
 │   └── event_detail_state.dart    # Event detail states
-├── screens/                 # UI screens
+├── screens/                 # UI screens (10 files, 536 KB)
 │   ├── book_list/                 # Book list screen (refactored)
 │   │   ├── book_list_screen_bloc.dart  # BLoC version (276 lines)
 │   │   ├── book_card.dart              # Book card widget
 │   │   ├── create_book_dialog.dart     # Create dialog
 │   │   └── rename_book_dialog.dart     # Rename dialog
-│   ├── book_list_screen.dart      # Original version (832 lines)
-│   ├── schedule_screen.dart       # Schedule view (2500 lines)
-│   └── event_detail_screen.dart   # Event details (1000 lines)
-├── widgets/                 # Reusable widgets
-│   └── handwriting_canvas.dart
+│   ├── book_list_screen.dart      # Legacy version (1,074 lines)
+│   ├── schedule_screen.dart       # Schedule view (2,004 lines) - being refactored
+│   ├── schedule_screen.dart.backup     # Backup files (refactoring in progress)
+│   ├── schedule_screen.dart.bak2
+│   ├── schedule_screen.dart.bak3
+│   └── event_detail_screen.dart   # Event details (1,870 lines)
+├── widgets/                 # Reusable widgets (6 files)
+│   ├── handwriting_canvas.dart    # Core handwriting widget
+│   └── schedule/                  # Schedule-specific widgets (NEW)
+│       ├── event_tile.dart       # Event display tile
+│       ├── fab_menu.dart         # Floating action button menu
+│       ├── drawing_toolbar.dart  # Drawing tools UI
+│       └── test_menu.dart        # Testing menu
+├── painters/                # Custom painters (NEW)
+│   └── schedule_painters.dart    # Custom paint operations for schedule
+├── utils/                   # Utilities (5 files)
+│   └── schedule/                 # Schedule-specific utilities
+│       ├── schedule_test_utils.dart    # Testing utilities
+│       ├── schedule_cache_utils.dart   # Cache utilities
+│       └── schedule_layout_utils.dart  # Layout calculations
 ├── l10n/                    # Localization files
 ├── app.dart                 # Main app configuration
 └── main.dart                # App entry point
@@ -162,12 +181,32 @@ doc/
     ├── phase6_cleanup.md
     └── phase7_validation.md
 
-test/
+test/                        # 18 test files
 ├── characterization/        # Behavior preservation tests
+│   ├── database_operations_test.dart
+│   └── cache_behavior_test.dart
+├── diagnostics/             # Diagnostic tools (6 files)
+│   ├── note_persistence_diagnosis.dart
+│   ├── canvas_state_diagnosis.dart
+│   ├── event_flow_diagnosis.dart
+│   ├── bug_fix_verification.dart
+│   ├── verify_time_change_fix.dart
+│   └── update_server_url.dart
 ├── repositories/            # Repository unit tests
+│   └── book_repository_test.dart
 ├── cubits/                  # Cubit unit tests
+│   ├── book_list_cubit_test.dart
+│   └── book_list_cubit_test.mocks.dart
+├── services/                # Service tests (4 files)
+│   ├── prd_database_service_test.dart
+│   ├── cache_manager_test.dart
+│   ├── content_service_test.dart
+│   └── cache_policy_db_test.dart
 ├── screens/                 # Screen widget tests
-└── widgets/                 # Widget tests
+│   ├── schedule_screen_behavior_test.dart
+│   └── schedule_screen_preload_test.dart
+└── models/                  # Model tests
+    └── cache_policy_test.dart
 ```
 
 ## Database
@@ -255,18 +294,22 @@ schedule_drawings (id, book_id, date, view_mode, strokes_data, ...)
 6. **Testability**: All layers can be tested independently with mocks
 7. **Platform Adaptation**: Automatic selection of appropriate implementations
 
-### Refactoring Progress
+### Refactoring Progress (v2.1.0)
 
 This app has undergone a comprehensive refactoring:
-- **Phase 1**: Foundation setup (dependency injection, repository interfaces)
-- **Phase 2**: Database layer extraction (repository implementations)
-- **Phase 3**: Service layer cleanup (focused services)
+- **Phase 1**: Foundation setup (dependency injection, repository interfaces) ✅
+- **Phase 2**: Database layer extraction (repository implementations) ✅
+- **Phase 3**: Service layer cleanup (focused services) ✅
 - **Phase 4**: BLoC/Cubit state management ✅
-- **Phase 5**: Screen refactoring (BookListScreen complete) ⏳
+- **Phase 5**: Screen refactoring 🔄
+  - BookListScreen: ✅ Complete (BLoC version in `screens/book_list/`)
+  - ScheduleScreen: 🔄 **In Progress** (extracting widgets to `lib/widgets/schedule/`, painters to `lib/painters/`)
+  - EventDetailScreen: ⏳ Pending
 - **Phase 6**: Cleanup and standardization (legacy code removed) ✅
-- **Phase 7**: Final validation (pending)
+- **Phase 7**: Final validation ⏳
 
 **Code Reduction**: ~4,239 lines of legacy code removed
+**Documentation Cleanup**: 12 guide files consolidated
 
 ## Legacy Code
 
@@ -277,6 +320,28 @@ The legacy code directory has been removed as part of Phase 6 cleanup. Approxima
 - Old Appointment model
 
 All functionality has been replaced with the new Clean Architecture + BLoC implementation.
+
+## Current Development Status
+
+### Active Work: ScheduleScreen Refactoring
+The `schedule_screen.dart` (2,004 lines) is currently being refactored using a component extraction strategy:
+
+**Strategy:**
+1. Extract reusable widgets to `lib/widgets/schedule/`
+2. Extract custom painters to `lib/painters/`
+3. Extract utility functions to `lib/utils/schedule/`
+4. Keep core screen logic with Cubit state management
+
+**Progress Indicators:**
+- Multiple backup files exist (`schedule_screen.dart.backup`, `.bak2`, `.bak3`)
+- New directories created: `lib/widgets/schedule/`, `lib/painters/`
+- Widget extraction in progress: `event_tile.dart`, `fab_menu.dart`, `drawing_toolbar.dart`, `test_menu.dart`
+
+**Next Steps:**
+1. Complete widget extraction from schedule_screen.dart
+2. Integrate extracted components with ScheduleCubit
+3. Remove backup files once refactoring is stable
+4. Apply same pattern to EventDetailScreen
 
 ## Development
 

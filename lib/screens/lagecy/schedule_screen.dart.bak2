@@ -21,8 +21,10 @@ import '../services/cache_manager.dart';
 import '../services/api_client.dart';
 import '../services/server_config_service.dart';
 import '../widgets/handwriting_canvas.dart';
-import '../utils/schedule_test_utils.dart';
-import '../utils/schedule_cache_utils.dart';
+import '../utils/schedule/schedule_test_utils.dart';
+import '../utils/schedule/schedule_cache_utils.dart';
+import '../utils/schedule/schedule_layout_utils.dart';
+import '../widgets/schedule/test_menu.dart';
 import 'event_detail_screen.dart';
 
 /// Schedule screen implementing 3-Day view only
@@ -41,7 +43,6 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObserver {
   late TransformationController _transformationController;
   DateTime _selectedDate = TimeService.instance.now();
-  List<Event> _events = []; // OLD: Still used by preloading logic, will remove in Phase 7
 
   // ContentService for server sync
   ContentService? _contentService;
@@ -77,23 +78,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Event? _selectedEventForMenu;
   Offset? _menuPosition;
 
-  // Heavy load test progress stream
-  final StreamController<Map<String, dynamic>> _progressController = StreamController<Map<String, dynamic>>.broadcast();
-  Stream<Map<String, dynamic>> get _progressStream => _progressController.stream;
-
-  // Stage 2 cancellation flag and event count controller
-  bool _isCancelled = false;
-  late TextEditingController _stage2EventCountController;
-
-  // Time range settings
-  static const int _startHour = 9;  // 9:00 AM
-  static const int _endHour = 21;   // 9:00 PM
-  static const int _totalSlots = (_endHour - _startHour) * 4; // 48 slots
-
-  // Large screen detection threshold for text scaling
-  // When slotHeight >= this value, apply 1.8x scaling to event names
-  // This threshold corresponds to ~13-inch iPad screen size
-  static const double _largeScreenSlotHeightThreshold = 15.0;
+  // Time range settings (now using ScheduleLayoutUtils)
+  static const int _startHour = ScheduleLayoutUtils.startHour;
+  static const int _endHour = ScheduleLayoutUtils.endHour;
+  static const int _totalSlots = ScheduleLayoutUtils.totalSlots;
 
   // Use appropriate database service based on platform
   IDatabaseService get _dbService => kIsWeb
@@ -104,7 +92,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
     _transformationController = TransformationController();
-    _stage2EventCountController = TextEditingController();
 
     // Register lifecycle observer
     WidgetsBinding.instance.addObserver(this);
@@ -118,9 +105,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Setup network connectivity monitoring for automatic sync retry
     _setupConnectivityMonitoring();
 
-    // Cubit is initialized in BlocProvider - it automatically loads events for UI
-    // But we still need _loadEvents() for preloading logic (uses _events variable)
-    _loadEvents();
+    // Cubit is initialized in BlocProvider - it automatically loads events
     _loadDrawing();
   }
 
@@ -153,8 +138,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         _autoSyncDirtyNotes();
       }
 
-      // Wait for events to load, then trigger preload
-      _waitForEventsAndPreload();
+      // Preloading is now triggered automatically by BlocListener when events are loaded
     } catch (e) {
       debugPrint('❌ ScheduleScreen: Failed to initialize ContentService: $e');
       // Continue without ContentService - sync will not work but UI remains functional
@@ -166,26 +150,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
       }
     }
-  }
-
-  /// Wait for events to load, then trigger preload
-  Future<void> _waitForEventsAndPreload() async {
-    // Poll for events to be loaded (max 5 seconds)
-    const maxWaitTime = Duration(seconds: 5);
-    const pollInterval = Duration(milliseconds: 100);
-    final startTime = DateTime.now();
-
-    while (_events.isEmpty) {
-      if (DateTime.now().difference(startTime) > maxWaitTime) {
-        debugPrint('⚠️ ScheduleScreen: Timeout waiting for events to load (waited ${maxWaitTime.inMilliseconds}ms), skipping preload');
-        return;
-      }
-      await Future.delayed(pollInterval);
-    }
-
-    final waitTime = DateTime.now().difference(startTime);
-    debugPrint('✅ ScheduleScreen: Events loaded after ${waitTime.inMilliseconds}ms (${_events.length} events), triggering preload...');
-    _preloadNotesInBackground();
   }
 
   /// Setup network connectivity monitoring for automatic sync retry
@@ -353,7 +317,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     _progressController.close();
 
     _transformationController.dispose();
-    _stage2EventCountController.dispose();
     super.dispose();
   }
 
@@ -390,7 +353,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       debugPrint('📅 Date changed detected: $lastActiveDate → $currentDate');
 
       // Check if user is viewing a 3-day window that contains "today" (the new current date)
-      final windowStart = _get3DayWindowStart(_selectedDate);
+      final windowStart = _get3DayWindowStart_LOCAL(_selectedDate);
       final windowEnd = windowStart.add(const Duration(days: 3));
       // Check if the old "today" (lastActiveDate) is in the current viewing window
       final isViewingWindowContainingToday = lastActiveDate.isAfter(windowStart.subtract(const Duration(days: 1))) &&
@@ -437,7 +400,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   /// Get unique page identifier for the current view and date
   String _getPageId() {
     // For 3-day view, use window start to keep same page across days in window
-    final normalizedDate = _get3DayWindowStart(_selectedDate);
+    final normalizedDate = _get3DayWindowStart_LOCAL(_selectedDate);
     return '3day_${normalizedDate.millisecondsSinceEpoch}';
   }
 
@@ -450,27 +413,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return _canvasKeys[pageId]!;
   }
 
-  Future<void> _loadEvents() async {
-    // OLD CODE: Still loads events into _events for preloading logic
-    // Phase 6: Loading state now managed by cubit (state is ScheduleLoading)
-    try {
-      // Use effective date to ensure consistency with UI rendering
-      // effectiveDate is the 3-day window start from _get3DayWindowStart()
-      final effectiveDate = _getEffectiveDate();
-      final events = await _dbService.getEventsBy3Days(widget.book.id!, effectiveDate);
-
-      setState(() {
-        _events = events;
-      });
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorLoadingEvents(e.toString()))),
-        );
-      }
-    }
-  }
-
   Future<void> _loadDrawing() async {
     try {
       // Reset current drawing to avoid carrying old IDs
@@ -480,7 +422,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
       // Use effective date to ensure consistency with UI rendering
       // For 3-Day View, this uses the window start date
-      final effectiveDate = _getEffectiveDate();
+      final effectiveDate = _getEffectiveDate_LOCAL();
 
       // Use ContentService for cache-first strategy with server fallback
       // This enables automatic server fetch when cache is empty
@@ -528,11 +470,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   /// Preload notes for all events in current 3-day window (background, non-blocking)
   ///
-  /// This method is called by _waitForEventsAndPreload() after both ContentService
-  /// and events are ready. It improves UX by preloading notes so they're instantly
+  /// This method is automatically triggered by BlocListener when events are loaded
+  /// from the ScheduleCubit. It improves UX by preloading notes so they're instantly
   /// available when user taps events.
-  Future<void> _preloadNotesInBackground() async {
-    if (_events.isEmpty) {
+  Future<void> _preloadNotesInBackground(List<Event> events) async {
+    if (events.isEmpty) {
       debugPrint('📦 ScheduleScreen: No events to preload');
       return;
     }
@@ -543,10 +485,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
 
     final preloadStartTime = DateTime.now();
-    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${_events.length} events');
+    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events');
 
     // Extract all event IDs (filter out null IDs)
-    final eventIds = _events
+    final eventIds = events
         .where((e) => e.id != null)
         .map((e) => e.id!)
         .toList();
@@ -617,7 +559,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
       // Use effective date to ensure consistency with UI rendering
       // For 3-Day View, this uses the window start date
-      final effectiveDate = _getEffectiveDate();
+      final effectiveDate = _getEffectiveDate_LOCAL();
 
       // Only use existing ID, createdAt, and version if it matches the current page
       // This prevents reusing old values when switching pages
@@ -739,7 +681,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     });
   }
 
-  DateTime _get3DayWindowStart(DateTime date) {
+  DateTime _get3DayWindowStart_LOCAL(DateTime date) {
     // Use fixed anchor to calculate stable 3-day windows
     // This ensures the same 3-day window is shown even when the real-world date changes
     final anchor = DateTime(2000, 1, 1); // Fixed epoch anchor
@@ -752,8 +694,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   /// Get the effective date for data operations (loading/saving events and drawings)
   /// This ensures consistency between UI rendering and data layer
-  DateTime _getEffectiveDate() {
-    return _get3DayWindowStart(_selectedDate); // Always 3-day view
+  DateTime _getEffectiveDate_LOCAL() {
+    return _get3DayWindowStart_LOCAL(_selectedDate); // Always 3-day view
   }
 
   void _panToCurrentTime() {
@@ -770,7 +712,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Check if currently viewing today's date
-  bool _isViewingToday() {
+  bool _isViewingToday_LOCAL() {
     final now = TimeService.instance.now();
     final today = DateTime(now.year, now.month, now.day);
     final viewingDate = DateTime(_selectedDate.year, _selectedDate.month, _selectedDate.day);
@@ -1177,17 +1119,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (result == null) return;
 
     try {
-      await _dbService.changeEventTime(
+      // Use cubit method to change event time (creates new event + soft-deletes old)
+      await context.read<ScheduleCubit>().changeEventTime(
         event,
         result['startTime'],
         result['endTime'],
         result['reason'],
       );
-
-      // TODO: Add changeEventTime() support to ScheduleCubit
-      // (changeEventTime creates new event + soft-deletes old event)
-      // For now, just reload to sync state
-      context.read<ScheduleCubit>().loadEvents();
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1258,8 +1196,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
     if (reason != null && reason.isNotEmpty) {
       try {
-        await _dbService.removeEvent(event.id!, reason);
-        context.read<ScheduleCubit>().deleteEvent(event.id!, reason: reason);
+        await context.read<ScheduleCubit>().deleteEvent(event.id!, reason: reason);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1300,11 +1237,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
     if (confirmed == true) {
       try {
-        await _dbService.deleteEvent(event.id!);
-
-        // TODO: Add hard delete support to ScheduleCubit (currently only has soft delete)
-        // For now, just reload to sync state
-        context.read<ScheduleCubit>().loadEvents();
+        // Use cubit method for hard delete (permanent deletion)
+        await context.read<ScheduleCubit>().hardDeleteEvent(event.id!);
 
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -1321,972 +1255,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
   }
 
-  Future<void> _showGenerateEventsDialog() async {
-    final controller = TextEditingController(text: '5');
-    bool clearAll = false;
-    bool openEndOnly = false;
-
-    final l10n = AppLocalizations.of(context)!;
-    final result = await showDialog<Map<String, dynamic>>(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: Text(l10n.generateRandomEvents),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              TextField(
-                controller: controller,
-                decoration: InputDecoration(
-                  labelText: l10n.numberOfEvents,
-                  hintText: l10n.enterNumber,
-                ),
-                keyboardType: TextInputType.number,
-                autofocus: true,
-              ),
-              const SizedBox(height: 16),
-              CheckboxListTile(
-                title: Text(l10n.clearAllExistingEventsFirst),
-                value: clearAll,
-                onChanged: (value) {
-                  setState(() {
-                    clearAll = value ?? false;
-                  });
-                },
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-              CheckboxListTile(
-                title: Text(l10n.generateOpenEndedEventsOnly),
-                subtitle: Text(l10n.noEndTime),
-                value: openEndOnly,
-                onChanged: (value) {
-                  setState(() {
-                    openEndOnly = value ?? false;
-                  });
-                },
-                contentPadding: EdgeInsets.zero,
-                dense: true,
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () {
-                final value = int.tryParse(controller.text);
-                if (value != null && value > 0 && value <= 50) {
-                  Navigator.pop(context, {
-                    'count': value,
-                    'clearAll': clearAll,
-                    'openEndOnly': openEndOnly,
-                  });
-                }
-              },
-              child: Text(l10n.generate),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    if (result != null) {
-      await _generateRandomEvents(
-        result['count'] as int,
-        clearAll: result['clearAll'] as bool,
-        openEndOnly: result['openEndOnly'] as bool,
-      );
-    }
-  }
-
-  /// Show test time dialog for testing time change behavior
-  Future<void> _showTestTimeDialog() async {
-    final l10n = AppLocalizations.of(context)!;
-    // If test mode is active, show option to reset
-    if (TimeService.instance.isTestMode) {
-      final reset = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: Text(l10n.testTimeActive),
-          content: Text(
-            l10n.currentTestTime(DateFormat('yyyy-MM-dd HH:mm:ss', Localizations.localeOf(context).toString()).format(TimeService.instance.overrideTime!)),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: Text(l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              style: TextButton.styleFrom(foregroundColor: Colors.red),
-              child: Text(l10n.resetToRealTime),
-            ),
-          ],
-        ),
-      );
-
-      if (reset == true) {
-        TimeService.instance.resetToRealTime();
-        setState(() {
-          _selectedDate = TimeService.instance.now();
-          _lastActiveDate = TimeService.instance.now();
-        });
-
-        if (mounted) {
-          context.read<ScheduleCubit>().selectDate(_selectedDate);
-        }
-
-        await _loadDrawing();
-      }
-      return;
-    }
-
-    // Show date and time picker
-    final selectedDate = await showDatePicker(
-      context: context,
-      initialDate: TimeService.instance.now(),
-      firstDate: DateTime(2020),
-      lastDate: DateTime(2030),
-    );
-
-    if (selectedDate == null || !mounted) return;
-
-    final selectedTime = await showTimePicker(
-      context: context,
-      initialTime: TimeOfDay.fromDateTime(TimeService.instance.now()),
-    );
-
-    if (selectedTime == null || !mounted) return;
-
-    final testTime = DateTime(
-      selectedDate.year,
-      selectedDate.month,
-      selectedDate.day,
-      selectedTime.hour,
-      selectedTime.minute,
-    );
-
-    TimeService.instance.setTestTime(testTime);
-    setState(() {
-      _selectedDate = TimeService.instance.now();
-      _lastActiveDate = TimeService.instance.now();
-    });
-
-    if (mounted) {
-      context.read<ScheduleCubit>().selectDate(_selectedDate);
-    }
-
-    await _loadDrawing();
-
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.testTimeSetTo(DateFormat('yyyy-MM-dd HH:mm', Localizations.localeOf(context).toString()).format(testTime))),
-          backgroundColor: Colors.red,
-        ),
-      );
-    }
-  }
-
-  /// Clear all events in the current book (not just those in view)
-  Future<void> _clearAllEventsInBook() async {
-    await ScheduleTestUtils.clearAllEventsInBook(_dbService, widget.book.id!);
-  }
-
-  Future<void> _generateRandomEvents(
-    int count, {
-    bool clearAll = false,
-    bool openEndOnly = false,
-  }) async {
-    // Clear existing events if requested
-    if (clearAll) {
-      await _clearAllEventsInBook();
-    }
-
-    final l10n = AppLocalizations.of(context)!;
-    final random = Random();
-    final now = TimeService.instance.now();
-
-    // Get available event types
-    final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
-    ];
-
-    // Get date range for 3-day view
-    final windowStart = _get3DayWindowStart(_selectedDate);
-    final availableDates = List.generate(3, (i) => windowStart.add(Duration(days: i)));
-
-    int created = 0;
-    int attempts = 0;
-    final maxAttempts = count * 10; // Prevent infinite loop
-
-    while (created < count && attempts < maxAttempts) {
-      attempts++;
-
-      // Random date from available dates
-      final date = availableDates[random.nextInt(availableDates.length)];
-
-      // Random time slot (9 AM - 9 PM, 15-min intervals)
-      final slotIndex = random.nextInt(_totalSlots);
-      final hour = _startHour + (slotIndex ~/ 4);
-      final minute = (slotIndex % 4) * 15;
-
-      final startTime = DateTime(date.year, date.month, date.day, hour, minute);
-
-      // Check if this time slot already has 4 events
-      final eventsAtSlot = _events.where((e) {
-        return e.startTime.year == startTime.year &&
-               e.startTime.month == startTime.month &&
-               e.startTime.day == startTime.day &&
-               e.startTime.hour == startTime.hour &&
-               e.startTime.minute == startTime.minute;
-      }).length;
-
-      if (eventsAtSlot >= 4) {
-        continue; // Skip this slot, try another
-      }
-
-      // Random duration (15, 30, 45, or 60 minutes) or null for open-ended
-      DateTime? endTime;
-      if (!openEndOnly) {
-        final durations = [15, 30, 45, 60];
-        final duration = durations[random.nextInt(durations.length)];
-        endTime = startTime.add(Duration(minutes: duration));
-      }
-
-      // Random event type
-      final eventType = eventTypes[random.nextInt(eventTypes.length)];
-
-      // Random name
-      final names = [
-        '王小明', '李小華', '張美玲', '陳志豪',
-        '林淑芬', '黃建國', '吳雅婷', '鄭明哲',
-        '劉佳穎', '許文祥', '楊淑惠', '蔡明道',
-      ];
-      final name = names[random.nextInt(names.length)];
-
-      // Random record number
-      final recordNumber = 'REC-${random.nextInt(90000) + 10000}';
-
-      final event = Event(
-        bookId: widget.book.id!,
-        name: name,
-        recordNumber: recordNumber,
-        eventType: eventType,
-        startTime: startTime,
-        endTime: endTime,
-        createdAt: now,
-        updatedAt: now,
-      );
-
-      try {
-        final createdEvent = await _dbService.createEvent(event);
-        created++;
-
-        // Generate and save random handwriting note for this event
-        if (createdEvent.id != null) {
-          try {
-            // Generate 3-15 random strokes for the note
-            final strokeCount = 3 + random.nextInt(13);
-            final strokes = _generateRandomStrokes(strokeCount);
-            final note = Note(
-              eventId: createdEvent.id!,
-              strokes: strokes,
-              createdAt: now,
-              updatedAt: now,
-              isDirty: true, // Mark as dirty so it syncs to server when first opened
-            );
-            await _dbService.saveCachedNote(note);
-            debugPrint('✅ Generated note with ${strokes.length} strokes for event ${createdEvent.id}');
-          } catch (e) {
-            debugPrint('⚠️ Error creating random note for event ${createdEvent.id}: $e');
-          }
-        }
-      } catch (e) {
-        debugPrint('Error creating random event: $e');
-      }
-    }
-
-    // Reload events to show the new ones
-
-    if (mounted) {
-      final l10n = AppLocalizations.of(context)!;
-      String message;
-      if (clearAll && openEndOnly) {
-        message = created == count
-            ? l10n.clearedAndGeneratedOpenEndedEvents(created)
-            : l10n.clearedAndGeneratedOpenEndedEventsSomeFull(created);
-      } else if (clearAll) {
-        message = created == count
-            ? l10n.clearedAndGeneratedEvents(created)
-            : l10n.clearedAndGeneratedEventsSomeFull(created);
-      } else if (openEndOnly) {
-        message = created == count
-            ? l10n.generatedOpenEndedEvents(created)
-            : l10n.generatedOpenEndedEventsSomeFull(created);
-      } else {
-        message = created == count
-            ? l10n.generatedEvents(created)
-            : l10n.generatedEventsSomeFull(created);
-      }
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(message)),
-      );
-    }
-  }
-
-  /// Show heavy load test confirmation dialog
-  Future<void> _showHeavyLoadTestDialog() async {
-    await ScheduleTestUtils.showHeavyLoadTestDialog(
-      context,
-      _dbService,
-      widget.book.id!,
-      _progressController,
-    );
-  }
-
-  /// Show Stage 1 Only confirmation dialog
-  Future<void> _showHeavyLoadStage1Dialog() async {
-    await ScheduleTestUtils.showHeavyLoadStage1Dialog(
-      context,
-      _dbService,
-      widget.book.id!,
-      _progressController,
-    );
-  }
-
-  /// Show Stage 2 Only confirmation dialog
-  Future<void> _showHeavyLoadStage2Dialog() async {
-    await ScheduleTestUtils.showHeavyLoadStage2Dialog(
-      context,
-      _dbService,
-      widget.book.id!,
-      _progressController,
-    );
-  }
-
-  /// Show Clear All Events confirmation dialog
-  Future<void> _showClearAllEventsDialog() async {
-    await ScheduleTestUtils.showClearAllEventsDialog(
-      context,
-      _dbService,
-      widget.book.id!,
-    );
-  }
-
-  /// Show Clear Cache dialog with cached event names
-  Future<void> _showClearCacheDialog() async {
-    await ScheduleCacheUtils.showClearCacheDialog(
-      context: context,
-      cacheManager: _cacheManager,
-      events: _events,
-      dbService: _dbService,
-      bookId: widget.book.id!,
-      effectiveDate: _getEffectiveDate(),
-      onReloadDrawing: _loadDrawing,
-      onPreloadNotes: _preloadNotesInBackground,
-    );
-  }
-
-  /// Generate heavy load test data using two-stage approach
-  Future<void> _generateHeavyLoadTest({bool clearAll = false}) async {
-    final l10n = AppLocalizations.of(context)!;
-    final startTime = DateTime.now();
-
-    // Clear existing events if requested
-    if (clearAll) {
-      await _clearAllEventsInBook();
-    }
-
-    // Constants
-    const daysRange = 61; // 30 previous + today + 30 next
-    const startHour = 9;
-    const endHour = 20; // 9-20 (12 hours)
-    const eventsPerHour = 4;
-    const strokesPerEvent = 750;
-    const totalEvents = daysRange * (endHour - startHour + 1) * eventsPerHour;
-
-    final random = Random();
-    final now = TimeService.instance.now();
-
-    // Get available event types
-    final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
-    ];
-
-    // Show progress dialog
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false,
-        child: AlertDialog(
-          title: Text(l10n.generatingEvents),
-          content: StreamBuilder<Map<String, dynamic>>(
-            stream: _progressStream,
-            builder: (context, snapshot) {
-              final data = snapshot.data ?? {
-                'stage': 1,
-                'count': 0,
-                'total': totalEvents,
-              };
-              final stage = data['stage'] as int;
-              final count = data['count'] as int;
-              final total = data['total'] as int;
-              final percent = total > 0 ? (count * 100 ~/ total) : 0;
-
-              final stageLabel = stage == 1 ? l10n.stage1Creating : l10n.stage2AddingStrokes;
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    stageLabel,
-                    style: const TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                  const SizedBox(height: 12),
-                  LinearProgressIndicator(value: count / total),
-                  const SizedBox(height: 16),
-                  Text(l10n.heavyLoadTestProgress(count, total, percent)),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-
-    // ======================
-    // STAGE 1: Create Events
-    // ======================
-    debugPrint('🚀 Heavy Load Test - Stage 1: Creating $totalEvents events...');
-    int createdEventsCount = 0;
-    final createdEventIds = <int>[];
-    final startDate = now.subtract(const Duration(days: 30));
-
-    for (int day = 0; day < daysRange; day++) {
-      final date = startDate.add(Duration(days: day));
-
-      for (int hour = startHour; hour <= endHour; hour++) {
-        for (int eventIndex = 0; eventIndex < eventsPerHour; eventIndex++) {
-          final minute = eventIndex * 15;
-          final eventStartTime = DateTime(date.year, date.month, date.day, hour, minute);
-
-          // Random name
-          final names = [
-            '王小明', '李小華', '張美玲', '陳志豪',
-            '林淑芬', '黃建國', '吳雅婷', '鄭明哲',
-            '劉佳穎', '許文祥', '楊淑惠', '蔡明道',
-          ];
-          final name = names[random.nextInt(names.length)];
-          final recordNumber = 'HEAVY-${createdEventsCount + 1}';
-          final eventType = eventTypes[random.nextInt(eventTypes.length)];
-
-          final event = Event(
-            bookId: widget.book.id!,
-            name: name,
-            recordNumber: recordNumber,
-            eventType: eventType,
-            startTime: eventStartTime,
-            endTime: null, // Open-ended
-            createdAt: now,
-            updatedAt: now,
-          );
-
-          try {
-            final createdEvent = await _dbService.createEvent(event);
-            createdEventIds.add(createdEvent.id!);
-            createdEventsCount++;
-
-            // Update progress
-            _progressController.add({
-              'stage': 1,
-              'count': createdEventsCount,
-              'total': totalEvents,
-            });
-          } catch (e) {
-            debugPrint('❌ Error creating event: $e');
-          }
-        }
-      }
-    }
-
-    debugPrint('✅ Stage 1 Complete: Created $createdEventsCount events');
-
-    // ==========================
-    // STAGE 2: Add Strokes
-    // ==========================
-    debugPrint('🚀 Heavy Load Test - Stage 2: Adding strokes to $createdEventsCount events...');
-    int strokesAddedCount = 0;
-    int totalStrokes = 0;
-
-    for (int i = 0; i < createdEventIds.length; i++) {
-      final eventId = createdEventIds[i];
-
-      try {
-        // Generate random strokes
-        final strokes = _generateRandomStrokes(strokesPerEvent);
-        totalStrokes += strokes.length;
-
-        // Create note with strokes
-        final note = Note(
-          eventId: eventId,
-          strokes: strokes,
-          createdAt: now,
-          updatedAt: now,
-        );
-
-        await _dbService.saveCachedNote(note);
-        strokesAddedCount++;
-
-        // Update progress
-        _progressController.add({
-          'stage': 2,
-          'count': strokesAddedCount,
-          'total': createdEventsCount,
-        });
-
-        // Yield to UI thread every 5 events
-        if (strokesAddedCount % 5 == 0) {
-          await Future.delayed(Duration.zero);
-        }
-      } catch (e) {
-        debugPrint('❌ Error adding strokes to event $eventId: $e');
-      }
-    }
-
-    debugPrint('✅ Stage 2 Complete: Added strokes to $strokesAddedCount events');
-
-    // Close progress dialog
-    if (mounted) {
-      Navigator.pop(context);
-    }
-
-    // Reload events
-
-    // Calculate elapsed time
-    final elapsed = DateTime.now().difference(startTime);
-    final elapsedSeconds = elapsed.inSeconds;
-    final timeStr = elapsedSeconds >= 60
-        ? '${elapsedSeconds ~/ 60}分${elapsedSeconds % 60}秒'
-        : '${elapsedSeconds}秒';
-
-    // Show completion message
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.heavyLoadTestComplete(createdEventsCount, totalStrokes, timeStr)),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
-
-    debugPrint('🎉 Heavy Load Test Complete: $createdEventsCount events, $totalStrokes strokes, $timeStr');
-  }
-
-  /// Stage 1 Only: Create events without strokes
-  Future<void> _generateHeavyLoadStage1({bool clearAll = false}) async {
-    final l10n = AppLocalizations.of(context)!;
-    final startTime = DateTime.now();
-
-    // Clear existing events if requested
-    if (clearAll) {
-      await _clearAllEventsInBook();
-    }
-
-    // Constants
-    const daysRange = 61; // 30 previous + today + 30 next
-    const startHour = 9;
-    const endHour = 20; // 9-20 (12 hours)
-    const gridsPerHour = 4; // 4 grids per hour (0, 15, 30, 45 minutes)
-    const eventsPerGrid = 4; // 4 events per grid
-    const totalEvents = daysRange * (endHour - startHour + 1) * gridsPerHour * eventsPerGrid;
-
-    final random = Random();
-    final now = TimeService.instance.now();
-
-    // Get available event types
-    final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
-    ];
-
-    // Show progress dialog
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false,
-        child: AlertDialog(
-          title: Text(l10n.stage1Creating),
-          content: StreamBuilder<Map<String, dynamic>>(
-            stream: _progressStream,
-            builder: (context, snapshot) {
-              final data = snapshot.data ?? {'count': 0, 'total': totalEvents};
-              final count = data['count'] as int;
-              final total = data['total'] as int;
-              final percent = total > 0 ? (count * 100 ~/ total) : 0;
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LinearProgressIndicator(value: count / total),
-                  const SizedBox(height: 16),
-                  Text(l10n.heavyLoadTestProgress(count, total, percent)),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-    );
-
-    debugPrint('🚀 Stage 1: Creating $totalEvents events...');
-    int createdEventsCount = 0;
-    final startDate = now.subtract(const Duration(days: 30));
-
-    for (int day = 0; day < daysRange; day++) {
-      final date = startDate.add(Duration(days: day));
-
-      for (int hour = startHour; hour <= endHour; hour++) {
-        for (int gridIndex = 0; gridIndex < gridsPerHour; gridIndex++) {
-          final minute = gridIndex * 15; // 0, 15, 30, 45
-          final eventStartTime = DateTime(date.year, date.month, date.day, hour, minute);
-
-          // Create 4 events for this grid (all with same start time)
-          for (int eventIndex = 0; eventIndex < eventsPerGrid; eventIndex++) {
-            // Random name
-            final names = [
-              '王小明', '李小華', '張美玲', '陳志豪',
-              '林淑芬', '黃建國', '吳雅婷', '鄭明哲',
-              '劉佳穎', '許文祥', '楊淑惠', '蔡明道',
-            ];
-            final name = names[random.nextInt(names.length)];
-            final recordNumber = 'HEAVY-${createdEventsCount + 1}';
-            final eventType = eventTypes[random.nextInt(eventTypes.length)];
-
-            final event = Event(
-              bookId: widget.book.id!,
-              name: name,
-              recordNumber: recordNumber,
-              eventType: eventType,
-              startTime: eventStartTime,
-              endTime: null, // Open-ended
-              createdAt: now,
-              updatedAt: now,
-            );
-
-            try {
-              await _dbService.createEvent(event);
-              createdEventsCount++;
-
-              // Update progress
-              _progressController.add({
-                'count': createdEventsCount,
-                'total': totalEvents,
-              });
-            } catch (e) {
-              debugPrint('❌ Error creating event: $e');
-            }
-          }
-        }
-      }
-    }
-
-    debugPrint('✅ Stage 1 Complete: Created $createdEventsCount events');
-
-    // Close progress dialog
-    if (mounted) {
-      Navigator.pop(context);
-    }
-
-    // Reload events
-
-    // Calculate elapsed time
-    final elapsed = DateTime.now().difference(startTime);
-    final elapsedSeconds = elapsed.inSeconds;
-    final timeStr = elapsedSeconds >= 60
-        ? '${elapsedSeconds ~/ 60}分${elapsedSeconds % 60}秒'
-        : '${elapsedSeconds}秒';
-
-    // Show completion message
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(l10n.stage1Complete(createdEventsCount) + ' ($timeStr)'),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
-
-    debugPrint('🎉 Stage 1 Complete: $createdEventsCount events, $timeStr');
-  }
-
-  /// Stage 2 Only: Add strokes to existing HEAVY- events
-  Future<void> _generateHeavyLoadStage2({int? maxEvents}) async {
-    final l10n = AppLocalizations.of(context)!;
-    final startTime = DateTime.now();
-
-    // Reset cancellation flag
-    _isCancelled = false;
-
-    const strokesPerEvent = 750;
-    final now = TimeService.instance.now();
-
-    debugPrint('🔍 Stage 2: Querying existing HEAVY- events...');
-
-    // Query all events in the book
-    final allEvents = await _dbService.getAllEventsByBook(widget.book.id!);
-
-    var heavyEvents = allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).toList();
-
-    if (heavyEvents.isEmpty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('找不到 HEAVY- 活動。請先執行階段1。'),
-            duration: const Duration(seconds: 3),
-          ),
-        );
-      }
-      return;
-    }
-
-    // Limit events if maxEvents is specified
-    if (maxEvents != null && maxEvents < heavyEvents.length) {
-      heavyEvents = heavyEvents.sublist(0, maxEvents);
-      debugPrint('📋 Found ${allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).length} HEAVY- events, processing first $maxEvents');
-    } else {
-      debugPrint('📋 Found ${heavyEvents.length} HEAVY- events');
-    }
-
-    // Show progress dialog
-    if (!mounted) return;
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => WillPopScope(
-        onWillPop: () async => false,
-        child: AlertDialog(
-          title: Text(l10n.stage2AddingStrokes),
-          content: StreamBuilder<Map<String, dynamic>>(
-            stream: _progressStream,
-            builder: (context, snapshot) {
-              final data = snapshot.data ?? {'count': 0, 'total': heavyEvents.length};
-              final count = data['count'] as int;
-              final total = data['total'] as int;
-              final percent = total > 0 ? (count * 100 ~/ total) : 0;
-
-              return Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  LinearProgressIndicator(value: count / total),
-                  const SizedBox(height: 16),
-                  Text(l10n.heavyLoadTestProgress(count, total, percent)),
-                ],
-              );
-            },
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                _isCancelled = true;
-              },
-              child: const Text('取消'),
-            ),
-          ],
-        ),
-      ),
-    );
-
-    debugPrint('🚀 Stage 2: Adding strokes to ${heavyEvents.length} events...');
-    int strokesAddedCount = 0;
-    int totalStrokes = 0;
-
-    for (int i = 0; i < heavyEvents.length; i++) {
-      // Check for cancellation
-      if (_isCancelled) {
-        debugPrint('⚠️ Stage 2 cancelled by user');
-        break;
-      }
-
-      final event = heavyEvents[i];
-
-      try {
-        // Generate random strokes
-        final strokes = _generateRandomStrokes(strokesPerEvent);
-        totalStrokes += strokes.length;
-
-        // Create note with strokes
-        final note = Note(
-          eventId: event.id!,
-          strokes: strokes,
-          createdAt: now,
-          updatedAt: now,
-        );
-
-        await _dbService.saveCachedNote(note);
-        strokesAddedCount++;
-
-        // Update event recordNumber: HEAVY-xxx -> DONE-HEAVY-xxx
-        final updatedEvent = event.copyWith(
-          recordNumber: event.recordNumber?.replaceFirst('HEAVY-', 'DONE-HEAVY-'),
-        );
-        await _dbService.updateEvent(updatedEvent);
-
-        // Update progress
-        _progressController.add({
-          'count': strokesAddedCount,
-          'total': heavyEvents.length,
-        });
-
-        // Yield to UI thread every 5 events
-        if (strokesAddedCount % 5 == 0) {
-          await Future.delayed(Duration.zero);
-        }
-      } catch (e) {
-        debugPrint('❌ Error adding strokes to event ${event.id}: $e');
-      }
-    }
-
-    final wasCancelled = _isCancelled;
-    debugPrint(wasCancelled
-      ? '⚠️ Stage 2 Cancelled: Added strokes to $strokesAddedCount events before cancellation'
-      : '✅ Stage 2 Complete: Added strokes to $strokesAddedCount events');
-
-    // Close progress dialog
-    if (mounted) {
-      Navigator.pop(context);
-    }
-
-    // Reload events
-
-    // Calculate elapsed time
-    final elapsed = DateTime.now().difference(startTime);
-    final elapsedSeconds = elapsed.inSeconds;
-    final timeStr = elapsedSeconds >= 60
-        ? '${elapsedSeconds ~/ 60}分${elapsedSeconds % 60}秒'
-        : '${elapsedSeconds}秒';
-
-    // Show completion message
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(wasCancelled
-            ? '⚠️ 已取消：已處理 $strokesAddedCount 個事件 (共 $totalStrokes 筆畫)，耗時 $timeStr'
-            : l10n.stage2Complete(strokesAddedCount, totalStrokes, timeStr)),
-          duration: const Duration(seconds: 5),
-        ),
-      );
-    }
-
-    debugPrint(wasCancelled
-      ? '⚠️ Stage 2 Cancelled: $strokesAddedCount events, $totalStrokes strokes, $timeStr'
-      : '🎉 Stage 2 Complete: $strokesAddedCount events, $totalStrokes strokes, $timeStr');
-  }
-
-  /// Generate random strokes for handwriting notes
-  List<Stroke> _generateRandomStrokes(int count) {
-    final random = Random();
-    final strokes = <Stroke>[];
-
-    // Define canvas dimensions for note area
-    const canvasWidth = 300.0;
-    const canvasHeight = 400.0;
-
-    // Color palette for strokes
-    final colors = [
-      0xFF000000, // Black
-      0xFF0000FF, // Blue
-      0xFFFF0000, // Red
-      0xFF00AA00, // Green
-      0xFF800080, // Purple
-    ];
-
-    for (int i = 0; i < count; i++) {
-      // Random number of points per stroke (20-50)
-      final pointCount = 20 + random.nextInt(31);
-      final points = <StrokePoint>[];
-
-      // Generate a curved stroke path
-      final startX = random.nextDouble() * canvasWidth;
-      final startY = random.nextDouble() * canvasHeight;
-
-      // Create points that follow a smooth curve
-      for (int j = 0; j < pointCount; j++) {
-        final t = j / pointCount; // Progress along the stroke (0 to 1)
-
-        // Use sine wave for natural curve
-        final offsetX = (random.nextDouble() - 0.5) * 20; // Small random variation
-        final offsetY = (random.nextDouble() - 0.5) * 20;
-
-        final x = startX + (t * 50) + offsetX; // Move across canvas
-        final y = startY + (sin(t * pi * 2) * 10) + offsetY; // Sinusoidal curve
-
-        // Clamp to canvas bounds
-        final clampedX = x.clamp(0.0, canvasWidth);
-        final clampedY = y.clamp(0.0, canvasHeight);
-
-        final pressure = 0.5 + (random.nextDouble() * 0.5); // Vary pressure
-
-        points.add(StrokePoint(clampedX, clampedY, pressure: pressure));
-      }
-
-      // Random color and width
-      final color = colors[random.nextInt(colors.length)];
-      final strokeWidth = 1.0 + random.nextDouble() * 2.0; // 1.0 to 3.0
-
-      strokes.add(Stroke(
-        points: points,
-        strokeWidth: strokeWidth,
-        color: color,
-      ));
-    }
-
-    return strokes;
-  }
-
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
-    return PopScope(
-      canPop: false,
-      onPopInvokedWithResult: (bool didPop, dynamic result) async {
-        if (didPop) return;
-
-        // Auto-save drawing before navigating back
-        if (_isDrawingMode) {
-          await _saveDrawing();
-        }
-
-        if (mounted) {
-          Navigator.of(context).pop();
+    return BlocListener<ScheduleCubit, ScheduleState>(
+      listener: (context, state) {
+        // Trigger preloading when events are loaded
+        if (state is ScheduleLoaded) {
+          _preloadNotesInBackground(state.events);
         }
       },
-      child: Scaffold(
+      child: PopScope(
+        canPop: false,
+        onPopInvokedWithResult: (bool didPop, dynamic result) async {
+          if (didPop) return;
+
+          // Auto-save drawing before navigating back
+          if (_isDrawingMode) {
+            await _saveDrawing();
+          }
+
+          if (mounted) {
+            Navigator.of(context).pop();
+          }
+        },
+        child: Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -2403,6 +1398,25 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       ),
       body: BlocBuilder<ScheduleCubit, ScheduleState>(
         builder: (context, state) {
+          // Handle error state
+          if (state is ScheduleError) {
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                  const SizedBox(height: 16),
+                  Text('Error: ${state.message}'),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () => context.read<ScheduleCubit>().loadEvents(),
+                    child: const Text('Retry'),
+                  ),
+                ],
+              ),
+            );
+          }
+
           final isLoading = state is ScheduleLoading;
           final events = state is ScheduleLoaded ? state.events : <Event>[];
           final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
@@ -2463,7 +1477,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               ),
           const SizedBox(height: 12),
           // Go to Today FAB (only show when not viewing today)
-          if (!_isViewingToday())
+          if (!_isViewingToday_LOCAL())
             FloatingActionButton(
               heroTag: 'goto_today',
               onPressed: () async {
@@ -2481,7 +1495,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               child: const Icon(Icons.today),
               tooltip: AppLocalizations.of(context)!.goToTodayTooltip,
             ),
-          if (!_isViewingToday())
+          if (!_isViewingToday_LOCAL())
             const SizedBox(height: 12),
           // Generate random events FAB (disabled in drawing mode)
           FloatingActionButton(
@@ -2564,19 +1578,20 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             tooltip: 'Show menu',
           ),
     ), // Scaffold
-  ); // PopScope
+    ), // PopScope
+    ); // BlocListener
   }
 
   String _getDateDisplayText() {
     // Always show 3-day range
-    final windowStart = _get3DayWindowStart(_selectedDate);
+    final windowStart = _get3DayWindowStart_LOCAL(_selectedDate);
     final windowEnd = windowStart.add(const Duration(days: 2));
     return '${DateFormat('MMM d', Localizations.localeOf(context).toString()).format(windowStart)} - ${DateFormat('MMM d, y', Localizations.localeOf(context).toString()).format(windowEnd)}';
   }
 
   Widget _build3DayView(List<Event> events, bool showOldEvents) {
     // Use stable 3-day window instead of _selectedDate to prevent page changes on date changes
-    final windowStart = _get3DayWindowStart(_selectedDate);
+    final windowStart = _get3DayWindowStart_LOCAL(_selectedDate);
     final dates = List.generate(3, (index) => windowStart.add(Duration(days: index)));
     return _buildTimeSlotView(dates, _getCanvasKeyForCurrentPage(), events, showOldEvents);
   }
@@ -2790,15 +1805,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Determine if an event should be displayed as open-end (single slot)
-  bool _shouldDisplayAsOpenEnd(Event event) {
+  bool _shouldDisplayAsOpenEnd_LOCAL(Event event) {
     // Removed events or old events with new time should be displayed as open-end (single slot)
     // NEW events (isTimeChanged) should display normally with full duration
     return event.isRemoved || event.hasNewTime || event.isOpenEnded;
   }
 
   /// Get the display duration in minutes for an event
-  int _getDisplayDurationInMinutes(Event event) {
-    if (_shouldDisplayAsOpenEnd(event)) {
+  int _getDisplayDurationInMinutes_LOCAL(Event event) {
+    if (_shouldDisplayAsOpenEnd_LOCAL(event)) {
       return 15; // Always 15 minutes (1 slot) for open-end display
     }
     return event.durationInMinutes ?? 15;
@@ -2810,7 +1825,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       children: [
         const SizedBox(width: 60), // Time column width
         ...dates.map((date) {
-          final dateEvents = _getEventsForDate(date, events, showOldEvents);
+          final dateEvents = _getEventsForDate_LOCAL(date, events, showOldEvents);
 
           return Expanded(
             child: LayoutBuilder(
@@ -2823,7 +1838,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 // Group events by start time slot
                 final Map<int, List<Event>> eventsBySlot = {};
                 for (final event in dateEvents) {
-                  final slotIndex = _getSlotIndexForTime(event.startTime);
+                  final slotIndex = _getSlotIndexForTime_LOCAL(event.startTime);
                   eventsBySlot.putIfAbsent(slotIndex, () => []).add(event);
                 }
 
@@ -2831,8 +1846,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 final Map<int, int> slotEventCount = {};
 
                 for (final event in dateEvents) {
-                  final slotIndex = _getSlotIndexForTime(event.startTime);
-                  final durationInMinutes = _getDisplayDurationInMinutes(event);
+                  final slotIndex = _getSlotIndexForTime_LOCAL(event.startTime);
+                  final durationInMinutes = _getDisplayDurationInMinutes_LOCAL(event);
                   final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 48);
 
                   // Increment count for all slots this event occupies
@@ -2852,8 +1867,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                   final slotEvents = eventsBySlot[slotIndex]!;
 
                   // Separate close-end and open-end events
-                  final closeEndEvents = slotEvents.where((e) => !_shouldDisplayAsOpenEnd(e)).toList();
-                  final openEndEvents = slotEvents.where((e) => _shouldDisplayAsOpenEnd(e)).toList();
+                  final closeEndEvents = slotEvents.where((e) => !_shouldDisplayAsOpenEnd_LOCAL(e)).toList();
+                  final openEndEvents = slotEvents.where((e) => _shouldDisplayAsOpenEnd_LOCAL(e)).toList();
 
                   // Sort each list by ID
                   closeEndEvents.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
@@ -2864,7 +1879,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
                   for (final event in orderedEvents) {
                     // Calculate display duration and slots spanned
-                    final durationInMinutes = _getDisplayDurationInMinutes(event);
+                    final durationInMinutes = _getDisplayDurationInMinutes_LOCAL(event);
                     final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 48);
 
                     // Calculate max concurrent events for this specific event across all slots it spans
@@ -2946,13 +1961,13 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Get slot index (0-47) for a given time
-  int _getSlotIndexForTime(DateTime time) {
+  int _getSlotIndexForTime_LOCAL(DateTime time) {
     final minutesFromStart = (time.hour - _startHour) * 60 + time.minute;
     return minutesFromStart ~/ 15;
   }
 
   /// Get all events for a specific date (used for overlay rendering)
-  List<Event> _getEventsForDate(DateTime date, List<Event> events, bool showOldEvents) {
+  List<Event> _getEventsForDate_LOCAL(DateTime date, List<Event> events, bool showOldEvents) {
     return events.where((event) {
       // Filter by date
       final matchesDate = event.startTime.year == date.year &&
@@ -2979,7 +1994,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
   /// Get the new event that this event was moved to (if it has a newEventId)
-  Event? _getNewEventForTimeChange(Event event, List<Event> events) {
+  Event? _getNewEventForTimeChange_LOCAL(Event event, List<Event> events) {
     if (event.newEventId == null) return null;
     try {
       return events.firstWhere((e) => e.id == event.newEventId);
@@ -2996,7 +2011,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   Widget _buildEventTile(BuildContext context, Event event, double slotHeight, List<Event> events) {
     // Calculate how many 15-minute slots this event spans
-    final durationInMinutes = _getDisplayDurationInMinutes(event);
+    final durationInMinutes = _getDisplayDurationInMinutes_LOCAL(event);
     final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 16); // Max 4 hours
     final tileHeight = (slotsSpanned * slotHeight) - 1; // Subtract margin
 
@@ -3084,8 +2099,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   /// Helper method to calculate event name font size based on slot height
   /// Returns scaled font size (1.8x) for large screens, or original size for smaller screens
-  double _getEventNameFontSize(double slotHeight, double baseFontSize) {
-    if (slotHeight >= _largeScreenSlotHeightThreshold) {
+  double _getEventNameFontSize_LOCAL(double slotHeight, double baseFontSize) {
+    if (slotHeight >= ScheduleLayoutUtils.largeScreenSlotHeightThreshold) {
       return baseFontSize * 1.8;
     }
     return baseFontSize;
@@ -3094,12 +2109,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   Widget _buildEventTileContent(Event event, double tileHeight, double slotHeight, List<Event> events) {
     // For closed-end events (with both start and end times), always show simplified content
     // Open-end events get height-adaptive rendering
-    final isClosedEnd = !_shouldDisplayAsOpenEnd(event);
+    final isClosedEnd = !_shouldDisplayAsOpenEnd_LOCAL(event);
 
     if (isClosedEnd) {
       // Closed-end events: Always show just the name with consistent styling
       // Use fixed small font size to match open-end events (not calculated from tileHeight)
-      final fontSize = _getEventNameFontSize(slotHeight, 9.0);
+      final fontSize = _getEventNameFontSize_LOCAL(slotHeight, 9.0);
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -3126,7 +2141,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     if (tileHeight < 20) {
       // Very small: Only show name with tiny font
       final baseFontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
-      final fontSize = _getEventNameFontSize(slotHeight, baseFontSize);
+      final fontSize = _getEventNameFontSize_LOCAL(slotHeight, baseFontSize);
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -3149,7 +2164,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     } else if (tileHeight < 35) {
       // Small: Only show name with small font
       final baseFontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
-      final fontSize = _getEventNameFontSize(slotHeight, baseFontSize);
+      final fontSize = _getEventNameFontSize_LOCAL(slotHeight, baseFontSize);
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -3195,7 +2210,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 child: Text(
                   event.name,
                   style: TextStyle(
-                    fontSize: _getEventNameFontSize(slotHeight, 12.6),
+                    fontSize: _getEventNameFontSize_LOCAL(slotHeight, 12.6),
                     color: event.isRemoved ? Colors.white70 : Colors.white,
                     height: 1.3,
                     decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -3234,7 +2249,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 child: Text(
                   event.name,
                   style: TextStyle(
-                    fontSize: _getEventNameFontSize(slotHeight, 14.4),
+                    fontSize: _getEventNameFontSize_LOCAL(slotHeight, 14.4),
                     color: event.isRemoved ? Colors.white70 : Colors.white,
                     height: 1.3,
                     decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -3288,7 +2303,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 child: Text(
                   event.name,
                   style: TextStyle(
-                    fontSize: _getEventNameFontSize(slotHeight, 16.2),
+                    fontSize: _getEventNameFontSize_LOCAL(slotHeight, 16.2),
                     color: event.isRemoved ? Colors.white70 : Colors.white,
                     height: 1.3,
                     decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -3318,7 +2333,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           if (event.hasNewTime)
             Builder(
               builder: (context) {
-                final newEvent = _getNewEventForTimeChange(event, events);
+                final newEvent = _getNewEventForTimeChange_LOCAL(event, events);
                 final newTimeDisplay = _getNewTimeDisplay(newEvent);
                 return Padding(
                   padding: const EdgeInsets.only(top: 2),
