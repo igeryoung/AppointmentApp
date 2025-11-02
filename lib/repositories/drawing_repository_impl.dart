@@ -12,8 +12,8 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
   @override
   Future<ScheduleDrawing?> getCached(int bookId, DateTime date) async {
-    // Default to day view (viewMode = 0) for the interface method
-    return getCachedWithViewMode(bookId, date, 0);
+    // Default to 3-day view (only supported mode)
+    return getCachedWithViewMode(bookId, date, ScheduleDrawing.VIEW_MODE_3DAY);
   }
 
   /// Get cached drawing with specific view mode
@@ -86,8 +86,8 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
   @override
   Future<void> deleteCache(int bookId, DateTime date) async {
-    // Default to day view (viewMode = 0) for the interface method
-    return deleteCacheWithViewMode(bookId, date, 0);
+    // Default to 3-day view (only supported mode)
+    return deleteCacheWithViewMode(bookId, date, ScheduleDrawing.VIEW_MODE_3DAY);
   }
 
   /// Delete cached drawing with specific view mode
@@ -122,8 +122,8 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
   @override
   Future<void> markClean(int bookId, DateTime date) async {
-    // Default to day view (viewMode = 0) for the interface method
-    return markCleanWithViewMode(bookId, date, 0);
+    // Default to 3-day view (only supported mode)
+    return markCleanWithViewMode(bookId, date, ScheduleDrawing.VIEW_MODE_3DAY);
   }
 
   /// Mark drawing as clean with specific view mode

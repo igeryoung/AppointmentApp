@@ -214,8 +214,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // Drawing Operations
   // ===================
 
-  /// Load drawing for the current date and view mode
-  Future<void> loadDrawing({int viewMode = 0, bool forceRefresh = false}) async {
+  /// Load drawing for the current date and view mode (always 3-day view)
+  Future<void> loadDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY, bool forceRefresh = false}) async {
     if (_currentBookId == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot load drawing - no book selected');
       return;
@@ -266,8 +266,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     }
   }
 
-  /// Delete current drawing
-  Future<void> deleteDrawing({int viewMode = 0}) async {
+  /// Delete current drawing (always 3-day view)
+  Future<void> deleteDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY}) async {
     if (_currentBookId == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot delete drawing - no book selected');
       return;

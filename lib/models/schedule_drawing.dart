@@ -3,10 +3,14 @@ import 'note.dart';
 
 /// Schedule Drawing model - Handwriting overlay on schedule view
 class ScheduleDrawing {
+  /// Constant for 3-day view mode (only supported mode)
+  static const int VIEW_MODE_3DAY = 1;
+
   final int? id;
   final int bookId;
   final DateTime date; // Reference date for the drawing
-  final int viewMode; // 0: Day, 1: 3-Day, 2: Week
+  /// ViewMode field (always 1 for 3-day view; kept for database compatibility)
+  final int viewMode;
   final List<Stroke> strokes;
   final int version; // Optimistic locking version
   final DateTime createdAt;

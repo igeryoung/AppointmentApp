@@ -46,10 +46,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   late TransformationController _transformationController;
   DateTime _selectedDate = TimeService.instance.now();
 
-  // ContentService for server sync
+  // Book ID must be non-null for ScheduleScreen (book must exist in database)
+  late final int _bookId;
+
+  // Optional: ContentService for server sync
+  // Nullable because: may fail to initialize on web platform or without server access
   ContentService? _contentService;
 
-  // CacheManager for experimental cache operations
+  // Optional: CacheManager for experimental cache operations
+  // Nullable because: depends on ContentService initialization
   CacheManager? _cacheManager;
 
   // Network connectivity monitoring
@@ -64,6 +69,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   // Drawing overlay state
   bool _isDrawingMode = false;
+  // Nullable because: may not exist for new/empty pages
   ScheduleDrawing? _currentDrawing;
   // Cache of canvas keys for each unique page (viewMode + date combination)
   final Map<String, GlobalKey<HandwritingCanvasState>> _canvasKeys = {};
@@ -77,7 +83,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   bool _isFabMenuVisible = false;
 
   // Event menu and drag state
+  // Nullable because: only set when user taps on an event to show context menu
   Event? _selectedEventForMenu;
+  // Nullable because: only set when context menu is active
   Offset? _menuPosition;
 
   // Time range settings (now using ScheduleLayoutUtils)
@@ -91,6 +99,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   @override
   void initState() {
     super.initState();
+
+    // Ensure book has a valid ID (must be persisted in database before opening ScheduleScreen)
+    assert(widget.book.id != null, 'Book must have a valid ID to open ScheduleScreen');
+    _bookId = widget.book.id!;
+
     _transformationController = TransformationController();
 
     // Register lifecycle observer
@@ -227,16 +240,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   /// Auto-sync dirty notes for this book in background
   Future<void> _autoSyncDirtyNotes() async {
-    if (_contentService == null || _isSyncing || widget.book.id == null) return;
+    if (_contentService == null || _isSyncing) return;
 
     setState(() {
       _isSyncing = true;
     });
 
     try {
-      debugPrint('🔄 ScheduleScreen: Auto-syncing dirty notes for book ${widget.book.id}...');
+      debugPrint('🔄 ScheduleScreen: Auto-syncing dirty notes for book $_bookId...');
 
-      final result = await _contentService!.syncDirtyNotesForBook(widget.book.id!);
+      final result = await _contentService!.syncDirtyNotesForBook(_bookId);
 
       if (mounted) {
         setState(() {
@@ -427,18 +440,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       if (_contentService != null) {
         debugPrint('📖 Loading drawing via ContentService (cache-first with server fallback)...');
         drawing = await _contentService!.getDrawing(
-          bookId: widget.book.id!,
+          bookId: _bookId,
           date: effectiveDate,
-          viewMode: 1, // Always 3-day view (viewMode = 1)
+          viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
           forceRefresh: false, // Use cache if available
         );
       } else {
         // Fallback to direct database access if ContentService not initialized
         debugPrint('⚠️ ContentService not available, loading drawing from cache only');
         drawing = await _dbService.getCachedDrawing(
-          widget.book.id!,
+          _bookId,
           effectiveDate,
-          1, // Always 3-day view (viewMode = 1)
+          ScheduleDrawing.VIEW_MODE_3DAY,
         );
       }
 
@@ -446,7 +459,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         _currentDrawing = drawing;
       });
 
-      context.read<ScheduleCubit>().loadDrawing(viewMode: 1, forceRefresh: false);
+      context.read<ScheduleCubit>().loadDrawing(viewMode: ScheduleDrawing.VIEW_MODE_3DAY, forceRefresh: false);
 
       // Load strokes into canvas if drawing exists
       // Use post-frame callback to ensure canvas is ready
@@ -564,8 +577,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       DateTime? createdAt;
       int version = 1; // Default version for new drawings
       if (_currentDrawing != null &&
-          _currentDrawing!.bookId == widget.book.id! &&
-          _currentDrawing!.viewMode == 1 && // Always 3-day view (viewMode = 1)
+          _currentDrawing!.bookId == _bookId &&
+          _currentDrawing!.viewMode == ScheduleDrawing.VIEW_MODE_3DAY &&
           _currentDrawing!.date.year == effectiveDate.year &&
           _currentDrawing!.date.month == effectiveDate.month &&
           _currentDrawing!.date.day == effectiveDate.day) {
@@ -576,9 +589,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
       final drawing = ScheduleDrawing(
         id: drawingId,
-        bookId: widget.book.id!,
+        bookId: _bookId,
         date: effectiveDate,
-        viewMode: 1, // Always 3-day view (viewMode = 1)
+        viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
         strokes: strokes,
         version: version, // Use preserved version from current drawing
         createdAt: createdAt ?? now,
@@ -603,7 +616,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
         // Update current drawing state - fetch back from cache to get server-assigned ID
         final savedDrawing = await _dbService.getCachedDrawing(
-          widget.book.id!,
+          _bookId,
           effectiveDate,
           1,
         );
@@ -729,7 +742,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         DateTime(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
 
     final newEvent = Event(
-      bookId: widget.book.id!,
+      bookId: _bookId,
       name: '',
       recordNumber: '',
       eventType: '',
@@ -1455,7 +1468,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         toggleDrawingMode: _toggleDrawingMode,
         createEvent: () => _createEvent(),
         dbService: _dbService,
-        bookId: widget.book.id!,
+        bookId: _bookId,
         get3DayWindowStart: _get3DayWindowStart_LOCAL,
         cacheManager: _cacheManager,
         getEffectiveDate: _getEffectiveDate_LOCAL,

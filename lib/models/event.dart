@@ -1,17 +1,23 @@
 /// Event model - Individual appointment entry with minimal metadata as per PRD
 class Event {
+  /// Nullable: new events don't have ID until saved to database
   final int? id;
   final int bookId;
   final String name;
+  /// Nullable: optional field per PRD
   final String? recordNumber;
   final String eventType;
   final DateTime startTime;
-  final DateTime? endTime; // Optional as per PRD
+  /// Nullable: open-ended events have no end time (as per PRD)
+  final DateTime? endTime;
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isRemoved; // Soft removal flag
-  final String? removalReason; // Reason for removal
+  /// Nullable: only set when event is removed
+  final String? removalReason;
+  /// Nullable: only set for time-change related events
   final int? originalEventId; // Reference to original event for time changes
+  /// Nullable: only set for time-change related events
   final int? newEventId; // Reference to new event if this event's time was changed
 
   const Event({
