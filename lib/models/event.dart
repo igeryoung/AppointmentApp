@@ -1,3 +1,5 @@
+import 'event_type.dart';
+
 /// Event model - Individual appointment entry with minimal metadata as per PRD
 class Event {
   /// Nullable: new events don't have ID until saved to database
@@ -6,7 +8,7 @@ class Event {
   final String name;
   /// Nullable: optional field per PRD
   final String? recordNumber;
-  final String eventType;
+  final EventType eventType;
   final DateTime startTime;
   /// Nullable: open-ended events have no end time (as per PRD)
   final DateTime? endTime;
@@ -41,7 +43,7 @@ class Event {
     int? bookId,
     String? name,
     String? recordNumber,
-    String? eventType,
+    EventType? eventType,
     DateTime? startTime,
     DateTime? endTime,
     DateTime? createdAt,
@@ -74,7 +76,7 @@ class Event {
       'book_id': bookId,
       'name': name,
       'record_number': recordNumber,
-      'event_type': eventType,
+      'event_type': eventType.toJson(), // Convert enum to string for storage
       'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
       'end_time': endTime != null ? endTime!.millisecondsSinceEpoch ~/ 1000 : null,
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
@@ -92,7 +94,7 @@ class Event {
       bookId: map['book_id']?.toInt() ?? 0,
       name: map['name'] ?? '',
       recordNumber: map['record_number'],
-      eventType: map['event_type'] ?? '',
+      eventType: EventType.fromString(map['event_type'] ?? ''), // Parse string to enum
       startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
       endTime: map['end_time'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000)

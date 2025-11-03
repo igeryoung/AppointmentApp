@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import '../lib/models/book.dart';
 import '../lib/models/event.dart';
+import '../lib/models/event_type.dart';
 import '../lib/models/note.dart';
 import '../lib/services/web_prd_database_service.dart';
 import '../lib/screens/event_detail_screen.dart';
@@ -24,7 +25,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'TEST001',
-        eventType: 'Consultation',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

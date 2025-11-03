@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
+import '../../models/event_type.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/time_service.dart';
@@ -341,12 +342,12 @@ class ScheduleTestUtils {
 
     // Get available event types
     final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
+      EventType.consultation,
+      EventType.surgery,
+      EventType.followUp,
+      EventType.emergency,
+      EventType.checkUp,
+      EventType.treatment,
     ];
 
     // Show progress dialog
@@ -547,12 +548,12 @@ class ScheduleTestUtils {
 
     // Get available event types
     final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
+      EventType.consultation,
+      EventType.surgery,
+      EventType.followUp,
+      EventType.emergency,
+      EventType.checkUp,
+      EventType.treatment,
     ];
 
     // Show progress dialog

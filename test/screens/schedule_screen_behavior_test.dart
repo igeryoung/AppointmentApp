@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/models/book.dart';
 import 'package:schedule_note_app/models/event.dart';
+import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/screens/schedule_screen.dart';
 import 'package:schedule_note_app/services/prd_database_service.dart';
 import 'package:schedule_note_app/services/service_locator.dart';
@@ -45,7 +46,7 @@ void main() {
       await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Event Day 1',
-        eventType: '',
+        eventType: EventType.other,
         startTime: today.add(const Duration(hours: 10)),
         endTime: today.add(const Duration(hours: 11)),
         createdAt: now,
@@ -55,7 +56,7 @@ void main() {
       await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Event Day 2',
-        eventType: '',
+        eventType: EventType.other,
         startTime: today.add(const Duration(days: 1, hours: 14)),
         endTime: today.add(const Duration(days: 1, hours: 15)),
         createdAt: now,
@@ -65,7 +66,7 @@ void main() {
       await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Event Day 3',
-        eventType: '',
+        eventType: EventType.other,
         startTime: today.add(const Duration(days: 2, hours: 16)),
         endTime: today.add(const Duration(days: 2, hours: 17)),
         createdAt: now,
@@ -116,7 +117,7 @@ void main() {
       await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Old Event',
-        eventType: '',
+        eventType: EventType.other,
         startTime: now.subtract(const Duration(days: 5)),
         endTime: now.subtract(const Duration(days: 5, hours: -1)),
         createdAt: now,
@@ -127,7 +128,7 @@ void main() {
       await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Current Event',
-        eventType: '',
+        eventType: EventType.other,
         startTime: now,
         endTime: now.add(const Duration(hours: 1)),
         createdAt: now,
@@ -138,7 +139,7 @@ void main() {
       await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Future Event',
-        eventType: '',
+        eventType: EventType.other,
         startTime: now.add(const Duration(days: 1)),
         endTime: now.add(const Duration(days: 1, hours: 1)),
         createdAt: now,
@@ -168,7 +169,7 @@ void main() {
       final originalEvent = await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'Original Event',
-        eventType: '',
+        eventType: EventType.other,
         startTime: now.add(const Duration(hours: 10)),
         endTime: now.add(const Duration(hours: 11)),
         createdAt: now,
@@ -228,7 +229,7 @@ void main() {
       final event = await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'To Delete',
-        eventType: '',
+        eventType: EventType.other,
         startTime: now,
         endTime: now.add(const Duration(hours: 1)),
         createdAt: now,
@@ -250,7 +251,7 @@ void main() {
       final event = await dbService.createEvent(Event(
         bookId: book.id!,
         name: 'To Remove',
-        eventType: '',
+        eventType: EventType.other,
         startTime: now,
         endTime: now.add(const Duration(hours: 1)),
         createdAt: now,

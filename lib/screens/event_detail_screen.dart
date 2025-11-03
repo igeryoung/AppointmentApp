@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../l10n/app_localizations.dart';
 import '../models/event.dart';
+import '../models/event_type.dart';
 import '../models/note.dart';
 import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
@@ -34,7 +35,7 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   late TextEditingController _nameController;
   late TextEditingController _recordNumberController;
-  late TextEditingController _eventTypeController;
+  late EventType _selectedEventType;
   late DateTime _startTime;
   DateTime? _endTime;
   Note? _note;
@@ -69,27 +70,48 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   bool _wasOfflineLastCheck = false;
 
   // Common event types for quick selection
-  List<String> get _commonEventTypes => [
-    AppLocalizations.of(context)!.consultation,
-    AppLocalizations.of(context)!.surgery,
-    AppLocalizations.of(context)!.followUp,
-    AppLocalizations.of(context)!.emergency,
-    AppLocalizations.of(context)!.checkUp,
-    AppLocalizations.of(context)!.treatment,
+  List<EventType> get _commonEventTypes => [
+    EventType.consultation,
+    EventType.surgery,
+    EventType.followUp,
+    EventType.emergency,
+    EventType.checkUp,
+    EventType.treatment,
+    EventType.other,
   ];
+
+  /// Get localized string for EventType
+  String _getLocalizedEventType(EventType type) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (type) {
+      case EventType.consultation:
+        return l10n.consultation;
+      case EventType.surgery:
+        return l10n.surgery;
+      case EventType.followUp:
+        return l10n.followUp;
+      case EventType.emergency:
+        return l10n.emergency;
+      case EventType.checkUp:
+        return l10n.checkUp;
+      case EventType.treatment:
+        return l10n.treatment;
+      case EventType.other:
+        return 'Other';
+    }
+  }
 
   @override
   void initState() {
     super.initState();
     _nameController = TextEditingController(text: widget.event.name);
     _recordNumberController = TextEditingController(text: widget.event.recordNumber);
-    _eventTypeController = TextEditingController(text: widget.event.eventType);
+    _selectedEventType = widget.event.eventType;
     _startTime = widget.event.startTime;
     _endTime = widget.event.endTime;
 
     _nameController.addListener(_onChanged);
     _recordNumberController.addListener(_onChanged);
-    _eventTypeController.addListener(_onChanged);
 
     // Initialize services and load data asynchronously
     _initialize();
@@ -269,7 +291,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void dispose() {
     _nameController.dispose();
     _recordNumberController.dispose();
-    _eventTypeController.dispose();
     _connectivitySubscription?.cancel();
     super.dispose();
   }
@@ -436,13 +457,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return;
     }
 
-    if (_eventTypeController.text.trim().isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.eventTypeRequired)),
-      );
-      return;
-    }
-
     setState(() => _isLoading = true);
 
     try {
@@ -450,7 +464,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       final eventToSave = widget.event.copyWith(
         name: _nameController.text.trim(),
         recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
-        eventType: _eventTypeController.text.trim(),
+        eventType: _selectedEventType,
         startTime: _startTime,
         endTime: _endTime,
       );
@@ -1320,25 +1334,28 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           Row(
             children: [
               Expanded(
-                child: TextField(
-                  controller: _eventTypeController,
+                child: DropdownButtonFormField<EventType>(
+                  value: _selectedEventType,
                   decoration: InputDecoration(
                     labelText: AppLocalizations.of(context)!.eventType,
                     border: const OutlineInputBorder(),
                     contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                   ),
+                  items: _commonEventTypes.map((type) {
+                    return DropdownMenuItem<EventType>(
+                      value: type,
+                      child: Text(_getLocalizedEventType(type)),
+                    );
+                  }).toList(),
+                  onChanged: (EventType? newValue) {
+                    if (newValue != null) {
+                      setState(() {
+                        _selectedEventType = newValue;
+                      });
+                      _onChanged();
+                    }
+                  },
                 ),
-              ),
-              const SizedBox(width: 8),
-              PopupMenuButton<String>(
-                icon: const Icon(Icons.arrow_drop_down),
-                onSelected: (type) {
-                  _eventTypeController.text = type;
-                  _onChanged();
-                },
-                itemBuilder: (context) => _commonEventTypes
-                    .map((type) => PopupMenuItem(value: type, child: Text(type)))
-                    .toList(),
               ),
             ],
           ),

@@ -3,6 +3,7 @@ import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
+import '../../models/event_type.dart';
 import '../../utils/schedule/schedule_layout_utils.dart';
 
 /// Helper class for rendering schedule event tiles
@@ -54,7 +55,7 @@ class ScheduleEventTileHelper {
     required Event event,
     required double slotHeight,
     required List<Event> events,
-    required Color Function(BuildContext, String) getEventTypeColor,
+    required Color Function(BuildContext, EventType) getEventTypeColor,
     required VoidCallback onTap,
     required Function(Offset) onLongPress,
     required bool isMenuOpen,

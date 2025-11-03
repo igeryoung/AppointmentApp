@@ -10,6 +10,7 @@ import '../cubits/schedule_state.dart';
 import '../l10n/app_localizations.dart';
 import '../models/book.dart';
 import '../models/event.dart';
+import '../models/event_type.dart';
 import '../models/schedule_drawing.dart';
 import '../services/database_service_interface.dart';
 import '../services/prd_database_service.dart';
@@ -745,7 +746,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       bookId: _bookId,
       name: '',
       recordNumber: '',
-      eventType: '',
+      eventType: EventType.consultation, // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
       updatedAt: now,
@@ -916,26 +917,47 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
   }
 
+  /// Get localized string for EventType
+  String _getLocalizedEventType(BuildContext context, EventType type) {
+    final l10n = AppLocalizations.of(context)!;
+    switch (type) {
+      case EventType.consultation:
+        return l10n.consultation;
+      case EventType.surgery:
+        return l10n.surgery;
+      case EventType.followUp:
+        return l10n.followUp;
+      case EventType.emergency:
+        return l10n.emergency;
+      case EventType.checkUp:
+        return l10n.checkUp;
+      case EventType.treatment:
+        return l10n.treatment;
+      case EventType.other:
+        return 'Other'; // Default for unspecified types
+    }
+  }
+
   Future<void> _changeEventType(Event event) async {
     final l10n = AppLocalizations.of(context)!;
     final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
+      EventType.consultation,
+      EventType.surgery,
+      EventType.followUp,
+      EventType.emergency,
+      EventType.checkUp,
+      EventType.treatment,
     ];
 
-    final selectedType = await showDialog<String>(
+    final selectedType = await showDialog<EventType>(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.changeEventType),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           children: eventTypes.map((type) => ListTile(
-            title: Text(type),
-            leading: Radio<String>(
+            title: Text(_getLocalizedEventType(context, type)),
+            leading: Radio<EventType>(
               value: type,
               groupValue: event.eventType,
               onChanged: (value) => Navigator.pop(context, value),
@@ -1885,27 +1907,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     return (totalMinutesFromStart / minutesPerSlot) * slotHeight;
   }
 
-  Color _getEventTypeColor(BuildContext context, String eventType) {
-    final l10n = AppLocalizations.of(context)!;
+  Color _getEventTypeColor(BuildContext context, EventType eventType) {
+    // Color coding based on event type enum (type-safe)
+    final Color baseColor;
 
-    Color baseColor;
-
-    // Color coding based on localized event type
-    if (eventType == l10n.consultation) {
-      baseColor = Colors.blue;
-    } else if (eventType == l10n.surgery) {
-      baseColor = Colors.red;
-    } else if (eventType == l10n.followUp) {
-      baseColor = Colors.green;
-    } else if (eventType == l10n.emergency) {
-      baseColor = Colors.orange;
-    } else if (eventType == l10n.checkUp) {
-      baseColor = Colors.purple;
-    } else if (eventType == l10n.treatment) {
-      baseColor = Colors.cyan;
-    } else {
-      // Default color for unknown types
-      baseColor = Colors.grey;
+    switch (eventType) {
+      case EventType.consultation:
+        baseColor = Colors.blue;
+        break;
+      case EventType.surgery:
+        baseColor = Colors.red;
+        break;
+      case EventType.followUp:
+        baseColor = Colors.green;
+        break;
+      case EventType.emergency:
+        baseColor = Colors.orange;
+        break;
+      case EventType.checkUp:
+        baseColor = Colors.purple;
+        break;
+      case EventType.treatment:
+        baseColor = Colors.cyan;
+        break;
+      case EventType.other:
+        // Default color for unknown types
+        baseColor = Colors.grey;
+        break;
     }
 
     // Reduce saturation to 60%

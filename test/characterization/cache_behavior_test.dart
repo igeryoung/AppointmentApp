@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/models/book.dart';
 import 'package:schedule_note_app/models/event.dart';
+import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/models/note.dart';
 import 'package:schedule_note_app/models/schedule_drawing.dart';
 import 'package:schedule_note_app/services/prd_database_service.dart';
@@ -35,7 +36,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC001',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -79,7 +80,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC001',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -105,7 +106,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC001',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -150,7 +151,7 @@ void main() {
         bookId: book1.id!,
         name: 'Event 1',
         recordNumber: 'REC001',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -160,7 +161,7 @@ void main() {
         bookId: book2.id!,
         name: 'Event 2',
         recordNumber: 'REC002',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -195,7 +196,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC001',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
@@ -230,7 +231,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC001',
-        eventType: 'appointment',
+        eventType: EventType.consultation,
         startTime: DateTime.now(),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),

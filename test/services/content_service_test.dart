@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/models/book.dart';
 import 'package:schedule_note_app/models/event.dart';
+import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/models/note.dart';
 import 'package:schedule_note_app/models/schedule_drawing.dart';
 import 'package:schedule_note_app/services/api_client.dart';
@@ -51,7 +52,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -92,7 +93,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -119,7 +120,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -151,7 +152,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -184,7 +185,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -215,7 +216,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -247,7 +248,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -318,7 +319,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -352,7 +353,7 @@ void main() {
           bookId: 10,
           name: 'Test Event',
           recordNumber: 'REC001',
-          eventType: 'appointment',
+          eventType: EventType.consultation,
           startTime: DateTime.now(),
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
@@ -527,6 +528,7 @@ class _MockApiClient extends ApiClient {
     required Map<String, dynamic> noteData,
     required String deviceId,
     required String deviceToken,
+    Map<String, dynamic>? eventData,
   }) async {
     saveNoteCalled = true;
     if (shouldThrowError) {

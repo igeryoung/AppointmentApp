@@ -8,6 +8,7 @@ import '../../cubits/schedule_cubit.dart';
 import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
+import '../../models/event_type.dart';
 import '../../models/note.dart';
 import '../../services/cache_manager.dart';
 import '../../services/database_service_interface.dart';
@@ -148,12 +149,12 @@ class ScheduleTestMenuHelper {
 
     // Get available event types
     final eventTypes = [
-      l10n.consultation,
-      l10n.surgery,
-      l10n.followUp,
-      l10n.emergency,
-      l10n.checkUp,
-      l10n.treatment,
+      EventType.consultation,
+      EventType.surgery,
+      EventType.followUp,
+      EventType.emergency,
+      EventType.checkUp,
+      EventType.treatment,
     ];
 
     // Get date range for 3-day view

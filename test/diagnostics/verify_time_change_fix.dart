@@ -2,6 +2,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import '../lib/models/book.dart';
 import '../lib/models/event.dart';
+import '../lib/models/event_type.dart';
 import '../lib/models/note.dart';
 import '../lib/services/prd_database_service.dart';
 
@@ -37,7 +38,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC001',
-        eventType: 'Consultation',
+        eventType: EventType.consultation,
         startTime: DateTime(2025, 10, 5, 10, 0),
         endTime: DateTime(2025, 10, 5, 11, 0),
         createdAt: DateTime.now(),
@@ -110,7 +111,7 @@ void main() {
         bookId: book.id!,
         name: 'Test Event',
         recordNumber: 'REC002',
-        eventType: 'Follow-up',
+        eventType: EventType.followUp,
         startTime: DateTime(2025, 10, 6, 9, 0),
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
