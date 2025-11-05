@@ -61,6 +61,12 @@ class DeviceRegistrationAdapter {
 
   /// Get device credentials
   Future<Map<String, dynamic>?> getCredentials() async {
-    return await _dbService.getDeviceCredentials();
+    final credentials = await _dbService.getDeviceCredentials();
+    if (credentials == null) return null;
+
+    return {
+      'deviceId': credentials.deviceId,
+      'deviceToken': credentials.deviceToken,
+    };
   }
 }

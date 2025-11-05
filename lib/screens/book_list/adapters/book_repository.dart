@@ -21,12 +21,12 @@ class BookRepository {
 
   /// Create a new book
   Future<void> create(String name) async {
-    return await _dbService.createBook(name);
+    await _dbService.createBook(name);
   }
 
   /// Update an existing book
   Future<void> update(Book book) async {
-    return await _dbService.updateBook(book);
+    await _dbService.updateBook(book);
   }
 
   /// Archive a book
