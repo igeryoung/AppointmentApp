@@ -1,5 +1,31 @@
+import 'dart:math';
+import 'package:flutter/foundation.dart';
+
 import '../../models/event.dart';
 import '../../services/time_service.dart';
+
+/// Data class representing a positioned event with layout information
+class PositionedEventData {
+  final Event event;
+  final int slotIndex;
+  final int slotsSpanned;
+  final int horizontalPosition;
+  final int maxConcurrentEvents;
+  final double topPosition;
+  final double width;
+  final double height;
+
+  const PositionedEventData({
+    required this.event,
+    required this.slotIndex,
+    required this.slotsSpanned,
+    required this.horizontalPosition,
+    required this.maxConcurrentEvents,
+    required this.topPosition,
+    required this.width,
+    required this.height,
+  });
+}
 
 /// Utility class for schedule layout calculations
 class ScheduleLayoutUtils {
@@ -146,5 +172,129 @@ class ScheduleLayoutUtils {
     } catch (e) {
       return null;
     }
+  }
+
+  /// Calculate event positions with slot occupancy algorithm
+  /// This prevents event overlaps by tracking which horizontal positions are occupied
+  ///
+  /// Returns list of positioned events with layout information (position, size)
+  static List<PositionedEventData> calculateEventPositions({
+    required List<Event> dateEvents,
+    required double availableWidth,
+    required double slotHeight,
+  }) {
+    final List<PositionedEventData> positionedEvents = [];
+
+    // Build slot occupancy map: slot index -> set of occupied horizontal positions
+    final Map<int, Set<int>> slotOccupancy = {};
+
+    // Group events by start time slot
+    final Map<int, List<Event>> eventsBySlot = {};
+    for (final event in dateEvents) {
+      final slotIndex = getSlotIndexForTime(event.startTime);
+      eventsBySlot.putIfAbsent(slotIndex, () => []).add(event);
+    }
+
+    // Calculate concurrent event count per time slot
+    final Map<int, int> slotEventCount = {};
+    for (final event in dateEvents) {
+      final slotIndex = getSlotIndexForTime(event.startTime);
+      final durationInMinutes = getDisplayDurationInMinutes(event);
+      final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 48);
+
+      // Increment count for all slots this event occupies
+      for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
+        final occupiedSlot = slotIndex + spanOffset;
+        slotEventCount[occupiedSlot] = (slotEventCount[occupiedSlot] ?? 0) + 1;
+      }
+    }
+
+    // Process events in order of time slots
+    final sortedSlotIndices = eventsBySlot.keys.toList()..sort();
+
+    for (final slotIndex in sortedSlotIndices) {
+      final slotEvents = eventsBySlot[slotIndex]!;
+
+      // Separate close-end and open-end events
+      final closeEndEvents = slotEvents.where((e) => !shouldDisplayAsOpenEnd(e)).toList();
+      final openEndEvents = slotEvents.where((e) => shouldDisplayAsOpenEnd(e)).toList();
+
+      // Sort each list by ID for stable ordering
+      closeEndEvents.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+      openEndEvents.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+
+      // Process in order: close-end events first, then open-end events
+      final orderedEvents = [...closeEndEvents, ...openEndEvents];
+
+      for (final event in orderedEvents) {
+        // Calculate display duration and slots spanned
+        final durationInMinutes = getDisplayDurationInMinutes(event);
+        final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 48);
+
+        // Calculate max concurrent events for this event across all slots it spans
+        int maxConcurrentForThisEvent = 4; // Default minimum of 4
+        for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
+          final checkSlot = slotIndex + spanOffset;
+          final concurrentInSlot = slotEventCount[checkSlot] ?? 0;
+          maxConcurrentForThisEvent = max(maxConcurrentForThisEvent, concurrentInSlot);
+        }
+
+        // Calculate event width based on concurrent events
+        final eventWidth = availableWidth / maxConcurrentForThisEvent;
+
+        // Find leftmost available horizontal position across all spanned slots
+        int horizontalPosition = 0;
+        bool positionFound = false;
+
+        for (int pos = 0; pos < maxConcurrentForThisEvent; pos++) {
+          bool positionAvailable = true;
+
+          // Check if this position is available in all spanned slots
+          for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
+            final checkSlot = slotIndex + spanOffset;
+            if (slotOccupancy[checkSlot]?.contains(pos) ?? false) {
+              positionAvailable = false;
+              break;
+            }
+          }
+
+          if (positionAvailable) {
+            horizontalPosition = pos;
+            positionFound = true;
+            break;
+          }
+        }
+
+        // If no position found, skip this event (should not happen with dynamic positioning)
+        if (!positionFound) {
+          debugPrint('⚠️ No position found for event ${event.id} at slot $slotIndex');
+          continue;
+        }
+
+        // Mark position as occupied in all spanned slots
+        for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
+          final occupySlot = slotIndex + spanOffset;
+          slotOccupancy.putIfAbsent(occupySlot, () => {}).add(horizontalPosition);
+        }
+
+        // Calculate position and height
+        final topPosition = calculateEventTopPosition(event.startTime, slotHeight);
+        final tileHeight = (slotsSpanned * slotHeight) - 1; // Subtract margin
+
+        // Add positioned event data
+        positionedEvents.add(PositionedEventData(
+          event: event,
+          slotIndex: slotIndex,
+          slotsSpanned: slotsSpanned,
+          horizontalPosition: horizontalPosition,
+          maxConcurrentEvents: maxConcurrentForThisEvent,
+          topPosition: topPosition,
+          width: eventWidth,
+          height: tileHeight,
+        ));
+      }
+    }
+
+    return positionedEvents;
   }
 }
