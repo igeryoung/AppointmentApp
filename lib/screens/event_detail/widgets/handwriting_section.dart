@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../models/note.dart';
 import '../../../widgets/handwriting_canvas.dart';
 import 'handwriting_toolbar.dart';
 import 'handwriting_control_panel.dart';

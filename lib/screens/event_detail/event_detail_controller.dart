@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/event.dart';
+import '../../models/event_type.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/prd_database_service.dart';

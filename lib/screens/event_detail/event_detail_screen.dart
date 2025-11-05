@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
+import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/service_locator.dart';
 import '../../utils/datetime_picker_utils.dart';
