@@ -1,0 +1,479 @@
+import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
+import '../../models/event.dart';
+import '../../services/database_service_interface.dart';
+import '../../services/service_locator.dart';
+import '../../utils/datetime_picker_utils.dart';
+import '../../widgets/handwriting_canvas.dart';
+import 'event_detail_controller.dart';
+import 'event_detail_state.dart';
+import 'widgets/status_bar.dart';
+import 'widgets/event_metadata_section.dart';
+import 'widgets/handwriting_section.dart';
+import 'dialogs/confirm_discard_dialog.dart';
+import 'dialogs/delete_event_dialog.dart';
+import 'dialogs/remove_event_dialog.dart';
+import 'dialogs/change_time_dialog.dart';
+
+/// Event Detail screen with handwriting notes - refactored version
+class EventDetailScreen extends StatefulWidget {
+  final Event event;
+  final bool isNew;
+
+  const EventDetailScreen({
+    super.key,
+    required this.event,
+    required this.isNew,
+  });
+
+  @override
+  State<EventDetailScreen> createState() => _EventDetailScreenState();
+}
+
+class _EventDetailScreenState extends State<EventDetailScreen> {
+  late EventDetailController _controller;
+  late TextEditingController _nameController;
+  late TextEditingController _recordNumberController;
+  final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
+
+  // Get database service from service locator
+  final IDatabaseService _dbService = getIt<IDatabaseService>();
+
+  @override
+  void initState() {
+    super.initState();
+
+    // Initialize text controllers
+    _nameController = TextEditingController(text: widget.event.name);
+    _recordNumberController = TextEditingController(text: widget.event.recordNumber);
+
+    // Add listeners for text changes
+    _nameController.addListener(() {
+      _controller.updateName(_nameController.text);
+    });
+    _recordNumberController.addListener(() {
+      _controller.updateRecordNumber(_recordNumberController.text);
+    });
+
+    // Initialize controller
+    _controller = EventDetailController(
+      event: widget.event,
+      isNew: widget.isNew,
+      dbService: _dbService,
+      onStateChanged: (state) {
+        if (mounted) {
+          setState(() {});
+        }
+      },
+    );
+
+    // Initialize services and load data asynchronously
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    try {
+      await _controller.initialize();
+      _controller.setupConnectivityMonitoring();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to initialize services. Some features may not work. Error: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 5),
+          ),
+        );
+      }
+    }
+  }
+
+  @override
+  void dispose() {
+    _nameController.dispose();
+    _recordNumberController.dispose();
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onStrokesChanged() {
+    debugPrint('🏗️ EventDetail: onStrokesChanged callback fired');
+
+    final canvasState = _canvasKey.currentState;
+    if (canvasState != null) {
+      final currentStrokes = canvasState.getStrokes();
+      _controller.updateStrokes(currentStrokes);
+
+      debugPrint('🔄 EventDetail: Updated strokes (${currentStrokes.length} strokes)');
+    } else {
+      debugPrint('⚠️ EventDetail: Canvas state is null during onStrokesChanged');
+    }
+  }
+
+  Future<void> _saveEvent() async {
+    if (_nameController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(AppLocalizations.of(context)!.eventNameRequired)),
+      );
+      return;
+    }
+
+    try {
+      final canvasState = _canvasKey.currentState;
+
+      // Validate canvas state before saving
+      if (canvasState != null) {
+        canvasState.validateState();
+      }
+
+      // Get strokes from canvas or backup
+      List<Stroke> strokes;
+      if (canvasState != null) {
+        strokes = canvasState.getStrokes();
+      } else {
+        strokes = List<Stroke>.from(_controller.state.lastKnownStrokes);
+      }
+
+      await _controller.saveEvent(strokes);
+
+      if (mounted) {
+        // Show success feedback
+        final isOffline = _controller.state.isOffline;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isOffline
+                        ? 'Saved locally (offline - will sync when online)'
+                        : 'Saved locally (syncing to server...)',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.errorSavingEventMessage(e.toString()))),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteEvent() async {
+    if (widget.isNew) return;
+
+    final confirmed = await DeleteEventDialog.show(context);
+    if (!confirmed) return;
+
+    try {
+      await _controller.deleteEvent();
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.errorDeletingEventMessage(e.toString()))),
+        );
+      }
+    }
+  }
+
+  Future<void> _removeEvent() async {
+    if (widget.isNew) return;
+
+    final reason = await RemoveEventDialog.show(context);
+    if (reason == null || reason.isEmpty) return;
+
+    try {
+      await _controller.removeEvent(reason);
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(AppLocalizations.of(context)!.errorRemovingEventMessage(e.toString()))),
+        );
+      }
+    }
+  }
+
+  Future<void> _changeEventTime() async {
+    if (widget.isNew) return;
+
+    final l10n = AppLocalizations.of(context)!;
+    final result = await ChangeTimeDialog.show(
+      context,
+      initialStartTime: _controller.state.startTime,
+      initialEndTime: _controller.state.endTime,
+    );
+
+    if (result == null) return;
+
+    try {
+      await _controller.changeEventTime(result.startTime, result.endTime, result.reason);
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.eventTimeChangedSuccess),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+
+        await Future.delayed(const Duration(milliseconds: 500));
+        Navigator.pop(context, true);
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(l10n.errorChangingEventTimeMessage(e.toString())),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 4),
+            action: SnackBarAction(
+              label: l10n.retry,
+              textColor: Colors.white,
+              onPressed: () => _changeEventTime(),
+            ),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _selectStartTime() async {
+    final result = await DateTimePickerUtils.pickDateTime(
+      context,
+      initialDateTime: _controller.state.startTime,
+    );
+
+    if (result == null) return;
+
+    _controller.updateStartTime(result);
+  }
+
+  Future<void> _selectEndTime() async {
+    final result = await DateTimePickerUtils.pickDateTime(
+      context,
+      initialDateTime: _controller.state.endTime ?? _controller.state.startTime,
+      firstDate: _controller.state.startTime,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (result == null) return;
+
+    _controller.updateEndTime(result);
+  }
+
+  Future<bool> _onWillPop() async {
+    if (!_controller.state.hasChanges) {
+      return true;
+    }
+
+    final shouldPop = await ConfirmDiscardDialog.show(context);
+    return shouldPop;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final state = _controller.state;
+
+    return WillPopScope(
+      onWillPop: _onWillPop,
+      child: Scaffold(
+        appBar: AppBar(
+          title: Text(widget.isNew ? l10n.newEvent : l10n.editEvent),
+          actions: [
+            // Sync status indicators in AppBar
+            if (state.hasUnsyncedChanges)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Icon(
+                  Icons.cloud_upload,
+                  color: Colors.orange,
+                  semanticLabel: 'Unsynced changes',
+                  size: 24,
+                ),
+              ),
+            if (state.isOffline && !state.hasUnsyncedChanges)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Icon(
+                  Icons.cloud_off,
+                  color: Colors.grey,
+                  semanticLabel: 'Offline',
+                  size: 24,
+                ),
+              ),
+            if (!widget.isNew && !widget.event.isRemoved) ...[
+              PopupMenuButton<String>(
+                enabled: !state.isLoading,
+                onSelected: (value) {
+                  if (state.isLoading) return;
+                  switch (value) {
+                    case 'remove':
+                      _removeEvent();
+                      break;
+                    case 'changeTime':
+                      _changeEventTime();
+                      break;
+                    case 'delete':
+                      _deleteEvent();
+                      break;
+                  }
+                },
+                itemBuilder: (context) => [
+                  PopupMenuItem(
+                    value: 'remove',
+                    enabled: !state.isLoading,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.remove_circle_outline,
+                          color: state.isLoading ? Colors.grey : null,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Remove Event',
+                          style: TextStyle(
+                            color: state.isLoading ? Colors.grey : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'changeTime',
+                    enabled: !state.isLoading,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.schedule,
+                          color: state.isLoading ? Colors.grey : null,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Change Time',
+                          style: TextStyle(
+                            color: state.isLoading ? Colors.grey : null,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem(
+                    value: 'delete',
+                    enabled: !state.isLoading,
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.delete_forever,
+                          color: state.isLoading ? Colors.grey : Colors.red,
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Delete Permanently'),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+            IconButton(
+              icon: const Icon(Icons.save),
+              onPressed: (state.isLoading || !state.isServicesReady) ? null : _saveEvent,
+              tooltip: state.isServicesReady ? 'Save' : 'Initializing...',
+            ),
+          ],
+        ),
+        body: state.isLoading
+            ? const Center(
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    CircularProgressIndicator(),
+                    SizedBox(height: 16),
+                    Text(
+                      'Processing...',
+                      style: TextStyle(
+                        fontSize: 16,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              )
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  final isTablet = constraints.maxWidth > 600;
+                  final screenHeight = constraints.maxHeight;
+                  final padding = isTablet ? 12.0 : 10.0;
+
+                  return Column(
+                    children: [
+                      // Status bar
+                      EventDetailStatusBar(
+                        hasUnsyncedChanges: state.hasUnsyncedChanges,
+                        isOffline: state.isOffline,
+                        isLoadingFromServer: state.isLoadingFromServer,
+                      ),
+                      // Event metadata section
+                      Flexible(
+                        flex: 0,
+                        child: Container(
+                          constraints: BoxConstraints(
+                            maxHeight: screenHeight * 0.7,
+                          ),
+                          padding: EdgeInsets.all(padding),
+                          child: SingleChildScrollView(
+                            physics: const BouncingScrollPhysics(),
+                            child: EventMetadataSection(
+                              event: widget.event,
+                              newEvent: state.newEvent,
+                              nameController: _nameController,
+                              recordNumberController: _recordNumberController,
+                              selectedEventType: state.selectedEventType,
+                              startTime: state.startTime,
+                              endTime: state.endTime,
+                              onStartTimeTap: _selectStartTime,
+                              onEndTimeTap: _selectEndTime,
+                              onClearEndTime: () => _controller.clearEndTime(),
+                              onEventTypeChanged: (eventType) {
+                                if (eventType != null) {
+                                  _controller.updateEventType(eventType);
+                                }
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                      // Handwriting section
+                      Expanded(
+                        child: HandwritingSection(
+                          canvasKey: _canvasKey,
+                          initialStrokes: state.note?.strokes ?? [],
+                          onStrokesChanged: _onStrokesChanged,
+                        ),
+                      ),
+                    ],
+                  );
+                },
+              ),
+      ),
+    );
+  }
+}
