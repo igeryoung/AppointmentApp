@@ -419,14 +419,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               padding: EdgeInsets.zero,
               tooltip: '-90 days',
             ),
-            // Date navigation - Previous 1 day (<)
+            // Date navigation - Previous 3 days (<)
             IconButton(
-              onPressed: () => _dateService?.navigate1DayPrevious(),
+              onPressed: () => _dateService?.navigate3DaysPrevious(),
               icon: const Icon(Icons.chevron_left, size: 18),
               iconSize: 18,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               padding: EdgeInsets.zero,
-              tooltip: '-1 day',
+              tooltip: '-3 days',
             ),
             const SizedBox(width: 4),
             // Date display
@@ -444,14 +444,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               ),
             ),
             const SizedBox(width: 4),
-            // Date navigation - Next 1 day (>)
+            // Date navigation - Next 3 days (>)
             IconButton(
-              onPressed: () => _dateService?.navigate1DayNext(),
+              onPressed: () => _dateService?.navigate3DaysNext(),
               icon: const Icon(Icons.chevron_right, size: 18),
               iconSize: 18,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               padding: EdgeInsets.zero,
-              tooltip: '+1 day',
+              tooltip: '+3 days',
             ),
             // Date navigation - Next 90 days
             IconButton(

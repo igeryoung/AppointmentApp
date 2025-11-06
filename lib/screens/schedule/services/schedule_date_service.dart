@@ -174,27 +174,27 @@ class ScheduleDateService {
     await onLoadDrawing();
   }
 
-  /// Navigate 1 day backward
-  Future<void> navigate1DayPrevious() async {
+  /// Navigate 3 days backward
+  Future<void> navigate3DaysPrevious() async {
     if (isInDrawingMode()) {
       onCancelPendingSave();
       await onSaveDrawing();
     }
 
-    _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+    _selectedDate = _selectedDate.subtract(const Duration(days: 3));
     onDateChanged(_selectedDate, _lastActiveDate);
     onUpdateCubit(_selectedDate);
     await onLoadDrawing();
   }
 
-  /// Navigate 1 day forward
-  Future<void> navigate1DayNext() async {
+  /// Navigate 3 days forward
+  Future<void> navigate3DaysNext() async {
     if (isInDrawingMode()) {
       onCancelPendingSave();
       await onSaveDrawing();
     }
 
-    _selectedDate = _selectedDate.add(const Duration(days: 1));
+    _selectedDate = _selectedDate.add(const Duration(days: 3));
     onDateChanged(_selectedDate, _lastActiveDate);
     onUpdateCubit(_selectedDate);
     await onLoadDrawing();
