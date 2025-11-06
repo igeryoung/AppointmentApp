@@ -309,6 +309,16 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     loadEvents(showOldEvents: newShowOldEvents);
   }
 
+  /// Toggle visibility of drawing overlay
+  void toggleDrawing() {
+    final currentState = state;
+    if (currentState is! ScheduleLoaded) return;
+
+    final newShowDrawing = !currentState.showDrawing;
+    emit(currentState.copyWith(showDrawing: newShowDrawing));
+    debugPrint('✅ ScheduleCubit: Drawing visibility updated: $newShowDrawing');
+  }
+
   /// Update offline status
   void setOfflineStatus(bool isOffline) {
     final currentState = state;
