@@ -401,21 +401,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Date navigation - Previous 180 days (<<<)
+            // Date navigation - Previous 180 days
             IconButton(
               onPressed: () => _dateService?.navigate180DaysPrevious(),
-              icon: const Text('<<<', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              icon: const Text('-180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
               padding: EdgeInsets.zero,
               tooltip: '-180 days',
             ),
-            // Date navigation - Previous 90 days (<<)
+            // Date navigation - Previous 90 days
             IconButton(
               onPressed: () => _dateService?.navigate90DaysPrevious(),
-              icon: const Text('<<', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              icon: const Text('-90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
               padding: EdgeInsets.zero,
               tooltip: '-90 days',
             ),
@@ -453,21 +453,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               padding: EdgeInsets.zero,
               tooltip: '+1 day',
             ),
-            // Date navigation - Next 90 days (>>)
+            // Date navigation - Next 90 days
             IconButton(
               onPressed: () => _dateService?.navigate90DaysNext(),
-              icon: const Text('>>', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              icon: const Text('+90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
               padding: EdgeInsets.zero,
               tooltip: '+90 days',
             ),
-            // Date navigation - Next 180 days (>>>)
+            // Date navigation - Next 180 days
             IconButton(
               onPressed: () => _dateService?.navigate180DaysNext(),
-              icon: const Text('>>>', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              icon: const Text('+180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
               iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
               padding: EdgeInsets.zero,
               tooltip: '+180 days',
             ),
