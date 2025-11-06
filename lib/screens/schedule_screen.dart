@@ -401,13 +401,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Date navigation - Previous button
+            // Date navigation - Previous 180 days (<<<)
             IconButton(
-              onPressed: () => _dateService?.navigatePrevious(),
+              onPressed: () => _dateService?.navigate180DaysPrevious(),
+              icon: const Text('<<<', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              iconSize: 18,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              tooltip: '-180 days',
+            ),
+            // Date navigation - Previous 90 days (<<)
+            IconButton(
+              onPressed: () => _dateService?.navigate90DaysPrevious(),
+              icon: const Text('<<', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              iconSize: 18,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              tooltip: '-90 days',
+            ),
+            // Date navigation - Previous 1 day (<)
+            IconButton(
+              onPressed: () => _dateService?.navigate1DayPrevious(),
               icon: const Icon(Icons.chevron_left, size: 18),
               iconSize: 18,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               padding: EdgeInsets.zero,
+              tooltip: '-1 day',
             ),
             const SizedBox(width: 4),
             // Date display
@@ -425,13 +444,32 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               ),
             ),
             const SizedBox(width: 4),
-            // Date navigation - Next button
+            // Date navigation - Next 1 day (>)
             IconButton(
-              onPressed: () => _dateService?.navigateNext(),
+              onPressed: () => _dateService?.navigate1DayNext(),
               icon: const Icon(Icons.chevron_right, size: 18),
               iconSize: 18,
               constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
               padding: EdgeInsets.zero,
+              tooltip: '+1 day',
+            ),
+            // Date navigation - Next 90 days (>>)
+            IconButton(
+              onPressed: () => _dateService?.navigate90DaysNext(),
+              icon: const Text('>>', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              iconSize: 18,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              tooltip: '+90 days',
+            ),
+            // Date navigation - Next 180 days (>>>)
+            IconButton(
+              onPressed: () => _dateService?.navigate180DaysNext(),
+              icon: const Text('>>>', style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold)),
+              iconSize: 18,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              tooltip: '+180 days',
             ),
           ],
         ),

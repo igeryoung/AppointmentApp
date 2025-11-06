@@ -174,6 +174,84 @@ class ScheduleDateService {
     await onLoadDrawing();
   }
 
+  /// Navigate 1 day backward
+  Future<void> navigate1DayPrevious() async {
+    if (isInDrawingMode()) {
+      onCancelPendingSave();
+      await onSaveDrawing();
+    }
+
+    _selectedDate = _selectedDate.subtract(const Duration(days: 1));
+    onDateChanged(_selectedDate, _lastActiveDate);
+    onUpdateCubit(_selectedDate);
+    await onLoadDrawing();
+  }
+
+  /// Navigate 1 day forward
+  Future<void> navigate1DayNext() async {
+    if (isInDrawingMode()) {
+      onCancelPendingSave();
+      await onSaveDrawing();
+    }
+
+    _selectedDate = _selectedDate.add(const Duration(days: 1));
+    onDateChanged(_selectedDate, _lastActiveDate);
+    onUpdateCubit(_selectedDate);
+    await onLoadDrawing();
+  }
+
+  /// Navigate 90 days backward
+  Future<void> navigate90DaysPrevious() async {
+    if (isInDrawingMode()) {
+      onCancelPendingSave();
+      await onSaveDrawing();
+    }
+
+    _selectedDate = _selectedDate.subtract(const Duration(days: 90));
+    onDateChanged(_selectedDate, _lastActiveDate);
+    onUpdateCubit(_selectedDate);
+    await onLoadDrawing();
+  }
+
+  /// Navigate 90 days forward
+  Future<void> navigate90DaysNext() async {
+    if (isInDrawingMode()) {
+      onCancelPendingSave();
+      await onSaveDrawing();
+    }
+
+    _selectedDate = _selectedDate.add(const Duration(days: 90));
+    onDateChanged(_selectedDate, _lastActiveDate);
+    onUpdateCubit(_selectedDate);
+    await onLoadDrawing();
+  }
+
+  /// Navigate 180 days backward
+  Future<void> navigate180DaysPrevious() async {
+    if (isInDrawingMode()) {
+      onCancelPendingSave();
+      await onSaveDrawing();
+    }
+
+    _selectedDate = _selectedDate.subtract(const Duration(days: 180));
+    onDateChanged(_selectedDate, _lastActiveDate);
+    onUpdateCubit(_selectedDate);
+    await onLoadDrawing();
+  }
+
+  /// Navigate 180 days forward
+  Future<void> navigate180DaysNext() async {
+    if (isInDrawingMode()) {
+      onCancelPendingSave();
+      await onSaveDrawing();
+    }
+
+    _selectedDate = _selectedDate.add(const Duration(days: 180));
+    onDateChanged(_selectedDate, _lastActiveDate);
+    onUpdateCubit(_selectedDate);
+    await onLoadDrawing();
+  }
+
   /// Jump to today's date
   Future<void> jumpToToday() async {
     final now = TimeService.instance.now();
