@@ -16,6 +16,7 @@ class ScheduleBody extends StatelessWidget {
   final List<DateTime> dates;
   final List<Event> events;
   final bool showOldEvents;
+  final bool showDrawing;
   final bool isDrawingMode;
   final GlobalKey<HandwritingCanvasState> canvasKey;
   final ScheduleDrawing? currentDrawing;
@@ -39,6 +40,7 @@ class ScheduleBody extends StatelessWidget {
     required this.dates,
     required this.events,
     required this.showOldEvents,
+    required this.showDrawing,
     required this.isDrawingMode,
     required this.canvasKey,
     required this.currentDrawing,
@@ -127,6 +129,7 @@ class ScheduleBody extends StatelessWidget {
                         canvasKey: canvasKey,
                         currentDrawing: currentDrawing,
                         isDrawingMode: isDrawingMode,
+                        showDrawing: showDrawing,
                         onStrokesChanged: onDrawingStrokesChanged,
                       ),
                       // Context menu overlay

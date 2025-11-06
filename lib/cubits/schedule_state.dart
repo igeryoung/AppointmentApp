@@ -27,6 +27,7 @@ class ScheduleLoaded extends ScheduleState {
   final ScheduleDrawing? drawing;
   final bool isOffline;
   final bool showOldEvents;
+  final bool showDrawing;
 
   const ScheduleLoaded({
     required this.selectedDate,
@@ -34,10 +35,11 @@ class ScheduleLoaded extends ScheduleState {
     this.drawing,
     this.isOffline = false,
     this.showOldEvents = true,
+    this.showDrawing = true,
   });
 
   @override
-  List<Object?> get props => [selectedDate, events, drawing, isOffline, showOldEvents];
+  List<Object?> get props => [selectedDate, events, drawing, isOffline, showOldEvents, showDrawing];
 
   /// Create a copy with updated values
   ScheduleLoaded copyWith({
@@ -46,6 +48,7 @@ class ScheduleLoaded extends ScheduleState {
     ScheduleDrawing? drawing,
     bool? isOffline,
     bool? showOldEvents,
+    bool? showDrawing,
     bool clearDrawing = false,
   }) {
     return ScheduleLoaded(
@@ -54,6 +57,7 @@ class ScheduleLoaded extends ScheduleState {
       drawing: clearDrawing ? null : (drawing ?? this.drawing),
       isOffline: isOffline ?? this.isOffline,
       showOldEvents: showOldEvents ?? this.showOldEvents,
+      showDrawing: showDrawing ?? this.showDrawing,
     );
   }
 }

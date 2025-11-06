@@ -474,6 +474,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           ],
         ),
         actions: [
+          // Toggle drawing visibility
+          BlocBuilder<ScheduleCubit, ScheduleState>(
+            builder: (context, state) {
+              final showDrawing = state is ScheduleLoaded ? state.showDrawing : true;
+              return IconButton(
+                icon: Icon(showDrawing ? Icons.brush : Icons.brush_outlined),
+                onPressed: () {
+                  context.read<ScheduleCubit>().toggleDrawing();
+                },
+                tooltip: showDrawing ? l10n.hideDrawing : l10n.showDrawing,
+              );
+            },
+          ),
           // Toggle old events visibility
           BlocBuilder<ScheduleCubit, ScheduleState>(
             builder: (context, state) {
@@ -522,6 +535,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           final isLoading = state is ScheduleLoading;
           final events = state is ScheduleLoaded ? state.events : <Event>[];
           final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
+          final showDrawing = state is ScheduleLoaded ? state.showDrawing : true;
 
           return Stack(
             children: [
@@ -530,7 +544,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                   Expanded(
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
-                        : _build3DayView(events, showOldEvents),
+                        : _build3DayView(events, showOldEvents, showDrawing),
                   ),
                 ],
               ),
@@ -578,7 +592,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
 
   /// Build 3-day view using ScheduleBody component
-  Widget _build3DayView(List<Event> events, bool showOldEvents) {
+  Widget _build3DayView(List<Event> events, bool showOldEvents, bool showDrawing) {
     final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
     final dates = List.generate(3, (index) => windowStart.add(Duration(days: index)));
 
@@ -586,6 +600,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       dates: dates,
       events: events,
       showOldEvents: showOldEvents,
+      showDrawing: showDrawing,
       isDrawingMode: _isDrawingMode,
       canvasKey: _getCanvasKeyForCurrentPage(),
       currentDrawing: _drawingService?.currentDrawing,
