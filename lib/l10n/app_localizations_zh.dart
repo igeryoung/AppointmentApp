@@ -133,12 +133,6 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hideOldEvents => '隱藏舊事件';
 
   @override
-  String get showDrawing => '顯示繪圖';
-
-  @override
-  String get hideDrawing => '隱藏繪圖';
-
-  @override
   String get createEvent => '建立活動';
 
   @override
@@ -771,12 +765,6 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get hideOldEvents => '隱藏舊事件';
-
-  @override
-  String get showDrawing => '顯示繪圖';
-
-  @override
-  String get hideDrawing => '隱藏繪圖';
 
   @override
   String get createEvent => '建立活動';

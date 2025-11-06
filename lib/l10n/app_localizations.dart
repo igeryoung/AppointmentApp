@@ -313,18 +313,6 @@ abstract class AppLocalizations {
   /// **'隱藏舊事件'**
   String get hideOldEvents;
 
-  /// Text for showing drawing
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'顯示繪圖'**
-  String get showDrawing;
-
-  /// Text for hiding drawing
-  ///
-  /// In zh_TW, this message translates to:
-  /// **'隱藏繪圖'**
-  String get hideDrawing;
-
   /// Tooltip for create event button
   ///
   /// In zh_TW, this message translates to:

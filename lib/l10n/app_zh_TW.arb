@@ -221,6 +221,16 @@
     "description": "Text for hiding old events"
   },
 
+  "showDrawing": "顯示繪圖",
+  "@showDrawing": {
+    "description": "Text for showing drawing"
+  },
+
+  "hideDrawing": "隱藏繪圖",
+  "@hideDrawing": {
+    "description": "Text for hiding drawing"
+  },
+
   "createEvent": "建立活動",
   "@createEvent": {
     "description": "Tooltip for create event button"
