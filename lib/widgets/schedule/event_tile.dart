@@ -33,6 +33,18 @@ class ScheduleEventTileHelper {
     return baseFontSize;
   }
 
+  /// Get formatted name with last 2 digits of record number
+  static String getFormattedName(Event event) {
+    if (event.recordNumber != null && event.recordNumber!.isNotEmpty) {
+      // Get last 2 digits of record number
+      String lastTwoDigits = event.recordNumber!.length >= 2
+          ? event.recordNumber!.substring(event.recordNumber!.length - 2)
+          : event.recordNumber!;
+      return '${event.name}($lastTwoDigits)';
+    }
+    return event.name;
+  }
+
   /// Get new event for time-changed events
   static Event? getNewEventForTimeChange(Event event, List<Event> events) {
     if (event.newEventId == null) return null;
@@ -169,7 +181,7 @@ class ScheduleEventTileHelper {
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
           child: Text(
-            event.name,
+            getFormattedName(event),
             style: TextStyle(
               fontSize: fontSize,
               color: event.isRemoved ? Colors.white70 : Colors.white,
@@ -191,20 +203,11 @@ class ScheduleEventTileHelper {
       final baseFontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
       final fontSize = getEventNameFontSize(slotHeight, baseFontSize);
       return _buildNameOnly(event, fontSize);
-    } else if (tileHeight < 35) {
-      // Small: Only show name with small font
+    } else {
+      // Small and larger: Show name with appropriate font
       final baseFontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
       final fontSize = getEventNameFontSize(slotHeight, baseFontSize);
       return _buildNameOnly(event, fontSize);
-    } else if (tileHeight < 50) {
-      // Medium: Show time + name
-      return _buildTimeAndName(event, slotHeight, 12.6);
-    } else if (tileHeight < 70) {
-      // Large: Show time + name + record number
-      return _buildTimeNameAndRecord(event, slotHeight, 14.4);
-    } else {
-      // Extra large: Show time + name + type + record number
-      return _buildFullContent(event, slotHeight, events);
     }
   }
 
@@ -214,7 +217,7 @@ class ScheduleEventTileHelper {
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2),
         child: Text(
-          event.name,
+          getFormattedName(event),
           style: TextStyle(
             fontSize: fontSize,
             color: event.isRemoved ? Colors.white70 : Colors.white,
@@ -227,201 +230,6 @@ class ScheduleEventTileHelper {
           maxLines: 1,
         ),
       ),
-    );
-  }
-
-  static Widget _buildTimeAndName(Event event, double slotHeight, double nameFontSize) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: [
-        Text(
-          event.timeRangeDisplay,
-          style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.bold,
-            color: event.isRemoved ? Colors.white70 : Colors.white,
-            height: 1.2,
-            decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.white70,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        if (event.name.isNotEmpty)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                event.name,
-                style: TextStyle(
-                  fontSize: getEventNameFontSize(slotHeight, nameFontSize),
-                  color: event.isRemoved ? Colors.white70 : Colors.white,
-                  height: 1.3,
-                  decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-                  decorationColor: Colors.white70,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  static Widget _buildTimeNameAndRecord(Event event, double slotHeight, double nameFontSize) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: [
-        Text(
-          event.timeRangeDisplay,
-          style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.bold,
-            color: event.isRemoved ? Colors.white70 : Colors.white,
-            height: 1.2,
-            decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.white70,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        if (event.name.isNotEmpty)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text(
-                event.name,
-                style: TextStyle(
-                  fontSize: getEventNameFontSize(slotHeight, nameFontSize),
-                  color: event.isRemoved ? Colors.white70 : Colors.white,
-                  height: 1.3,
-                  decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-                  decorationColor: Colors.white70,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-            ),
-          ),
-        if (event.recordNumber?.isNotEmpty ?? false)
-          Builder(
-            builder: (context) => Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                '${AppLocalizations.of(context)!.record}${event.recordNumber}',
-                style: TextStyle(
-                  fontSize: 7,
-                  color: event.isRemoved ? Colors.white60 : Colors.white70,
-                  height: 1.2,
-                  decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-                  decorationColor: Colors.white60,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ),
-      ],
-    );
-  }
-
-  static Widget _buildFullContent(Event event, double slotHeight, List<Event> events) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: [
-        Text(
-          event.timeRangeDisplay,
-          style: TextStyle(
-            fontSize: 8,
-            fontWeight: FontWeight.bold,
-            color: event.isRemoved ? Colors.white70 : Colors.white,
-            height: 1.2,
-            decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.white70,
-          ),
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
-        if (event.name.isNotEmpty)
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                event.name,
-                style: TextStyle(
-                  fontSize: getEventNameFontSize(slotHeight, 16.2),
-                  color: event.isRemoved ? Colors.white70 : Colors.white,
-                  height: 1.3,
-                  decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-                  decorationColor: Colors.white70,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 2,
-              ),
-            ),
-          ),
-        if (event.recordNumber?.isNotEmpty ?? false)
-          Builder(
-            builder: (context) => Text(
-              '${AppLocalizations.of(context)!.record}${event.recordNumber}',
-              style: TextStyle(
-                fontSize: 7,
-                color: event.isRemoved ? Colors.white60 : Colors.white70,
-                height: 1.2,
-                decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-                decorationColor: Colors.white60,
-              ),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
-            ),
-          ),
-        // Show new time if event was moved
-        if (event.hasNewTime)
-          Builder(
-            builder: (context) {
-              final newEvent = getNewEventForTimeChange(event, events);
-              final newTimeDisplay = getNewTimeDisplay(newEvent, context);
-              return Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  '${AppLocalizations.of(context)!.moved} $newTimeDisplay',
-                  style: const TextStyle(
-                    fontSize: 7,
-                    color: Colors.white70,
-                    height: 1.2,
-                    fontWeight: FontWeight.bold,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                  maxLines: 1,
-                ),
-              );
-            },
-          ),
-        // Show removal reason or time change indicator
-        if ((event.isRemoved || event.isTimeChanged) && event.removalReason != null)
-          Builder(
-            builder: (context) => Padding(
-              padding: const EdgeInsets.only(top: 2),
-              child: Text(
-                event.isTimeChanged
-                  ? AppLocalizations.of(context)!.timeChanged(event.removalReason!)
-                  : AppLocalizations.of(context)!.removedReason(event.removalReason!),
-                style: const TextStyle(
-                  fontSize: 6,
-                  color: Colors.white60,
-                  height: 1.2,
-                  fontStyle: FontStyle.italic,
-                ),
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
-              ),
-            ),
-          ),
-      ],
     );
   }
 }
