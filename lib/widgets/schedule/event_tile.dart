@@ -33,16 +33,63 @@ class ScheduleEventTileHelper {
     return baseFontSize;
   }
 
-  /// Get formatted name with last 2 digits of record number
-  static String getFormattedName(Event event) {
+  /// Build formatted name text with last 2 digits of record number
+  /// Record number is displayed at 0.7x the name font size
+  static Widget buildFormattedNameText({
+    required Event event,
+    required double fontSize,
+    required Color color,
+    required double height,
+    TextDecoration? decoration,
+    Color? decorationColor,
+    FontWeight? fontWeight,
+    TextOverflow? overflow,
+    int? maxLines,
+  }) {
     if (event.recordNumber != null && event.recordNumber!.isNotEmpty) {
       // Get last 2 digits of record number
       String lastTwoDigits = event.recordNumber!.length >= 2
           ? event.recordNumber!.substring(event.recordNumber!.length - 2)
           : event.recordNumber!;
-      return '${event.name}($lastTwoDigits)';
+
+      return RichText(
+        overflow: overflow ?? TextOverflow.clip,
+        maxLines: maxLines,
+        text: TextSpan(
+          style: TextStyle(
+            fontSize: fontSize,
+            color: color,
+            height: height,
+            decoration: decoration,
+            decorationColor: decorationColor,
+            fontWeight: fontWeight,
+          ),
+          children: [
+            TextSpan(text: event.name),
+            TextSpan(
+              text: '($lastTwoDigits)',
+              style: TextStyle(
+                fontSize: fontSize * 0.7,
+              ),
+            ),
+          ],
+        ),
+      );
     }
-    return event.name;
+
+    return Text(
+      event.name,
+      style: TextStyle(
+        fontSize: fontSize,
+        color: color,
+        height: height,
+        decoration: decoration,
+        decorationColor: decorationColor,
+        fontWeight: fontWeight,
+      ),
+      overflow: overflow,
+      maxLines: maxLines,
+    );
   }
 
   /// Get new event for time-changed events
@@ -180,16 +227,14 @@ class ScheduleEventTileHelper {
         alignment: Alignment.topLeft,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 2),
-          child: Text(
-            getFormattedName(event),
-            style: TextStyle(
-              fontSize: fontSize,
-              color: event.isRemoved ? Colors.white70 : Colors.white,
-              height: 1.2,
-              decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-              decorationColor: Colors.white70,
-              fontWeight: FontWeight.bold,
-            ),
+          child: buildFormattedNameText(
+            event: event,
+            fontSize: fontSize,
+            color: event.isRemoved ? Colors.white70 : Colors.white,
+            height: 1.2,
+            decoration: event.isRemoved ? TextDecoration.lineThrough : null,
+            decorationColor: Colors.white70,
+            fontWeight: FontWeight.bold,
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
@@ -216,16 +261,14 @@ class ScheduleEventTileHelper {
       alignment: Alignment.topLeft,
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 2),
-        child: Text(
-          getFormattedName(event),
-          style: TextStyle(
-            fontSize: fontSize,
-            color: event.isRemoved ? Colors.white70 : Colors.white,
-            height: 1.2,
-            decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.white70,
-            fontWeight: FontWeight.bold,
-          ),
+        child: buildFormattedNameText(
+          event: event,
+          fontSize: fontSize,
+          color: event.isRemoved ? Colors.white70 : Colors.white,
+          height: 1.2,
+          decoration: event.isRemoved ? TextDecoration.lineThrough : null,
+          decorationColor: Colors.white70,
+          fontWeight: FontWeight.bold,
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
         ),
