@@ -1,11 +1,13 @@
 import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../widgets/handwriting_canvas.dart';
 
-/// Toolbar for handwriting canvas with pen/eraser toggle and action buttons
+/// Toolbar for handwriting canvas with pen/highlighter/eraser toggle and action buttons
 class HandwritingToolbar extends StatelessWidget {
-  final bool isErasing;
+  final DrawingTool currentTool;
   final bool isControlPanelExpanded;
   final VoidCallback onPenTap;
+  final VoidCallback onHighlighterTap;
   final VoidCallback onEraserTap;
   final VoidCallback onExpandCollapseTap;
   final VoidCallback onUndo;
@@ -14,9 +16,10 @@ class HandwritingToolbar extends StatelessWidget {
 
   const HandwritingToolbar({
     super.key,
-    required this.isErasing,
+    required this.currentTool,
     required this.isControlPanelExpanded,
     required this.onPenTap,
+    required this.onHighlighterTap,
     required this.onEraserTap,
     required this.onExpandCollapseTap,
     required this.onUndo,
@@ -44,7 +47,7 @@ class HandwritingToolbar extends StatelessWidget {
             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
           ),
           const Spacer(),
-          // Pen/Eraser toggle
+          // Pen/Highlighter/Eraser toggle
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
@@ -54,13 +57,14 @@ class HandwritingToolbar extends StatelessWidget {
             child: Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Pen button
                 InkWell(
                   onTap: onPenTap,
                   borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: !isErasing ? Colors.blue.shade100 : Colors.transparent,
+                      color: currentTool == DrawingTool.pen ? Colors.blue.shade100 : Colors.transparent,
                       borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
                     ),
                     child: Row(
@@ -69,15 +73,15 @@ class HandwritingToolbar extends StatelessWidget {
                         Icon(
                           Icons.edit,
                           size: 16,
-                          color: !isErasing ? Colors.blue.shade700 : Colors.grey.shade600,
+                          color: currentTool == DrawingTool.pen ? Colors.blue.shade700 : Colors.grey.shade600,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           l10n.pen,
                           style: TextStyle(
                             fontSize: 12,
-                            color: !isErasing ? Colors.blue.shade700 : Colors.grey.shade600,
-                            fontWeight: !isErasing ? FontWeight.bold : FontWeight.normal,
+                            color: currentTool == DrawingTool.pen ? Colors.blue.shade700 : Colors.grey.shade600,
+                            fontWeight: currentTool == DrawingTool.pen ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ],
@@ -85,13 +89,44 @@ class HandwritingToolbar extends StatelessWidget {
                   ),
                 ),
                 Container(width: 1, height: 24, color: Colors.grey.shade300),
+                // Highlighter button
+                InkWell(
+                  onTap: onHighlighterTap,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: currentTool == DrawingTool.highlighter ? Colors.yellow.shade100 : Colors.transparent,
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          Icons.highlight,
+                          size: 16,
+                          color: currentTool == DrawingTool.highlighter ? Colors.amber.shade700 : Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          'Highlighter',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: currentTool == DrawingTool.highlighter ? Colors.amber.shade700 : Colors.grey.shade600,
+                            fontWeight: currentTool == DrawingTool.highlighter ? FontWeight.bold : FontWeight.normal,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Container(width: 1, height: 24, color: Colors.grey.shade300),
+                // Eraser button
                 InkWell(
                   onTap: onEraserTap,
                   borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
                   child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
-                      color: isErasing ? Colors.orange.shade100 : Colors.transparent,
+                      color: currentTool == DrawingTool.eraser ? Colors.orange.shade100 : Colors.transparent,
                       borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
                     ),
                     child: Row(
@@ -100,15 +135,15 @@ class HandwritingToolbar extends StatelessWidget {
                         Icon(
                           Icons.auto_fix_high,
                           size: 16,
-                          color: isErasing ? Colors.orange.shade700 : Colors.grey.shade600,
+                          color: currentTool == DrawingTool.eraser ? Colors.orange.shade700 : Colors.grey.shade600,
                         ),
                         const SizedBox(width: 4),
                         Text(
                           l10n.eraser,
                           style: TextStyle(
                             fontSize: 12,
-                            color: isErasing ? Colors.orange.shade700 : Colors.grey.shade600,
-                            fontWeight: isErasing ? FontWeight.bold : FontWeight.normal,
+                            color: currentTool == DrawingTool.eraser ? Colors.orange.shade700 : Colors.grey.shade600,
+                            fontWeight: currentTool == DrawingTool.eraser ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ],

@@ -1,5 +1,12 @@
 import 'dart:convert';
 
+/// Stroke type enum - Defines the drawing tool type
+enum StrokeType {
+  pen,
+  highlighter,
+  // eraser is not stored as strokes, but included for completeness
+}
+
 /// Note model - Handwriting-only note page linked to a single event as per PRD
 class Note {
   final int? id;
@@ -148,11 +155,13 @@ class Stroke {
   final List<StrokePoint> points;
   final double strokeWidth;
   final int color; // ARGB color value
+  final StrokeType strokeType; // Tool type used for this stroke
 
   const Stroke({
     required this.points,
     this.strokeWidth = 2.0,
     this.color = 0xFF000000, // Default black
+    this.strokeType = StrokeType.pen, // Default to pen for backward compatibility
   });
 
   Stroke addPoint(StrokePoint point) {
@@ -160,6 +169,7 @@ class Stroke {
       points: [...points, point],
       strokeWidth: strokeWidth,
       color: color,
+      strokeType: strokeType,
     );
   }
 
@@ -168,15 +178,23 @@ class Stroke {
       'points': points.map((p) => p.toMap()).toList(),
       'stroke_width': strokeWidth,
       'color': color,
+      'stroke_type': strokeType.index, // Store as int for compatibility
     };
   }
 
   factory Stroke.fromMap(Map<String, dynamic> map) {
     final pointsList = map['points'] as List? ?? [];
+    // Handle backward compatibility - if stroke_type is missing, default to pen
+    final strokeTypeIndex = map['stroke_type']?.toInt() ?? 0;
+    final strokeType = strokeTypeIndex < StrokeType.values.length
+        ? StrokeType.values[strokeTypeIndex]
+        : StrokeType.pen;
+
     return Stroke(
       points: pointsList.map((p) => StrokePoint.fromMap(p)).toList(),
       strokeWidth: map['stroke_width']?.toDouble() ?? 2.0,
       color: map['color']?.toInt() ?? 0xFF000000,
+      strokeType: strokeType,
     );
   }
 
@@ -186,12 +204,13 @@ class Stroke {
     return other is Stroke &&
         other.strokeWidth == strokeWidth &&
         other.color == color &&
+        other.strokeType == strokeType &&
         other.points.length == points.length;
   }
 
   @override
   int get hashCode {
-    return Object.hash(strokeWidth, color, points.length);
+    return Object.hash(strokeWidth, color, strokeType, points.length);
   }
 }
 
