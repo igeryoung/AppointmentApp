@@ -135,7 +135,7 @@ class ScheduleEventTileHelper {
       child: Container(
         height: tileHeight,
         margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
-        padding: const EdgeInsets.only(left: 2, right: 2, top: 1, bottom: 0),
+        padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
         decoration: BoxDecoration(
           color: event.isRemoved
               ? getEventTypeColor(context, event.eventType).withOpacity(0.3)
@@ -182,7 +182,7 @@ class ScheduleEventTileHelper {
             child: Container(
               width: 100,
               height: tileHeight,
-              padding: const EdgeInsets.only(left: 2, right: 2, top: 1, bottom: 0),
+              padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
               decoration: BoxDecoration(
                 color: getEventTypeColor(context, event.eventType),
                 borderRadius: BorderRadius.circular(2),
