@@ -226,7 +226,7 @@ class ScheduleEventTileHelper {
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 2),
+          padding: const EdgeInsets.only(left: 2, right: 2, top: 1),
           child: buildFormattedNameText(
             event: event,
             fontSize: fontSize,
@@ -260,7 +260,7 @@ class ScheduleEventTileHelper {
     return Align(
       alignment: Alignment.topLeft,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 2),
+        padding: const EdgeInsets.only(left: 2, right: 2, top: 1),
         child: buildFormattedNameText(
           event: event,
           fontSize: fontSize,
