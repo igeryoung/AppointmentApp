@@ -173,9 +173,9 @@ class ScheduleBody extends StatelessWidget {
                     border: Border.all(color: Colors.grey.shade300),
                   ),
                   child: Text(
-                    DateFormat('M 月 d號 EEE', Localizations.localeOf(context).toString()).format(date),
+                    DateFormat('M / d (EEE)', Localizations.localeOf(context).toString()).format(date),
                     style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontSize: (Theme.of(context).textTheme.titleSmall?.fontSize ?? 14) * 1.4,
+                      fontSize: (Theme.of(context).textTheme.titleSmall?.fontSize ?? 14) * 1.2,
                     ),
                   ),
                 ),
