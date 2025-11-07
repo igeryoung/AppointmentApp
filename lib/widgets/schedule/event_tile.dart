@@ -135,7 +135,7 @@ class ScheduleEventTileHelper {
       child: Container(
         height: tileHeight,
         margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
-        padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 0),
+        padding: const EdgeInsets.only(left: 2, right: 2, top: 1, bottom: 0),
         decoration: BoxDecoration(
           color: event.isRemoved
               ? getEventTypeColor(context, event.eventType).withOpacity(0.3)
@@ -182,7 +182,7 @@ class ScheduleEventTileHelper {
             child: Container(
               width: 100,
               height: tileHeight,
-              padding: const EdgeInsets.symmetric(horizontal: 2, vertical: 1),
+              padding: const EdgeInsets.only(left: 2, right: 2, top: 1, bottom: 0),
               decoration: BoxDecoration(
                 color: getEventTypeColor(context, event.eventType),
                 borderRadius: BorderRadius.circular(2),
@@ -225,9 +225,7 @@ class ScheduleEventTileHelper {
       final fontSize = getEventNameFontSize(slotHeight, 9.0) * 0.9;
       return Align(
         alignment: Alignment.topLeft,
-        child: Padding(
-          padding: const EdgeInsets.only(left: 2, right: 2, top: 1),
-          child: buildFormattedNameText(
+        child: buildFormattedNameText(
             event: event,
             fontSize: fontSize,
             color: event.isRemoved ? Colors.white70 : Colors.white,
@@ -238,7 +236,6 @@ class ScheduleEventTileHelper {
             overflow: TextOverflow.ellipsis,
             maxLines: 1,
           ),
-        ),
       );
     }
 
@@ -259,19 +256,16 @@ class ScheduleEventTileHelper {
   static Widget _buildNameOnly(Event event, double fontSize) {
     return Align(
       alignment: Alignment.topLeft,
-      child: Padding(
-        padding: const EdgeInsets.only(left: 2, right: 2, top: 1),
-        child: buildFormattedNameText(
-          event: event,
-          fontSize: fontSize,
-          color: event.isRemoved ? Colors.white70 : Colors.white,
-          height: 1.2,
-          decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-          decorationColor: Colors.white70,
-          fontWeight: FontWeight.bold,
-          overflow: TextOverflow.ellipsis,
-          maxLines: 1,
-        ),
+      child: buildFormattedNameText(
+        event: event,
+        fontSize: fontSize,
+        color: event.isRemoved ? Colors.white70 : Colors.white,
+        height: 1.2,
+        decoration: event.isRemoved ? TextDecoration.lineThrough : null,
+        decorationColor: Colors.white70,
+        fontWeight: FontWeight.bold,
+        overflow: TextOverflow.ellipsis,
+        maxLines: 1,
       ),
     );
   }
