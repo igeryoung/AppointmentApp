@@ -35,9 +35,11 @@ class _HandwritingSectionState extends State<HandwritingSection> {
       child: StatefulBuilder(
         builder: (context, setToolbarState) {
           final canvasState = widget.canvasKey.currentState;
-          final isErasing = canvasState?.isErasing ?? false;
+          final currentTool = canvasState?.currentTool ?? DrawingTool.pen;
           final currentColor = canvasState?.strokeColor ?? Colors.black;
           final currentWidth = canvasState?.strokeWidth ?? 2.0;
+          final currentHighlighterColor = canvasState?.highlighterColor ?? const Color(0x66FFEB3B);
+          final currentHighlighterWidth = canvasState?.highlighterWidth ?? 10.0;
           final currentEraserRadius = canvasState?.eraserRadius ?? 20.0;
 
           return Stack(
@@ -47,14 +49,18 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                 children: [
                   // Toolbar
                   HandwritingToolbar(
-                    isErasing: isErasing,
+                    currentTool: currentTool,
                     isControlPanelExpanded: _isControlPanelExpanded,
                     onPenTap: () {
-                      widget.canvasKey.currentState?.setErasing(false);
+                      widget.canvasKey.currentState?.setTool(DrawingTool.pen);
+                      setToolbarState(() {});
+                    },
+                    onHighlighterTap: () {
+                      widget.canvasKey.currentState?.setTool(DrawingTool.highlighter);
                       setToolbarState(() {});
                     },
                     onEraserTap: () {
-                      widget.canvasKey.currentState?.setErasing(true);
+                      widget.canvasKey.currentState?.setTool(DrawingTool.eraser);
                       setToolbarState(() {});
                     },
                     onExpandCollapseTap: () {
@@ -83,12 +89,18 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                 right: 0,
                 child: HandwritingControlPanel(
                   isExpanded: _isControlPanelExpanded,
-                  isErasing: isErasing,
+                  currentTool: currentTool,
                   currentColor: currentColor,
                   currentWidth: currentWidth,
+                  currentHighlighterColor: currentHighlighterColor,
+                  currentHighlighterWidth: currentHighlighterWidth,
                   currentEraserRadius: currentEraserRadius,
                   onWidthChanged: (value) {
                     widget.canvasKey.currentState?.setStrokeWidth(value);
+                    setToolbarState(() {});
+                  },
+                  onHighlighterWidthChanged: (value) {
+                    widget.canvasKey.currentState?.setHighlighterWidth(value);
                     setToolbarState(() {});
                   },
                   onEraserRadiusChanged: (value) {
@@ -97,6 +109,10 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                   },
                   onColorSelected: (color) {
                     widget.canvasKey.currentState?.setStrokeColor(color);
+                    setToolbarState(() {});
+                  },
+                  onHighlighterColorSelected: (color) {
+                    widget.canvasKey.currentState?.setHighlighterColor(color);
                     setToolbarState(() {});
                   },
                 ),

@@ -2,6 +2,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/note.dart';
 
+/// Drawing tool type enum
+enum DrawingTool {
+  pen,
+  highlighter,
+  eraser,
+}
+
 /// Base class for canvas operations that can be undone/redone
 abstract class CanvasOperation {
   void undo(List<Stroke> strokes);
@@ -96,10 +103,18 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   List<Stroke>? _strokesBeforeErase;
 
   // Drawing settings
+  DrawingTool _currentTool = DrawingTool.pen;
+
+  // Pen settings
   Color _strokeColor = Colors.black;
   double _strokeWidth = 2.0;
-  bool _isErasing = false;
-  double _eraserRadius = 20.0; // Separate eraser radius
+
+  // Highlighter settings
+  Color _highlighterColor = const Color(0x66FFEB3B); // Yellow with 40% opacity
+  double _highlighterWidth = 10.0;
+
+  // Eraser settings
+  double _eraserRadius = 20.0;
 
   // Canvas bounds tracking
   Size _canvasSize = Size.zero;
@@ -232,9 +247,19 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   }
 
   /// Get current drawing settings
+  DrawingTool get currentTool => _currentTool;
+  bool get isErasing => _currentTool == DrawingTool.eraser;
+  bool get isHighlighting => _currentTool == DrawingTool.highlighter;
+
+  // Pen getters
   Color get strokeColor => _strokeColor;
   double get strokeWidth => _strokeWidth;
-  bool get isErasing => _isErasing;
+
+  // Highlighter getters
+  Color get highlighterColor => _highlighterColor;
+  double get highlighterWidth => _highlighterWidth;
+
+  // Eraser getters
   double get eraserRadius => _eraserRadius;
 
   /// Check if undo is available
@@ -315,7 +340,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     // Update pointer position for eraser visualization
     _currentPointerPosition = point;
 
-    if (_isErasing) {
+    if (_currentTool == DrawingTool.eraser) {
       // For eraser mode, save state before erasing
       _strokesBeforeErase = List<Stroke>.from(_strokes);
       _eraseStrokesAtPoint(clippedPoint);
@@ -324,14 +349,24 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       // Clear redo stack when starting new erase operation (standard undo/redo behavior)
       _redoStack.clear();
     } else {
-      // For drawing mode, create a new stroke with the first point
-      // onPanUpdate will add subsequent points if user drags
+      // For drawing mode (pen or highlighter), create a new stroke with the first point
+      final strokeType = _currentTool == DrawingTool.highlighter
+          ? StrokeType.highlighter
+          : StrokeType.pen;
+      final color = _currentTool == DrawingTool.highlighter
+          ? _highlighterColor
+          : _strokeColor;
+      final width = _currentTool == DrawingTool.highlighter
+          ? _highlighterWidth
+          : _strokeWidth;
+
       _currentStroke = Stroke(
         points: [StrokePoint(clippedPoint.dx, clippedPoint.dy)],
-        strokeWidth: _strokeWidth,
-        color: _strokeColor.value,
+        strokeWidth: width,
+        color: color.value,
+        strokeType: strokeType,
       );
-      debugPrint('✏️ STROKE: firstPoint=(${clippedPoint.dx.toStringAsFixed(2)}, ${clippedPoint.dy.toStringAsFixed(2)}) strokeWidth=$_strokeWidth');
+      debugPrint('✏️ STROKE: firstPoint=(${clippedPoint.dx.toStringAsFixed(2)}, ${clippedPoint.dy.toStringAsFixed(2)}) strokeWidth=$width tool=$_currentTool');
 
       // Clear redo stack when starting new drawing operation (standard undo/redo behavior)
       _redoStack.clear();
@@ -360,12 +395,12 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     // Update pointer position for eraser visualization
     _currentPointerPosition = point;
 
-    if (_isErasing) {
+    if (_currentTool == DrawingTool.eraser) {
       // Continue erasing at this point
       _eraseStrokesAtPoint(clippedPoint);
       setState(() {});
     } else if (_currentStroke != null) {
-      // Add point to current drawing stroke
+      // Add point to current drawing stroke (pen or highlighter)
       _currentStroke = _currentStroke!.addPoint(
         StrokePoint(clippedPoint.dx, clippedPoint.dy),
       );
@@ -404,7 +439,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         debugPrint('🎨 Canvas: _endStroke called but no valid current stroke to add');
         _currentPointerPosition = null; // Clear pointer position
         // If we were erasing, create EraseOperation
-        if (_isErasing && _strokesBeforeErase != null) {
+        if (_currentTool == DrawingTool.eraser && _strokesBeforeErase != null) {
           final strokesAfter = List<Stroke>.from(_strokes);
           // Only record if something actually changed
           if (_strokesBeforeErase!.length != strokesAfter.length ||
@@ -662,24 +697,45 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     widget.onStrokesChanged?.call();
   }
 
-  /// Set stroke color
+  /// Set current drawing tool
+  void setTool(DrawingTool tool) {
+    setState(() {
+      _currentTool = tool;
+    });
+  }
+
+  /// Toggle eraser mode (backward compatibility)
+  void setErasing(bool isErasing) {
+    setState(() {
+      _currentTool = isErasing ? DrawingTool.eraser : DrawingTool.pen;
+    });
+  }
+
+  /// Set pen color
   void setStrokeColor(Color color) {
     setState(() {
       _strokeColor = color;
     });
   }
 
-  /// Set stroke width
+  /// Set pen width
   void setStrokeWidth(double width) {
     setState(() {
       _strokeWidth = width;
     });
   }
 
-  /// Toggle eraser mode
-  void setErasing(bool isErasing) {
+  /// Set highlighter color
+  void setHighlighterColor(Color color) {
     setState(() {
-      _isErasing = isErasing;
+      _highlighterColor = color;
+    });
+  }
+
+  /// Set highlighter width
+  void setHighlighterWidth(double width) {
+    setState(() {
+      _highlighterWidth = width;
     });
   }
 
@@ -715,7 +771,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
                 painter: HandwritingPainter(
                   strokes: _strokes,
                   currentStroke: _currentStroke,
-                  isErasing: _isErasing,
+                  currentTool: _currentTool,
                   eraserRadius: _eraserRadius,
                   pointerPosition: _currentPointerPosition,
                 ),
@@ -733,32 +789,49 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 class HandwritingPainter extends CustomPainter {
   final List<Stroke> strokes;
   final Stroke? currentStroke;
-  final bool isErasing;
+  final DrawingTool currentTool;
   final double eraserRadius;
   final Offset? pointerPosition; // Position in screen space for eraser indicator
 
   HandwritingPainter({
     required this.strokes,
     this.currentStroke,
-    this.isErasing = false,
+    this.currentTool = DrawingTool.pen,
     this.eraserRadius = 20.0,
     this.pointerPosition,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Draw completed strokes
+    // Separate strokes by type for proper z-ordering
+    final highlighterStrokes = <Stroke>[];
+    final penStrokes = <Stroke>[];
+
     for (final stroke in strokes) {
+      if (stroke.strokeType == StrokeType.highlighter) {
+        highlighterStrokes.add(stroke);
+      } else {
+        penStrokes.add(stroke);
+      }
+    }
+
+    // Draw highlighter strokes first (behind pen strokes)
+    for (final stroke in highlighterStrokes) {
       _drawStroke(canvas, stroke, isCurrentStroke: false);
     }
 
-    // Draw current stroke being drawn
+    // Draw pen strokes on top
+    for (final stroke in penStrokes) {
+      _drawStroke(canvas, stroke, isCurrentStroke: false);
+    }
+
+    // Draw current stroke being drawn (on appropriate layer)
     if (currentStroke != null) {
       _drawStroke(canvas, currentStroke!, isCurrentStroke: true);
     }
 
     // Draw eraser circle indicator when in eraser mode and actively touching
-    if (isErasing && pointerPosition != null) {
+    if (currentTool == DrawingTool.eraser && pointerPosition != null) {
       final eraserPaint = Paint()
         ..color = Colors.grey.withOpacity(0.3)
         ..style = PaintingStyle.fill;
@@ -828,7 +901,7 @@ class HandwritingPainter extends CustomPainter {
     return oldDelegate.strokes != strokes ||
            oldDelegate.currentStroke != currentStroke ||
            oldDelegate.pointerPosition != pointerPosition ||
-           oldDelegate.isErasing != isErasing ||
+           oldDelegate.currentTool != currentTool ||
            oldDelegate.eraserRadius != eraserRadius;
   }
 }
