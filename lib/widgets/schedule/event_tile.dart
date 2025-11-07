@@ -222,7 +222,7 @@ class ScheduleEventTileHelper {
 
     if (isClosedEnd) {
       // Closed-end events: Always show just the name
-      final fontSize = getEventNameFontSize(slotHeight, 9.0);
+      final fontSize = getEventNameFontSize(slotHeight, 9.0) * 0.9;
       return Align(
         alignment: Alignment.topLeft,
         child: Padding(
@@ -246,12 +246,12 @@ class ScheduleEventTileHelper {
     if (tileHeight < 20) {
       // Very small: Only show name with tiny font
       final baseFontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
-      final fontSize = getEventNameFontSize(slotHeight, baseFontSize);
+      final fontSize = getEventNameFontSize(slotHeight, baseFontSize) * 0.9;
       return _buildNameOnly(event, fontSize);
     } else {
       // Small and larger: Show name with appropriate font
       final baseFontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
-      final fontSize = getEventNameFontSize(slotHeight, baseFontSize);
+      final fontSize = getEventNameFontSize(slotHeight, baseFontSize) * 0.9;
       return _buildNameOnly(event, fontSize);
     }
   }
