@@ -37,6 +37,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   late TextEditingController _recordNumberController;
   final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
 
+  // Track the last checked record number to prevent dialog loop
+  String? _lastCheckedRecordNumber;
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -54,6 +57,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     });
     _recordNumberController.addListener(() {
       _controller.updateRecordNumber(_recordNumberController.text);
+
+      // Reset tracker if user is typing (value changed from last checked)
+      if (_recordNumberController.text.trim() != _lastCheckedRecordNumber) {
+        setState(() {
+          _lastCheckedRecordNumber = null;
+        });
+      }
     });
 
     // Initialize controller
@@ -260,9 +270,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Only check for NEW events
     if (!widget.isNew) return;
 
+    final currentRecordNumber = _controller.state.recordNumber.trim();
+
+    // Skip if we already checked this value
+    if (currentRecordNumber == _lastCheckedRecordNumber) {
+      return;
+    }
+
     final existingNote = await _controller.checkExistingPersonNote();
 
     if (existingNote != null && mounted) {
+      // Mark as checked BEFORE showing dialog to prevent re-triggering
+      setState(() {
+        _lastCheckedRecordNumber = currentRecordNumber;
+      });
+
       final result = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
