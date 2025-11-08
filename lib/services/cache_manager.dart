@@ -20,8 +20,9 @@ class CacheManager {
   // ===================
 
   /// 从缓存获取Note（并增加命中计数）
+  /// Uses person sync logic - if event has record_number, syncs with latest note from same person group
   Future<Note?> getNote(int eventId) async {
-    final note = await _db.getCachedNote(eventId);
+    final note = await _db.loadNoteForEvent(eventId);
     if (note != null) {
       // 增加cache命中计数
       await _db.incrementNoteCacheHit(eventId);
@@ -32,11 +33,12 @@ class CacheManager {
   /// 保存Note到缓存（更新cached_at时间戳）
   ///
   /// [dirty] - 标记note是否需要同步到server (默认false)
-  /// Note: saveCachedNote已经在PRDDatabaseService中处理cached_at更新
+  /// Uses person sync logic - if event has record_number, syncs strokes to all events in same person group
+  /// Also releases lock on the note
   Future<void> saveNote(int eventId, Note note, {bool dirty = false}) async {
     // 如果指定dirty参数，更新note的isDirty标记
     final noteToSave = dirty ? note.copyWith(isDirty: true) : note;
-    await _db.saveCachedNote(noteToSave);
+    await _db.saveNoteWithSync(eventId, noteToSave);
 
     // 保存后检查是否需要自动清理
     final policy = await _db.getCachePolicy();
@@ -60,6 +62,31 @@ class CacheManager {
   /// 从缓存删除Note
   Future<void> deleteNote(int eventId) async {
     await _db.deleteCachedNote(eventId);
+  }
+
+  // ===================
+  // Lock Mechanism
+  // ===================
+
+  /// Try to acquire a lock on a note for editing
+  /// Returns true if lock was acquired, false if locked by another device
+  Future<bool> acquireNoteLock(int eventId) async {
+    return await _db.acquireNoteLock(eventId);
+  }
+
+  /// Release a lock on a note
+  Future<void> releaseNoteLock(int eventId) async {
+    await _db.releaseNoteLock(eventId);
+  }
+
+  /// Check if a note is locked by another device
+  Future<bool> isNoteLockedByOther(int eventId) async {
+    return await _db.isNoteLockedByOther(eventId);
+  }
+
+  /// Clean up stale locks (older than 5 minutes)
+  Future<int> cleanupStaleLocks() async {
+    return await _db.cleanupStaleLocks();
   }
 
   // ===================

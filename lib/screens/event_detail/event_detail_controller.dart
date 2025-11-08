@@ -270,11 +270,32 @@ class EventDetailController {
         endTime: _state.endTime,
       );
 
+      // Detect if record_number changed from null/empty to a value
+      final oldRecordNumber = event.recordNumber?.trim() ?? '';
+      final newRecordNumber = eventToSave.recordNumber?.trim() ?? '';
+      final recordNumberAdded = oldRecordNumber.isEmpty && newRecordNumber.isNotEmpty;
+
       Event savedEvent;
       if (isNew) {
         savedEvent = await _dbService.createEvent(eventToSave);
       } else {
         savedEvent = await _dbService.updateEvent(eventToSave);
+
+        // If record_number was added, handle person note sync
+        if (recordNumberAdded && savedEvent.id != null && _dbService is PRDDatabaseService) {
+          debugPrint('🔄 EventDetailController: Record number added, syncing with person group...');
+          final prdDb = _dbService as PRDDatabaseService;
+          final syncedNote = await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
+
+          if (syncedNote != null && syncedNote.isNotEmpty) {
+            // Update state with synced note if it has content
+            _updateState(_state.copyWith(note: syncedNote));
+            debugPrint('✅ EventDetailController: Note synced from person group, skipping save');
+            // Return early - we don't need to save the note again since it was synced
+            _updateState(_state.copyWith(isLoading: false));
+            return savedEvent;
+          }
+        }
       }
 
       // Save handwriting note using offline-first strategy
