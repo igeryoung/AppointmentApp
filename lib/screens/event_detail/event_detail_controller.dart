@@ -270,11 +270,56 @@ class EventDetailController {
         endTime: _state.endTime,
       );
 
+      // Detect if record_number changed from null/empty to a value
+      final oldRecordNumber = event.recordNumber?.trim() ?? '';
+      final newRecordNumber = eventToSave.recordNumber?.trim() ?? '';
+      final recordNumberAdded = oldRecordNumber.isEmpty && newRecordNumber.isNotEmpty;
+
       Event savedEvent;
       if (isNew) {
         savedEvent = await _dbService.createEvent(eventToSave);
+
+        // Safety check: If new event has record number, check for existing person note
+        // This prevents accidental overwriting if UI dialog wasn't shown
+        if (recordNumberText.isNotEmpty && _dbService is PRDDatabaseService) {
+          debugPrint('🔍 EventDetailController: NEW event with record number, checking for existing person note...');
+          final prdDb = _dbService as PRDDatabaseService;
+          final existingNote = await prdDb.findExistingPersonNote(
+            _state.name.trim(),
+            recordNumberText,
+          );
+
+          if (existingNote != null) {
+            // DB has handwriting - auto-load it (safety: never lose existing patient data)
+            debugPrint('⚠️ EventDetailController: Found existing person note (${existingNote.strokes.length} strokes), loading DB handwriting');
+            await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
+            _updateState(_state.copyWith(
+              note: existingNote,
+              lastKnownStrokes: existingNote.strokes,
+              isLoading: false,
+            ));
+            debugPrint('✅ EventDetailController: Loaded DB handwriting, skipping canvas save (patient data protected)');
+            return savedEvent;
+          }
+        }
       } else {
         savedEvent = await _dbService.updateEvent(eventToSave);
+
+        // If record_number was added, handle person note sync
+        if (recordNumberAdded && savedEvent.id != null && _dbService is PRDDatabaseService) {
+          debugPrint('🔄 EventDetailController: Record number added, syncing with person group...');
+          final prdDb = _dbService as PRDDatabaseService;
+          final syncedNote = await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
+
+          if (syncedNote != null && syncedNote.isNotEmpty) {
+            // Update state with synced note if it has content
+            _updateState(_state.copyWith(note: syncedNote));
+            debugPrint('✅ EventDetailController: Note synced from person group, skipping save');
+            // Return early - we don't need to save the note again since it was synced
+            _updateState(_state.copyWith(isLoading: false));
+            return savedEvent;
+          }
+        }
       }
 
       // Save handwriting note using offline-first strategy
@@ -429,6 +474,40 @@ class EventDetailController {
   /// Update event type
   void updateEventType(EventType eventType) {
     _updateState(_state.copyWith(selectedEventType: eventType, hasChanges: true));
+  }
+
+  /// Check for existing person note when record number is set (for NEW events only)
+  /// Returns the existing note if found, null otherwise
+  /// This is called when user finishes typing record number
+  Future<Note?> checkExistingPersonNote() async {
+    // Only check for new events
+    if (!isNew) {
+      return null;
+    }
+
+    final name = _state.name.trim();
+    final recordNumber = _state.recordNumber.trim();
+
+    if (name.isEmpty || recordNumber.isEmpty) {
+      return null;
+    }
+
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      return await prdDb.findExistingPersonNote(name, recordNumber);
+    }
+
+    return null;
+  }
+
+  /// Load existing person note (when user chooses "載入現有")
+  /// Replaces current canvas with DB handwriting
+  Future<void> loadExistingPersonNote(Note existingNote) async {
+    _updateState(_state.copyWith(
+      note: existingNote,
+      lastKnownStrokes: existingNote.strokes,
+    ));
+    debugPrint('✅ EventDetailController: Loaded existing person note (${existingNote.strokes.length} strokes)');
   }
 
   /// Update start time

@@ -34,7 +34,7 @@ class PRDDatabaseService implements IDatabaseService {
 
     return await openDatabase(
       path,
-      version: 9, // New version for optional record_number
+      version: 10, // New version for shared person notes with lock mechanism
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -247,6 +247,106 @@ class PRDDatabaseService implements IDatabaseService {
 
       debugPrint('✅ Database upgraded to version 9 (record_number is now optional)');
     }
+    if (oldVersion < 10) {
+      // Add shared person notes with lock mechanism
+      debugPrint('🔄 Upgrading to database version 10 (shared person notes with lock)...');
+
+      // Add new columns to notes table
+      await db.execute('ALTER TABLE notes ADD COLUMN person_name_normalized TEXT');
+      await db.execute('ALTER TABLE notes ADD COLUMN record_number_normalized TEXT');
+      await db.execute('ALTER TABLE notes ADD COLUMN locked_by_device_id TEXT');
+      await db.execute('ALTER TABLE notes ADD COLUMN locked_at INTEGER');
+
+      // Create indexes for person lookup and lock management
+      await db.execute('''
+        CREATE INDEX idx_notes_person_key
+        ON notes(person_name_normalized, record_number_normalized)
+      ''');
+      await db.execute('''
+        CREATE INDEX idx_notes_locked_by
+        ON notes(locked_by_device_id)
+      ''');
+
+      debugPrint('✅ Added person sharing and lock columns to notes table');
+
+      // Populate normalized fields for existing notes with record_numbers
+      final result = await db.rawQuery('''
+        SELECT notes.id, notes.event_id, events.name, events.record_number
+        FROM notes
+        INNER JOIN events ON notes.event_id = events.id
+        WHERE events.record_number IS NOT NULL AND events.record_number != ''
+      ''');
+
+      debugPrint('🔄 Found ${result.length} notes with record numbers to normalize');
+
+      for (final row in result) {
+        final noteId = row['id'] as int;
+        final name = row['name'] as String;
+        final recordNumber = row['record_number'] as String;
+
+        // Normalize: trim and lowercase
+        final nameNorm = name.trim().toLowerCase();
+        final recordNorm = recordNumber.trim().toLowerCase();
+
+        await db.update(
+          'notes',
+          {
+            'person_name_normalized': nameNorm,
+            'record_number_normalized': recordNorm,
+          },
+          where: 'id = ?',
+          whereArgs: [noteId],
+        );
+      }
+
+      debugPrint('✅ Normalized ${result.length} existing notes');
+
+      // Handle duplicates: for each person group, sync strokes from most recent
+      final duplicateGroups = await db.rawQuery('''
+        SELECT person_name_normalized, record_number_normalized, COUNT(*) as count
+        FROM notes
+        WHERE person_name_normalized IS NOT NULL
+          AND record_number_normalized IS NOT NULL
+        GROUP BY person_name_normalized, record_number_normalized
+        HAVING COUNT(*) > 1
+      ''');
+
+      debugPrint('🔄 Found ${duplicateGroups.length} duplicate person groups to sync');
+
+      for (final group in duplicateGroups) {
+        final nameNorm = group['person_name_normalized'] as String;
+        final recordNorm = group['record_number_normalized'] as String;
+
+        // Get most recent note in this group
+        final latestNotes = await db.query(
+          'notes',
+          where: 'person_name_normalized = ? AND record_number_normalized = ?',
+          whereArgs: [nameNorm, recordNorm],
+          orderBy: 'updated_at DESC',
+          limit: 1,
+        );
+
+        if (latestNotes.isEmpty) continue;
+
+        final latestStrokesData = latestNotes.first['strokes_data'];
+        final latestUpdatedAt = latestNotes.first['updated_at'];
+
+        // Sync to all other notes in the group
+        await db.update(
+          'notes',
+          {
+            'strokes_data': latestStrokesData,
+            'updated_at': latestUpdatedAt,
+          },
+          where: 'person_name_normalized = ? AND record_number_normalized = ? AND id != ?',
+          whereArgs: [nameNorm, recordNorm, latestNotes.first['id']],
+        );
+
+        debugPrint('✅ Synced strokes for person group: $nameNorm+$recordNorm');
+      }
+
+      debugPrint('✅ Database upgraded to version 10 (shared person notes with lock)');
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -296,6 +396,10 @@ class PRDDatabaseService implements IDatabaseService {
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         cached_at INTEGER,
         cache_hit_count INTEGER DEFAULT 0,
+        person_name_normalized TEXT,
+        record_number_normalized TEXT,
+        locked_by_device_id TEXT,
+        locked_at INTEGER,
         FOREIGN KEY (event_id) REFERENCES events (id) ON DELETE CASCADE
       )
     ''');
@@ -312,6 +416,18 @@ class PRDDatabaseService implements IDatabaseService {
     await db.execute('''
       CREATE INDEX idx_notes_event ON notes(event_id)
     ''');
+
+    // Indexes for person sharing and lock mechanism (version 10+)
+    if (version >= 10) {
+      await db.execute('''
+        CREATE INDEX idx_notes_person_key
+        ON notes(person_name_normalized, record_number_normalized)
+      ''');
+      await db.execute('''
+        CREATE INDEX idx_notes_locked_by
+        ON notes(locked_by_device_id)
+      ''');
+    }
 
     // Schedule Drawings table - Handwriting overlay on schedule views
     await db.execute('''
@@ -720,6 +836,329 @@ class PRDDatabaseService implements IDatabaseService {
     final maps = await db.query('notes', where: 'event_id = ?', whereArgs: [eventId], limit: 1);
     if (maps.isEmpty) return null;
     return Note.fromMap(maps.first);
+  }
+
+  /// Load note for event with person sync logic
+  /// If event has record_number, syncs with latest note from same person group
+  Future<Note?> loadNoteForEvent(int eventId) async {
+    final db = await database;
+
+    // Get the event to check for record_number
+    final event = await getEventById(eventId);
+    if (event == null) {
+      debugPrint('⚠️ Event not found: $eventId');
+      return null;
+    }
+
+    // Load current note for this event
+    Note? currentNote = await getCachedNote(eventId);
+
+    // If no record number, just return the note (no syncing)
+    final personKey = getPersonKeyFromEvent(event);
+    if (personKey == null) {
+      return currentNote;
+    }
+
+    final (nameNorm, recordNorm) = personKey;
+
+    // Find latest note in person group
+    final groupNotes = await db.query(
+      'notes',
+      where: 'person_name_normalized = ? AND record_number_normalized = ?',
+      whereArgs: [nameNorm, recordNorm],
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+
+    // If no group note found, update current note with normalized keys
+    if (groupNotes.isEmpty) {
+      if (currentNote != null) {
+        // Mark current note with person keys
+        await db.update(
+          'notes',
+          {
+            'person_name_normalized': nameNorm,
+            'record_number_normalized': recordNorm,
+          },
+          where: 'event_id = ?',
+          whereArgs: [eventId],
+        );
+        currentNote = currentNote.copyWith(
+          personNameNormalized: nameNorm,
+          recordNumberNormalized: recordNorm,
+        );
+      }
+      return currentNote;
+    }
+
+    final latestGroupNote = Note.fromMap(groupNotes.first);
+
+    // If current note doesn't exist or group note is newer, sync
+    if (currentNote == null ||
+        latestGroupNote.updatedAt.isAfter(currentNote.updatedAt)) {
+      debugPrint('🔄 Syncing note from person group (${nameNorm}+${recordNorm})');
+
+      // Update current event's note with latest strokes
+      await db.update(
+        'notes',
+        {
+          'strokes_data': groupNotes.first['strokes_data'],
+          'updated_at': latestGroupNote.updatedAt.millisecondsSinceEpoch ~/ 1000,
+          'person_name_normalized': nameNorm,
+          'record_number_normalized': recordNorm,
+        },
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+
+      // Return the synced note
+      currentNote = latestGroupNote.copyWith(
+        id: currentNote?.id,
+        eventId: eventId,
+        personNameNormalized: nameNorm,
+        recordNumberNormalized: recordNorm,
+      );
+
+      debugPrint('✅ Note synced from person group');
+    } else {
+      // Current note is up to date, just ensure normalized keys are set
+      await db.update(
+        'notes',
+        {
+          'person_name_normalized': nameNorm,
+          'record_number_normalized': recordNorm,
+        },
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+      currentNote = currentNote.copyWith(
+        personNameNormalized: nameNorm,
+        recordNumberNormalized: recordNorm,
+      );
+    }
+
+    return currentNote;
+  }
+
+  /// Save note with person group sync and lock release
+  /// If event has record_number, syncs strokes to all events in same person group
+  Future<Note> saveNoteWithSync(int eventId, Note note) async {
+    final db = await database;
+
+    // Get the event to check for record_number
+    final event = await getEventById(eventId);
+    if (event == null) {
+      throw Exception('Event not found: $eventId');
+    }
+
+    final now = DateTime.now();
+    final updatedNote = note.copyWith(updatedAt: now);
+
+    // Get person key if event has record number
+    final personKey = getPersonKeyFromEvent(event);
+
+    // Save to current event's note
+    final noteMap = updatedNote.toMap();
+
+    // If event has record number, add normalized keys
+    if (personKey != null) {
+      final (nameNorm, recordNorm) = personKey;
+      noteMap['person_name_normalized'] = nameNorm;
+      noteMap['record_number_normalized'] = recordNorm;
+    }
+
+    // Release lock
+    noteMap['locked_by_device_id'] = null;
+    noteMap['locked_at'] = null;
+
+    // Update cache timestamp
+    final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
+    noteMap['cached_at'] = cachedAt;
+
+    debugPrint('🔍 SQLite: saveNoteWithSync called with ${updatedNote.strokes.length} strokes');
+
+    try {
+      // Force strokes_data to be a string
+      final strokesDataString = noteMap['strokes_data'] as String;
+
+      // Update current event's note
+      final updatedRows = await db.rawUpdate(
+        '''UPDATE notes
+           SET event_id = ?, strokes_data = ?, created_at = ?, updated_at = ?,
+               cached_at = ?, is_dirty = ?, person_name_normalized = ?,
+               record_number_normalized = ?, locked_by_device_id = ?, locked_at = ?
+           WHERE event_id = ?''',
+        [
+          noteMap['event_id'],
+          strokesDataString,
+          noteMap['created_at'],
+          noteMap['updated_at'],
+          cachedAt,
+          noteMap['is_dirty'] ?? 0,
+          noteMap['person_name_normalized'],
+          noteMap['record_number_normalized'],
+          null, // locked_by_device_id
+          null, // locked_at
+          eventId,
+        ],
+      );
+
+      // If no rows updated, insert new note
+      if (updatedRows == 0) {
+        debugPrint('🔍 SQLite: Inserting new note');
+        await db.rawInsert(
+          '''INSERT INTO notes (event_id, strokes_data, created_at, updated_at, cached_at,
+             cache_hit_count, is_dirty, person_name_normalized, record_number_normalized,
+             locked_by_device_id, locked_at)
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)''',
+          [
+            noteMap['event_id'],
+            strokesDataString,
+            noteMap['created_at'],
+            noteMap['updated_at'],
+            cachedAt,
+            noteMap['is_dirty'] ?? 0,
+            noteMap['person_name_normalized'],
+            noteMap['record_number_normalized'],
+            null, // locked_by_device_id
+            null, // locked_at
+          ],
+        );
+      }
+
+      debugPrint('✅ SQLite: Note saved successfully');
+
+      // If event has record number, sync to all other events in same person group
+      if (personKey != null) {
+        final (nameNorm, recordNorm) = personKey;
+
+        debugPrint('🔄 Syncing note to person group (${nameNorm}+${recordNorm})');
+
+        // Update all other notes in the group (that are not locked)
+        final syncedRows = await db.rawUpdate(
+          '''UPDATE notes
+             SET strokes_data = ?, updated_at = ?
+             WHERE person_name_normalized = ?
+               AND record_number_normalized = ?
+               AND event_id != ?
+               AND locked_by_device_id IS NULL''',
+          [
+            strokesDataString,
+            noteMap['updated_at'],
+            nameNorm,
+            recordNorm,
+            eventId,
+          ],
+        );
+
+        debugPrint('✅ Synced note to $syncedRows other event(s) in person group');
+      }
+    } catch (e) {
+      debugPrint('❌ SQLite: Failed to save note: $e');
+      rethrow;
+    }
+
+    return updatedNote;
+  }
+
+  /// Handle record number update for an event
+  /// Called when event's record_number changes from NULL to a value
+  /// Returns the updated note (may be synced from person group)
+  Future<Note?> handleRecordNumberUpdate(int eventId, Event updatedEvent) async {
+    final db = await database;
+
+    // Get person key from updated event
+    final personKey = getPersonKeyFromEvent(updatedEvent);
+    if (personKey == null) {
+      debugPrint('⚠️ No record number in event, skipping person sync');
+      return await getCachedNote(eventId);
+    }
+
+    final (nameNorm, recordNorm) = personKey;
+
+    debugPrint('🔄 Handling record number update for event $eventId: ${nameNorm}+${recordNorm}');
+
+    // Get current event's note
+    final currentNote = await getCachedNote(eventId);
+
+    // Find existing note in person group
+    final groupNotes = await db.query(
+      'notes',
+      where: 'person_name_normalized = ? AND record_number_normalized = ?',
+      whereArgs: [nameNorm, recordNorm],
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+
+    // Case 1: Found existing person note in DB
+    if (groupNotes.isNotEmpty) {
+      final groupNote = Note.fromMap(groupNotes.first);
+
+      debugPrint('✅ Found existing person note, loading strokes');
+
+      // Update current event's note with person group strokes
+      await db.update(
+        'notes',
+        {
+          'strokes_data': groupNotes.first['strokes_data'],
+          'updated_at': groupNote.updatedAt.millisecondsSinceEpoch ~/ 1000,
+          'person_name_normalized': nameNorm,
+          'record_number_normalized': recordNorm,
+        },
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+
+      return groupNote.copyWith(
+        id: currentNote?.id,
+        eventId: eventId,
+        personNameNormalized: nameNorm,
+        recordNumberNormalized: recordNorm,
+      );
+    }
+
+    // Case 2: No existing person note, but current has strokes
+    if (currentNote != null && currentNote.isNotEmpty) {
+      debugPrint('✅ No person note found, marking current as person note');
+
+      // Mark current note as the person note
+      await db.update(
+        'notes',
+        {
+          'person_name_normalized': nameNorm,
+          'record_number_normalized': recordNorm,
+        },
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+
+      return currentNote.copyWith(
+        personNameNormalized: nameNorm,
+        recordNumberNormalized: recordNorm,
+      );
+    }
+
+    // Case 3: No person note, no current strokes - just mark with person keys
+    if (currentNote != null) {
+      debugPrint('✅ No person note, no strokes - marking with person keys');
+
+      await db.update(
+        'notes',
+        {
+          'person_name_normalized': nameNorm,
+          'record_number_normalized': recordNorm,
+        },
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+
+      return currentNote.copyWith(
+        personNameNormalized: nameNorm,
+        recordNumberNormalized: recordNorm,
+      );
+    }
+
+    return null;
   }
 
   /// Save note to cache (insert or update)
@@ -1399,6 +1838,206 @@ class PRDDatabaseService implements IDatabaseService {
   static void resetInstance() {
     _instance = null;
     _database = null;
+  }
+
+  // ===================
+  // Person Info Utilities
+  // ===================
+
+  /// Normalize a string for person key matching (case-insensitive, trimmed)
+  /// Used for both person names and record numbers
+  static String normalizePersonKey(String input) {
+    return input.trim().toLowerCase();
+  }
+
+  /// Get normalized person key tuple from event
+  /// Returns null if recordNumber is null or empty
+  static (String, String)? getPersonKeyFromEvent(Event event) {
+    if (event.recordNumber == null || event.recordNumber!.trim().isEmpty) {
+      return null;
+    }
+    return (
+      normalizePersonKey(event.name),
+      normalizePersonKey(event.recordNumber!),
+    );
+  }
+
+  /// Check if a person note exists in DB (for showing dialog before overwriting)
+  /// Returns the existing note if found, null if no existing note
+  Future<Note?> findExistingPersonNote(String name, String recordNumber) async {
+    if (name.trim().isEmpty || recordNumber.trim().isEmpty) {
+      return null;
+    }
+
+    final db = await database;
+    final nameNorm = normalizePersonKey(name);
+    final recordNorm = normalizePersonKey(recordNumber);
+
+    final groupNotes = await db.query(
+      'notes',
+      where: 'person_name_normalized = ? AND record_number_normalized = ?',
+      whereArgs: [nameNorm, recordNorm],
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+
+    if (groupNotes.isEmpty) {
+      return null;
+    }
+
+    final note = Note.fromMap(groupNotes.first);
+    // Only return if it has actual handwriting
+    return note.isNotEmpty ? note : null;
+  }
+
+  // ===================
+  // Lock Mechanism
+  // ===================
+
+  static const int lockTimeoutMinutes = 5;
+
+  /// Try to acquire a lock on a note for editing
+  /// Returns true if lock was acquired, false if already locked by another device
+  Future<bool> acquireNoteLock(int eventId) async {
+    final db = await database;
+
+    // Get current device ID
+    final deviceCreds = await getDeviceCredentials();
+    if (deviceCreds == null) {
+      debugPrint('⚠️ Cannot acquire lock: device not registered');
+      return false;
+    }
+
+    final now = DateTime.now();
+    final staleLockCutoff = now.subtract(const Duration(minutes: lockTimeoutMinutes));
+
+    try {
+      final updatedRows = await db.rawUpdate('''
+        UPDATE notes
+        SET locked_by_device_id = ?,
+            locked_at = ?
+        WHERE event_id = ?
+          AND (locked_by_device_id IS NULL
+               OR locked_by_device_id = ?
+               OR locked_at < ?)
+      ''', [
+        deviceCreds.deviceId,
+        now.millisecondsSinceEpoch ~/ 1000,
+        eventId,
+        deviceCreds.deviceId,
+        staleLockCutoff.millisecondsSinceEpoch ~/ 1000,
+      ]);
+
+      if (updatedRows > 0) {
+        debugPrint('✅ Lock acquired for note (event_id: $eventId)');
+        return true;
+      } else {
+        debugPrint('⚠️ Failed to acquire lock: note is locked by another device');
+        return false;
+      }
+    } catch (e) {
+      debugPrint('❌ Error acquiring lock: $e');
+      return false;
+    }
+  }
+
+  /// Release a lock on a note
+  /// Only releases if current device holds the lock
+  Future<void> releaseNoteLock(int eventId) async {
+    final db = await database;
+
+    // Get current device ID
+    final deviceCreds = await getDeviceCredentials();
+    if (deviceCreds == null) {
+      debugPrint('⚠️ Cannot release lock: device not registered');
+      return;
+    }
+
+    try {
+      final updatedRows = await db.rawUpdate('''
+        UPDATE notes
+        SET locked_by_device_id = NULL,
+            locked_at = NULL
+        WHERE event_id = ?
+          AND locked_by_device_id = ?
+      ''', [eventId, deviceCreds.deviceId]);
+
+      if (updatedRows > 0) {
+        debugPrint('✅ Lock released for note (event_id: $eventId)');
+      }
+    } catch (e) {
+      debugPrint('❌ Error releasing lock: $e');
+    }
+  }
+
+  /// Clean up stale locks (older than lockTimeoutMinutes)
+  /// Should be called periodically (e.g., every minute)
+  Future<int> cleanupStaleLocks() async {
+    final db = await database;
+    final staleLockCutoff = DateTime.now()
+        .subtract(const Duration(minutes: lockTimeoutMinutes))
+        .millisecondsSinceEpoch ~/
+        1000;
+
+    try {
+      final deletedRows = await db.rawUpdate('''
+        UPDATE notes
+        SET locked_by_device_id = NULL,
+            locked_at = NULL
+        WHERE locked_at IS NOT NULL
+          AND locked_at < ?
+      ''', [staleLockCutoff]);
+
+      if (deletedRows > 0) {
+        debugPrint('✅ Cleaned up $deletedRows stale lock(s)');
+      }
+      return deletedRows;
+    } catch (e) {
+      debugPrint('❌ Error cleaning up stale locks: $e');
+      return 0;
+    }
+  }
+
+  /// Check if a note is currently locked by another device
+  /// Returns true if locked by another device, false if unlocked or locked by current device
+  Future<bool> isNoteLockedByOther(int eventId) async {
+    final db = await database;
+
+    // Get current device ID
+    final deviceCreds = await getDeviceCredentials();
+    if (deviceCreds == null) {
+      return false; // If not registered, can't be locked by us
+    }
+
+    final staleLockCutoff = DateTime.now()
+        .subtract(const Duration(minutes: lockTimeoutMinutes))
+        .millisecondsSinceEpoch ~/
+        1000;
+
+    final result = await db.query(
+      'notes',
+      columns: ['locked_by_device_id', 'locked_at'],
+      where: 'event_id = ?',
+      whereArgs: [eventId],
+      limit: 1,
+    );
+
+    if (result.isEmpty) return false;
+
+    final lockedBy = result.first['locked_by_device_id'] as String?;
+    final lockedAt = result.first['locked_at'] as int?;
+
+    // Not locked
+    if (lockedBy == null || lockedAt == null) return false;
+
+    // Stale lock (expired)
+    if (lockedAt < staleLockCutoff) return false;
+
+    // Locked by current device
+    if (lockedBy == deviceCreds.deviceId) return false;
+
+    // Locked by another device
+    return true;
   }
 }
 

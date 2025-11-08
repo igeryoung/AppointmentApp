@@ -18,6 +18,7 @@ class EventMetadataSection extends StatelessWidget {
   final VoidCallback onEndTimeTap;
   final VoidCallback onClearEndTime;
   final ValueChanged<EventType?> onEventTypeChanged;
+  final Future<void> Function()? onRecordNumberEditingComplete;
 
   const EventMetadataSection({
     super.key,
@@ -32,6 +33,7 @@ class EventMetadataSection extends StatelessWidget {
     required this.onEndTimeTap,
     required this.onClearEndTime,
     required this.onEventTypeChanged,
+    this.onRecordNumberEditingComplete,
   });
 
   @override
@@ -139,6 +141,16 @@ class EventMetadataSection extends StatelessWidget {
             border: const OutlineInputBorder(),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
+          onEditingComplete: () {
+            if (onRecordNumberEditingComplete != null) {
+              onRecordNumberEditingComplete!();
+            }
+          },
+          onTapOutside: (_) {
+            if (onRecordNumberEditingComplete != null) {
+              onRecordNumberEditingComplete!();
+            }
+          },
         ),
         const SizedBox(height: 8),
 

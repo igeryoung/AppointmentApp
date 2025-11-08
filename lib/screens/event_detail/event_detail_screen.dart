@@ -37,6 +37,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   late TextEditingController _recordNumberController;
   final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
 
+  // Track the last checked record number to prevent dialog loop
+  String? _lastCheckedRecordNumber;
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -54,6 +57,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     });
     _recordNumberController.addListener(() {
       _controller.updateRecordNumber(_recordNumberController.text);
+
+      // Reset tracker if user is typing (value changed from last checked)
+      if (_recordNumberController.text.trim() != _lastCheckedRecordNumber) {
+        setState(() {
+          _lastCheckedRecordNumber = null;
+        });
+      }
     });
 
     // Initialize controller
@@ -252,6 +262,56 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             ),
           ),
         );
+      }
+    }
+  }
+
+  Future<void> _checkAndShowPersonNoteDialog() async {
+    // Only check for NEW events
+    if (!widget.isNew) return;
+
+    final currentRecordNumber = _controller.state.recordNumber.trim();
+
+    // Skip if we already checked this value
+    if (currentRecordNumber == _lastCheckedRecordNumber) {
+      return;
+    }
+
+    final existingNote = await _controller.checkExistingPersonNote();
+
+    if (existingNote != null && mounted) {
+      // Mark as checked BEFORE showing dialog to prevent re-triggering
+      setState(() {
+        _lastCheckedRecordNumber = currentRecordNumber;
+      });
+
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('提示'),
+          content: Text('此病歷號已有筆記（${existingNote.strokes.length} 筆畫），要載入現有筆記嗎？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('保留當前'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('載入現有'),
+            ),
+          ],
+        ),
+      );
+
+      // Unfocus the record number field to prevent re-triggering the dialog
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+      }
+
+      if (result == true && mounted) {
+        await _controller.loadExistingPersonNote(existingNote);
+        // Update canvas with loaded strokes
+        _canvasKey.currentState?.loadStrokes(existingNote.strokes);
       }
     }
   }
@@ -458,6 +518,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   _controller.updateEventType(eventType);
                                 }
                               },
+                              onRecordNumberEditingComplete: _checkAndShowPersonNoteDialog,
                             ),
                           ),
                         ),

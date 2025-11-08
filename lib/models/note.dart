@@ -15,6 +15,10 @@ class Note {
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isDirty; // Indicates unsaved changes not synced to server
+  final String? personNameNormalized; // Normalized person name for shared notes
+  final String? recordNumberNormalized; // Normalized record number for shared notes
+  final String? lockedByDeviceId; // Device ID that currently holds the lock
+  final DateTime? lockedAt; // Timestamp when lock was acquired
 
   const Note({
     this.id,
@@ -23,6 +27,10 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.isDirty = false,
+    this.personNameNormalized,
+    this.recordNumberNormalized,
+    this.lockedByDeviceId,
+    this.lockedAt,
   });
 
   Note copyWith({
@@ -32,6 +40,10 @@ class Note {
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isDirty,
+    String? personNameNormalized,
+    String? recordNumberNormalized,
+    String? lockedByDeviceId,
+    DateTime? lockedAt,
   }) {
     return Note(
       id: id ?? this.id,
@@ -40,6 +52,10 @@ class Note {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isDirty: isDirty ?? this.isDirty,
+      personNameNormalized: personNameNormalized ?? this.personNameNormalized,
+      recordNumberNormalized: recordNumberNormalized ?? this.recordNumberNormalized,
+      lockedByDeviceId: lockedByDeviceId ?? this.lockedByDeviceId,
+      lockedAt: lockedAt ?? this.lockedAt,
     );
   }
 
@@ -66,6 +82,7 @@ class Note {
   }
 
   Map<String, dynamic> toMap() {
+    final lockedAtMs = lockedAt?.millisecondsSinceEpoch;
     return {
       'id': id,
       'event_id': eventId,
@@ -73,6 +90,10 @@ class Note {
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
       'is_dirty': isDirty ? 1 : 0,
+      'person_name_normalized': personNameNormalized,
+      'record_number_normalized': recordNumberNormalized,
+      'locked_by_device_id': lockedByDeviceId,
+      'locked_at': lockedAtMs != null ? lockedAtMs ~/ 1000 : null,
     };
   }
 
@@ -91,7 +112,7 @@ class Note {
     }
 
     // Parse timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
-    DateTime parseTimestamp(dynamic value, {required DateTime fallback}) {
+    DateTime? parseTimestamp(dynamic value, {required DateTime? fallback}) {
       if (value == null) return fallback;
       if (value is String) {
         // ISO 8601 string from server
@@ -110,12 +131,19 @@ class Note {
       createdAt: parseTimestamp(
         map['createdAt'] ?? map['created_at'],
         fallback: DateTime.now(),
-      ),
+      ) ?? DateTime.now(),
       updatedAt: parseTimestamp(
         map['updatedAt'] ?? map['updated_at'],
         fallback: DateTime.now(),
-      ),
+      ) ?? DateTime.now(),
       isDirty: (map['isDirty'] ?? map['is_dirty'] ?? 0) == 1,
+      personNameNormalized: map['personNameNormalized'] ?? map['person_name_normalized'],
+      recordNumberNormalized: map['recordNumberNormalized'] ?? map['record_number_normalized'],
+      lockedByDeviceId: map['lockedByDeviceId'] ?? map['locked_by_device_id'],
+      lockedAt: parseTimestamp(
+        map['lockedAt'] ?? map['locked_at'],
+        fallback: null,
+      ),
     );
   }
 
@@ -124,7 +152,7 @@ class Note {
 
   @override
   String toString() {
-    return 'Note(id: $id, eventId: $eventId, strokeCount: ${strokes.length}, isDirty: $isDirty)';
+    return 'Note(id: $id, eventId: $eventId, strokeCount: ${strokes.length}, isDirty: $isDirty, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
   }
 
   @override
