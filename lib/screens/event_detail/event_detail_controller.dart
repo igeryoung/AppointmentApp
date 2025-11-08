@@ -452,6 +452,40 @@ class EventDetailController {
     _updateState(_state.copyWith(selectedEventType: eventType, hasChanges: true));
   }
 
+  /// Check for existing person note when record number is set (for NEW events only)
+  /// Returns the existing note if found, null otherwise
+  /// This is called when user finishes typing record number
+  Future<Note?> checkExistingPersonNote() async {
+    // Only check for new events
+    if (!isNew) {
+      return null;
+    }
+
+    final name = _state.name.trim();
+    final recordNumber = _state.recordNumber.trim();
+
+    if (name.isEmpty || recordNumber.isEmpty) {
+      return null;
+    }
+
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      return await prdDb.findExistingPersonNote(name, recordNumber);
+    }
+
+    return null;
+  }
+
+  /// Load existing person note (when user chooses "載入現有")
+  /// Replaces current canvas with DB handwriting
+  Future<void> loadExistingPersonNote(Note existingNote) async {
+    _updateState(_state.copyWith(
+      note: existingNote,
+      lastKnownStrokes: existingNote.strokes,
+    ));
+    debugPrint('✅ EventDetailController: Loaded existing person note (${existingNote.strokes.length} strokes)');
+  }
+
   /// Update start time
   void updateStartTime(DateTime startTime) {
     _updateState(_state.copyWith(startTime: startTime, hasChanges: true));

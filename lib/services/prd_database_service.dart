@@ -1862,6 +1862,34 @@ class PRDDatabaseService implements IDatabaseService {
     );
   }
 
+  /// Check if a person note exists in DB (for showing dialog before overwriting)
+  /// Returns the existing note if found, null if no existing note
+  Future<Note?> findExistingPersonNote(String name, String recordNumber) async {
+    if (name.trim().isEmpty || recordNumber.trim().isEmpty) {
+      return null;
+    }
+
+    final db = await database;
+    final nameNorm = normalizePersonKey(name);
+    final recordNorm = normalizePersonKey(recordNumber);
+
+    final groupNotes = await db.query(
+      'notes',
+      where: 'person_name_normalized = ? AND record_number_normalized = ?',
+      whereArgs: [nameNorm, recordNorm],
+      orderBy: 'updated_at DESC',
+      limit: 1,
+    );
+
+    if (groupNotes.isEmpty) {
+      return null;
+    }
+
+    final note = Note.fromMap(groupNotes.first);
+    // Only return if it has actual handwriting
+    return note.isNotEmpty ? note : null;
+  }
+
   // ===================
   // Lock Mechanism
   // ===================
