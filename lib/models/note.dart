@@ -92,7 +92,7 @@ class Note {
       'person_name_normalized': personNameNormalized,
       'record_number_normalized': recordNumberNormalized,
       'locked_by_device_id': lockedByDeviceId,
-      'locked_at': lockedAt?.millisecondsSinceEpoch ~/ 1000,
+      'locked_at': lockedAt != null ? lockedAt.millisecondsSinceEpoch ~/ 1000 : null,
     };
   }
 
@@ -130,11 +130,11 @@ class Note {
       createdAt: parseTimestamp(
         map['createdAt'] ?? map['created_at'],
         fallback: DateTime.now(),
-      ),
+      ) ?? DateTime.now(),
       updatedAt: parseTimestamp(
         map['updatedAt'] ?? map['updated_at'],
         fallback: DateTime.now(),
-      ),
+      ) ?? DateTime.now(),
       isDirty: (map['isDirty'] ?? map['is_dirty'] ?? 0) == 1,
       personNameNormalized: map['personNameNormalized'] ?? map['person_name_normalized'],
       recordNumberNormalized: map['recordNumberNormalized'] ?? map['record_number_normalized'],
