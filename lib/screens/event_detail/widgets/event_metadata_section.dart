@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart';
@@ -346,16 +347,25 @@ class _RecordNumberDropdown extends StatelessWidget {
 
               if (newValue == _emptyOption) {
                 // User selected "留空"
-                onChanged('');
+                // Defer state update to avoid build scope conflict
+                SchedulerBinding.instance.addPostFrameCallback((_) {
+                  onChanged('');
+                });
               } else if (newValue == _newOption) {
                 // User selected "新病例號", show dialog
                 final result = await onNewRecordNumberRequested();
                 if (result != null && result.trim().isNotEmpty) {
-                  onChanged(result.trim());
+                  // Defer state update to avoid build scope conflict
+                  SchedulerBinding.instance.addPostFrameCallback((_) {
+                    onChanged(result.trim());
+                  });
                 }
               } else {
                 // User selected an existing record number
-                onChanged(newValue);
+                // Defer state update to avoid build scope conflict
+                SchedulerBinding.instance.addPostFrameCallback((_) {
+                  onChanged(newValue);
+                });
               }
             }
           : null,
