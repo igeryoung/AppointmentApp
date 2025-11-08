@@ -34,11 +34,13 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   late EventDetailController _controller;
   late TextEditingController _nameController;
-  late TextEditingController _recordNumberController;
   final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
 
   // Track the last checked record number to prevent dialog loop
   String? _lastCheckedRecordNumber;
+
+  // Available record numbers for dropdown
+  List<String> _availableRecordNumbers = [];
 
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
@@ -49,21 +51,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     // Initialize text controllers
     _nameController = TextEditingController(text: widget.event.name);
-    _recordNumberController = TextEditingController(text: widget.event.recordNumber);
 
-    // Add listeners for text changes
+    // Add listener for name changes
     _nameController.addListener(() {
       _controller.updateName(_nameController.text);
-    });
-    _recordNumberController.addListener(() {
-      _controller.updateRecordNumber(_recordNumberController.text);
-
-      // Reset tracker if user is typing (value changed from last checked)
-      if (_recordNumberController.text.trim() != _lastCheckedRecordNumber) {
-        setState(() {
-          _lastCheckedRecordNumber = null;
-        });
-      }
+      // Fetch available record numbers when name changes
+      _fetchAvailableRecordNumbers();
     });
 
     // Initialize controller
@@ -77,6 +70,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         }
       },
     );
+
+    // Initial fetch of record numbers
+    _fetchAvailableRecordNumbers();
 
     // Initialize services and load data asynchronously
     _initialize();
@@ -102,9 +98,31 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void dispose() {
     _nameController.dispose();
-    _recordNumberController.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  Future<void> _fetchAvailableRecordNumbers() async {
+    final recordNumbers = await _controller.getRecordNumbersForCurrentName();
+    if (mounted) {
+      setState(() {
+        _availableRecordNumbers = recordNumbers;
+      });
+    }
+  }
+
+  void _handleRecordNumberChanged(String newRecordNumber) {
+    _controller.updateRecordNumber(newRecordNumber);
+
+    // Reset tracker if value changed from last checked
+    if (newRecordNumber.trim() != _lastCheckedRecordNumber) {
+      setState(() {
+        _lastCheckedRecordNumber = null;
+      });
+    }
+
+    // Check for existing person note after selection
+    _checkAndShowPersonNoteDialog();
   }
 
   void _onStrokesChanged() {
@@ -316,6 +334,41 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
+  Future<String?> _showNewRecordNumberDialog() async {
+    final controller = TextEditingController();
+
+    final result = await showDialog<String>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('新病例號'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: const InputDecoration(
+            labelText: '病例號',
+            hintText: '請輸入新的病例號',
+          ),
+          onSubmitted: (value) {
+            Navigator.pop(context, value.trim());
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, null),
+            child: const Text('取消'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, controller.text.trim()),
+            child: const Text('確定'),
+          ),
+        ],
+      ),
+    );
+
+    controller.dispose();
+    return result;
+  }
+
   Future<void> _selectStartTime() async {
     final result = await DateTimePickerUtils.pickDateTime(
       context,
@@ -506,7 +559,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               event: widget.event,
                               newEvent: state.newEvent,
                               nameController: _nameController,
-                              recordNumberController: _recordNumberController,
+                              recordNumber: state.recordNumber,
+                              availableRecordNumbers: _availableRecordNumbers,
+                              isRecordNumberFieldEnabled: _nameController.text.trim().isNotEmpty,
                               selectedEventType: state.selectedEventType,
                               startTime: state.startTime,
                               endTime: state.endTime,
@@ -518,7 +573,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   _controller.updateEventType(eventType);
                                 }
                               },
-                              onRecordNumberEditingComplete: _checkAndShowPersonNoteDialog,
+                              onRecordNumberChanged: _handleRecordNumberChanged,
+                              onNewRecordNumberRequested: _showNewRecordNumberDialog,
                             ),
                           ),
                         ),

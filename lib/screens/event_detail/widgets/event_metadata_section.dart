@@ -10,7 +10,9 @@ class EventMetadataSection extends StatelessWidget {
   final Event event;
   final Event? newEvent;
   final TextEditingController nameController;
-  final TextEditingController recordNumberController;
+  final String recordNumber;
+  final List<String> availableRecordNumbers;
+  final bool isRecordNumberFieldEnabled;
   final EventType selectedEventType;
   final DateTime startTime;
   final DateTime? endTime;
@@ -18,14 +20,17 @@ class EventMetadataSection extends StatelessWidget {
   final VoidCallback onEndTimeTap;
   final VoidCallback onClearEndTime;
   final ValueChanged<EventType?> onEventTypeChanged;
-  final Future<void> Function()? onRecordNumberEditingComplete;
+  final ValueChanged<String> onRecordNumberChanged;
+  final Future<String?> Function() onNewRecordNumberRequested;
 
   const EventMetadataSection({
     super.key,
     required this.event,
     this.newEvent,
     required this.nameController,
-    required this.recordNumberController,
+    required this.recordNumber,
+    required this.availableRecordNumbers,
+    required this.isRecordNumberFieldEnabled,
     required this.selectedEventType,
     required this.startTime,
     this.endTime,
@@ -33,7 +38,8 @@ class EventMetadataSection extends StatelessWidget {
     required this.onEndTimeTap,
     required this.onClearEndTime,
     required this.onEventTypeChanged,
-    this.onRecordNumberEditingComplete,
+    required this.onRecordNumberChanged,
+    required this.onNewRecordNumberRequested,
   });
 
   @override
@@ -133,24 +139,14 @@ class EventMetadataSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // Record Number field
-        TextField(
-          controller: recordNumberController,
-          decoration: InputDecoration(
-            labelText: l10n.recordNumber,
-            border: const OutlineInputBorder(),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-          onEditingComplete: () {
-            if (onRecordNumberEditingComplete != null) {
-              onRecordNumberEditingComplete!();
-            }
-          },
-          onTapOutside: (_) {
-            if (onRecordNumberEditingComplete != null) {
-              onRecordNumberEditingComplete!();
-            }
-          },
+        // Record Number dropdown field
+        _RecordNumberDropdown(
+          value: recordNumber,
+          availableRecordNumbers: availableRecordNumbers,
+          isEnabled: isRecordNumberFieldEnabled,
+          labelText: l10n.recordNumber,
+          onChanged: onRecordNumberChanged,
+          onNewRecordNumberRequested: onNewRecordNumberRequested,
         ),
         const SizedBox(height: 8),
 
@@ -270,6 +266,99 @@ class EventMetadataSection extends StatelessWidget {
           },
         ),
       ],
+    );
+  }
+}
+
+/// Private widget for record number dropdown with special options
+class _RecordNumberDropdown extends StatelessWidget {
+  static const String _emptyOption = '__EMPTY__';
+  static const String _newOption = '__NEW__';
+
+  final String value;
+  final List<String> availableRecordNumbers;
+  final bool isEnabled;
+  final String labelText;
+  final ValueChanged<String> onChanged;
+  final Future<String?> Function() onNewRecordNumberRequested;
+
+  const _RecordNumberDropdown({
+    required this.value,
+    required this.availableRecordNumbers,
+    required this.isEnabled,
+    required this.labelText,
+    required this.onChanged,
+    required this.onNewRecordNumberRequested,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    // Build dropdown items
+    final items = <DropdownMenuItem<String>>[];
+
+    // Add available record numbers
+    for (final recordNum in availableRecordNumbers) {
+      items.add(DropdownMenuItem<String>(
+        value: recordNum,
+        child: Text(recordNum),
+      ));
+    }
+
+    // Add special options
+    items.add(const DropdownMenuItem<String>(
+      value: _emptyOption,
+      child: Text('留空'),
+    ));
+    items.add(const DropdownMenuItem<String>(
+      value: _newOption,
+      child: Text('新病例號'),
+    ));
+
+    // Determine current value for dropdown
+    String dropdownValue;
+    if (value.isEmpty) {
+      dropdownValue = _emptyOption;
+    } else if (availableRecordNumbers.contains(value)) {
+      dropdownValue = value;
+    } else {
+      // User has a custom value not in the list, treat as regular option
+      // Add it to the items if not already present
+      if (!items.any((item) => item.value == value)) {
+        items.insert(0, DropdownMenuItem<String>(
+          value: value,
+          child: Text(value),
+        ));
+      }
+      dropdownValue = value;
+    }
+
+    return DropdownButtonFormField<String>(
+      value: dropdownValue,
+      decoration: InputDecoration(
+        labelText: labelText,
+        border: const OutlineInputBorder(),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      ),
+      items: items,
+      onChanged: isEnabled
+          ? (String? newValue) async {
+              if (newValue == null) return;
+
+              if (newValue == _emptyOption) {
+                // User selected "留空"
+                onChanged('');
+              } else if (newValue == _newOption) {
+                // User selected "新病例號", show dialog
+                final result = await onNewRecordNumberRequested();
+                if (result != null && result.trim().isNotEmpty) {
+                  onChanged(result.trim());
+                }
+              } else {
+                // User selected an existing record number
+                onChanged(newValue);
+              }
+            }
+          : null,
     );
   }
 }

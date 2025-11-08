@@ -1890,6 +1890,59 @@ class PRDDatabaseService implements IDatabaseService {
     return note.isNotEmpty ? note : null;
   }
 
+  /// Get all distinct record numbers for a given person name
+  /// Queries both events and notes tables, excludes empty record numbers
+  Future<List<String>> getRecordNumbersByName(String name) async {
+    if (name.trim().isEmpty) {
+      return [];
+    }
+
+    final db = await database;
+    final nameNorm = normalizePersonKey(name);
+
+    // Query events table
+    final eventsResult = await db.rawQuery('''
+      SELECT DISTINCT record_number
+      FROM events
+      WHERE person_name_normalized = ?
+        AND record_number IS NOT NULL
+        AND TRIM(record_number) != ''
+        AND is_removed = 0
+      ORDER BY record_number
+    ''', [nameNorm]);
+
+    // Query notes table
+    final notesResult = await db.rawQuery('''
+      SELECT DISTINCT record_number_normalized
+      FROM notes
+      WHERE person_name_normalized = ?
+        AND record_number_normalized IS NOT NULL
+        AND TRIM(record_number_normalized) != ''
+      ORDER BY record_number_normalized
+    ''', [nameNorm]);
+
+    // Combine and deduplicate
+    final recordNumbers = <String>{};
+
+    for (final row in eventsResult) {
+      final recordNumber = row['record_number'] as String?;
+      if (recordNumber != null && recordNumber.trim().isNotEmpty) {
+        recordNumbers.add(recordNumber.trim());
+      }
+    }
+
+    for (final row in notesResult) {
+      final recordNumber = row['record_number_normalized'] as String?;
+      if (recordNumber != null && recordNumber.trim().isNotEmpty) {
+        // Notes store normalized values, we need to preserve original case
+        // For now, we'll use the normalized value as-is
+        recordNumbers.add(recordNumber.trim());
+      }
+    }
+
+    return recordNumbers.toList()..sort();
+  }
+
   // ===================
   // Lock Mechanism
   // ===================
