@@ -5,6 +5,7 @@ import 'package:flutter/widgets.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/intl.dart' as intl;
 
+import 'app_localizations_en.dart';
 import 'app_localizations_zh.dart';
 
 // ignore_for_file: type=lint
@@ -93,6 +94,7 @@ abstract class AppLocalizations {
 
   /// A list of this localizations delegate's supported locales.
   static const List<Locale> supportedLocales = <Locale>[
+    Locale('en'),
     Locale('zh'),
     Locale('zh', 'TW'),
   ];
@@ -931,6 +933,48 @@ abstract class AppLocalizations {
   /// **'活動選項'**
   String get eventOptions;
 
+  /// Menu item and dialog title for scheduling next appointment
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'預約下次約診'**
+  String get scheduleNextAppointment;
+
+  /// Label for days from original appointment field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'距離原約診天數'**
+  String get daysFromOriginal;
+
+  /// Label for appointment type selection
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'約診類型'**
+  String get appointmentType;
+
+  /// Preview of target appointment date
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'目標日期：{date}'**
+  String targetDatePreview(String date);
+
+  /// Confirm button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'確認'**
+  String get confirm;
+
+  /// Validation error for empty days field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'天數為必填項目'**
+  String get daysRequired;
+
+  /// Validation error for invalid days value
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'天數必須為正整數'**
+  String get daysInvalid;
+
   /// Clear action label
   ///
   /// In zh_TW, this message translates to:
@@ -1201,7 +1245,7 @@ class _AppLocalizationsDelegate
 
   @override
   bool isSupported(Locale locale) =>
-      <String>['zh'].contains(locale.languageCode);
+      <String>['en', 'zh'].contains(locale.languageCode);
 
   @override
   bool shouldReload(_AppLocalizationsDelegate old) => false;
@@ -1222,6 +1266,8 @@ AppLocalizations lookupAppLocalizations(Locale locale) {
 
   // Lookup logic when only language code is specified.
   switch (locale.languageCode) {
+    case 'en':
+      return AppLocalizationsEn();
     case 'zh':
       return AppLocalizationsZh();
   }

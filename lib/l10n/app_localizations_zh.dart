@@ -496,6 +496,29 @@ class AppLocalizationsZh extends AppLocalizations {
   String get eventOptions => '活動選項';
 
   @override
+  String get scheduleNextAppointment => '預約下次約診';
+
+  @override
+  String get daysFromOriginal => '距離原約診天數';
+
+  @override
+  String get appointmentType => '約診類型';
+
+  @override
+  String targetDatePreview(String date) {
+    return '目標日期：$date';
+  }
+
+  @override
+  String get confirm => '確認';
+
+  @override
+  String get daysRequired => '天數為必填項目';
+
+  @override
+  String get daysInvalid => '天數必須為正整數';
+
+  @override
   String get clear => '清除';
 
   @override
@@ -1134,6 +1157,29 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get eventOptions => '活動選項';
+
+  @override
+  String get scheduleNextAppointment => '預約下次約診';
+
+  @override
+  String get daysFromOriginal => '距離原約診天數';
+
+  @override
+  String get appointmentType => '約診類型';
+
+  @override
+  String targetDatePreview(String date) {
+    return '目標日期：$date';
+  }
+
+  @override
+  String get confirm => '確認';
+
+  @override
+  String get daysRequired => '天數為必填項目';
+
+  @override
+  String get daysInvalid => '天數必須為正整數';
 
   @override
   String get clear => '清除';
