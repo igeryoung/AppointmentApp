@@ -335,38 +335,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<String?> _showNewRecordNumberDialog() async {
-    final controller = TextEditingController();
-
-    final result = await showDialog<String>(
+    return await showDialog<String>(
       context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('新病例號'),
-        content: TextField(
-          controller: controller,
-          autofocus: true,
-          decoration: const InputDecoration(
-            labelText: '病例號',
-            hintText: '請輸入新的病例號',
-          ),
-          onSubmitted: (value) {
-            Navigator.pop(context, value.trim());
-          },
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, null),
-            child: const Text('取消'),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, controller.text.trim()),
-            child: const Text('確定'),
-          ),
-        ],
+      builder: (context) => _NewRecordNumberDialog(
+        existingRecordNumbers: _availableRecordNumbers,
       ),
     );
-
-    controller.dispose();
-    return result;
   }
 
   Future<void> _selectStartTime() async {
@@ -592,6 +566,101 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 },
               ),
       ),
+    );
+  }
+}
+
+/// Dialog for entering a new record number with duplicate validation
+class _NewRecordNumberDialog extends StatefulWidget {
+  final List<String> existingRecordNumbers;
+
+  const _NewRecordNumberDialog({
+    required this.existingRecordNumbers,
+  });
+
+  @override
+  State<_NewRecordNumberDialog> createState() => _NewRecordNumberDialogState();
+}
+
+class _NewRecordNumberDialogState extends State<_NewRecordNumberDialog> {
+  late TextEditingController _controller;
+  String? _errorText;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  bool _validateAndSubmit() {
+    final value = _controller.text.trim();
+
+    if (value.isEmpty) {
+      setState(() {
+        _errorText = '請輸入病例號';
+      });
+      return false;
+    }
+
+    // Check for duplicates (case-insensitive)
+    final isDuplicate = widget.existingRecordNumbers.any(
+      (existing) => existing.toLowerCase() == value.toLowerCase(),
+    );
+
+    if (isDuplicate) {
+      setState(() {
+        _errorText = '此病例號已存在，請輸入不同的病例號';
+      });
+      return false;
+    }
+
+    return true;
+  }
+
+  void _handleSubmit() {
+    if (_validateAndSubmit()) {
+      Navigator.pop(context, _controller.text.trim());
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('新病例號'),
+      content: TextField(
+        controller: _controller,
+        autofocus: true,
+        decoration: InputDecoration(
+          labelText: '病例號',
+          hintText: '請輸入新的病例號',
+          errorText: _errorText,
+        ),
+        onChanged: (_) {
+          // Clear error when user types
+          if (_errorText != null) {
+            setState(() {
+              _errorText = null;
+            });
+          }
+        },
+        onSubmitted: (_) => _handleSubmit(),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, null),
+          child: const Text('取消'),
+        ),
+        TextButton(
+          onPressed: _handleSubmit,
+          child: const Text('確定'),
+        ),
+      ],
     );
   }
 }
