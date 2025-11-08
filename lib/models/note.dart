@@ -82,6 +82,7 @@ class Note {
   }
 
   Map<String, dynamic> toMap() {
+    final lockedAtMs = lockedAt?.millisecondsSinceEpoch;
     return {
       'id': id,
       'event_id': eventId,
@@ -92,7 +93,7 @@ class Note {
       'person_name_normalized': personNameNormalized,
       'record_number_normalized': recordNumberNormalized,
       'locked_by_device_id': lockedByDeviceId,
-      'locked_at': lockedAt != null ? lockedAt.millisecondsSinceEpoch ~/ 1000 : null,
+      'locked_at': lockedAtMs != null ? lockedAtMs ~/ 1000 : null,
     };
   }
 
