@@ -106,4 +106,25 @@ When user saves the event:
 1. **Only for NEW events**: The check only runs for `isNew == true`
 2. **Only when both name and record number exist**: Both fields must have values
 3. **Only if DB has actual handwriting**: Empty notes in DB won't trigger dialog
-4. **Last-modified-wins**: When saving, the current drawing always wins and syncs to all events in the person group
+4. **Safety fallback**: If dialog wasn't shown (e.g., user didn't trigger check), the save button has a safety check that auto-loads DB handwriting to prevent data loss
+5. **Last-modified-wins**: When saving (and no existing DB note found), the current drawing is saved and syncs to all events in the person group
+
+## Safety Mechanism
+
+The implementation uses **defense-in-depth**:
+
+### Layer 1: UI Dialog (Primary)
+- Triggered when user finishes typing record number
+- Shows explicit choice to user
+- Best UX - user makes informed decision
+
+### Layer 2: Save-Time Check (Fallback)
+- Runs during save if new event has record number
+- Auto-loads DB handwriting if exists
+- **Never loses existing patient data** even if dialog wasn't shown
+- Logged with warning: "Found existing person note, loading DB handwriting"
+
+This ensures **100% patient data safety** even if:
+- User bypasses the field check somehow
+- Dialog fails to show due to timing issues
+- UI integration is incomplete

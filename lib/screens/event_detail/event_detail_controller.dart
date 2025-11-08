@@ -278,6 +278,30 @@ class EventDetailController {
       Event savedEvent;
       if (isNew) {
         savedEvent = await _dbService.createEvent(eventToSave);
+
+        // Safety check: If new event has record number, check for existing person note
+        // This prevents accidental overwriting if UI dialog wasn't shown
+        if (recordNumberText.isNotEmpty && _dbService is PRDDatabaseService) {
+          debugPrint('🔍 EventDetailController: NEW event with record number, checking for existing person note...');
+          final prdDb = _dbService as PRDDatabaseService;
+          final existingNote = await prdDb.findExistingPersonNote(
+            _state.name.trim(),
+            recordNumberText,
+          );
+
+          if (existingNote != null) {
+            // DB has handwriting - auto-load it (safety: never lose existing patient data)
+            debugPrint('⚠️ EventDetailController: Found existing person note (${existingNote.strokes.length} strokes), loading DB handwriting');
+            await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
+            _updateState(_state.copyWith(
+              note: existingNote,
+              lastKnownStrokes: existingNote.strokes,
+              isLoading: false,
+            ));
+            debugPrint('✅ EventDetailController: Loaded DB handwriting, skipping canvas save (patient data protected)');
+            return savedEvent;
+          }
+        }
       } else {
         savedEvent = await _dbService.updateEvent(eventToSave);
 
