@@ -59,8 +59,18 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final effectiveShowOldEvents = showOldEvents ??
         (currentState is ScheduleLoaded ? currentState.showOldEvents : true);
 
-    // Preserve drawing from current state to prevent it from being cleared
-    final currentDrawing = currentState is ScheduleLoaded ? currentState.drawing : null;
+    // Preserve showDrawing from current state
+    final effectiveShowDrawing = currentState is ScheduleLoaded ? currentState.showDrawing : true;
+
+    // Preserve pendingNextAppointment from current state
+    final pendingNextAppointment = currentState is ScheduleLoaded ? currentState.pendingNextAppointment : null;
+
+    // Check if date is changing - if so, clear drawing to avoid showing old drawing on new date
+    final isDateChanging = currentState is ScheduleLoaded &&
+        _get3DayWindowStart(currentState.selectedDate) != _get3DayWindowStart(selectedDate);
+
+    // Only preserve drawing if date is NOT changing (same 3-day window)
+    final currentDrawing = (currentState is ScheduleLoaded && !isDateChanging) ? currentState.drawing : null;
 
     emit(const ScheduleLoading());
 
@@ -88,6 +98,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         drawing: currentDrawing,
         isOffline: currentState is ScheduleLoaded ? currentState.isOffline : false,
         showOldEvents: effectiveShowOldEvents,
+        showDrawing: effectiveShowDrawing,
+        pendingNextAppointment: pendingNextAppointment,
       ));
 
       debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for 3-day window starting $windowStart');

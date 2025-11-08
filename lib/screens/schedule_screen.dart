@@ -39,6 +39,7 @@ class ScheduleScreen extends StatefulWidget {
 class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObserver {
   late TransformationController _transformationController;
   DateTime _selectedDate = TimeService.instance.now();
+  DateTime? _previousSelectedDate;
 
   // Book ID must be non-null for ScheduleScreen (book must exist in database)
   late final int _bookId;
@@ -382,6 +383,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         // Trigger preloading when events are loaded
         if (state is ScheduleLoaded) {
           _preloadNotesInBackground(state.events);
+
+          // Check if date has changed to a different 3-day window
+          final currentWindow = _previousSelectedDate != null
+              ? ScheduleLayoutUtils.get3DayWindowStart(_previousSelectedDate!)
+              : null;
+          final newWindow = ScheduleLayoutUtils.get3DayWindowStart(state.selectedDate);
+
+          if (currentWindow != newWindow) {
+            // Date changed to a different 3-day window - update internal state and reload drawing
+            _previousSelectedDate = state.selectedDate;
+            if (_selectedDate != state.selectedDate) {
+              setState(() {
+                _selectedDate = state.selectedDate;
+              });
+            }
+            // Reload drawing for the new date
+            _loadDrawing();
+          }
         }
       },
       child: PopScope(
