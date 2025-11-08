@@ -281,6 +281,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         ),
       );
 
+      // Unfocus the record number field to prevent re-triggering the dialog
+      if (mounted) {
+        FocusScope.of(context).unfocus();
+      }
+
       if (result == true && mounted) {
         await _controller.loadExistingPersonNote(existingNote);
         // Update canvas with loaded strokes
