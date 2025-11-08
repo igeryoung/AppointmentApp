@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/scheduler.dart';
 import 'package:intl/intl.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart';
@@ -272,7 +271,7 @@ class EventMetadataSection extends StatelessWidget {
 }
 
 /// Private widget for record number dropdown with special options
-class _RecordNumberDropdown extends StatelessWidget {
+class _RecordNumberDropdown extends StatefulWidget {
   static const String _emptyOption = '__EMPTY__';
   static const String _newOption = '__NEW__';
 
@@ -293,12 +292,19 @@ class _RecordNumberDropdown extends StatelessWidget {
   });
 
   @override
+  State<_RecordNumberDropdown> createState() => _RecordNumberDropdownState();
+}
+
+class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
+  bool _isProcessing = false;
+
+  @override
   Widget build(BuildContext context) {
     // Build dropdown items
     final items = <DropdownMenuItem<String>>[];
 
     // Add available record numbers
-    for (final recordNum in availableRecordNumbers) {
+    for (final recordNum in widget.availableRecordNumbers) {
       items.add(DropdownMenuItem<String>(
         value: recordNum,
         child: Text(recordNum),
@@ -307,68 +313,77 @@ class _RecordNumberDropdown extends StatelessWidget {
 
     // Add special options
     items.add(const DropdownMenuItem<String>(
-      value: _emptyOption,
+      value: _RecordNumberDropdown._emptyOption,
       child: Text('留空'),
     ));
     items.add(const DropdownMenuItem<String>(
-      value: _newOption,
+      value: _RecordNumberDropdown._newOption,
       child: Text('新病例號'),
     ));
 
     // Determine current value for dropdown
     String dropdownValue;
-    if (value.isEmpty) {
-      dropdownValue = _emptyOption;
-    } else if (availableRecordNumbers.contains(value)) {
-      dropdownValue = value;
+    if (widget.value.isEmpty) {
+      dropdownValue = _RecordNumberDropdown._emptyOption;
+    } else if (widget.availableRecordNumbers.contains(widget.value)) {
+      dropdownValue = widget.value;
     } else {
       // User has a custom value not in the list, treat as regular option
       // Add it to the items if not already present
-      if (!items.any((item) => item.value == value)) {
+      if (!items.any((item) => item.value == widget.value)) {
         items.insert(0, DropdownMenuItem<String>(
-          value: value,
-          child: Text(value),
+          value: widget.value,
+          child: Text(widget.value),
         ));
       }
-      dropdownValue = value;
+      dropdownValue = widget.value;
     }
 
     return DropdownButtonFormField<String>(
       value: dropdownValue,
       decoration: InputDecoration(
-        labelText: labelText,
+        labelText: widget.labelText,
         border: const OutlineInputBorder(),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
       items: items,
-      onChanged: isEnabled
-          ? (String? newValue) async {
+      onChanged: widget.isEnabled && !_isProcessing
+          ? (String? newValue) {
               if (newValue == null) return;
 
-              if (newValue == _emptyOption) {
+              if (newValue == _RecordNumberDropdown._emptyOption) {
                 // User selected "留空"
-                // Defer state update to avoid build scope conflict
-                SchedulerBinding.instance.addPostFrameCallback((_) {
-                  onChanged('');
-                });
-              } else if (newValue == _newOption) {
+                widget.onChanged('');
+              } else if (newValue == _RecordNumberDropdown._newOption) {
                 // User selected "新病例號", show dialog
-                final result = await onNewRecordNumberRequested();
-                if (result != null && result.trim().isNotEmpty) {
-                  // Defer state update to avoid build scope conflict
-                  SchedulerBinding.instance.addPostFrameCallback((_) {
-                    onChanged(result.trim());
-                  });
-                }
+                _handleNewRecordNumber();
               } else {
                 // User selected an existing record number
-                // Defer state update to avoid build scope conflict
-                SchedulerBinding.instance.addPostFrameCallback((_) {
-                  onChanged(newValue);
-                });
+                widget.onChanged(newValue);
               }
             }
           : null,
     );
+  }
+
+  Future<void> _handleNewRecordNumber() async {
+    if (_isProcessing) return;
+
+    setState(() {
+      _isProcessing = true;
+    });
+
+    try {
+      final result = await widget.onNewRecordNumberRequested();
+      if (result != null && result.trim().isNotEmpty && mounted) {
+        widget.onChanged(result.trim());
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isProcessing = false;
+        });
+      }
+    }
   }
 }
