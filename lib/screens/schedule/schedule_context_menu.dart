@@ -10,6 +10,7 @@ class ScheduleContextMenu extends StatelessWidget {
   final VoidCallback onClose;
   final VoidCallback onChangeType;
   final VoidCallback onChangeTime;
+  final VoidCallback onScheduleNextAppointment;
   final VoidCallback onRemove;
   final VoidCallback onDelete;
 
@@ -20,6 +21,7 @@ class ScheduleContextMenu extends StatelessWidget {
     required this.onClose,
     required this.onChangeType,
     required this.onChangeTime,
+    required this.onScheduleNextAppointment,
     required this.onRemove,
     required this.onDelete,
   });
@@ -88,6 +90,12 @@ class ScheduleContextMenu extends StatelessWidget {
                 leading: const Icon(Icons.access_time, size: 20),
                 title: Text(l10n.changeEventTime, style: const TextStyle(fontSize: 14)),
                 onTap: onChangeTime,
+              ),
+              ListTile(
+                dense: true,
+                leading: const Icon(Icons.event_available, size: 20),
+                title: Text(l10n.scheduleNextAppointment, style: const TextStyle(fontSize: 14)),
+                onTap: onScheduleNextAppointment,
               ),
               ListTile(
                 dense: true,
