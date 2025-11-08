@@ -256,6 +256,39 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
+  Future<void> _checkAndShowPersonNoteDialog() async {
+    // Only check for NEW events
+    if (!widget.isNew) return;
+
+    final existingNote = await _controller.checkExistingPersonNote();
+
+    if (existingNote != null && mounted) {
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('提示'),
+          content: Text('此病歷號已有筆記（${existingNote.strokes.length} 筆畫），要載入現有筆記嗎？'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('保留當前'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('載入現有'),
+            ),
+          ],
+        ),
+      );
+
+      if (result == true && mounted) {
+        await _controller.loadExistingPersonNote(existingNote);
+        // Update canvas with loaded strokes
+        _canvasKey.currentState?.loadStrokes(existingNote.strokes);
+      }
+    }
+  }
+
   Future<void> _selectStartTime() async {
     final result = await DateTimePickerUtils.pickDateTime(
       context,
@@ -458,6 +491,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                   _controller.updateEventType(eventType);
                                 }
                               },
+                              onRecordNumberEditingComplete: _checkAndShowPersonNoteDialog,
                             ),
                           ),
                         ),
