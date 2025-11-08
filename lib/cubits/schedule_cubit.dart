@@ -328,6 +328,30 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     debugPrint('✅ ScheduleCubit: Offline status updated: $isOffline');
   }
 
+  /// Set pending next appointment data for pre-filling event creation
+  void setPendingNextAppointment(PendingNextAppointment pendingAppointment) {
+    final currentState = state;
+    if (currentState is! ScheduleLoaded) return;
+
+    emit(currentState.copyWith(pendingNextAppointment: pendingAppointment));
+    debugPrint('✅ ScheduleCubit: Pending next appointment set: ${pendingAppointment.name}');
+  }
+
+  /// Clear pending next appointment data
+  void clearPendingNextAppointment() {
+    final currentState = state;
+    if (currentState is! ScheduleLoaded) return;
+
+    emit(currentState.copyWith(clearPendingNextAppointment: true));
+    debugPrint('✅ ScheduleCubit: Pending next appointment cleared');
+  }
+
+  /// Change the center date and navigate to that date
+  Future<void> changeDate(DateTime targetDate) async {
+    debugPrint('✅ ScheduleCubit: Changing date to $targetDate');
+    await selectDate(targetDate);
+  }
+
   // ===================
   // Helper Methods
   // ===================

@@ -4,7 +4,9 @@ import '../../../models/event_type.dart';
 import '../../../services/database_service_interface.dart';
 import '../../../services/time_service.dart';
 import '../../../l10n/app_localizations.dart';
+import '../../../cubits/schedule_state.dart';
 import '../../../widgets/schedule/change_event_time_dialog.dart';
+import '../../../widgets/schedule/schedule_next_appointment_dialog.dart';
 import '../dialogs/change_event_type_dialog.dart';
 import '../../event_detail_screen.dart';
 
@@ -57,6 +59,12 @@ class EventManagementService {
   /// Callback to sync event to server
   final Future<void> Function(Event event) onSyncEvent;
 
+  /// Callback to set pending next appointment data
+  final void Function(PendingNextAppointment) onSetPendingNextAppointment;
+
+  /// Callback to change date
+  final Future<void> Function(DateTime) onChangeDate;
+
   EventManagementService({
     required IDatabaseService dbService,
     required int bookId,
@@ -71,6 +79,8 @@ class EventManagementService {
     required this.isMounted,
     required this.getLocalizedString,
     required this.onSyncEvent,
+    required this.onSetPendingNextAppointment,
+    required this.onChangeDate,
   })  : _dbService = dbService,
         _bookId = bookId;
 
@@ -81,16 +91,21 @@ class EventManagementService {
   Offset? get menuPosition => _menuPosition;
 
   /// Create a new event and navigate to detail screen
-  Future<void> createEvent({DateTime? startTime}) async {
+  Future<void> createEvent({
+    DateTime? startTime,
+    String? name,
+    String? recordNumber,
+    EventType? eventType,
+  }) async {
     final now = TimeService.instance.now();
     final defaultStartTime = startTime ??
         DateTime(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
 
     final newEvent = Event(
       bookId: _bookId,
-      name: '',
-      recordNumber: '',
-      eventType: EventType.consultation, // Default to consultation for new events
+      name: name ?? '',
+      recordNumber: recordNumber ?? '',
+      eventType: eventType ?? EventType.consultation, // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
       updatedAt: now,
@@ -120,6 +135,31 @@ class EventManagementService {
     if (result == true) {
       onReloadEvents();
     }
+  }
+
+  /// Schedule next appointment from existing event
+  Future<void> scheduleNextAppointment(Event originalEvent, BuildContext context) async {
+    // Show dialog to get days and event type
+    final result = await showScheduleNextAppointmentDialog(context, originalEvent);
+    if (result == null) return; // User cancelled
+
+    // Calculate target date
+    final targetDate = originalEvent.startTime.add(Duration(days: result.daysFromOriginal));
+
+    // Store pending appointment data
+    onSetPendingNextAppointment(
+      PendingNextAppointment(
+        name: originalEvent.name,
+        recordNumber: originalEvent.recordNumber ?? '',
+        eventType: result.eventType,
+      ),
+    );
+
+    // Navigate to target date
+    await onChangeDate(targetDate);
+
+    // Close menu
+    closeEventMenu();
   }
 
   /// Show context menu for event

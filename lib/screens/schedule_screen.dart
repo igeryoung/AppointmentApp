@@ -203,6 +203,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       isMounted: () => mounted,
       getLocalizedString: (getter) => getter(AppLocalizations.of(context)!),
       onSyncEvent: (event) async => await _connectivityService?.syncEventToServer(event),
+      onSetPendingNextAppointment: (pending) => context.read<ScheduleCubit>().setPendingNextAppointment(pending),
+      onChangeDate: (date) async => await context.read<ScheduleCubit>().changeDate(date),
     );
 
     // Start services
@@ -536,6 +538,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           final events = state is ScheduleLoaded ? state.events : <Event>[];
           final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
           final showDrawing = state is ScheduleLoaded ? state.showDrawing : true;
+          final pendingNextAppointment = state is ScheduleLoaded ? state.pendingNextAppointment : null;
 
           return Stack(
             children: [
@@ -544,7 +547,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                   Expanded(
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
-                        : _build3DayView(events, showOldEvents, showDrawing),
+                        : _build3DayView(events, showOldEvents, showDrawing, pendingNextAppointment),
                   ),
                 ],
               ),
@@ -592,7 +595,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
 
   /// Build 3-day view using ScheduleBody component
-  Widget _build3DayView(List<Event> events, bool showOldEvents, bool showDrawing) {
+  Widget _build3DayView(List<Event> events, bool showOldEvents, bool showDrawing, PendingNextAppointment? pendingNextAppointment) {
     final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
     final dates = List.generate(3, (index) => windowStart.add(Duration(days: index)));
 
@@ -608,7 +611,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       getEventTypeColor: (context, eventType) => _eventService?.getEventTypeColor(eventType) ?? Colors.grey,
       onEditEvent: (event) => _eventService?.editEvent(event),
       onShowEventContextMenu: (event, position) => _eventService?.showEventContextMenu(event, position),
-      onCreateEvent: (startTime) => _eventService?.createEvent(startTime: startTime),
+      onCreateEvent: (startTime) {
+        _eventService?.createEvent(
+          startTime: startTime,
+          name: pendingNextAppointment?.name,
+          recordNumber: pendingNextAppointment?.recordNumber,
+          eventType: pendingNextAppointment?.eventType,
+        );
+        // Clear pending data after using it
+        if (pendingNextAppointment != null) {
+          context.read<ScheduleCubit>().clearPendingNextAppointment();
+        }
+      },
       onEventDrop: (event, newStartTime) => _eventService?.handleEventDrop(event, newStartTime, context),
       onCloseEventMenu: () => _eventService?.closeEventMenu(),
       onDrawingStrokesChanged: () {
@@ -619,6 +633,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       menuPosition: _eventService?.menuPosition,
       onChangeType: _eventService?.selectedEventForMenu != null ? () => _eventService?.handleMenuAction('changeType', _eventService!.selectedEventForMenu!, context) : null,
       onChangeTime: _eventService?.selectedEventForMenu != null ? () => _eventService?.handleMenuAction('changeTime', _eventService!.selectedEventForMenu!, context) : null,
+      onScheduleNextAppointment: _eventService?.selectedEventForMenu != null ? () => _eventService?.scheduleNextAppointment(_eventService!.selectedEventForMenu!, context) : null,
       onRemove: _eventService?.selectedEventForMenu != null ? () => _eventService?.handleMenuAction('remove', _eventService!.selectedEventForMenu!, context) : null,
       onDelete: _eventService?.selectedEventForMenu != null ? () => _eventService?.handleMenuAction('delete', _eventService!.selectedEventForMenu!, context) : null,
     );

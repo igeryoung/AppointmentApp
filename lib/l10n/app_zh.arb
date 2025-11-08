@@ -809,5 +809,50 @@
   "keepEditing": "继续编辑",
   "@keepEditing": {
     "description": "Keep editing button text"
+  },
+
+  "scheduleNextAppointment": "預約下次約診",
+  "@scheduleNextAppointment": {
+    "description": "Menu item and dialog title for scheduling next appointment"
+  },
+
+  "daysFromOriginal": "距離原約診天數",
+  "@daysFromOriginal": {
+    "description": "Label for days from original appointment field"
+  },
+
+  "appointmentType": "約診類型",
+  "@appointmentType": {
+    "description": "Label for appointment type selection"
+  },
+
+  "targetDatePreview": "目標日期：{date}",
+  "@targetDatePreview": {
+    "description": "Preview of target appointment date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+
+  "confirm": "確認",
+  "@confirm": {
+    "description": "Confirm button text"
+  },
+
+  "daysRequired": "天數為必填項目",
+  "@daysRequired": {
+    "description": "Validation error for empty days field"
+  },
+
+  "daysInvalid": "天數必須為正整數",
+  "@daysInvalid": {
+    "description": "Validation error for invalid days value"
+  },
+
+  "eventOptions": "活動選項",
+  "@eventOptions": {
+    "description": "Default header for event context menu when event has no name"
   }
 }

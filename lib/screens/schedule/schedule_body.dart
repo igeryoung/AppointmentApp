@@ -32,6 +32,7 @@ class ScheduleBody extends StatelessWidget {
   final Offset? menuPosition;
   final VoidCallback? onChangeType;
   final VoidCallback? onChangeTime;
+  final VoidCallback? onScheduleNextAppointment;
   final VoidCallback? onRemove;
   final VoidCallback? onDelete;
 
@@ -56,6 +57,7 @@ class ScheduleBody extends StatelessWidget {
     this.menuPosition,
     this.onChangeType,
     this.onChangeTime,
+    this.onScheduleNextAppointment,
     this.onRemove,
     this.onDelete,
   });
@@ -137,6 +139,7 @@ class ScheduleBody extends StatelessWidget {
                           menuPosition != null &&
                           onChangeType != null &&
                           onChangeTime != null &&
+                          onScheduleNextAppointment != null &&
                           onRemove != null &&
                           onDelete != null)
                         ScheduleContextMenu(
@@ -145,6 +148,7 @@ class ScheduleBody extends StatelessWidget {
                           onClose: onCloseEventMenu,
                           onChangeType: onChangeType!,
                           onChangeTime: onChangeTime!,
+                          onScheduleNextAppointment: onScheduleNextAppointment!,
                           onRemove: onRemove!,
                           onDelete: onDelete!,
                         ),

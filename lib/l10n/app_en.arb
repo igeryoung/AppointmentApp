@@ -1,0 +1,53 @@
+{
+  "@@locale": "en",
+
+  "scheduleNextAppointment": "Schedule Next Appointment",
+  "@scheduleNextAppointment": {
+    "description": "Menu item and dialog title for scheduling next appointment"
+  },
+
+  "daysFromOriginal": "Days from Original",
+  "@daysFromOriginal": {
+    "description": "Label for days from original appointment field"
+  },
+
+  "appointmentType": "Appointment Type",
+  "@appointmentType": {
+    "description": "Label for appointment type selection"
+  },
+
+  "targetDatePreview": "Target Date: {date}",
+  "@targetDatePreview": {
+    "description": "Preview of target appointment date",
+    "placeholders": {
+      "date": {
+        "type": "String"
+      }
+    }
+  },
+
+  "confirm": "Confirm",
+  "@confirm": {
+    "description": "Confirm button text"
+  },
+
+  "cancel": "Cancel",
+  "@cancel": {
+    "description": "Cancel button text"
+  },
+
+  "daysRequired": "Days is required",
+  "@daysRequired": {
+    "description": "Validation error for empty days field"
+  },
+
+  "daysInvalid": "Days must be a positive integer",
+  "@daysInvalid": {
+    "description": "Validation error for invalid days value"
+  },
+
+  "eventOptions": "Event Options",
+  "@eventOptions": {
+    "description": "Default header for event context menu when event has no name"
+  }
+}
