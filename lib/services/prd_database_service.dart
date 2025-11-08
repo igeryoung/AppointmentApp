@@ -1900,11 +1900,11 @@ class PRDDatabaseService implements IDatabaseService {
     final db = await database;
     final nameNorm = normalizePersonKey(name);
 
-    // Query events table
+    // Query events table (using LOWER(name) since events table doesn't have person_name_normalized)
     final eventsResult = await db.rawQuery('''
       SELECT DISTINCT record_number
       FROM events
-      WHERE person_name_normalized = ?
+      WHERE LOWER(TRIM(name)) = ?
         AND record_number IS NOT NULL
         AND TRIM(record_number) != ''
         AND is_removed = 0
@@ -1940,6 +1940,7 @@ class PRDDatabaseService implements IDatabaseService {
       }
     }
 
+    debugPrint('🔍 PRDDatabase: Found ${recordNumbers.length} record numbers for name "$name": $recordNumbers');
     return recordNumbers.toList()..sort();
   }
 

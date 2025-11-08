@@ -52,14 +52,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Initialize text controllers
     _nameController = TextEditingController(text: widget.event.name);
 
-    // Add listener for name changes
-    _nameController.addListener(() {
-      _controller.updateName(_nameController.text);
-      // Fetch available record numbers when name changes
-      _fetchAvailableRecordNumbers();
-    });
-
-    // Initialize controller
+    // Initialize controller FIRST
     _controller = EventDetailController(
       event: widget.event,
       isNew: widget.isNew,
@@ -71,8 +64,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       },
     );
 
-    // Initial fetch of record numbers
-    _fetchAvailableRecordNumbers();
+    // Add listener for name changes AFTER controller is initialized
+    _nameController.addListener(() {
+      _controller.updateName(_nameController.text);
+      // Fetch available record numbers when name changes
+      _fetchAvailableRecordNumbers();
+    });
 
     // Initialize services and load data asynchronously
     _initialize();
@@ -80,6 +77,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _initialize() async {
     try {
+      // Fetch available record numbers after controller is ready
+      await _fetchAvailableRecordNumbers();
       await _controller.initialize();
       _controller.setupConnectivityMonitoring();
     } catch (e) {
@@ -104,6 +103,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _fetchAvailableRecordNumbers() async {
     final recordNumbers = await _controller.getRecordNumbersForCurrentName();
+    debugPrint('📋 EventDetail: Fetched ${recordNumbers.length} record numbers for name "${_controller.state.name}"');
     if (mounted) {
       setState(() {
         _availableRecordNumbers = recordNumbers;
@@ -335,6 +335,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<String?> _showNewRecordNumberDialog() async {
+    // Fetch latest available record numbers before showing dialog
+    await _fetchAvailableRecordNumbers();
+
     return await showDialog<String>(
       context: context,
       builder: (context) => _NewRecordNumberDialog(
@@ -601,6 +604,9 @@ class _NewRecordNumberDialogState extends State<_NewRecordNumberDialog> {
   bool _validateAndSubmit() {
     final value = _controller.text.trim();
 
+    debugPrint('🔍 Validating record number: "$value"');
+    debugPrint('🔍 Existing record numbers: ${widget.existingRecordNumbers}');
+
     if (value.isEmpty) {
       setState(() {
         _errorText = '請輸入病例號';
@@ -612,6 +618,8 @@ class _NewRecordNumberDialogState extends State<_NewRecordNumberDialog> {
     final isDuplicate = widget.existingRecordNumbers.any(
       (existing) => existing.toLowerCase() == value.toLowerCase(),
     );
+
+    debugPrint('🔍 Is duplicate: $isDuplicate');
 
     if (isDuplicate) {
       setState(() {
