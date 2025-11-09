@@ -140,13 +140,16 @@ class EventMetadataSection extends StatelessWidget {
         const SizedBox(height: 8),
 
         // Record Number dropdown field
-        _RecordNumberDropdown(
-          value: recordNumber,
-          availableRecordNumbers: availableRecordNumbers,
-          isEnabled: isRecordNumberFieldEnabled,
-          labelText: l10n.recordNumber,
-          onChanged: onRecordNumberChanged,
-          onNewRecordNumberRequested: onNewRecordNumberRequested,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: _RecordNumberDropdown(
+            value: recordNumber,
+            availableRecordNumbers: availableRecordNumbers,
+            isEnabled: isRecordNumberFieldEnabled,
+            labelText: l10n.recordNumber,
+            onChanged: onRecordNumberChanged,
+            onNewRecordNumberRequested: onNewRecordNumberRequested,
+          ),
         ),
         const SizedBox(height: 8),
 
@@ -154,22 +157,27 @@ class EventMetadataSection extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<EventType>(
-                value: selectedEventType,
-                decoration: InputDecoration(
-                  labelText: l10n.eventType,
-                  border: const OutlineInputBorder(),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: DropdownButtonFormField<EventType>(
+                  value: selectedEventType,
+                  decoration: InputDecoration(
+                    labelText: l10n.eventType,
+                    border: const OutlineInputBorder(),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                  ),
+                  isExpanded: true,
+                  menuMaxHeight: 300,
+                  elevation: 16,
+                  borderRadius: BorderRadius.circular(8),
+                  items: EventTypeLocalizations.commonEventTypes.map((type) {
+                    return DropdownMenuItem<EventType>(
+                      value: type,
+                      child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+                    );
+                  }).toList(),
+                  onChanged: onEventTypeChanged,
                 ),
-                isExpanded: true,
-                menuMaxHeight: 300,
-                items: EventTypeLocalizations.commonEventTypes.map((type) {
-                  return DropdownMenuItem<EventType>(
-                    value: type,
-                    child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
-                  );
-                }).toList(),
-                onChanged: onEventTypeChanged,
               ),
             ),
           ],
@@ -350,6 +358,8 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
       ),
       isExpanded: true,
       menuMaxHeight: 300,
+      elevation: 16,
+      borderRadius: BorderRadius.circular(8),
       items: items,
       onChanged: widget.isEnabled && !_isProcessing
           ? (String? newValue) {
