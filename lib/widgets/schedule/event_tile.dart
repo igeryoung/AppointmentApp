@@ -152,6 +152,7 @@ class ScheduleEventTileHelper {
                   : null,
         ),
         child: Stack(
+          clipBehavior: Clip.none,
           children: [
             // Dotted line overlay for removed events
             if (event.isRemoved && dottedBorderPainter != null)
@@ -168,12 +169,12 @@ class ScheduleEventTileHelper {
             // OK indicator for checked events (top-right corner, full tile height)
             if (event.isChecked)
               Positioned(
-                top: 0,
-                right: 0,
+                top: -2,
+                right: -1,
                 child: Image.asset(
                   'assets/images/icons8-ok-96.png',
-                  width: tileHeight,
-                  height: tileHeight,
+                  width: tileHeight / 2,
+                  height: tileHeight / 2,
                   fit: BoxFit.contain,
                 ),
               ),
