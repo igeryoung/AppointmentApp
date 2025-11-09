@@ -303,6 +303,20 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _lastCheckedRecordNumber = currentRecordNumber;
       });
 
+      // Check if current event has any handwriting
+      final canvasState = _canvasKey.currentState;
+      final currentStrokes = canvasState?.getStrokes() ?? [];
+      final hasCurrentHandwriting = currentStrokes.isNotEmpty;
+
+      // If current event has no handwriting, auto-load without dialog
+      if (!hasCurrentHandwriting) {
+        debugPrint('📝 EventDetail: Auto-loading existing note (current canvas is empty)');
+        await _controller.loadExistingPersonNote(existingNote);
+        _canvasKey.currentState?.loadStrokes(existingNote.strokes);
+        return;
+      }
+
+      // Current event has handwriting, show confirmation dialog
       final result = await showDialog<bool>(
         context: context,
         builder: (context) => AlertDialog(
