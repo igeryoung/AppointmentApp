@@ -1819,6 +1819,37 @@ class PRDDatabaseService implements IDatabaseService {
     return result.first['count'] as int;
   }
 
+  @override
+  Future<List<String>> getAllRecordNumbers(int bookId) async {
+    final db = await database;
+    final result = await db.query(
+      'events',
+      columns: ['DISTINCT record_number'],
+      where: 'book_id = ? AND record_number IS NOT NULL AND record_number != ""',
+      whereArgs: [bookId],
+      orderBy: 'record_number ASC',
+    );
+    return result
+        .map((row) => row['record_number'] as String)
+        .toList();
+  }
+
+  @override
+  Future<List<Event>> searchByNameAndRecordNumber(
+    int bookId,
+    String name,
+    String recordNumber,
+  ) async {
+    final db = await database;
+    final maps = await db.query(
+      'events',
+      where: 'book_id = ? AND name = ? AND record_number = ?',
+      whereArgs: [bookId, name, recordNumber],
+      orderBy: 'start_time ASC',
+    );
+    return maps.map((map) => Event.fromMap(map)).toList();
+  }
+
   Future<void> clearAllData() async {
     final db = await database;
     await db.delete('schedule_drawings');

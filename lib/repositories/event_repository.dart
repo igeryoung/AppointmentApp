@@ -45,4 +45,14 @@ abstract class IEventRepository {
     DateTime? newEndTime,
     String reason,
   );
+
+  /// Get all unique record numbers for a specific book
+  Future<List<String>> getAllRecordNumbers(int bookId);
+
+  /// Search events by name and record number for a specific book
+  Future<List<Event>> searchByNameAndRecordNumber(
+    int bookId,
+    String name,
+    String recordNumber,
+  );
 }

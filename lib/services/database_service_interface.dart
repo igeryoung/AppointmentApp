@@ -124,6 +124,16 @@ abstract class IDatabaseService {
   /// Get the count of events in a book
   Future<int> getEventCountByBook(int bookId);
 
+  /// Get all unique record numbers for a book
+  Future<List<String>> getAllRecordNumbers(int bookId);
+
+  /// Search events by name and record number
+  Future<List<Event>> searchByNameAndRecordNumber(
+    int bookId,
+    String name,
+    String recordNumber,
+  );
+
   /// Clear all data (for testing)
   Future<void> clearAllData();
 

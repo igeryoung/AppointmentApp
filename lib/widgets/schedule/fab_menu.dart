@@ -5,9 +5,12 @@ import '../../cubits/schedule_cubit.dart';
 import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
+import '../../repositories/event_repository.dart';
 import '../../services/cache_manager.dart';
 import '../../services/database_service_interface.dart';
+import '../../services/service_locator.dart';
 import '../../services/time_service.dart';
+import 'query_appointments_dialog.dart';
 import 'test_menu.dart';
 
 /// Helper class for building schedule screen FAB menu
@@ -84,6 +87,21 @@ class ScheduleFabMenuHelper {
           ),
         if (!isViewingToday())
           const SizedBox(height: 12),
+        // Query Appointments FAB (disabled in drawing mode)
+        FloatingActionButton(
+          heroTag: 'query_appointments',
+          onPressed: isDrawingMode
+              ? null
+              : () => showQueryAppointmentsDialog(
+                    context,
+                    bookId,
+                    getIt<IEventRepository>(),
+                  ),
+          backgroundColor: isDrawingMode ? Colors.grey : Colors.teal,
+          child: const Icon(Icons.search),
+          tooltip: isDrawingMode ? null : l10n.queryAppointments,
+        ),
+        const SizedBox(height: 12),
         // Generate random events FAB (disabled in drawing mode)
         FloatingActionButton(
           heroTag: 'generate_events',
