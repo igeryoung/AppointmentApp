@@ -379,6 +379,31 @@ class WebPRDDatabaseService implements IDatabaseService {
     return _events.where((e) => e.bookId == bookId).length;
   }
 
+  @override
+  Future<List<String>> getAllRecordNumbers(int bookId) async {
+    await Future.delayed(const Duration(milliseconds: 5));
+    final recordNumbers = _events
+        .where((e) => e.bookId == bookId && e.recordNumber != null && e.recordNumber!.isNotEmpty)
+        .map((e) => e.recordNumber!)
+        .toSet()
+        .toList();
+    recordNumbers.sort();
+    return recordNumbers;
+  }
+
+  @override
+  Future<List<Event>> searchByNameAndRecordNumber(
+    int bookId,
+    String name,
+    String recordNumber,
+  ) async {
+    await Future.delayed(const Duration(milliseconds: 5));
+    return _events
+        .where((e) => e.bookId == bookId && e.name == name && e.recordNumber == recordNumber)
+        .toList()
+      ..sort((a, b) => a.startTime.compareTo(b.startTime));
+  }
+
   // ===================
   // Schedule Drawing Operations
   // ===================
