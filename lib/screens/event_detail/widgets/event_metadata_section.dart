@@ -140,13 +140,16 @@ class EventMetadataSection extends StatelessWidget {
         const SizedBox(height: 8),
 
         // Record Number dropdown field
-        _RecordNumberDropdown(
-          value: recordNumber,
-          availableRecordNumbers: availableRecordNumbers,
-          isEnabled: isRecordNumberFieldEnabled,
-          labelText: l10n.recordNumber,
-          onChanged: onRecordNumberChanged,
-          onNewRecordNumberRequested: onNewRecordNumberRequested,
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: _RecordNumberDropdown(
+            value: recordNumber,
+            availableRecordNumbers: availableRecordNumbers,
+            isEnabled: isRecordNumberFieldEnabled,
+            labelText: l10n.recordNumber,
+            onChanged: onRecordNumberChanged,
+            onNewRecordNumberRequested: onNewRecordNumberRequested,
+          ),
         ),
         const SizedBox(height: 8),
 
@@ -154,20 +157,40 @@ class EventMetadataSection extends StatelessWidget {
         Row(
           children: [
             Expanded(
-              child: DropdownButtonFormField<EventType>(
-                value: selectedEventType,
-                decoration: InputDecoration(
-                  labelText: l10n.eventType,
-                  border: const OutlineInputBorder(),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              child: Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return PopupMenuButton<EventType>(
+                      position: PopupMenuPosition.under,
+                      offset: Offset(constraints.maxWidth - 200, 0),
+                      elevation: 16,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
+                      onSelected: onEventTypeChanged,
+                      itemBuilder: (context) {
+                        return EventTypeLocalizations.commonEventTypes.map((type) {
+                          return PopupMenuItem<EventType>(
+                            value: type,
+                            child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+                          );
+                        }).toList();
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: l10n.eventType,
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          suffixIcon: const Icon(Icons.arrow_drop_down),
+                        ),
+                        child: Text(
+                          EventTypeLocalizations.getLocalizedEventType(context, selectedEventType),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    );
+                  },
                 ),
-                items: EventTypeLocalizations.commonEventTypes.map((type) {
-                  return DropdownMenuItem<EventType>(
-                    value: type,
-                    child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
-                  );
-                }).toList(),
-                onChanged: onEventTypeChanged,
               ),
             ),
           ],
@@ -300,69 +323,85 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
 
   @override
   Widget build(BuildContext context) {
-    // Build dropdown items
-    final items = <DropdownMenuItem<String>>[];
+    // Build popup menu items
+    final items = <PopupMenuItem<String>>[];
 
     // Add available record numbers
     for (final recordNum in widget.availableRecordNumbers) {
-      items.add(DropdownMenuItem<String>(
+      items.add(PopupMenuItem<String>(
         value: recordNum,
         child: Text(recordNum),
       ));
     }
 
     // Add special options
-    items.add(const DropdownMenuItem<String>(
+    items.add(PopupMenuItem<String>(
       value: _RecordNumberDropdown._emptyOption,
       child: Text('留空'),
     ));
-    items.add(const DropdownMenuItem<String>(
+    items.add(PopupMenuItem<String>(
       value: _RecordNumberDropdown._newOption,
       child: Text('新病例號'),
     ));
 
-    // Determine current value for dropdown
-    String dropdownValue;
+    // Determine display text
+    String displayText;
     if (widget.value.isEmpty) {
-      dropdownValue = _RecordNumberDropdown._emptyOption;
-    } else if (widget.availableRecordNumbers.contains(widget.value)) {
-      dropdownValue = widget.value;
+      displayText = '留空';
     } else {
-      // User has a custom value not in the list, treat as regular option
-      // Add it to the items if not already present
+      displayText = widget.value;
+    }
+
+    // Add custom value to items if not in list
+    if (widget.value.isNotEmpty && !widget.availableRecordNumbers.contains(widget.value)) {
       if (!items.any((item) => item.value == widget.value)) {
-        items.insert(0, DropdownMenuItem<String>(
+        items.insert(0, PopupMenuItem<String>(
           value: widget.value,
           child: Text(widget.value),
         ));
       }
-      dropdownValue = widget.value;
     }
 
-    return DropdownButtonFormField<String>(
-      value: dropdownValue,
-      decoration: InputDecoration(
-        labelText: widget.labelText,
-        border: const OutlineInputBorder(),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      ),
-      items: items,
-      onChanged: widget.isEnabled && !_isProcessing
-          ? (String? newValue) {
-              if (newValue == null) return;
-
-              if (newValue == _RecordNumberDropdown._emptyOption) {
-                // User selected "留空"
-                widget.onChanged('');
-              } else if (newValue == _RecordNumberDropdown._newOption) {
-                // User selected "新病例號", show dialog
-                _handleNewRecordNumber();
-              } else {
-                // User selected an existing record number
-                widget.onChanged(newValue);
-              }
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return PopupMenuButton<String>(
+          position: PopupMenuPosition.under,
+          offset: Offset(constraints.maxWidth - 200, 0),
+          elevation: 16,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
+          enabled: widget.isEnabled && !_isProcessing,
+          onSelected: (String newValue) {
+            if (newValue == _RecordNumberDropdown._emptyOption) {
+              // User selected "留空"
+              widget.onChanged('');
+            } else if (newValue == _RecordNumberDropdown._newOption) {
+              // User selected "新病例號", show dialog
+              _handleNewRecordNumber();
+            } else {
+              // User selected an existing record number
+              widget.onChanged(newValue);
             }
-          : null,
+          },
+          itemBuilder: (context) => items,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: widget.labelText,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              suffixIcon: const Icon(Icons.arrow_drop_down),
+              enabled: widget.isEnabled && !_isProcessing,
+            ),
+            child: Text(
+              displayText,
+              style: TextStyle(
+                fontSize: 16,
+                color: widget.isEnabled && !_isProcessing ? null : Colors.grey,
+              ),
+            ),
+          ),
+        );
+      },
     );
   }
 

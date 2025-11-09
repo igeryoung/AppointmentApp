@@ -546,6 +546,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           padding: EdgeInsets.all(padding),
                           child: SingleChildScrollView(
                             physics: const BouncingScrollPhysics(),
+                            clipBehavior: Clip.none,
                             child: EventMetadataSection(
                               event: widget.event,
                               newEvent: state.newEvent,
