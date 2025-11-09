@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -36,6 +38,7 @@ class _QueryAppointmentsDialog extends StatefulWidget {
 
 class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController nameController;
+  Timer? _debounceTimer;
   String? selectedRecordNumber;
   List<String> filteredRecordNumbers = [];
   List<Event> searchResults = [];
@@ -53,6 +56,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
 
   @override
   void dispose() {
+    _debounceTimer?.cancel();
     nameController.dispose();
     super.dispose();
   }
@@ -213,11 +217,17 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null; // Clear selection when name changes
-                        isDropdownEnabled = false; // Disable until focus lost
+                        isDropdownEnabled = false; // Temporarily disable while typing
+                      });
+
+                      // Cancel previous debounce timer
+                      _debounceTimer?.cancel();
+
+                      // Start new debounce timer - filter after 500ms of no typing
+                      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
+                        _filterRecordNumbersByName();
                       });
                     },
-                    onEditingComplete: _filterRecordNumbersByName,
-                    onSubmitted: (_) => _filterRecordNumbersByName(),
                   ),
                   const SizedBox(height: 16),
 
