@@ -154,6 +154,10 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     final l10n = AppLocalizations.of(context)!;
 
     return Dialog(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(28.0),
+      ),
+      clipBehavior: Clip.antiAlias,
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
         constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
@@ -195,28 +199,26 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                   const SizedBox(height: 16),
 
                   // Record number dropdown
-                  DropdownButtonFormField<String>(
-                    value: selectedRecordNumber,
-                    decoration: InputDecoration(
-                      labelText: l10n.recordNumber,
-                      errorText: recordNumberError,
-                      border: const OutlineInputBorder(),
-                    ),
-                    hint: Text(recordNumbers.isEmpty
+                  DropdownMenu<String>(
+                    initialSelection: selectedRecordNumber,
+                    label: Text(l10n.recordNumber),
+                    hintText: recordNumbers.isEmpty
                         ? l10n.noRecordNumbers
-                        : l10n.selectRecordNumber),
-                    isExpanded: true,
-                    menuMaxHeight: 300,
-                    borderRadius: BorderRadius.circular(4),
-                    alignment: AlignmentDirectional.centerStart,
-                    items: recordNumbers.map((number) {
-                      return DropdownMenuItem(
+                        : l10n.selectRecordNumber,
+                    enabled: recordNumbers.isNotEmpty,
+                    expandedInsets: EdgeInsets.zero,
+                    menuHeight: 300,
+                    errorText: recordNumberError,
+                    inputDecorationTheme: const InputDecorationTheme(
+                      border: OutlineInputBorder(),
+                    ),
+                    dropdownMenuEntries: recordNumbers.map((number) {
+                      return DropdownMenuEntry<String>(
                         value: number,
-                        alignment: AlignmentDirectional.centerStart,
-                        child: Text(number),
+                        label: number,
                       );
                     }).toList(),
-                    onChanged: recordNumbers.isEmpty ? null : (String? newValue) {
+                    onSelected: (String? newValue) {
                       setState(() {
                         selectedRecordNumber = newValue;
                         recordNumberError = null;
