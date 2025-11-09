@@ -169,7 +169,10 @@ class EventMetadataSection extends StatelessWidget {
                     return EventTypeLocalizations.commonEventTypes.map((type) {
                       return PopupMenuItem<EventType>(
                         value: type,
-                        child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+                        ),
                       );
                     }).toList();
                   },
@@ -325,18 +328,27 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
     for (final recordNum in widget.availableRecordNumbers) {
       items.add(PopupMenuItem<String>(
         value: recordNum,
-        child: Text(recordNum),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: Text(recordNum),
+        ),
       ));
     }
 
     // Add special options
-    items.add(const PopupMenuItem<String>(
+    items.add(PopupMenuItem<String>(
       value: _RecordNumberDropdown._emptyOption,
-      child: Text('留空'),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Text('留空'),
+      ),
     ));
-    items.add(const PopupMenuItem<String>(
+    items.add(PopupMenuItem<String>(
       value: _RecordNumberDropdown._newOption,
-      child: Text('新病例號'),
+      child: Align(
+        alignment: Alignment.centerRight,
+        child: Text('新病例號'),
+      ),
     ));
 
     // Determine display text
@@ -352,7 +364,10 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
       if (!items.any((item) => item.value == widget.value)) {
         items.insert(0, PopupMenuItem<String>(
           value: widget.value,
-          child: Text(widget.value),
+          child: Align(
+            alignment: Alignment.centerRight,
+            child: Text(widget.value),
+          ),
         ));
       }
     }
