@@ -37,10 +37,11 @@ class _QueryAppointmentsDialog extends StatefulWidget {
 class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController nameController;
   String? selectedRecordNumber;
-  List<String> recordNumbers = [];
+  List<String> filteredRecordNumbers = [];
   List<Event> searchResults = [];
   bool isLoading = false;
   bool hasSearched = false;
+  bool isDropdownEnabled = false;
   String? nameError;
   String? recordNumberError;
 
@@ -48,7 +49,6 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   void initState() {
     super.initState();
     nameController = TextEditingController();
-    _loadRecordNumbers();
   }
 
   @override
@@ -57,20 +57,39 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     super.dispose();
   }
 
-  /// Load all unique record numbers from the database
-  Future<void> _loadRecordNumbers() async {
+  /// Filter record numbers based on entered name (exact match, case-insensitive)
+  Future<void> _filterRecordNumbersByName() async {
+    final name = nameController.text.trim();
+
+    if (name.isEmpty) {
+      // Empty name - disable dropdown
+      setState(() {
+        filteredRecordNumbers = [];
+        isDropdownEnabled = false;
+        selectedRecordNumber = null;
+      });
+      return;
+    }
+
     setState(() {
       isLoading = true;
     });
 
     try {
-      final numbers = await widget.eventRepository.getAllRecordNumbers(widget.bookId);
+      final numbers = await widget.eventRepository.getRecordNumbersByName(
+        widget.bookId,
+        name,
+      );
       setState(() {
-        recordNumbers = numbers;
+        filteredRecordNumbers = numbers;
+        isDropdownEnabled = true;
+        selectedRecordNumber = null; // Always clear selection when name changes
         isLoading = false;
       });
     } catch (e) {
       setState(() {
+        filteredRecordNumbers = [];
+        isDropdownEnabled = false;
         isLoading = false;
       });
       if (mounted) {
@@ -193,8 +212,12 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                     onChanged: (value) {
                       setState(() {
                         nameError = null;
+                        selectedRecordNumber = null; // Clear selection when name changes
+                        isDropdownEnabled = false; // Disable until focus lost
                       });
                     },
+                    onEditingComplete: _filterRecordNumbersByName,
+                    onSubmitted: (_) => _filterRecordNumbersByName(),
                   ),
                   const SizedBox(height: 16),
 
@@ -202,17 +225,19 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                   DropdownMenu<String>(
                     initialSelection: selectedRecordNumber,
                     label: Text(l10n.recordNumber),
-                    hintText: recordNumbers.isEmpty
-                        ? l10n.noRecordNumbers
-                        : l10n.selectRecordNumber,
-                    enabled: recordNumbers.isNotEmpty,
+                    hintText: !isDropdownEnabled
+                        ? l10n.enterNameFirst
+                        : (filteredRecordNumbers.isEmpty
+                            ? l10n.noMatchingRecordNumbers
+                            : l10n.selectRecordNumber),
+                    enabled: isDropdownEnabled,
                     expandedInsets: EdgeInsets.zero,
                     menuHeight: 300,
                     errorText: recordNumberError,
                     inputDecorationTheme: const InputDecorationTheme(
                       border: OutlineInputBorder(),
                     ),
-                    dropdownMenuEntries: recordNumbers.map((number) {
+                    dropdownMenuEntries: filteredRecordNumbers.map((number) {
                       return DropdownMenuEntry<String>(
                         value: number,
                         label: number,

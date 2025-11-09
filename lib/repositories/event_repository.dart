@@ -49,6 +49,9 @@ abstract class IEventRepository {
   /// Get all unique record numbers for a specific book
   Future<List<String>> getAllRecordNumbers(int bookId);
 
+  /// Get unique record numbers filtered by exact name match (case-insensitive)
+  Future<List<String>> getRecordNumbersByName(int bookId, String name);
+
   /// Search events by name and record number for a specific book
   Future<List<Event>> searchByNameAndRecordNumber(
     int bookId,

@@ -392,6 +392,22 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   @override
+  Future<List<String>> getRecordNumbersByName(int bookId, String name) async {
+    await Future.delayed(const Duration(milliseconds: 5));
+    final recordNumbers = _events
+        .where((e) =>
+          e.bookId == bookId &&
+          e.name.toLowerCase() == name.toLowerCase() &&
+          e.recordNumber != null &&
+          e.recordNumber!.isNotEmpty)
+        .map((e) => e.recordNumber!)
+        .toSet()
+        .toList();
+    recordNumbers.sort();
+    return recordNumbers;
+  }
+
+  @override
   Future<List<Event>> searchByNameAndRecordNumber(
     int bookId,
     String name,

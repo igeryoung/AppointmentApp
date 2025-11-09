@@ -127,6 +127,9 @@ abstract class IDatabaseService {
   /// Get all unique record numbers for a book
   Future<List<String>> getAllRecordNumbers(int bookId);
 
+  /// Get unique record numbers filtered by exact name match (case-insensitive)
+  Future<List<String>> getRecordNumbersByName(int bookId, String name);
+
   /// Search events by name and record number
   Future<List<Event>> searchByNameAndRecordNumber(
     int bookId,
