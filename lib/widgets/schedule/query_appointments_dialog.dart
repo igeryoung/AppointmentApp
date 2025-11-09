@@ -183,7 +183,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       clipBehavior: Clip.antiAlias,
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
-        constraints: const BoxConstraints(maxWidth: 600, maxHeight: 700),
+        constraints: const BoxConstraints(maxWidth: 900, maxHeight: 1050),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
