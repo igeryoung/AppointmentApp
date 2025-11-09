@@ -1819,6 +1819,37 @@ class PRDDatabaseService implements IDatabaseService {
     return result.first['count'] as int;
   }
 
+  @override
+  Future<List<String>> getAllRecordNumbers(int bookId) async {
+    final db = await database;
+    final result = await db.query(
+      'events',
+      columns: ['DISTINCT record_number'],
+      where: 'book_id = ? AND record_number IS NOT NULL AND record_number != ""',
+      whereArgs: [bookId],
+      orderBy: 'record_number ASC',
+    );
+    return result
+        .map((row) => row['record_number'] as String)
+        .toList();
+  }
+
+  @override
+  Future<List<Event>> searchByNameAndRecordNumber(
+    int bookId,
+    String name,
+    String recordNumber,
+  ) async {
+    final db = await database;
+    final maps = await db.query(
+      'events',
+      where: 'book_id = ? AND name = ? AND record_number = ?',
+      whereArgs: [bookId, name, recordNumber],
+      orderBy: 'start_time ASC',
+    );
+    return maps.map((map) => Event.fromMap(map)).toList();
+  }
+
   Future<void> clearAllData() async {
     final db = await database;
     await db.delete('schedule_drawings');
@@ -1892,7 +1923,8 @@ class PRDDatabaseService implements IDatabaseService {
 
   /// Get all distinct record numbers for a given person name
   /// Queries both events and notes tables, excludes empty record numbers
-  Future<List<String>> getRecordNumbersByName(String name) async {
+  @override
+  Future<List<String>> getRecordNumbersByName(int bookId, String name) async {
     if (name.trim().isEmpty) {
       return [];
     }
@@ -1904,22 +1936,25 @@ class PRDDatabaseService implements IDatabaseService {
     final eventsResult = await db.rawQuery('''
       SELECT DISTINCT record_number
       FROM events
-      WHERE LOWER(TRIM(name)) = ?
+      WHERE book_id = ?
+        AND LOWER(TRIM(name)) = ?
         AND record_number IS NOT NULL
         AND TRIM(record_number) != ''
         AND is_removed = 0
       ORDER BY record_number
-    ''', [nameNorm]);
+    ''', [bookId, nameNorm]);
 
-    // Query notes table
+    // Query notes table (joined with events to filter by book_id)
     final notesResult = await db.rawQuery('''
-      SELECT DISTINCT record_number_normalized
-      FROM notes
-      WHERE person_name_normalized = ?
-        AND record_number_normalized IS NOT NULL
-        AND TRIM(record_number_normalized) != ''
-      ORDER BY record_number_normalized
-    ''', [nameNorm]);
+      SELECT DISTINCT n.record_number_normalized
+      FROM notes n
+      INNER JOIN events e ON n.event_id = e.id
+      WHERE e.book_id = ?
+        AND n.person_name_normalized = ?
+        AND n.record_number_normalized IS NOT NULL
+        AND TRIM(n.record_number_normalized) != ''
+      ORDER BY n.record_number_normalized
+    ''', [bookId, nameNorm]);
 
     // Combine and deduplicate
     final recordNumbers = <String>{};

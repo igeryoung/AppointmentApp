@@ -49,5 +49,60 @@
   "eventOptions": "Event Options",
   "@eventOptions": {
     "description": "Default header for event context menu when event has no name"
+  },
+
+  "queryAppointments": "Query Appointments",
+  "@queryAppointments": {
+    "description": "Title for query appointments dialog"
+  },
+
+  "search": "Search",
+  "@search": {
+    "description": "Search button text"
+  },
+
+  "errorLoadingData": "Error loading data",
+  "@errorLoadingData": {
+    "description": "Error message when loading data fails"
+  },
+
+  "nameRequired": "Name is required",
+  "@nameRequired": {
+    "description": "Validation error for empty name field"
+  },
+
+  "errorSearching": "Error searching",
+  "@errorSearching": {
+    "description": "Error message when search fails"
+  },
+
+  "noRecordNumbers": "No record numbers",
+  "@noRecordNumbers": {
+    "description": "Message when no record numbers are available"
+  },
+
+  "selectRecordNumber": "Select record number",
+  "@selectRecordNumber": {
+    "description": "Hint text for record number dropdown"
+  },
+
+  "enterSearchCriteria": "Enter search criteria to query appointments",
+  "@enterSearchCriteria": {
+    "description": "Message shown before performing search"
+  },
+
+  "noAppointmentsFound": "No appointments found",
+  "@noAppointmentsFound": {
+    "description": "Message when no appointments match the search criteria"
+  },
+
+  "enterNameFirst": "Please enter name first",
+  "@enterNameFirst": {
+    "description": "Message when name must be entered before selecting record number"
+  },
+
+  "noMatchingRecordNumbers": "No matching record numbers",
+  "@noMatchingRecordNumbers": {
+    "description": "Message when no record numbers match the entered name"
   }
 }

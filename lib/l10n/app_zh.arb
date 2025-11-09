@@ -854,5 +854,60 @@
   "eventOptions": "活動選項",
   "@eventOptions": {
     "description": "Default header for event context menu when event has no name"
+  },
+
+  "queryAppointments": "查詢預約記錄",
+  "@queryAppointments": {
+    "description": "Title for query appointments dialog"
+  },
+
+  "search": "搜尋",
+  "@search": {
+    "description": "Search button text"
+  },
+
+  "errorLoadingData": "載入資料時發生錯誤",
+  "@errorLoadingData": {
+    "description": "Error message when loading data fails"
+  },
+
+  "nameRequired": "名稱為必填項目",
+  "@nameRequired": {
+    "description": "Validation error for empty name field"
+  },
+
+  "errorSearching": "搜尋時發生錯誤",
+  "@errorSearching": {
+    "description": "Error message when search fails"
+  },
+
+  "noRecordNumbers": "沒有紀錄編號",
+  "@noRecordNumbers": {
+    "description": "Message when no record numbers are available"
+  },
+
+  "selectRecordNumber": "選擇紀錄編號",
+  "@selectRecordNumber": {
+    "description": "Hint text for record number dropdown"
+  },
+
+  "enterSearchCriteria": "輸入搜尋條件以查詢預約記錄",
+  "@enterSearchCriteria": {
+    "description": "Message shown before performing search"
+  },
+
+  "noAppointmentsFound": "找不到符合條件的預約記錄",
+  "@noAppointmentsFound": {
+    "description": "Message when no appointments match the search criteria"
+  },
+
+  "enterNameFirst": "請先輸入姓名",
+  "@enterNameFirst": {
+    "description": "Message when name must be entered before selecting record number"
+  },
+
+  "noMatchingRecordNumbers": "沒有符合的病例號",
+  "@noMatchingRecordNumbers": {
+    "description": "Message when no record numbers match the entered name"
   }
 }
