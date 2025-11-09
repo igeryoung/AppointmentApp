@@ -159,36 +159,37 @@ class EventMetadataSection extends StatelessWidget {
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 4),
-                child: PopupMenuButton<EventType>(
-                  position: PopupMenuPosition.under,
-                  offset: const Offset(0, 0),
-                  elevation: 16,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                  constraints: const BoxConstraints(maxHeight: 300),
-                  onSelected: onEventTypeChanged,
-                  itemBuilder: (context) {
-                    return EventTypeLocalizations.commonEventTypes.map((type) {
-                      return PopupMenuItem<EventType>(
-                        value: type,
-                        child: Align(
-                          alignment: Alignment.centerRight,
-                          child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+                child: LayoutBuilder(
+                  builder: (context, constraints) {
+                    return PopupMenuButton<EventType>(
+                      position: PopupMenuPosition.under,
+                      offset: Offset(constraints.maxWidth - 200, 0),
+                      elevation: 16,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
+                      onSelected: onEventTypeChanged,
+                      itemBuilder: (context) {
+                        return EventTypeLocalizations.commonEventTypes.map((type) {
+                          return PopupMenuItem<EventType>(
+                            value: type,
+                            child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+                          );
+                        }).toList();
+                      },
+                      child: InputDecorator(
+                        decoration: InputDecoration(
+                          labelText: l10n.eventType,
+                          border: const OutlineInputBorder(),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          suffixIcon: const Icon(Icons.arrow_drop_down),
                         ),
-                      );
-                    }).toList();
+                        child: Text(
+                          EventTypeLocalizations.getLocalizedEventType(context, selectedEventType),
+                          style: const TextStyle(fontSize: 16),
+                        ),
+                      ),
+                    );
                   },
-                  child: InputDecorator(
-                    decoration: InputDecoration(
-                      labelText: l10n.eventType,
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                      suffixIcon: const Icon(Icons.arrow_drop_down),
-                    ),
-                    child: Text(
-                      EventTypeLocalizations.getLocalizedEventType(context, selectedEventType),
-                      style: const TextStyle(fontSize: 16),
-                    ),
-                  ),
                 ),
               ),
             ),
@@ -329,27 +330,18 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
     for (final recordNum in widget.availableRecordNumbers) {
       items.add(PopupMenuItem<String>(
         value: recordNum,
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: Text(recordNum),
-        ),
+        child: Text(recordNum),
       ));
     }
 
     // Add special options
     items.add(PopupMenuItem<String>(
       value: _RecordNumberDropdown._emptyOption,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Text('留空'),
-      ),
+      child: Text('留空'),
     ));
     items.add(PopupMenuItem<String>(
       value: _RecordNumberDropdown._newOption,
-      child: Align(
-        alignment: Alignment.centerRight,
-        child: Text('新病例號'),
-      ),
+      child: Text('新病例號'),
     ));
 
     // Determine display text
@@ -365,50 +357,51 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
       if (!items.any((item) => item.value == widget.value)) {
         items.insert(0, PopupMenuItem<String>(
           value: widget.value,
-          child: Align(
-            alignment: Alignment.centerRight,
-            child: Text(widget.value),
-          ),
+          child: Text(widget.value),
         ));
       }
     }
 
-    return PopupMenuButton<String>(
-      position: PopupMenuPosition.under,
-      offset: const Offset(0, 0),
-      elevation: 16,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-      constraints: const BoxConstraints(maxHeight: 300),
-      enabled: widget.isEnabled && !_isProcessing,
-      onSelected: (String newValue) {
-        if (newValue == _RecordNumberDropdown._emptyOption) {
-          // User selected "留空"
-          widget.onChanged('');
-        } else if (newValue == _RecordNumberDropdown._newOption) {
-          // User selected "新病例號", show dialog
-          _handleNewRecordNumber();
-        } else {
-          // User selected an existing record number
-          widget.onChanged(newValue);
-        }
-      },
-      itemBuilder: (context) => items,
-      child: InputDecorator(
-        decoration: InputDecoration(
-          labelText: widget.labelText,
-          border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          suffixIcon: const Icon(Icons.arrow_drop_down),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return PopupMenuButton<String>(
+          position: PopupMenuPosition.under,
+          offset: Offset(constraints.maxWidth - 200, 0),
+          elevation: 16,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
           enabled: widget.isEnabled && !_isProcessing,
-        ),
-        child: Text(
-          displayText,
-          style: TextStyle(
-            fontSize: 16,
-            color: widget.isEnabled && !_isProcessing ? null : Colors.grey,
+          onSelected: (String newValue) {
+            if (newValue == _RecordNumberDropdown._emptyOption) {
+              // User selected "留空"
+              widget.onChanged('');
+            } else if (newValue == _RecordNumberDropdown._newOption) {
+              // User selected "新病例號", show dialog
+              _handleNewRecordNumber();
+            } else {
+              // User selected an existing record number
+              widget.onChanged(newValue);
+            }
+          },
+          itemBuilder: (context) => items,
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: widget.labelText,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              suffixIcon: const Icon(Icons.arrow_drop_down),
+              enabled: widget.isEnabled && !_isProcessing,
+            ),
+            child: Text(
+              displayText,
+              style: TextStyle(
+                fontSize: 16,
+                color: widget.isEnabled && !_isProcessing ? null : Colors.grey,
+              ),
+            ),
           ),
-        ),
-      ),
+        );
+      },
     );
   }
 
