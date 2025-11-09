@@ -152,6 +152,7 @@ class ScheduleEventTileHelper {
                   : null,
         ),
         child: Stack(
+          clipBehavior: Clip.none, // Allow OK indicator to overflow boundary
           children: [
             // Dotted line overlay for removed events
             if (event.isRemoved && dottedBorderPainter != null)
@@ -165,11 +166,11 @@ class ScheduleEventTileHelper {
               slotHeight: slotHeight,
               events: events,
             ),
-            // OK indicator for checked events (top-right corner, 1/2 tile height, exceeding boundary)
+            // OK indicator for checked events (top-right corner, 1/2 tile height, exceeding boundary by 8px)
             if (event.isChecked)
               Positioned(
-                top: -4,
-                right: -4,
+                top: -8,
+                right: -8,
                 child: Image.asset(
                   'assets/images/icons8-ok-96.png',
                   width: tileHeight / 2,
