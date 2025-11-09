@@ -1232,6 +1232,72 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'繼續編輯'**
   String get keepEditing;
+
+  /// Title for query appointments dialog
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'查詢預約記錄'**
+  String get queryAppointments;
+
+  /// Search button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'搜尋'**
+  String get search;
+
+  /// Error message when loading data fails
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'載入資料時發生錯誤'**
+  String get errorLoadingData;
+
+  /// Validation error for empty name field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'名稱為必填項目'**
+  String get nameRequired;
+
+  /// Error message when search fails
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'搜尋時發生錯誤'**
+  String get errorSearching;
+
+  /// Message when no record numbers are available
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'沒有病例號'**
+  String get noRecordNumbers;
+
+  /// Hint text for record number dropdown
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'選擇病例號'**
+  String get selectRecordNumber;
+
+  /// Message shown before performing search
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'輸入搜尋條件以查詢預約記錄'**
+  String get enterSearchCriteria;
+
+  /// Message when no appointments match the search criteria
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'找不到符合條件的預約記錄'**
+  String get noAppointmentsFound;
+
+  /// Message when name must be entered before selecting record number
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請先輸入姓名'**
+  String get enterNameFirst;
+
+  /// Message when no record numbers match the entered name
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'沒有符合的病例號'**
+  String get noMatchingRecordNumbers;
 }
 
 class _AppLocalizationsDelegate

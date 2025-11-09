@@ -665,4 +665,38 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get keepEditing => '繼續編輯';
+
+  @override
+  String get queryAppointments => 'Query Appointments';
+
+  @override
+  String get search => 'Search';
+
+  @override
+  String get errorLoadingData => 'Error loading data';
+
+  @override
+  String get nameRequired => 'Name is required';
+
+  @override
+  String get errorSearching => 'Error searching';
+
+  @override
+  String get noRecordNumbers => 'No record numbers';
+
+  @override
+  String get selectRecordNumber => 'Select record number';
+
+  @override
+  String get enterSearchCriteria =>
+      'Enter search criteria to query appointments';
+
+  @override
+  String get noAppointmentsFound => 'No appointments found';
+
+  @override
+  String get enterNameFirst => 'Please enter name first';
+
+  @override
+  String get noMatchingRecordNumbers => 'No matching record numbers';
 }

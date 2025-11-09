@@ -665,6 +665,39 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get keepEditing => '继续编辑';
+
+  @override
+  String get queryAppointments => '查詢預約記錄';
+
+  @override
+  String get search => '搜尋';
+
+  @override
+  String get errorLoadingData => '載入資料時發生錯誤';
+
+  @override
+  String get nameRequired => '名稱為必填項目';
+
+  @override
+  String get errorSearching => '搜尋時發生錯誤';
+
+  @override
+  String get noRecordNumbers => '沒有紀錄編號';
+
+  @override
+  String get selectRecordNumber => '選擇紀錄編號';
+
+  @override
+  String get enterSearchCriteria => '輸入搜尋條件以查詢預約記錄';
+
+  @override
+  String get noAppointmentsFound => '找不到符合條件的預約記錄';
+
+  @override
+  String get enterNameFirst => '請先輸入姓名';
+
+  @override
+  String get noMatchingRecordNumbers => '沒有符合的病例號';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1328,4 +1361,37 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get keepEditing => '繼續編輯';
+
+  @override
+  String get queryAppointments => '查詢預約記錄';
+
+  @override
+  String get search => '搜尋';
+
+  @override
+  String get errorLoadingData => '載入資料時發生錯誤';
+
+  @override
+  String get nameRequired => '名稱為必填項目';
+
+  @override
+  String get errorSearching => '搜尋時發生錯誤';
+
+  @override
+  String get noRecordNumbers => '沒有病例號';
+
+  @override
+  String get selectRecordNumber => '選擇病例號';
+
+  @override
+  String get enterSearchCriteria => '輸入搜尋條件以查詢預約記錄';
+
+  @override
+  String get noAppointmentsFound => '找不到符合條件的預約記錄';
+
+  @override
+  String get enterNameFirst => '請先輸入姓名';
+
+  @override
+  String get noMatchingRecordNumbers => '沒有符合的病例號';
 }
