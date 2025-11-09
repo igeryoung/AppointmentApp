@@ -510,6 +510,23 @@ class EventDetailController {
     debugPrint('✅ EventDetailController: Loaded existing person note (${existingNote.strokes.length} strokes)');
   }
 
+  /// Get all record numbers for the current person name
+  /// Returns empty list if name is empty or DB service is not PRD
+  Future<List<String>> getRecordNumbersForCurrentName() async {
+    final name = _state.name.trim();
+
+    if (name.isEmpty) {
+      return [];
+    }
+
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      return await prdDb.getRecordNumbersByName(name);
+    }
+
+    return [];
+  }
+
   /// Update start time
   void updateStartTime(DateTime startTime) {
     _updateState(_state.copyWith(startTime: startTime, hasChanges: true));
