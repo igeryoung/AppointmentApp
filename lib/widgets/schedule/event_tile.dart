@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -171,8 +170,8 @@ class ScheduleEventTileHelper {
               Positioned(
                 top: -4,
                 right: -4,
-                child: SvgPicture.asset(
-                  'assets/images/ok_indicator.svg',
+                child: Image.asset(
+                  'assets/images/icons8-ok-96.png',
                   width: tileHeight / 2,
                   height: tileHeight / 2,
                   fit: BoxFit.contain,
