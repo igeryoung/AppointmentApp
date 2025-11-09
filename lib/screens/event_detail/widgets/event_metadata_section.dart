@@ -161,6 +161,8 @@ class EventMetadataSection extends StatelessWidget {
                   border: const OutlineInputBorder(),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                 ),
+                isExpanded: true,
+                menuMaxHeight: 300,
                 items: EventTypeLocalizations.commonEventTypes.map((type) {
                   return DropdownMenuItem<EventType>(
                     value: type,
@@ -346,6 +348,8 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
         border: const OutlineInputBorder(),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
+      isExpanded: true,
+      menuMaxHeight: 300,
       items: items,
       onChanged: widget.isEnabled && !_isProcessing
           ? (String? newValue) {
