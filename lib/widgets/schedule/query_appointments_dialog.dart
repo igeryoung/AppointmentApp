@@ -205,9 +205,14 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                     hint: Text(recordNumbers.isEmpty
                         ? l10n.noRecordNumbers
                         : l10n.selectRecordNumber),
+                    isExpanded: true,
+                    menuMaxHeight: 300,
+                    borderRadius: BorderRadius.circular(4),
+                    alignment: AlignmentDirectional.centerStart,
                     items: recordNumbers.map((number) {
                       return DropdownMenuItem(
                         value: number,
+                        alignment: AlignmentDirectional.centerStart,
                         child: Text(number),
                       );
                     }).toList(),
