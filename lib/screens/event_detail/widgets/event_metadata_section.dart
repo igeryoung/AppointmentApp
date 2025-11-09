@@ -160,7 +160,8 @@ class EventMetadataSection extends StatelessWidget {
               child: Padding(
                 padding: const EdgeInsets.only(bottom: 4),
                 child: PopupMenuButton<EventType>(
-                  offset: const Offset(0, 50),
+                  position: PopupMenuPosition.under,
+                  offset: const Offset(0, 0),
                   elevation: 16,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                   constraints: const BoxConstraints(maxHeight: 300),
@@ -373,7 +374,8 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
     }
 
     return PopupMenuButton<String>(
-      offset: const Offset(0, 50),
+      position: PopupMenuPosition.under,
+      offset: const Offset(0, 0),
       elevation: 16,
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
       constraints: const BoxConstraints(maxHeight: 300),
