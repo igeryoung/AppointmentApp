@@ -35,6 +35,7 @@ class ScheduleBody extends StatelessWidget {
   final VoidCallback? onScheduleNextAppointment;
   final VoidCallback? onRemove;
   final VoidCallback? onDelete;
+  final Function(bool)? onCheckedChanged;
 
   const ScheduleBody({
     super.key,
@@ -60,6 +61,7 @@ class ScheduleBody extends StatelessWidget {
     this.onScheduleNextAppointment,
     this.onRemove,
     this.onDelete,
+    this.onCheckedChanged,
   });
 
   @override
@@ -141,7 +143,8 @@ class ScheduleBody extends StatelessWidget {
                           onChangeTime != null &&
                           onScheduleNextAppointment != null &&
                           onRemove != null &&
-                          onDelete != null)
+                          onDelete != null &&
+                          onCheckedChanged != null)
                         ScheduleContextMenu(
                           event: selectedEventForMenu!,
                           position: menuPosition!,
@@ -151,6 +154,7 @@ class ScheduleBody extends StatelessWidget {
                           onScheduleNextAppointment: onScheduleNextAppointment!,
                           onRemove: onRemove!,
                           onDelete: onDelete!,
+                          onCheckedChanged: onCheckedChanged!,
                         ),
                     ],
                   ),

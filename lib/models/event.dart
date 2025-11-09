@@ -21,6 +21,7 @@ class Event {
   final int? originalEventId; // Reference to original event for time changes
   /// Nullable: only set for time-change related events
   final int? newEventId; // Reference to new event if this event's time was changed
+  final bool isChecked; // Marks event as completed/checked
 
   const Event({
     this.id,
@@ -36,6 +37,7 @@ class Event {
     this.removalReason,
     this.originalEventId,
     this.newEventId,
+    this.isChecked = false,
   });
 
   Event copyWith({
@@ -52,6 +54,7 @@ class Event {
     String? removalReason,
     int? originalEventId,
     int? newEventId,
+    bool? isChecked,
   }) {
     return Event(
       id: id ?? this.id,
@@ -67,6 +70,7 @@ class Event {
       removalReason: removalReason ?? this.removalReason,
       originalEventId: originalEventId ?? this.originalEventId,
       newEventId: newEventId ?? this.newEventId,
+      isChecked: isChecked ?? this.isChecked,
     );
   }
 
@@ -85,6 +89,7 @@ class Event {
       'removal_reason': removalReason,
       'original_event_id': originalEventId,
       'new_event_id': newEventId,
+      'is_checked': isChecked ? 1 : 0,
     };
   }
 
@@ -105,6 +110,7 @@ class Event {
       removalReason: map['removal_reason'],
       originalEventId: map['original_event_id']?.toInt(),
       newEventId: map['new_event_id']?.toInt(),
+      isChecked: (map['is_checked'] ?? 0) == 1,
     );
   }
 
@@ -152,11 +158,12 @@ class Event {
         other.isRemoved == isRemoved &&
         other.removalReason == removalReason &&
         other.originalEventId == originalEventId &&
-        other.newEventId == newEventId;
+        other.newEventId == newEventId &&
+        other.isChecked == isChecked;
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, bookId, name, recordNumber, eventType, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId);
+    return Object.hash(id, bookId, name, recordNumber, eventType, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked);
   }
 }

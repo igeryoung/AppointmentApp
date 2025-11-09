@@ -165,6 +165,26 @@ class ScheduleEventTileHelper {
               slotHeight: slotHeight,
               events: events,
             ),
+            // OK indicator for checked events (top-right corner, ~1/3 tile height)
+            if (event.isChecked)
+              Positioned(
+                top: 0,
+                right: 0,
+                child: Container(
+                  width: tileHeight / 3,
+                  height: tileHeight / 3,
+                  decoration: BoxDecoration(
+                    color: Colors.green.withOpacity(0.9),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white, width: 1),
+                  ),
+                  child: Icon(
+                    Icons.check,
+                    color: Colors.white,
+                    size: (tileHeight / 3) * 0.6,
+                  ),
+                ),
+              ),
           ],
         ),
       ),
