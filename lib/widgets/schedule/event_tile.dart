@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_svg/flutter_svg.dart';
 import 'package:intl/intl.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -165,24 +166,16 @@ class ScheduleEventTileHelper {
               slotHeight: slotHeight,
               events: events,
             ),
-            // OK indicator for checked events (top-right corner, ~1/3 tile height)
+            // OK indicator for checked events (top-right corner, 1/2 tile height, exceeding boundary)
             if (event.isChecked)
               Positioned(
-                top: 0,
-                right: 0,
-                child: Container(
-                  width: tileHeight / 3,
-                  height: tileHeight / 3,
-                  decoration: BoxDecoration(
-                    color: Colors.green.withOpacity(0.9),
-                    shape: BoxShape.circle,
-                    border: Border.all(color: Colors.white, width: 1),
-                  ),
-                  child: Icon(
-                    Icons.check,
-                    color: Colors.white,
-                    size: (tileHeight / 3) * 0.6,
-                  ),
+                top: -4,
+                right: -4,
+                child: SvgPicture.asset(
+                  'assets/images/ok_indicator.svg',
+                  width: tileHeight / 2,
+                  height: tileHeight / 2,
+                  fit: BoxFit.contain,
                 ),
               ),
           ],
