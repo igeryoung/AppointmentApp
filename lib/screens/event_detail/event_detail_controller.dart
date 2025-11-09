@@ -521,7 +521,7 @@ class EventDetailController {
 
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.getRecordNumbersByName(name);
+      return await prdDb.getRecordNumbersByName(event.bookId, name);
     }
 
     return [];
