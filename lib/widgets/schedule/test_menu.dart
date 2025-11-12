@@ -238,7 +238,7 @@ class ScheduleTestMenuHelper {
             final strokes = ScheduleTestUtils.generateRandomStrokes(strokeCount);
             final note = Note(
               eventId: createdEvent.id!,
-              strokes: strokes,
+              pages: [strokes], // Wrap strokes in array for multi-page format
               createdAt: now,
               updatedAt: now,
               isDirty: true, // Mark as dirty so it syncs to server when first opened
