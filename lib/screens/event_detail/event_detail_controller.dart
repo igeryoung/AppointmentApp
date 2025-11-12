@@ -197,6 +197,7 @@ class EventDetailController {
     if (cachedNote != null) {
       _updateState(_state.copyWith(
         note: cachedNote,
+        lastKnownPages: cachedNote.pages,
         hasUnsyncedChanges: cachedNote.isDirty,
       ));
       debugPrint('✅ EventDetailController: Loaded from cache (${cachedNote.strokes.length} strokes, isDirty: ${cachedNote.isDirty})');
@@ -237,6 +238,7 @@ class EventDetailController {
       if (serverNote != null) {
         _updateState(_state.copyWith(
           note: serverNote,
+          lastKnownPages: serverNote.pages,
           hasUnsyncedChanges: false,
           isLoadingFromServer: false,
           isOffline: false,
@@ -315,7 +317,10 @@ class EventDetailController {
 
           if (syncedNote != null && syncedNote.isNotEmpty) {
             // Update state with synced note if it has content
-            _updateState(_state.copyWith(note: syncedNote));
+            _updateState(_state.copyWith(
+              note: syncedNote,
+              lastKnownPages: syncedNote.pages,
+            ));
             debugPrint('✅ EventDetailController: Note synced from person group, skipping save');
             // Return early - we don't need to save the note again since it was synced
             _updateState(_state.copyWith(isLoading: false));
