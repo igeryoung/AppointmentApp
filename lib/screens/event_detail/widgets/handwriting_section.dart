@@ -60,6 +60,40 @@ class _HandwritingSectionState extends State<HandwritingSection> {
     widget.onSaveCurrentPageCallbackSet?.call(saveCurrentPage);
   }
 
+  @override
+  void didUpdateWidget(HandwritingSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    // Check if initialPages changed
+    final oldTotalStrokes = oldWidget.initialPages.fold<int>(0, (sum, page) => sum + page.length);
+    final newTotalStrokes = widget.initialPages.fold<int>(0, (sum, page) => sum + page.length);
+
+    debugPrint('🔍 DEBUG didUpdateWidget: oldPages=${oldWidget.initialPages.length}, newPages=${widget.initialPages.length}');
+    debugPrint('🔍 DEBUG didUpdateWidget: oldStrokes=$oldTotalStrokes, newStrokes=$newTotalStrokes');
+
+    // If data changed, reinitialize
+    if (oldWidget.initialPages.length != widget.initialPages.length ||
+        oldTotalStrokes != newTotalStrokes) {
+      debugPrint('🔍 DEBUG didUpdateWidget: Data changed, reinitializing _allPages');
+
+      _allPages = widget.initialPages.isEmpty
+          ? [[]]
+          : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
+      _currentPageIndex = _allPages.length - 1;
+
+      final finalTotalStrokes = _allPages.fold<int>(0, (sum, page) => sum + page.length);
+      debugPrint('🔍 DEBUG didUpdateWidget: Reinitialized with ${_allPages.length} pages, $finalTotalStrokes total strokes, currentPageIndex=$_currentPageIndex');
+
+      // Load the new page into canvas
+      if (_currentPageIndex >= 0 && _currentPageIndex < _allPages.length) {
+        widget.canvasKey.currentState?.loadStrokes(_allPages[_currentPageIndex]);
+        debugPrint('🔍 DEBUG didUpdateWidget: Loaded ${_allPages[_currentPageIndex].length} strokes into canvas');
+      }
+    } else {
+      debugPrint('🔍 DEBUG didUpdateWidget: No data change detected, keeping existing state');
+    }
+  }
+
   // Convert array index to display page number (reverse order)
   int get _displayPageNumber => _allPages.length - _currentPageIndex;
 
