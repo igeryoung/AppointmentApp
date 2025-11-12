@@ -34,7 +34,7 @@ class PRDDatabaseService implements IDatabaseService {
 
     return await openDatabase(
       path,
-      version: 10, // New version for shared person notes with lock mechanism
+      version: 11, // New version for event checked/completed status
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -347,6 +347,14 @@ class PRDDatabaseService implements IDatabaseService {
 
       debugPrint('✅ Database upgraded to version 10 (shared person notes with lock)');
     }
+    if (oldVersion < 11) {
+      // Add is_checked column for event completion status
+      debugPrint('🔄 Upgrading to database version 11 (event checked/completed status)...');
+
+      await db.execute('ALTER TABLE events ADD COLUMN is_checked INTEGER DEFAULT 0');
+
+      debugPrint('✅ Database upgraded to version 11 (event checked/completed status)');
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -382,6 +390,7 @@ class PRDDatabaseService implements IDatabaseService {
         removal_reason TEXT,
         original_event_id INTEGER,
         new_event_id INTEGER,
+        is_checked INTEGER DEFAULT 0,
         FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');

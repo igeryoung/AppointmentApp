@@ -655,6 +655,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       onScheduleNextAppointment: _eventService?.selectedEventForMenu != null ? () => _eventService?.scheduleNextAppointment(_eventService!.selectedEventForMenu!, context) : null,
       onRemove: _eventService?.selectedEventForMenu != null ? () => _eventService?.handleMenuAction('remove', _eventService!.selectedEventForMenu!, context) : null,
       onDelete: _eventService?.selectedEventForMenu != null ? () => _eventService?.handleMenuAction('delete', _eventService!.selectedEventForMenu!, context) : null,
+      onCheckedChanged: _eventService?.selectedEventForMenu != null ? (isChecked) => _eventService?.toggleEventChecked(_eventService!.selectedEventForMenu!, isChecked) : null,
     );
   }
 

@@ -4,7 +4,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 
 /// Context menu overlay for event actions
-class ScheduleContextMenu extends StatelessWidget {
+class ScheduleContextMenu extends StatefulWidget {
   final Event event;
   final Offset position;
   final VoidCallback onClose;
@@ -13,6 +13,7 @@ class ScheduleContextMenu extends StatelessWidget {
   final VoidCallback onScheduleNextAppointment;
   final VoidCallback onRemove;
   final VoidCallback onDelete;
+  final Function(bool) onCheckedChanged;
 
   const ScheduleContextMenu({
     super.key,
@@ -24,7 +25,21 @@ class ScheduleContextMenu extends StatelessWidget {
     required this.onScheduleNextAppointment,
     required this.onRemove,
     required this.onDelete,
+    required this.onCheckedChanged,
   });
+
+  @override
+  State<ScheduleContextMenu> createState() => _ScheduleContextMenuState();
+}
+
+class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
+  late bool isChecked;
+
+  @override
+  void initState() {
+    super.initState();
+    isChecked = widget.event.isChecked;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,12 +47,12 @@ class ScheduleContextMenu extends StatelessWidget {
     final screenSize = MediaQuery.of(context).size;
 
     // Determine if menu should appear above or below
-    final showAbove = position.dy > screenSize.height / 2;
+    final showAbove = widget.position.dy > screenSize.height / 2;
 
     return Positioned(
-      left: position.dx.clamp(20.0, screenSize.width - 200),
-      top: showAbove ? null : position.dy + 10,
-      bottom: showAbove ? screenSize.height - position.dy + 10 : null,
+      left: widget.position.dx.clamp(20.0, screenSize.width - 200),
+      top: showAbove ? null : widget.position.dy + 10,
+      bottom: showAbove ? screenSize.height - widget.position.dy + 10 : null,
       child: Material(
         elevation: 8,
         borderRadius: BorderRadius.circular(8),
@@ -59,20 +74,36 @@ class ScheduleContextMenu extends StatelessWidget {
                   borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
                 ),
                 child: Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
+                    // Checkbox for marking event as completed
+                    Transform.scale(
+                      scale: 0.9,
+                      child: Checkbox(
+                        value: isChecked,
+                        onChanged: (value) {
+                          setState(() {
+                            isChecked = value ?? false;
+                          });
+                          widget.onCheckedChanged(isChecked);
+                        },
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
+                      ),
+                    ),
+                    // Event name
                     Expanded(
                       child: Text(
-                        event.name.isEmpty ? l10n.eventOptions : event.name,
+                        widget.event.name.isEmpty ? l10n.eventOptions : widget.event.name,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    // Close button
                     IconButton(
                       icon: const Icon(Icons.close, size: 18),
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
-                      onPressed: onClose,
+                      onPressed: widget.onClose,
                     ),
                   ],
                 ),
@@ -83,19 +114,19 @@ class ScheduleContextMenu extends StatelessWidget {
                 dense: true,
                 leading: const Icon(Icons.category, size: 20),
                 title: Text(l10n.changeEventType, style: const TextStyle(fontSize: 14)),
-                onTap: onChangeType,
+                onTap: widget.onChangeType,
               ),
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.access_time, size: 20),
                 title: Text(l10n.changeEventTime, style: const TextStyle(fontSize: 14)),
-                onTap: onChangeTime,
+                onTap: widget.onChangeTime,
               ),
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.event_available, size: 20),
                 title: Text(l10n.scheduleNextAppointment, style: const TextStyle(fontSize: 14)),
-                onTap: onScheduleNextAppointment,
+                onTap: widget.onScheduleNextAppointment,
               ),
               ListTile(
                 dense: true,
@@ -104,7 +135,7 @@ class ScheduleContextMenu extends StatelessWidget {
                   l10n.removeEvent,
                   style: const TextStyle(color: Colors.orange, fontSize: 14),
                 ),
-                onTap: onRemove,
+                onTap: widget.onRemove,
               ),
               ListTile(
                 dense: true,
@@ -113,7 +144,7 @@ class ScheduleContextMenu extends StatelessWidget {
                   l10n.deleteEvent,
                   style: const TextStyle(color: Colors.red, fontSize: 14),
                 ),
-                onTap: onDelete,
+                onTap: widget.onDelete,
               ),
             ],
           ),

@@ -176,6 +176,28 @@ class EventManagementService {
     onMenuStateChanged(_selectedEventForMenu, _menuPosition);
   }
 
+  /// Toggle event checked status
+  Future<void> toggleEventChecked(Event event, bool isChecked) async {
+    try {
+      final updatedEvent = event.copyWith(
+        isChecked: isChecked,
+        updatedAt: TimeService.instance.now(),
+      );
+
+      await _dbService.updateEvent(updatedEvent);
+      onUpdateEvent(updatedEvent);
+
+      // Sync to server in background (best effort)
+      onSyncEvent(updatedEvent);
+    } catch (e) {
+      if (isMounted()) {
+        onShowSnackbar(
+          getLocalizedString((l10n) => l10n.errorUpdatingEvent(e.toString())),
+        );
+      }
+    }
+  }
+
   /// Handle menu action
   Future<void> handleMenuAction(String action, Event event, BuildContext context) async {
     if (action == 'changeType') {
