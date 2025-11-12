@@ -86,7 +86,7 @@ class HandwritingToolbar extends StatelessWidget {
           // Previous page button
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
-            onPressed: currentPageNumber < totalPages ? onPreviousPage : null,
+            onPressed: currentPageNumber > 1 ? onPreviousPage : null,
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             tooltip: '上一頁',
@@ -111,7 +111,7 @@ class HandwritingToolbar extends StatelessWidget {
           // Next page button
           IconButton(
             icon: const Icon(Icons.chevron_right, size: 20),
-            onPressed: currentPageNumber > 1 ? onNextPage : null,
+            onPressed: currentPageNumber < totalPages ? onNextPage : null,
             padding: const EdgeInsets.all(4),
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             tooltip: '下一頁',

@@ -28,11 +28,20 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   late List<List<Stroke>> _allPages;
   int _currentPageIndex = 0; // Array index (0-based)
 
+  /// Public method to force save current page before reading pages
+  /// This should be called before saveEvent() to ensure current canvas state is captured
+  void saveCurrentPage() {
+    _saveCurrentPageStrokes();
+    widget.onPagesChanged(_deepCopyPages(_allPages));
+  }
+
   @override
   void initState() {
     super.initState();
-    // Initialize pages, ensure at least one empty page
-    _allPages = widget.initialPages.isEmpty ? [[]] : List.from(widget.initialPages);
+    // Initialize pages with deep copy, ensure at least one empty page
+    _allPages = widget.initialPages.isEmpty
+        ? [[]]
+        : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
     // Start at the last page (newest, displayed as "page 1")
     _currentPageIndex = _allPages.length - 1;
   }
@@ -72,8 +81,8 @@ class _HandwritingSectionState extends State<HandwritingSection> {
     final newPageStrokes = _allPages[arrayIndex];
     widget.canvasKey.currentState?.loadStrokes(newPageStrokes);
 
-    // Notify parent
-    widget.onPagesChanged(_allPages);
+    // Notify parent with deep copy
+    widget.onPagesChanged(_deepCopyPages(_allPages));
 
     debugPrint('📄 Switched to page ${arrayIndex + 1} (display: ${_displayPageNumber})');
   }
@@ -92,8 +101,8 @@ class _HandwritingSectionState extends State<HandwritingSection> {
     // Load empty canvas
     widget.canvasKey.currentState?.loadStrokes([]);
 
-    // Notify parent
-    widget.onPagesChanged(_allPages);
+    // Notify parent with deep copy
+    widget.onPagesChanged(_deepCopyPages(_allPages));
 
     debugPrint('➕ Added new page at index ${_currentPageIndex} (display: page 1/${_allPages.length})');
   }
@@ -115,7 +124,12 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   // Called when canvas strokes change
   void _onCanvasStrokesChanged() {
     _saveCurrentPageStrokes();
-    widget.onPagesChanged(_allPages);
+    widget.onPagesChanged(_deepCopyPages(_allPages));
+  }
+
+  // Helper: Create a deep copy of pages
+  List<List<Stroke>> _deepCopyPages(List<List<Stroke>> pages) {
+    return pages.map((page) => List<Stroke>.from(page)).toList();
   }
 
   @override
