@@ -9,12 +9,14 @@ class HandwritingSection extends StatefulWidget {
   final GlobalKey<HandwritingCanvasState> canvasKey;
   final List<List<Stroke>> initialPages;
   final Function(List<List<Stroke>>) onPagesChanged;
+  final void Function(VoidCallback)? onSaveCurrentPageCallbackSet;
 
   const HandwritingSection({
     super.key,
     required this.canvasKey,
     required this.initialPages,
     required this.onPagesChanged,
+    this.onSaveCurrentPageCallbackSet,
   });
 
   @override
@@ -44,6 +46,9 @@ class _HandwritingSectionState extends State<HandwritingSection> {
         : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
     // Start at the last page (newest, displayed as "page 1")
     _currentPageIndex = _allPages.length - 1;
+
+    // Register the save callback with parent
+    widget.onSaveCurrentPageCallbackSet?.call(saveCurrentPage);
   }
 
   // Convert array index to display page number (reverse order)

@@ -35,7 +35,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   late EventDetailController _controller;
   late TextEditingController _nameController;
   final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
-  final GlobalKey<_HandwritingSectionState> _handwritingSectionKey = GlobalKey<_HandwritingSectionState>();
+
+  // Callback to save current page before final save
+  VoidCallback? _saveCurrentPageCallback;
 
   // Track the last checked record number to prevent dialog loop
   String? _lastCheckedRecordNumber;
@@ -145,7 +147,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     try {
       // Ensure current canvas state is saved before reading pages
-      _handwritingSectionKey.currentState?.saveCurrentPage();
+      _saveCurrentPageCallback?.call();
 
       // Save is handled by the controller which already has the latest pages
       // from onPagesChanged callbacks
@@ -561,10 +563,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       // Handwriting section
                       Expanded(
                         child: HandwritingSection(
-                          key: _handwritingSectionKey,
                           canvasKey: _canvasKey,
                           initialPages: state.note?.pages ?? state.lastKnownPages,
                           onPagesChanged: _onPagesChanged,
+                          onSaveCurrentPageCallbackSet: (callback) {
+                            _saveCurrentPageCallback = callback;
+                          },
                         ),
                       ),
                     ],
