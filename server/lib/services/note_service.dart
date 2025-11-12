@@ -125,7 +125,7 @@ class NoteService {
       return {
         'id': row['id'],
         'eventId': row['event_id'],
-        'strokesData': row['strokes_data'],
+        'pagesData': row['pages_data'],
         'createdAt': (row['created_at'] as DateTime).toIso8601String(),
         'updatedAt': (row['updated_at'] as DateTime).toIso8601String(),
         'version': row['version'],
@@ -148,30 +148,44 @@ class NoteService {
   Future<NoteOperationResult> createOrUpdateNote({
     required int eventId,
     required String deviceId,
-    required String strokesData,
+    String? pagesData,
+    String? strokesData,
     int? expectedVersion,
   }) async {
     try {
+      // Prefer pagesData (new format), fallback to strokesData (legacy)
+      // If strokesData provided but not pagesData, migrate to pagesData format: [strokes] -> [[strokes]]
+      final String finalPagesData;
+      if (pagesData != null) {
+        finalPagesData = pagesData;
+      } else if (strokesData != null) {
+        // Wrap single-page strokes in array for migration
+        finalPagesData = '[$strokesData]';
+      } else {
+        // Start with empty page
+        finalPagesData = '[[]]';
+      }
+
       // Use optimistic locking with UPSERT
       // The WHERE clause in ON CONFLICT ensures version check
       final result = await db.querySingle(
         '''
-        INSERT INTO notes (event_id, device_id, strokes_data, version, created_at, updated_at, synced_at)
-        VALUES (@eventId, @deviceId, @strokesData, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO notes (event_id, device_id, pages_data, version, created_at, updated_at, synced_at)
+        VALUES (@eventId, @deviceId, @pagesData, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (event_id) DO UPDATE
-        SET strokes_data = EXCLUDED.strokes_data,
+        SET pages_data = EXCLUDED.pages_data,
             updated_at = CURRENT_TIMESTAMP,
             synced_at = CURRENT_TIMESTAMP,
             version = notes.version + 1,
             device_id = EXCLUDED.device_id
         WHERE (CAST(@expectedVersion AS INTEGER) IS NULL OR notes.version = CAST(@expectedVersion AS INTEGER))
           AND notes.is_deleted = false
-        RETURNING id, event_id, strokes_data, created_at, updated_at, version
+        RETURNING id, event_id, pages_data, created_at, updated_at, version
         ''',
         parameters: {
           'eventId': eventId,
           'deviceId': deviceId,
-          'strokesData': strokesData,
+          'pagesData': finalPagesData,
           'expectedVersion': expectedVersion,
         },
       );
@@ -181,7 +195,7 @@ class NoteService {
         final note = {
           'id': result['id'],
           'eventId': result['event_id'],
-          'strokesData': result['strokes_data'],
+          'pagesData': result['pages_data'],
           'createdAt': (result['created_at'] as DateTime).toIso8601String(),
           'updatedAt': (result['updated_at'] as DateTime).toIso8601String(),
           'version': result['version'],
@@ -193,7 +207,7 @@ class NoteService {
       // No row returned - either version conflict or note is deleted
       // Query the current state to determine which
       final currentNote = await db.querySingle(
-        'SELECT id, event_id, strokes_data, created_at, updated_at, version, is_deleted FROM notes WHERE event_id = @eventId',
+        'SELECT id, event_id, pages_data, created_at, updated_at, version, is_deleted FROM notes WHERE event_id = @eventId',
         parameters: {'eventId': eventId},
       );
 
@@ -212,7 +226,7 @@ class NoteService {
       final serverNote = {
         'id': currentNote['id'],
         'eventId': currentNote['event_id'],
-        'strokesData': currentNote['strokes_data'],
+        'pagesData': currentNote['pages_data'],
         'createdAt': (currentNote['created_at'] as DateTime).toIso8601String(),
         'updatedAt': (currentNote['updated_at'] as DateTime).toIso8601String(),
         'version': currentNote['version'],
@@ -297,7 +311,7 @@ class NoteService {
         return {
           'id': row['id'],
           'eventId': row['event_id'],
-          'strokesData': row['strokes_data'],
+          'pagesData': row['pages_data'],
           'createdAt': (row['created_at'] as DateTime).toIso8601String(),
           'updatedAt': (row['updated_at'] as DateTime).toIso8601String(),
           'version': row['version'],

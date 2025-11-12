@@ -208,15 +208,20 @@ class NoteRoutes {
       // Parse request body
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
+      // Support both new pagesData and legacy strokesData
+      final pagesData = json['pagesData'] as String?;
       final strokesData = json['strokesData'] as String?;
       final version = json['version'] as int?;
       final eventData = json['eventData'] as Map<String, dynamic>?;
 
-      if (strokesData == null) {
+      // Prefer pagesData, fall back to strokesData for backward compatibility
+      final notesDataString = pagesData ?? strokesData;
+
+      if (notesDataString == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Missing strokesData',
+            'message': 'Missing pagesData or strokesData',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -293,6 +298,7 @@ class NoteRoutes {
       final result = await noteService.createOrUpdateNote(
         eventId: eventId,
         deviceId: deviceId,
+        pagesData: pagesData,
         strokesData: strokesData,
         expectedVersion: version,
       );

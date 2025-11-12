@@ -4,17 +4,17 @@ import '../../../widgets/handwriting_canvas.dart';
 import 'handwriting_toolbar.dart';
 import 'handwriting_control_panel.dart';
 
-/// Handwriting section combining canvas, toolbar, and control panel
+/// Handwriting section combining canvas, toolbar, and control panel with multi-page support
 class HandwritingSection extends StatefulWidget {
   final GlobalKey<HandwritingCanvasState> canvasKey;
-  final List<Stroke> initialStrokes;
-  final VoidCallback onStrokesChanged;
+  final List<List<Stroke>> initialPages;
+  final Function(List<List<Stroke>>) onPagesChanged;
 
   const HandwritingSection({
     super.key,
     required this.canvasKey,
-    required this.initialStrokes,
-    required this.onStrokesChanged,
+    required this.initialPages,
+    required this.onPagesChanged,
   });
 
   @override
@@ -23,6 +23,100 @@ class HandwritingSection extends StatefulWidget {
 
 class _HandwritingSectionState extends State<HandwritingSection> {
   bool _isControlPanelExpanded = false;
+
+  // Multi-page state
+  late List<List<Stroke>> _allPages;
+  int _currentPageIndex = 0; // Array index (0-based)
+
+  @override
+  void initState() {
+    super.initState();
+    // Initialize pages, ensure at least one empty page
+    _allPages = widget.initialPages.isEmpty ? [[]] : List.from(widget.initialPages);
+    // Start at the last page (newest, displayed as "page 1")
+    _currentPageIndex = _allPages.length - 1;
+  }
+
+  // Convert array index to display page number (reverse order)
+  int get _displayPageNumber => _allPages.length - _currentPageIndex;
+
+  // Convert display page number to array index
+  int _displayToArrayIndex(int displayNumber) => _allPages.length - displayNumber;
+
+  // Save current canvas strokes to current page
+  void _saveCurrentPageStrokes() {
+    final canvasState = widget.canvasKey.currentState;
+    if (canvasState != null) {
+      final currentStrokes = canvasState.getStrokes();
+      if (_currentPageIndex >= 0 && _currentPageIndex < _allPages.length) {
+        _allPages[_currentPageIndex] = currentStrokes;
+        debugPrint('💾 Saved ${currentStrokes.length} strokes to page ${_currentPageIndex + 1}');
+      }
+    }
+  }
+
+  // Switch to a specific page by array index
+  void _switchToPage(int arrayIndex) {
+    if (arrayIndex < 0 || arrayIndex >= _allPages.length) return;
+    if (arrayIndex == _currentPageIndex) return;
+
+    // Save current page before switching
+    _saveCurrentPageStrokes();
+
+    // Update current page index
+    setState(() {
+      _currentPageIndex = arrayIndex;
+    });
+
+    // Load new page into canvas
+    final newPageStrokes = _allPages[arrayIndex];
+    widget.canvasKey.currentState?.loadStrokes(newPageStrokes);
+
+    // Notify parent
+    widget.onPagesChanged(_allPages);
+
+    debugPrint('📄 Switched to page ${arrayIndex + 1} (display: ${_displayPageNumber})');
+  }
+
+  // Add a new page (appends to end of array, becomes new "page 1")
+  void _addPrependPage() {
+    // Save current work
+    _saveCurrentPageStrokes();
+
+    // Add empty page to end of array
+    setState(() {
+      _allPages.add([]);
+      _currentPageIndex = _allPages.length - 1;
+    });
+
+    // Load empty canvas
+    widget.canvasKey.currentState?.loadStrokes([]);
+
+    // Notify parent
+    widget.onPagesChanged(_allPages);
+
+    debugPrint('➕ Added new page at index ${_currentPageIndex} (display: page 1/${_allPages.length})');
+  }
+
+  // Navigate to previous page in UI (next in array)
+  void _navigatePrevious() {
+    if (_currentPageIndex < _allPages.length - 1) {
+      _switchToPage(_currentPageIndex + 1);
+    }
+  }
+
+  // Navigate to next page in UI (previous in array)
+  void _navigateNext() {
+    if (_currentPageIndex > 0) {
+      _switchToPage(_currentPageIndex - 1);
+    }
+  }
+
+  // Called when canvas strokes change
+  void _onCanvasStrokesChanged() {
+    _saveCurrentPageStrokes();
+    widget.onPagesChanged(_allPages);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -47,10 +141,17 @@ class _HandwritingSectionState extends State<HandwritingSection> {
               // Handwriting canvas (full space)
               Column(
                 children: [
-                  // Toolbar
+                  // Toolbar with page navigation
                   HandwritingToolbar(
                     currentTool: currentTool,
                     isControlPanelExpanded: _isControlPanelExpanded,
+                    // Page navigation
+                    currentPageNumber: _displayPageNumber,
+                    totalPages: _allPages.length,
+                    onAddPrependPage: _addPrependPage,
+                    onPreviousPage: _navigatePrevious,
+                    onNextPage: _navigateNext,
+                    // Tool selection
                     onPenTap: () {
                       widget.canvasKey.currentState?.setTool(DrawingTool.pen);
                       setToolbarState(() {});
@@ -76,8 +177,8 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                   Expanded(
                     child: HandwritingCanvas(
                       key: widget.canvasKey,
-                      initialStrokes: widget.initialStrokes,
-                      onStrokesChanged: widget.onStrokesChanged,
+                      initialStrokes: _allPages.isNotEmpty ? _allPages[_currentPageIndex] : [],
+                      onStrokesChanged: _onCanvasStrokesChanged,
                     ),
                   ),
                 ],

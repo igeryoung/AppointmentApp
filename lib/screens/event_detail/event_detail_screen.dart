@@ -125,18 +125,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _checkAndShowPersonNoteDialog();
   }
 
-  void _onStrokesChanged() {
-    debugPrint('🏗️ EventDetail: onStrokesChanged callback fired');
+  void _onPagesChanged(List<List<Stroke>> pages) {
+    debugPrint('🏗️ EventDetail: onPagesChanged callback fired with ${pages.length} pages');
 
-    final canvasState = _canvasKey.currentState;
-    if (canvasState != null) {
-      final currentStrokes = canvasState.getStrokes();
-      _controller.updateStrokes(currentStrokes);
+    _controller.updatePages(pages);
 
-      debugPrint('🔄 EventDetail: Updated strokes (${currentStrokes.length} strokes)');
-    } else {
-      debugPrint('⚠️ EventDetail: Canvas state is null during onStrokesChanged');
-    }
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔄 EventDetail: Updated pages (${pages.length} pages, $totalStrokes total strokes)');
   }
 
   Future<void> _saveEvent() async {
@@ -148,22 +143,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
 
     try {
-      final canvasState = _canvasKey.currentState;
-
-      // Validate canvas state before saving
-      if (canvasState != null) {
-        canvasState.validateState();
-      }
-
-      // Get strokes from canvas or backup
-      List<Stroke> strokes;
-      if (canvasState != null) {
-        strokes = canvasState.getStrokes();
-      } else {
-        strokes = List<Stroke>.from(_controller.state.lastKnownStrokes);
-      }
-
-      await _controller.saveEvent(strokes);
+      // Save is handled by the controller which already has the latest pages
+      // from onPagesChanged callbacks
+      await _controller.saveEvent();
 
       if (mounted) {
         // Show success feedback
@@ -312,7 +294,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       if (!hasCurrentHandwriting) {
         debugPrint('📝 EventDetail: Auto-loading existing note (current canvas is empty)');
         await _controller.loadExistingPersonNote(existingNote);
-        _canvasKey.currentState?.loadStrokes(existingNote.strokes);
+        // Canvas will be updated by rebuilding HandwritingSection with new note pages
+        setState(() {});
         return;
       }
 
@@ -342,8 +325,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
       if (result == true && mounted) {
         await _controller.loadExistingPersonNote(existingNote);
-        // Update canvas with loaded strokes
-        _canvasKey.currentState?.loadStrokes(existingNote.strokes);
+        // Canvas will be updated by rebuilding HandwritingSection with new note pages
+        setState(() {});
       }
     }
   }
@@ -575,8 +558,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       Expanded(
                         child: HandwritingSection(
                           canvasKey: _canvasKey,
-                          initialStrokes: state.note?.strokes ?? [],
-                          onStrokesChanged: _onStrokesChanged,
+                          initialPages: state.note?.pages ?? [[]],
+                          onPagesChanged: _onPagesChanged,
                         ),
                       ),
                     ],

@@ -34,7 +34,7 @@ class PRDDatabaseService implements IDatabaseService {
 
     return await openDatabase(
       path,
-      version: 11, // New version for event checked/completed status
+      version: 12, // New version for multi-page handwriting notes
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -328,21 +328,22 @@ class PRDDatabaseService implements IDatabaseService {
 
         if (latestNotes.isEmpty) continue;
 
-        final latestStrokesData = latestNotes.first['strokes_data'];
+        // Get pages_data, fallback to migrating strokes_data if needed
+        final latestPagesData = latestNotes.first['pages_data'] ?? '[${latestNotes.first['strokes_data'] ?? '[]'}]';
         final latestUpdatedAt = latestNotes.first['updated_at'];
 
         // Sync to all other notes in the group
         await db.update(
           'notes',
           {
-            'strokes_data': latestStrokesData,
+            'pages_data': latestPagesData,
             'updated_at': latestUpdatedAt,
           },
           where: 'person_name_normalized = ? AND record_number_normalized = ? AND id != ?',
           whereArgs: [nameNorm, recordNorm, latestNotes.first['id']],
         );
 
-        debugPrint('✅ Synced strokes for person group: $nameNorm+$recordNorm');
+        debugPrint('✅ Synced pages for person group: $nameNorm+$recordNorm');
       }
 
       debugPrint('✅ Database upgraded to version 10 (shared person notes with lock)');
@@ -354,6 +355,44 @@ class PRDDatabaseService implements IDatabaseService {
       await db.execute('ALTER TABLE events ADD COLUMN is_checked INTEGER DEFAULT 0');
 
       debugPrint('✅ Database upgraded to version 11 (event checked/completed status)');
+    }
+    if (oldVersion < 12) {
+      // Migrate to multi-page handwriting notes
+      debugPrint('🔄 Upgrading to database version 12 (multi-page handwriting notes)...');
+
+      // Add new pages_data column
+      await db.execute('ALTER TABLE notes ADD COLUMN pages_data TEXT');
+
+      // Migrate existing strokes_data to pages_data format (wrap in array)
+      final notesWithData = await db.query('notes', where: 'strokes_data IS NOT NULL');
+      debugPrint('🔄 Migrating ${notesWithData.length} notes to multi-page format...');
+
+      for (final note in notesWithData) {
+        final strokesData = note['strokes_data'] as String?;
+        if (strokesData != null && strokesData != '[]') {
+          // Wrap single-page strokes in array: [strokes] -> [[strokes]]
+          final pagesData = '[$strokesData]';
+          await db.update(
+            'notes',
+            {'pages_data': pagesData},
+            where: 'id = ?',
+            whereArgs: [note['id']],
+          );
+        } else {
+          // Empty strokes: [] -> [[]]
+          await db.update(
+            'notes',
+            {'pages_data': '[[]]'},
+            where: 'id = ?',
+            whereArgs: [note['id']],
+          );
+        }
+      }
+
+      // Set pages_data to [[]] for any notes that didn't have strokes_data
+      await db.execute("UPDATE notes SET pages_data = '[[]]' WHERE pages_data IS NULL");
+
+      debugPrint('✅ Database upgraded to version 12 (multi-page handwriting notes)');
     }
   }
 
@@ -395,12 +434,13 @@ class PRDDatabaseService implements IDatabaseService {
       )
     ''');
 
-    // Notes table - Handwriting-only notes linked to events
+    // Notes table - Multi-page handwriting notes linked to events
     await db.execute('''
       CREATE TABLE notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         event_id INTEGER NOT NULL UNIQUE,
         strokes_data TEXT,
+        pages_data TEXT,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         cached_at INTEGER,
@@ -698,10 +738,10 @@ class PRDDatabaseService implements IDatabaseService {
     final eventToCreate = event.copyWith(createdAt: now, updatedAt: now);
     final id = await db.insert('events', eventToCreate.toMap());
 
-    // Create associated empty note
+    // Create associated empty note with one empty page
     await db.insert('notes', {
       'event_id': id,
-      'strokes_data': '[]',
+      'pages_data': '[[]]', // Start with one empty page
       'created_at': now.millisecondsSinceEpoch ~/ 1000,
       'updated_at': now.millisecondsSinceEpoch ~/ 1000,
     });
@@ -824,7 +864,7 @@ class PRDDatabaseService implements IDatabaseService {
       // If no original note exists, create an empty one for the new event
       await db.insert('notes', {
         'event_id': newEventId,
-        'strokes_data': '[]',
+        'pages_data': '[[]]',
         'created_at': now.millisecondsSinceEpoch ~/ 1000,
         'updated_at': now.millisecondsSinceEpoch ~/ 1000,
         'is_dirty': 1, // Mark as dirty to trigger server sync
@@ -907,11 +947,11 @@ class PRDDatabaseService implements IDatabaseService {
         latestGroupNote.updatedAt.isAfter(currentNote.updatedAt)) {
       debugPrint('🔄 Syncing note from person group (${nameNorm}+${recordNorm})');
 
-      // Update current event's note with latest strokes
+      // Update current event's note with latest pages
       await db.update(
         'notes',
         {
-          'strokes_data': groupNotes.first['strokes_data'],
+          'pages_data': groupNotes.first['pages_data'],
           'updated_at': latestGroupNote.updatedAt.millisecondsSinceEpoch ~/ 1000,
           'person_name_normalized': nameNorm,
           'record_number_normalized': recordNorm,
@@ -984,22 +1024,23 @@ class PRDDatabaseService implements IDatabaseService {
     final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
     noteMap['cached_at'] = cachedAt;
 
-    debugPrint('🔍 SQLite: saveNoteWithSync called with ${updatedNote.strokes.length} strokes');
+    final totalStrokes = updatedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 SQLite: saveNoteWithSync called with ${updatedNote.pages.length} pages, $totalStrokes total strokes');
 
     try {
-      // Force strokes_data to be a string
-      final strokesDataString = noteMap['strokes_data'] as String;
+      // Force pages_data to be a string
+      final pagesDataString = noteMap['pages_data'] as String;
 
       // Update current event's note
       final updatedRows = await db.rawUpdate(
         '''UPDATE notes
-           SET event_id = ?, strokes_data = ?, created_at = ?, updated_at = ?,
+           SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?,
                cached_at = ?, is_dirty = ?, person_name_normalized = ?,
                record_number_normalized = ?, locked_by_device_id = ?, locked_at = ?
            WHERE event_id = ?''',
         [
           noteMap['event_id'],
-          strokesDataString,
+          pagesDataString,
           noteMap['created_at'],
           noteMap['updated_at'],
           cachedAt,
@@ -1016,13 +1057,13 @@ class PRDDatabaseService implements IDatabaseService {
       if (updatedRows == 0) {
         debugPrint('🔍 SQLite: Inserting new note');
         await db.rawInsert(
-          '''INSERT INTO notes (event_id, strokes_data, created_at, updated_at, cached_at,
+          '''INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at,
              cache_hit_count, is_dirty, person_name_normalized, record_number_normalized,
              locked_by_device_id, locked_at)
              VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)''',
           [
             noteMap['event_id'],
-            strokesDataString,
+            pagesDataString,
             noteMap['created_at'],
             noteMap['updated_at'],
             cachedAt,
@@ -1046,13 +1087,13 @@ class PRDDatabaseService implements IDatabaseService {
         // Update all other notes in the group (that are not locked)
         final syncedRows = await db.rawUpdate(
           '''UPDATE notes
-             SET strokes_data = ?, updated_at = ?
+             SET pages_data = ?, updated_at = ?
              WHERE person_name_normalized = ?
                AND record_number_normalized = ?
                AND event_id != ?
                AND locked_by_device_id IS NULL''',
           [
-            strokesDataString,
+            pagesDataString,
             noteMap['updated_at'],
             nameNorm,
             recordNorm,
@@ -1105,11 +1146,11 @@ class PRDDatabaseService implements IDatabaseService {
 
       debugPrint('✅ Found existing person note, loading strokes');
 
-      // Update current event's note with person group strokes
+      // Update current event's note with person group pages
       await db.update(
         'notes',
         {
-          'strokes_data': groupNotes.first['strokes_data'],
+          'pages_data': groupNotes.first['pages_data'],
           'updated_at': groupNote.updatedAt.millisecondsSinceEpoch ~/ 1000,
           'person_name_normalized': nameNorm,
           'record_number_normalized': recordNorm,
@@ -1179,40 +1220,40 @@ class PRDDatabaseService implements IDatabaseService {
 
     // Debug the serialization
     final noteMap = updatedNote.toMap();
-    debugPrint('🔍 SQLite: updateNote called with ${updatedNote.strokes.length} strokes');
+    final totalStrokes = updatedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 SQLite: updateNote called with ${updatedNote.pages.length} pages, $totalStrokes total strokes');
     debugPrint('🔍 SQLite: noteMap contents:');
     noteMap.forEach((key, value) {
       debugPrint('   $key: $value (${value.runtimeType})');
     });
 
     try {
-      // Force strokes_data to be a proper string to avoid SQLite parameter binding issues
+      // Force pages_data to be a proper string to avoid SQLite parameter binding issues
       final updateMap = Map<String, dynamic>.from(noteMap);
-      final originalStrokesData = updateMap['strokes_data'];
+      final originalPagesData = updateMap['pages_data'];
 
       // Force string conversion to prevent SQLite parameter binding corruption
-      if (originalStrokesData is String) {
-        debugPrint('🔍 SQLite: strokes_data is String, ensuring it stays as String');
-        // Even if it's already a string, explicitly recreate it to avoid any reference issues
-        updateMap['strokes_data'] = originalStrokesData.toString();
+      if (originalPagesData is String) {
+        debugPrint('🔍 SQLite: pages_data is String, ensuring it stays as String');
+        updateMap['pages_data'] = originalPagesData.toString();
       } else {
-        debugPrint('⚠️ SQLite: strokes_data is NOT a String: ${originalStrokesData.runtimeType}');
-        updateMap['strokes_data'] = originalStrokesData.toString();
+        debugPrint('⚠️ SQLite: pages_data is NOT a String: ${originalPagesData.runtimeType}');
+        updateMap['pages_data'] = originalPagesData.toString();
       }
 
-      debugPrint('🔍 SQLite: Final strokes_data type: ${updateMap['strokes_data'].runtimeType}');
-      debugPrint('🔍 SQLite: Final strokes_data length: ${updateMap['strokes_data'].toString().length} chars');
+      debugPrint('🔍 SQLite: Final pages_data type: ${updateMap['pages_data'].runtimeType}');
+      debugPrint('🔍 SQLite: Final pages_data length: ${updateMap['pages_data'].toString().length} chars');
 
       // Try to update existing note first using raw SQL to avoid parameter binding issues
-      final strokesDataString = updateMap['strokes_data'] as String;
+      final pagesDataString = updateMap['pages_data'] as String;
       final cachedAt = now.millisecondsSinceEpoch ~/ 1000; // Cache timestamp
       final isDirty = updateMap['is_dirty'] ?? 0; // Get dirty flag from note
       debugPrint('🔍 SQLite: Using raw SQL with explicit string parameter');
       final updatedRows = await db.rawUpdate(
-        'UPDATE notes SET event_id = ?, strokes_data = ?, created_at = ?, updated_at = ?, cached_at = ?, is_dirty = ? WHERE event_id = ?',
+        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, is_dirty = ? WHERE event_id = ?',
         [
           updateMap['event_id'],
-          strokesDataString, // Explicitly pass as string
+          pagesDataString, // Explicitly pass as string
           updateMap['created_at'],
           updateMap['updated_at'],
           cachedAt, // Update cache timestamp
@@ -1227,10 +1268,10 @@ class PRDDatabaseService implements IDatabaseService {
       if (updatedRows == 0) {
         debugPrint('🔍 SQLite: Inserting new note using raw SQL');
         await db.rawInsert(
-          'INSERT INTO notes (event_id, strokes_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?)',
+          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?)',
           [
             updateMap['event_id'],
-            strokesDataString, // Explicitly pass as string
+            pagesDataString, // Explicitly pass as string
             updateMap['created_at'],
             updateMap['updated_at'],
             cachedAt, // Set initial cache timestamp
@@ -1297,15 +1338,15 @@ class PRDDatabaseService implements IDatabaseService {
 
       // Use rawInsert with ON CONFLICT clause for upsert
       batch.rawInsert('''
-        INSERT INTO notes (event_id, strokes_data, created_at, updated_at, cached_at, cache_hit_count)
+        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count)
         VALUES (?, ?, ?, ?, ?, 0)
         ON CONFLICT(event_id) DO UPDATE SET
-          strokes_data = excluded.strokes_data,
+          pages_data = excluded.pages_data,
           updated_at = excluded.updated_at,
           cached_at = excluded.cached_at
       ''', [
         eventId,
-        noteMap['strokes_data'],
+        noteMap['pages_data'],
         noteMap['created_at'],
         noteMap['updated_at'],
         cachedAt,
@@ -1643,9 +1684,9 @@ class PRDDatabaseService implements IDatabaseService {
   Future<int> getNotesCacheSize() async {
     final db = await database;
     final result = await db.rawQuery('''
-      SELECT SUM(LENGTH(strokes_data)) as total_size
+      SELECT SUM(LENGTH(pages_data)) as total_size
       FROM notes
-      WHERE strokes_data IS NOT NULL
+      WHERE pages_data IS NOT NULL
     ''');
     return (result.first['total_size'] as int?) ?? 0;
   }
