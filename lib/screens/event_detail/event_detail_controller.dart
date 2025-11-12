@@ -195,12 +195,17 @@ class EventDetailController {
     // Step 1: Load from cache immediately
     final cachedNote = await _noteSyncAdapter!.getCachedNote(event.id!);
     if (cachedNote != null) {
+      final totalStrokes = cachedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+      debugPrint('🔍 DEBUG loadNote: Loaded from cache - ${cachedNote.pages.length} pages, $totalStrokes total strokes');
       _updateState(_state.copyWith(
         note: cachedNote,
         lastKnownPages: cachedNote.pages,
         hasUnsyncedChanges: cachedNote.isDirty,
       ));
+      debugPrint('🔍 DEBUG loadNote: State updated - lastKnownPages now ${_state.lastKnownPages.length} pages');
       debugPrint('✅ EventDetailController: Loaded from cache (${cachedNote.strokes.length} strokes, isDirty: ${cachedNote.isDirty})');
+    } else {
+      debugPrint('🔍 DEBUG loadNote: No cached note found, lastKnownPages = ${_state.lastKnownPages.length} pages');
     }
 
     // Step 2: Background refresh from server
@@ -261,6 +266,10 @@ class EventDetailController {
     debugPrint('💾 EventDetailController: Saving event...');
 
     final pages = _state.lastKnownPages;
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG saveEvent: lastKnownPages has ${pages.length} pages, $totalStrokes total strokes');
+    debugPrint('🔍 DEBUG saveEvent: state.note has ${_state.note?.pages.length ?? 0} pages');
+
     _updateState(_state.copyWith(isLoading: true));
 
     try {
@@ -550,10 +559,13 @@ class EventDetailController {
 
   /// Update strokes (called when canvas changes)
   void updatePages(List<List<Stroke>> pages) {
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG updatePages: Received ${pages.length} pages, $totalStrokes total strokes');
     _updateState(_state.copyWith(
       lastKnownPages: pages,
       hasChanges: true,
     ));
+    debugPrint('🔍 DEBUG updatePages: State updated, lastKnownPages now ${_state.lastKnownPages.length} pages');
   }
 
   /// Dispose resources

@@ -147,7 +147,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     try {
       // Ensure current canvas state is saved before reading pages
+      debugPrint('🔍 DEBUG _saveEvent: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');
       _saveCurrentPageCallback?.call();
+      debugPrint('🔍 DEBUG _saveEvent: Callback invoked, now calling controller.saveEvent()');
 
       // Save is handled by the controller which already has the latest pages
       // from onPagesChanged callbacks
@@ -562,12 +564,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       ),
                       // Handwriting section
                       Expanded(
-                        child: HandwritingSection(
-                          canvasKey: _canvasKey,
-                          initialPages: state.note?.pages ?? state.lastKnownPages,
-                          onPagesChanged: _onPagesChanged,
-                          onSaveCurrentPageCallbackSet: (callback) {
-                            _saveCurrentPageCallback = callback;
+                        child: Builder(
+                          builder: (context) {
+                            final initialPages = state.note?.pages ?? state.lastKnownPages;
+                            final totalStrokes = initialPages.fold<int>(0, (sum, page) => sum + page.length);
+                            debugPrint('🔍 DEBUG Screen build: Creating HandwritingSection with initialPages=${initialPages.length} pages, $totalStrokes strokes (note=${state.note?.pages.length}, lastKnown=${state.lastKnownPages.length})');
+                            return HandwritingSection(
+                              canvasKey: _canvasKey,
+                              initialPages: initialPages,
+                              onPagesChanged: _onPagesChanged,
+                              onSaveCurrentPageCallbackSet: (callback) {
+                                _saveCurrentPageCallback = callback;
+                              },
+                            );
                           },
                         ),
                       ),

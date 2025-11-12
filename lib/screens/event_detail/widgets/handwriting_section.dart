@@ -33,7 +33,10 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   /// Public method to force save current page before reading pages
   /// This should be called before saveEvent() to ensure current canvas state is captured
   void saveCurrentPage() {
+    debugPrint('🔍 DEBUG saveCurrentPage: Called, about to save current page index $_currentPageIndex');
     _saveCurrentPageStrokes();
+    final totalStrokes = _allPages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG saveCurrentPage: After save, _allPages has ${_allPages.length} pages, $totalStrokes total strokes');
     widget.onPagesChanged(_deepCopyPages(_allPages));
   }
 
@@ -41,11 +44,17 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   void initState() {
     super.initState();
     // Initialize pages with deep copy, ensure at least one empty page
+    final initialTotalStrokes = widget.initialPages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG HandwritingSection.initState: Received initialPages with ${widget.initialPages.length} pages, $initialTotalStrokes total strokes');
+
     _allPages = widget.initialPages.isEmpty
         ? [[]]
         : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
     // Start at the last page (newest, displayed as "page 1")
     _currentPageIndex = _allPages.length - 1;
+
+    final finalTotalStrokes = _allPages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG HandwritingSection.initState: Initialized _allPages with ${_allPages.length} pages, $finalTotalStrokes total strokes, currentPageIndex=$_currentPageIndex');
 
     // Register the save callback with parent
     widget.onSaveCurrentPageCallbackSet?.call(saveCurrentPage);
@@ -60,8 +69,10 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   // Save current canvas strokes to current page
   void _saveCurrentPageStrokes() {
     final canvasState = widget.canvasKey.currentState;
+    debugPrint('🔍 DEBUG _saveCurrentPageStrokes: Called, canvasState=${canvasState != null ? "exists" : "null"}');
     if (canvasState != null) {
       final currentStrokes = canvasState.getStrokes();
+      debugPrint('🔍 DEBUG _saveCurrentPageStrokes: Got ${currentStrokes.length} strokes from canvas');
       if (_currentPageIndex >= 0 && _currentPageIndex < _allPages.length) {
         _allPages[_currentPageIndex] = currentStrokes;
         debugPrint('💾 Saved ${currentStrokes.length} strokes to page ${_currentPageIndex + 1}');
