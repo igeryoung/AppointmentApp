@@ -277,7 +277,7 @@ class EventDetailController {
       final eventToSave = event.copyWith(
         name: _state.name.trim(),
         recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
-        eventType: _state.selectedEventType,
+        eventTypes: _state.selectedEventTypes,
         startTime: _state.startTime,
         endTime: _state.endTime,
       );
@@ -485,9 +485,9 @@ class EventDetailController {
     _updateState(_state.copyWith(recordNumber: recordNumber, hasChanges: true));
   }
 
-  /// Update event type
-  void updateEventType(EventType eventType) {
-    _updateState(_state.copyWith(selectedEventType: eventType, hasChanges: true));
+  /// Update event types
+  void updateEventTypes(List<EventType> eventTypes) {
+    _updateState(_state.copyWith(selectedEventTypes: eventTypes, hasChanges: true));
   }
 
   /// Check for existing person note when record number is set (for NEW events only)

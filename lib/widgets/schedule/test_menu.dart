@@ -219,7 +219,7 @@ class ScheduleTestMenuHelper {
         bookId: bookId,
         name: name,
         recordNumber: recordNumber,
-        eventType: eventType,
+        eventTypes: [eventType],
         startTime: startTime,
         endTime: endTime,
         createdAt: now,

@@ -423,7 +423,7 @@ class ScheduleTestUtils {
             bookId: bookId,
             name: name,
             recordNumber: recordNumber,
-            eventType: eventType,
+            eventTypes: [eventType],
             startTime: eventStartTime,
             endTime: null, // Open-ended
             createdAt: now,
@@ -615,7 +615,7 @@ class ScheduleTestUtils {
               bookId: bookId,
               name: name,
               recordNumber: recordNumber,
-              eventType: eventType,
+              eventTypes: [eventType],
               startTime: eventStartTime,
               endTime: null, // Open-ended
               createdAt: now,
