@@ -380,8 +380,60 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return true;
     }
 
-    final shouldPop = await ConfirmDiscardDialog.show(context);
-    return shouldPop;
+    // If event name is empty, show discard dialog
+    if (_nameController.text.trim().isEmpty) {
+      final shouldPop = await ConfirmDiscardDialog.show(context);
+      return shouldPop;
+    }
+
+    // Auto-save when name exists
+    try {
+      // Save current canvas state
+      debugPrint('🔍 DEBUG _onWillPop: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');
+      _saveCurrentPageCallback?.call();
+      debugPrint('🔍 DEBUG _onWillPop: Callback invoked, now calling controller.saveEvent()');
+
+      // Save the event
+      await _controller.saveEvent();
+
+      if (mounted) {
+        // Show success feedback
+        final isOffline = _controller.state.isOffline;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    isOffline
+                        ? 'Saved locally (offline - will sync when online)'
+                        : 'Saved locally (syncing to server...)',
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+
+      return true; // Navigate back
+    } catch (e) {
+      if (mounted) {
+        // Show error but still navigate back
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error saving: ${e.toString()}'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+      return true; // Navigate back anyway
+    }
   }
 
   @override
@@ -489,11 +541,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 ],
               ),
             ],
-            IconButton(
-              icon: const Icon(Icons.save),
-              onPressed: (state.isLoading || !state.isServicesReady) ? null : _saveEvent,
-              tooltip: state.isServicesReady ? 'Save' : 'Initializing...',
-            ),
           ],
         ),
         body: state.isLoading
