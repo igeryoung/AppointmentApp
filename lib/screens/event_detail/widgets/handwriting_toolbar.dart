@@ -2,10 +2,17 @@ import 'package:flutter/material.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../widgets/handwriting_canvas.dart';
 
-/// Toolbar for handwriting canvas with pen/highlighter/eraser toggle and action buttons
+/// Toolbar for handwriting canvas with page navigation, tool selection, and action buttons
 class HandwritingToolbar extends StatelessWidget {
   final DrawingTool currentTool;
   final bool isControlPanelExpanded;
+  // Page navigation
+  final int currentPageNumber;
+  final int totalPages;
+  final VoidCallback onAddPrependPage;
+  final VoidCallback onPreviousPage;
+  final VoidCallback onNextPage;
+  // Tool selection
   final VoidCallback onPenTap;
   final VoidCallback onHighlighterTap;
   final VoidCallback onEraserTap;
@@ -18,6 +25,11 @@ class HandwritingToolbar extends StatelessWidget {
     super.key,
     required this.currentTool,
     required this.isControlPanelExpanded,
+    required this.currentPageNumber,
+    required this.totalPages,
+    required this.onAddPrependPage,
+    required this.onPreviousPage,
+    required this.onNextPage,
     required this.onPenTap,
     required this.onHighlighterTap,
     required this.onEraserTap,
@@ -42,11 +54,71 @@ class HandwritingToolbar extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Text(
-            l10n.handwritingNotes,
-            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          // Page navigation section
+          InkWell(
+            onTap: onAddPrependPage,
+            borderRadius: BorderRadius.circular(6),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.green.shade50,
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(color: Colors.green.shade300),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 16, color: Colors.green.shade700),
+                  const SizedBox(width: 4),
+                  Text(
+                    '頁',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.green.shade700,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
-          const Spacer(),
+          const SizedBox(width: 8),
+          // Previous page button
+          IconButton(
+            icon: const Icon(Icons.chevron_left, size: 20),
+            onPressed: currentPageNumber > 1 ? onPreviousPage : null,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: '上一頁',
+          ),
+          // Page indicator
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: Colors.blue.shade50,
+              borderRadius: BorderRadius.circular(4),
+              border: Border.all(color: Colors.blue.shade200),
+            ),
+            child: Text(
+              '$currentPageNumber/$totalPages頁',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+                color: Colors.blue.shade800,
+              ),
+            ),
+          ),
+          // Next page button
+          IconButton(
+            icon: const Icon(Icons.chevron_right, size: 20),
+            onPressed: currentPageNumber < totalPages ? onNextPage : null,
+            padding: const EdgeInsets.all(4),
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            tooltip: '下一頁',
+          ),
+          const SizedBox(width: 12),
+          Container(width: 1, height: 32, color: Colors.grey.shade300),
+          const SizedBox(width: 12),
           // Pen/Highlighter/Eraser toggle
           Container(
             decoration: BoxDecoration(

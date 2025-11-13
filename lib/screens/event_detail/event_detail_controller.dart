@@ -195,11 +195,17 @@ class EventDetailController {
     // Step 1: Load from cache immediately
     final cachedNote = await _noteSyncAdapter!.getCachedNote(event.id!);
     if (cachedNote != null) {
+      final totalStrokes = cachedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+      debugPrint('🔍 DEBUG loadNote: Loaded from cache - ${cachedNote.pages.length} pages, $totalStrokes total strokes');
       _updateState(_state.copyWith(
         note: cachedNote,
+        lastKnownPages: cachedNote.pages,
         hasUnsyncedChanges: cachedNote.isDirty,
       ));
+      debugPrint('🔍 DEBUG loadNote: State updated - lastKnownPages now ${_state.lastKnownPages.length} pages');
       debugPrint('✅ EventDetailController: Loaded from cache (${cachedNote.strokes.length} strokes, isDirty: ${cachedNote.isDirty})');
+    } else {
+      debugPrint('🔍 DEBUG loadNote: No cached note found, lastKnownPages = ${_state.lastKnownPages.length} pages');
     }
 
     // Step 2: Background refresh from server
@@ -237,6 +243,7 @@ class EventDetailController {
       if (serverNote != null) {
         _updateState(_state.copyWith(
           note: serverNote,
+          lastKnownPages: serverNote.pages,
           hasUnsyncedChanges: false,
           isLoadingFromServer: false,
           isOffline: false,
@@ -255,8 +262,13 @@ class EventDetailController {
   }
 
   /// Save event with handwriting note
-  Future<Event> saveEvent(List<Stroke> strokes) async {
+  Future<Event> saveEvent() async {
     debugPrint('💾 EventDetailController: Saving event...');
+
+    final pages = _state.lastKnownPages;
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG saveEvent: lastKnownPages has ${pages.length} pages, $totalStrokes total strokes');
+    debugPrint('🔍 DEBUG saveEvent: state.note has ${_state.note?.pages.length ?? 0} pages');
 
     _updateState(_state.copyWith(isLoading: true));
 
@@ -291,11 +303,12 @@ class EventDetailController {
 
           if (existingNote != null) {
             // DB has handwriting - auto-load it (safety: never lose existing patient data)
-            debugPrint('⚠️ EventDetailController: Found existing person note (${existingNote.strokes.length} strokes), loading DB handwriting');
+            final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+            debugPrint('⚠️ EventDetailController: Found existing person note (${existingNote.pages.length} pages, $totalStrokes strokes), loading DB handwriting');
             await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
             _updateState(_state.copyWith(
               note: existingNote,
-              lastKnownStrokes: existingNote.strokes,
+              lastKnownPages: existingNote.pages,
               isLoading: false,
             ));
             debugPrint('✅ EventDetailController: Loaded DB handwriting, skipping canvas save (patient data protected)');
@@ -313,7 +326,10 @@ class EventDetailController {
 
           if (syncedNote != null && syncedNote.isNotEmpty) {
             // Update state with synced note if it has content
-            _updateState(_state.copyWith(note: syncedNote));
+            _updateState(_state.copyWith(
+              note: syncedNote,
+              lastKnownPages: syncedNote.pages,
+            ));
             debugPrint('✅ EventDetailController: Note synced from person group, skipping save');
             // Return early - we don't need to save the note again since it was synced
             _updateState(_state.copyWith(isLoading: false));
@@ -323,7 +339,7 @@ class EventDetailController {
       }
 
       // Save handwriting note using offline-first strategy
-      await saveNoteWithOfflineFirst(savedEvent.id!, strokes);
+      await saveNoteWithOfflineFirst(savedEvent.id!, pages);
 
       return savedEvent;
     } catch (e) {
@@ -333,22 +349,19 @@ class EventDetailController {
   }
 
   /// Save note with offline-first strategy
-  Future<void> saveNoteWithOfflineFirst(int eventId, List<Stroke> strokes) async {
+  Future<void> saveNoteWithOfflineFirst(int eventId, List<List<Stroke>> pages) async {
     debugPrint('💾 EventDetailController: Starting offline-first note save for event $eventId');
 
     if (_noteSyncAdapter == null) {
       throw Exception('NoteSyncAdapter not initialized. Cannot save note.');
     }
 
-    debugPrint('💾 EventDetailController: Saving note with ${strokes.length} strokes');
-    for (int i = 0; i < strokes.length && i < 3; i++) {
-      final stroke = strokes[i];
-      debugPrint('   Stroke $i: ${stroke.points.length} points, width: ${stroke.strokeWidth}, color: ${stroke.color}');
-    }
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('💾 EventDetailController: Saving note with ${pages.length} pages, $totalStrokes total strokes');
 
     final noteToSave = Note(
       eventId: eventId,
-      strokes: strokes,
+      pages: pages,
       createdAt: _state.note?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
     );
@@ -366,20 +379,21 @@ class EventDetailController {
         throw Exception('Local save verification failed: Note not found in cache after save');
       }
 
-      if (verifyNote.strokes.length != strokes.length) {
-        throw Exception('Local save verification failed: Expected ${strokes.length} strokes but found ${verifyNote.strokes.length}');
+      final verifyTotalStrokes = verifyNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+      if (verifyTotalStrokes != totalStrokes) {
+        throw Exception('Local save verification failed: Expected $totalStrokes strokes but found $verifyTotalStrokes');
       }
 
-      debugPrint('✅ EventDetailController: Local save verified - ${verifyNote.strokes.length} strokes in cache, isDirty: ${verifyNote.isDirty}');
+      debugPrint('✅ EventDetailController: Local save verified - ${verifyNote.pages.length} pages, $verifyTotalStrokes strokes in cache, isDirty: ${verifyNote.isDirty}');
 
       _updateState(_state.copyWith(
         note: noteToSave,
         hasChanges: false,
         hasUnsyncedChanges: true,
-        lastKnownStrokes: strokes,
+        lastKnownPages: pages,
       ));
 
-      debugPrint('✅ EventDetailController: Note saved locally with ${strokes.length} strokes');
+      debugPrint('✅ EventDetailController: Note saved locally with ${pages.length} pages, $totalStrokes total strokes');
 
       // Background sync to server
       await syncNoteInBackground(eventId);
@@ -503,11 +517,12 @@ class EventDetailController {
   /// Load existing person note (when user chooses "載入現有")
   /// Replaces current canvas with DB handwriting
   Future<void> loadExistingPersonNote(Note existingNote) async {
+    final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
     _updateState(_state.copyWith(
       note: existingNote,
-      lastKnownStrokes: existingNote.strokes,
+      lastKnownPages: existingNote.pages,
     ));
-    debugPrint('✅ EventDetailController: Loaded existing person note (${existingNote.strokes.length} strokes)');
+    debugPrint('✅ EventDetailController: Loaded existing person note (${existingNote.pages.length} pages, $totalStrokes strokes)');
   }
 
   /// Get all record numbers for the current person name
@@ -543,11 +558,14 @@ class EventDetailController {
   }
 
   /// Update strokes (called when canvas changes)
-  void updateStrokes(List<Stroke> strokes) {
+  void updatePages(List<List<Stroke>> pages) {
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    debugPrint('🔍 DEBUG updatePages: Received ${pages.length} pages, $totalStrokes total strokes');
     _updateState(_state.copyWith(
-      lastKnownStrokes: strokes,
+      lastKnownPages: pages,
       hasChanges: true,
     ));
+    debugPrint('🔍 DEBUG updatePages: State updated, lastKnownPages now ${_state.lastKnownPages.length} pages');
   }
 
   /// Dispose resources

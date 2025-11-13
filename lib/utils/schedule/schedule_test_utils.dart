@@ -468,7 +468,7 @@ class ScheduleTestUtils {
         // Create note with strokes
         final note = Note(
           eventId: eventId,
-          strokes: strokes,
+          pages: [strokes], // Wrap strokes in array for multi-page format
           createdAt: now,
           updatedAt: now,
         );
@@ -770,7 +770,7 @@ class ScheduleTestUtils {
         // Create note with strokes
         final note = Note(
           eventId: event.id!,
-          strokes: strokes,
+          pages: [strokes], // Wrap strokes in array for multi-page format
           createdAt: now,
           updatedAt: now,
         );

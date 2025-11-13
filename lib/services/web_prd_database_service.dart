@@ -196,7 +196,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     final note = Note(
       id: _nextNoteId++,
       eventId: newEvent.id!,
-      strokes: [],
+      pages: [[]], // Start with one empty page
       createdAt: now,
       updatedAt: now,
     );
@@ -305,7 +305,7 @@ class WebPRDDatabaseService implements IDatabaseService {
       final emptyNote = Note(
         id: _nextNoteId++,
         eventId: newEvent.id!,
-        strokes: [],
+        pages: [[]], // Start with one empty page
         createdAt: now,
         updatedAt: now,
       );

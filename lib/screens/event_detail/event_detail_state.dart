@@ -14,7 +14,7 @@ class EventDetailState {
 
   // Note data
   final Note? note;
-  final List<Stroke> lastKnownStrokes;
+  final List<List<Stroke>> lastKnownPages;
 
   // Loading and sync state
   final bool isLoading;
@@ -34,7 +34,7 @@ class EventDetailState {
     required this.startTime,
     this.endTime,
     this.note,
-    this.lastKnownStrokes = const [],
+    this.lastKnownPages = const [[]],
     this.isLoading = false,
     this.isLoadingFromServer = false,
     this.hasChanges = false,
@@ -63,7 +63,7 @@ class EventDetailState {
     DateTime? startTime,
     DateTime? endTime,
     Note? note,
-    List<Stroke>? lastKnownStrokes,
+    List<List<Stroke>>? lastKnownPages,
     bool? isLoading,
     bool? isLoadingFromServer,
     bool? hasChanges,
@@ -81,7 +81,7 @@ class EventDetailState {
       startTime: startTime ?? this.startTime,
       endTime: clearEndTime ? null : (endTime ?? this.endTime),
       note: note ?? this.note,
-      lastKnownStrokes: lastKnownStrokes ?? this.lastKnownStrokes,
+      lastKnownPages: lastKnownPages ?? this.lastKnownPages,
       isLoading: isLoading ?? this.isLoading,
       isLoadingFromServer: isLoadingFromServer ?? this.isLoadingFromServer,
       hasChanges: hasChanges ?? this.hasChanges,

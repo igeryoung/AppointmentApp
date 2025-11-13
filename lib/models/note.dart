@@ -7,11 +7,11 @@ enum StrokeType {
   // eraser is not stored as strokes, but included for completeness
 }
 
-/// Note model - Handwriting-only note page linked to a single event as per PRD
+/// Note model - Multi-page handwriting note linked to a single event
 class Note {
   final int? id;
   final int eventId;
-  final List<Stroke> strokes;
+  final List<List<Stroke>> pages; // Multi-page support: array of pages, each page contains strokes
   final DateTime createdAt;
   final DateTime updatedAt;
   final bool isDirty; // Indicates unsaved changes not synced to server
@@ -23,7 +23,7 @@ class Note {
   const Note({
     this.id,
     required this.eventId,
-    required this.strokes,
+    required this.pages,
     required this.createdAt,
     required this.updatedAt,
     this.isDirty = false,
@@ -36,7 +36,7 @@ class Note {
   Note copyWith({
     int? id,
     int? eventId,
-    List<Stroke>? strokes,
+    List<List<Stroke>>? pages,
     DateTime? createdAt,
     DateTime? updatedAt,
     bool? isDirty,
@@ -48,7 +48,7 @@ class Note {
     return Note(
       id: id ?? this.id,
       eventId: eventId ?? this.eventId,
-      strokes: strokes ?? this.strokes,
+      pages: pages ?? this.pages,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       isDirty: isDirty ?? this.isDirty,
@@ -59,34 +59,66 @@ class Note {
     );
   }
 
+  // Multi-page helper methods
+  int get pageCount => pages.length;
+
+  List<Stroke> getPageStrokes(int pageIndex) {
+    if (pageIndex < 0 || pageIndex >= pages.length) return [];
+    return pages[pageIndex];
+  }
+
+  Note addPage() {
+    return copyWith(
+      pages: [...pages, []],
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Note updatePageStrokes(int pageIndex, List<Stroke> strokes) {
+    if (pageIndex < 0 || pageIndex >= pages.length) return this;
+    final updatedPages = List<List<Stroke>>.from(pages);
+    updatedPages[pageIndex] = strokes;
+    return copyWith(
+      pages: updatedPages,
+      updatedAt: DateTime.now(),
+    );
+  }
+
+  Note clearPage(int pageIndex) {
+    return updatePageStrokes(pageIndex, []);
+  }
+
+  // Legacy methods for backward compatibility (deprecated)
+  @Deprecated('Use pages instead')
+  List<Stroke> get strokes => pages.isNotEmpty ? pages[0] : [];
+
+  @Deprecated('Use addPage and updatePageStrokes instead')
   Note addStroke(Stroke stroke) {
-    return copyWith(
-      strokes: [...strokes, stroke],
-      updatedAt: DateTime.now(),
-    );
+    if (pages.isEmpty) {
+      return copyWith(pages: [[stroke]], updatedAt: DateTime.now());
+    }
+    final firstPage = List<Stroke>.from(pages[0]);
+    firstPage.add(stroke);
+    return updatePageStrokes(0, firstPage);
   }
 
-  Note removeLastStroke() {
-    if (strokes.isEmpty) return this;
-    return copyWith(
-      strokes: strokes.sublist(0, strokes.length - 1),
-      updatedAt: DateTime.now(),
-    );
-  }
-
+  @Deprecated('Use updatePageStrokes instead')
   Note clearStrokes() {
-    return copyWith(
-      strokes: [],
-      updatedAt: DateTime.now(),
-    );
+    if (pages.isEmpty) return this;
+    return clearPage(0);
   }
 
   Map<String, dynamic> toMap() {
     final lockedAtMs = lockedAt?.millisecondsSinceEpoch;
+    // Serialize pages as array of arrays
+    final pagesData = pages.map((page) =>
+      page.map((stroke) => stroke.toMap()).toList()
+    ).toList();
+
     return {
       'id': id,
       'event_id': eventId,
-      'strokes_data': jsonEncode(strokes.map((s) => s.toMap()).toList()),
+      'pages_data': jsonEncode(pagesData),
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
       'is_dirty': isDirty ? 1 : 0,
@@ -99,17 +131,7 @@ class Note {
 
   factory Note.fromMap(Map<String, dynamic> map) {
     // Handle both camelCase (from server API) and snake_case (from local DB)
-    List<Stroke> strokes = [];
-
-    // Check for strokesData (server) or strokes_data (local DB)
-    final strokesDataRaw = map['strokesData'] ?? map['strokes_data'];
-    if (strokesDataRaw != null) {
-      // Handle both pre-decoded list and JSON string
-      final strokesJson = strokesDataRaw is String
-          ? jsonDecode(strokesDataRaw) as List
-          : strokesDataRaw as List;
-      strokes = strokesJson.map((s) => Stroke.fromMap(s)).toList();
-    }
+    List<List<Stroke>> pages = [];
 
     // Parse timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
     DateTime? parseTimestamp(dynamic value, {required DateTime? fallback}) {
@@ -124,10 +146,41 @@ class Note {
       return fallback;
     }
 
+    // Check for new multi-page format: pagesData (server) or pages_data (local DB)
+    final pagesDataRaw = map['pagesData'] ?? map['pages_data'];
+    if (pagesDataRaw != null) {
+      // Handle both pre-decoded list and JSON string
+      final pagesJson = pagesDataRaw is String
+          ? jsonDecode(pagesDataRaw) as List
+          : pagesDataRaw as List;
+
+      // Parse pages: array of arrays
+      pages = pagesJson.map((pageJson) {
+        final pageList = pageJson as List;
+        return pageList.map((s) => Stroke.fromMap(s)).toList();
+      }).toList();
+    } else {
+      // Backward compatibility: Check for old single-page format (strokesData/strokes_data)
+      final strokesDataRaw = map['strokesData'] ?? map['strokes_data'];
+      if (strokesDataRaw != null) {
+        final strokesJson = strokesDataRaw is String
+            ? jsonDecode(strokesDataRaw) as List
+            : strokesDataRaw as List;
+        final strokes = strokesJson.map((s) => Stroke.fromMap(s)).toList();
+        // Migrate: wrap single page in array
+        pages = [strokes];
+      }
+    }
+
+    // Ensure at least one empty page
+    if (pages.isEmpty) {
+      pages = [[]];
+    }
+
     return Note(
       id: map['id']?.toInt(),
       eventId: (map['eventId'] ?? map['event_id'])?.toInt() ?? 0,
-      strokes: strokes,
+      pages: pages,
       createdAt: parseTimestamp(
         map['createdAt'] ?? map['created_at'],
         fallback: DateTime.now(),
@@ -147,12 +200,13 @@ class Note {
     );
   }
 
-  bool get isEmpty => strokes.isEmpty;
-  bool get isNotEmpty => strokes.isNotEmpty;
+  bool get isEmpty => pages.every((page) => page.isEmpty);
+  bool get isNotEmpty => pages.any((page) => page.isNotEmpty);
 
   @override
   String toString() {
-    return 'Note(id: $id, eventId: $eventId, strokeCount: ${strokes.length}, isDirty: $isDirty, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
+    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    return 'Note(id: $id, eventId: $eventId, pageCount: ${pages.length}, totalStrokes: $totalStrokes, isDirty: $isDirty, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
   }
 
   @override
@@ -161,12 +215,20 @@ class Note {
     return other is Note &&
         other.id == id &&
         other.eventId == eventId &&
-        _listEquals(other.strokes, strokes);
+        _pagesEquals(other.pages, pages);
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, eventId, strokes.length);
+    return Object.hash(id, eventId, pages.length);
+  }
+
+  bool _pagesEquals(List<List<Stroke>> pages1, List<List<Stroke>> pages2) {
+    if (pages1.length != pages2.length) return false;
+    for (int i = 0; i < pages1.length; i++) {
+      if (!_listEquals(pages1[i], pages2[i])) return false;
+    }
+    return true;
   }
 
   bool _listEquals<T>(List<T> list1, List<T> list2) {
