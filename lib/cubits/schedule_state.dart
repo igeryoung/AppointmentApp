@@ -82,14 +82,14 @@ class ScheduleError extends ScheduleState {
 class PendingNextAppointment extends Equatable {
   final String name;
   final String recordNumber;
-  final EventType eventType;
+  final List<EventType> eventTypes;
 
   const PendingNextAppointment({
     required this.name,
     required this.recordNumber,
-    required this.eventType,
+    required this.eventTypes,
   });
 
   @override
-  List<Object?> get props => [name, recordNumber, eventType];
+  List<Object?> get props => [name, recordNumber, eventTypes];
 }

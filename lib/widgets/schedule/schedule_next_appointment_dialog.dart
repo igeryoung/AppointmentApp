@@ -6,15 +6,16 @@ import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../screens/event_detail/utils/event_type_localizations.dart';
+import '../../screens/schedule/dialogs/change_event_type_dialog.dart';
 
 /// Data returned from schedule next appointment dialog
 class ScheduleNextAppointmentResult {
   final int daysFromOriginal;
-  final EventType eventType;
+  final List<EventType> eventTypes;
 
   const ScheduleNextAppointmentResult({
     required this.daysFromOriginal,
-    required this.eventType,
+    required this.eventTypes,
   });
 }
 
@@ -51,14 +52,14 @@ class _ScheduleNextAppointmentDialog extends StatefulWidget {
 
 class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointmentDialog> {
   late TextEditingController daysController;
-  late EventType selectedEventType;
+  late List<EventType> selectedEventTypes;
   String? daysError;
 
   @override
   void initState() {
     super.initState();
     daysController = TextEditingController(text: '180');
-    selectedEventType = widget.originalEvent.eventType;
+    selectedEventTypes = List.from(widget.originalEvent.eventTypes);
   }
 
   @override
@@ -105,7 +106,7 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
     Navigator.of(context).pop(
       ScheduleNextAppointmentResult(
         daysFromOriginal: days,
-        eventType: selectedEventType,
+        eventTypes: selectedEventTypes,
       ),
     );
   }
@@ -138,25 +139,35 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
           ),
           const SizedBox(height: 16),
 
-          // Event type dropdown
-          DropdownButtonFormField<EventType>(
-            value: selectedEventType,
-            decoration: InputDecoration(
-              labelText: widget.l10n.appointmentType,
-            ),
-            items: EventTypeLocalizations.commonEventTypes.map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
+          // Event types selection - same style as other fields
+          InkWell(
+            onTap: () async {
+              final result = await showChangeEventTypeDialog(
+                context,
+                widget.originalEvent.copyWith(eventTypes: selectedEventTypes),
+                EventTypeLocalizations.commonEventTypes,
+                EventTypeLocalizations.getLocalizedEventType,
               );
-            }).toList(),
-            onChanged: (EventType? newValue) {
-              if (newValue != null) {
+              if (result != null) {
                 setState(() {
-                  selectedEventType = newValue;
+                  selectedEventTypes = result;
                 });
               }
             },
+            child: InputDecorator(
+              decoration: InputDecoration(
+                labelText: widget.l10n.appointmentType,
+                border: const OutlineInputBorder(),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                suffixIcon: const Icon(Icons.arrow_drop_down),
+              ),
+              child: Text(
+                _buildEventTypeDisplayText(selectedEventTypes),
+                style: const TextStyle(fontSize: 16),
+                overflow: TextOverflow.ellipsis,
+                maxLines: 1,
+              ),
+            ),
           ),
           const SizedBox(height: 16),
 
@@ -201,5 +212,36 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
         ),
       ],
     );
+  }
+
+  /// Build display text for event types with overflow handling
+  /// Shows "Type1, Type2, +N more" format when there are too many types
+  String _buildEventTypeDisplayText(List<EventType> types) {
+    if (types.isEmpty) {
+      return '';
+    }
+
+    // Get localized names
+    final typeNames = types
+        .map((type) => EventTypeLocalizations.getLocalizedEventType(context, type))
+        .toList();
+
+    // If only 1-2 types, show all
+    if (typeNames.length <= 2) {
+      return typeNames.join(', ');
+    }
+
+    // If 3 types, try to show all, but check length
+    if (typeNames.length == 3) {
+      final fullText = typeNames.join(', ');
+      // Roughly estimate if it fits (assuming ~10 chars per type on average)
+      if (fullText.length <= 30) {
+        return fullText;
+      }
+    }
+
+    // Show first 2 types and "+N more"
+    final remaining = typeNames.length - 2;
+    return '${typeNames[0]}, ${typeNames[1]}, +$remaining more';
   }
 }

@@ -34,7 +34,7 @@ class PRDDatabaseService implements IDatabaseService {
 
     return await openDatabase(
       path,
-      version: 12, // New version for multi-page handwriting notes
+      version: 13, // New version for multi-type event support
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -394,6 +394,31 @@ class PRDDatabaseService implements IDatabaseService {
 
       debugPrint('✅ Database upgraded to version 12 (multi-page handwriting notes)');
     }
+    if (oldVersion < 13) {
+      // Add multi-type event support with event_types JSON array column
+      debugPrint('🔄 Upgrading to database version 13 (multi-type event support)...');
+
+      // Add new event_types column to store JSON array
+      await db.execute('ALTER TABLE events ADD COLUMN event_types TEXT');
+
+      // Migrate existing data: wrap single event_type in JSON array
+      // For example: "consultation" becomes ["consultation"]
+      final events = await db.query('events');
+      debugPrint('🔄 Migrating ${events.length} events to multi-type format...');
+
+      for (final event in events) {
+        final oldType = event['event_type'];
+        final newTypes = '["$oldType"]'; // Wrap in JSON array
+        await db.update(
+          'events',
+          {'event_types': newTypes},
+          where: 'id = ?',
+          whereArgs: [event['id']],
+        );
+      }
+
+      debugPrint('✅ Database upgraded to version 13 (multi-type event support)');
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -420,7 +445,8 @@ class PRDDatabaseService implements IDatabaseService {
         book_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         record_number TEXT,
-        event_type TEXT NOT NULL,
+        event_type TEXT,
+        event_types TEXT NOT NULL,
         start_time INTEGER NOT NULL,
         end_time INTEGER,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),

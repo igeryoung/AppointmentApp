@@ -4,6 +4,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart';
 import '../../../models/event_type.dart';
 import '../utils/event_type_localizations.dart';
+import '../../schedule/dialogs/change_event_type_dialog.dart';
 
 /// Event metadata section with name, record number, type, and time fields
 class EventMetadataSection extends StatelessWidget {
@@ -13,15 +14,16 @@ class EventMetadataSection extends StatelessWidget {
   final String recordNumber;
   final List<String> availableRecordNumbers;
   final bool isRecordNumberFieldEnabled;
-  final EventType selectedEventType;
+  final List<EventType> selectedEventTypes;
   final DateTime startTime;
   final DateTime? endTime;
   final VoidCallback onStartTimeTap;
   final VoidCallback onEndTimeTap;
   final VoidCallback onClearEndTime;
-  final ValueChanged<EventType?> onEventTypeChanged;
+  final ValueChanged<List<EventType>> onEventTypesChanged;
   final ValueChanged<String> onRecordNumberChanged;
   final Future<String?> Function() onNewRecordNumberRequested;
+  final Color Function(BuildContext, EventType)? getEventTypeColor;
 
   const EventMetadataSection({
     super.key,
@@ -31,15 +33,16 @@ class EventMetadataSection extends StatelessWidget {
     required this.recordNumber,
     required this.availableRecordNumbers,
     required this.isRecordNumberFieldEnabled,
-    required this.selectedEventType,
+    required this.selectedEventTypes,
     required this.startTime,
     this.endTime,
     required this.onStartTimeTap,
     required this.onEndTimeTap,
     required this.onClearEndTime,
-    required this.onEventTypeChanged,
+    required this.onEventTypesChanged,
     required this.onRecordNumberChanged,
     required this.onNewRecordNumberRequested,
+    this.getEventTypeColor,
   });
 
   @override
@@ -153,47 +156,33 @@ class EventMetadataSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // Event Type field with quick selection
-        Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return PopupMenuButton<EventType>(
-                      position: PopupMenuPosition.under,
-                      offset: Offset(constraints.maxWidth - 200, 0),
-                      elevation: 16,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
-                      onSelected: onEventTypeChanged,
-                      itemBuilder: (context) {
-                        return EventTypeLocalizations.commonEventTypes.map((type) {
-                          return PopupMenuItem<EventType>(
-                            value: type,
-                            child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
-                          );
-                        }).toList();
-                      },
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: l10n.eventType,
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          suffixIcon: const Icon(Icons.arrow_drop_down),
-                        ),
-                        child: Text(
-                          EventTypeLocalizations.getLocalizedEventType(context, selectedEventType),
-                          style: const TextStyle(fontSize: 16),
-                        ),
-                      ),
-                    );
-                  },
-                ),
-              ),
+        // Event Type field (same style as name and record number)
+        InkWell(
+          onTap: () async {
+            final result = await showChangeEventTypeDialog(
+              context,
+              event.copyWith(eventTypes: selectedEventTypes),
+              EventTypeLocalizations.commonEventTypes,
+              EventTypeLocalizations.getLocalizedEventType,
+            );
+            if (result != null) {
+              onEventTypesChanged(result);
+            }
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: l10n.eventType,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              suffixIcon: const Icon(Icons.arrow_drop_down),
             ),
-          ],
+            child: Text(
+              _buildEventTypeDisplayText(context, selectedEventTypes),
+              style: const TextStyle(fontSize: 16),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
+            ),
+          ),
         ),
         const SizedBox(height: 8),
 
@@ -290,6 +279,37 @@ class EventMetadataSection extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Build display text for event types with overflow handling
+  /// Shows "Type1, Type2, +N more" format when there are too many types
+  String _buildEventTypeDisplayText(BuildContext context, List<EventType> types) {
+    if (types.isEmpty) {
+      return '';
+    }
+
+    // Get localized names
+    final typeNames = types
+        .map((type) => EventTypeLocalizations.getLocalizedEventType(context, type))
+        .toList();
+
+    // If only 1-2 types, show all
+    if (typeNames.length <= 2) {
+      return typeNames.join(', ');
+    }
+
+    // If 3 types, try to show all, but check length
+    if (typeNames.length == 3) {
+      final fullText = typeNames.join(', ');
+      // Roughly estimate if it fits (assuming ~10 chars per type on average)
+      if (fullText.length <= 30) {
+        return fullText;
+      }
+    }
+
+    // Show first 2 types and "+N more"
+    final remaining = typeNames.length - 2;
+    return '${typeNames[0]}, ${typeNames[1]}, +$remaining more';
   }
 }
 

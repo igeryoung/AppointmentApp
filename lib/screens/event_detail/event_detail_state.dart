@@ -8,7 +8,7 @@ class EventDetailState {
   // Event metadata
   final String name;
   final String recordNumber;
-  final EventType selectedEventType;
+  final List<EventType> selectedEventTypes;
   final DateTime startTime;
   final DateTime? endTime;
 
@@ -30,7 +30,7 @@ class EventDetailState {
   const EventDetailState({
     required this.name,
     required this.recordNumber,
-    required this.selectedEventType,
+    required this.selectedEventTypes,
     required this.startTime,
     this.endTime,
     this.note,
@@ -49,7 +49,7 @@ class EventDetailState {
     return EventDetailState(
       name: event.name,
       recordNumber: event.recordNumber ?? '',
-      selectedEventType: event.eventType,
+      selectedEventTypes: event.eventTypes,
       startTime: event.startTime,
       endTime: event.endTime,
     );
@@ -59,7 +59,7 @@ class EventDetailState {
   EventDetailState copyWith({
     String? name,
     String? recordNumber,
-    EventType? selectedEventType,
+    List<EventType>? selectedEventTypes,
     DateTime? startTime,
     DateTime? endTime,
     Note? note,
@@ -77,7 +77,7 @@ class EventDetailState {
     return EventDetailState(
       name: name ?? this.name,
       recordNumber: recordNumber ?? this.recordNumber,
-      selectedEventType: selectedEventType ?? this.selectedEventType,
+      selectedEventTypes: selectedEventTypes ?? this.selectedEventTypes,
       startTime: startTime ?? this.startTime,
       endTime: clearEndTime ? null : (endTime ?? this.endTime),
       note: note ?? this.note,

@@ -545,16 +545,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               recordNumber: state.recordNumber,
                               availableRecordNumbers: _availableRecordNumbers,
                               isRecordNumberFieldEnabled: _nameController.text.trim().isNotEmpty,
-                              selectedEventType: state.selectedEventType,
+                              selectedEventTypes: state.selectedEventTypes,
                               startTime: state.startTime,
                               endTime: state.endTime,
                               onStartTimeTap: _selectStartTime,
                               onEndTimeTap: _selectEndTime,
                               onClearEndTime: () => _controller.clearEndTime(),
-                              onEventTypeChanged: (eventType) {
-                                if (eventType != null) {
-                                  _controller.updateEventType(eventType);
-                                }
+                              onEventTypesChanged: (eventTypes) {
+                                _controller.updateEventTypes(eventTypes);
                               },
                               onRecordNumberChanged: _handleRecordNumberChanged,
                               onNewRecordNumberRequested: _showNewRecordNumberDialog,

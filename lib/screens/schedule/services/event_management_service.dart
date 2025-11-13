@@ -95,7 +95,7 @@ class EventManagementService {
     DateTime? startTime,
     String? name,
     String? recordNumber,
-    EventType? eventType,
+    List<EventType>? eventTypes,
   }) async {
     final now = TimeService.instance.now();
     final defaultStartTime = startTime ??
@@ -105,7 +105,7 @@ class EventManagementService {
       bookId: _bookId,
       name: name ?? '',
       recordNumber: recordNumber ?? '',
-      eventType: eventType ?? EventType.consultation, // Default to consultation for new events
+      eventTypes: eventTypes ?? [EventType.consultation], // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
       updatedAt: now,
@@ -151,7 +151,7 @@ class EventManagementService {
       PendingNextAppointment(
         name: originalEvent.name,
         recordNumber: originalEvent.recordNumber ?? '',
-        eventType: result.eventType,
+        eventTypes: result.eventTypes,
       ),
     );
 
@@ -215,7 +215,7 @@ class EventManagementService {
     }
   }
 
-  /// Change event type
+  /// Change event types (multi-select)
   Future<void> changeEventType(Event event, BuildContext context) async {
     final eventTypes = [
       EventType.consultation,
@@ -226,33 +226,43 @@ class EventManagementService {
       EventType.treatment,
     ];
 
-    final selectedType = await showChangeEventTypeDialog(
+    final selectedTypes = await showChangeEventTypeDialog(
       context,
       event,
       eventTypes,
       getLocalizedEventType,
     );
 
-    if (selectedType != null && selectedType != event.eventType) {
-      try {
-        final updatedEvent = event.copyWith(
-          eventType: selectedType,
-          updatedAt: TimeService.instance.now(),
-        );
+    if (selectedTypes != null) {
+      // Check if types have changed
+      final currentSorted = EventType.sortAlphabetically(event.eventTypes);
+      final newSorted = EventType.sortAlphabetically(selectedTypes);
 
-        await _dbService.updateEvent(updatedEvent);
-        onUpdateEvent(updatedEvent);
+      final hasChanged = currentSorted.length != newSorted.length ||
+          !List.generate(currentSorted.length, (i) => currentSorted[i] == newSorted[i])
+              .every((e) => e);
 
-        if (isMounted()) {
-          onShowSnackbar(
-            getLocalizedString((l10n) => l10n.eventTypeChanged),
+      if (hasChanged) {
+        try {
+          final updatedEvent = event.copyWith(
+            eventTypes: selectedTypes,
+            updatedAt: TimeService.instance.now(),
           );
-        }
-      } catch (e) {
-        if (isMounted()) {
-          onShowSnackbar(
-            getLocalizedString((l10n) => l10n.errorUpdatingEvent(e.toString())),
-          );
+
+          await _dbService.updateEvent(updatedEvent);
+          onUpdateEvent(updatedEvent);
+
+          if (isMounted()) {
+            onShowSnackbar(
+              getLocalizedString((l10n) => l10n.eventTypeChanged),
+            );
+          }
+        } catch (e) {
+          if (isMounted()) {
+            onShowSnackbar(
+              getLocalizedString((l10n) => l10n.errorUpdatingEvent(e.toString())),
+            );
+          }
         }
       }
     }
@@ -532,5 +542,19 @@ class EventManagementService {
     // Reduce saturation to 60%
     final hslColor = HSLColor.fromColor(baseColor);
     return hslColor.withSaturation(0.60).toColor();
+  }
+
+  /// Get colors for multiple event types
+  /// Returns up to 2 colors, sorted alphabetically
+  List<Color> getEventTypeColors(List<EventType> types) {
+    if (types.isEmpty) {
+      return [getEventTypeColor(EventType.other)];
+    }
+
+    // Sort alphabetically and take first 2
+    final sorted = EventType.sortAlphabetically(types);
+    final topTwo = sorted.take(2).toList();
+
+    return topTwo.map((type) => getEventTypeColor(type)).toList();
   }
 }
