@@ -139,7 +139,7 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
           ),
           const SizedBox(height: 16),
 
-          // Event types selection
+          // Event types selection - inline format
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -149,49 +149,55 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
               ),
               const SizedBox(height: 8),
               Container(
-                padding: const EdgeInsets.all(8),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   border: Border.all(color: Colors.grey.shade400),
                   borderRadius: BorderRadius.circular(4),
                 ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                child: Wrap(
+                  spacing: 4,
+                  runSpacing: 4,
+                  crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
-                    // Display selected types
-                    Wrap(
-                      spacing: 4,
-                      runSpacing: 4,
-                      children: selectedEventTypes.map((type) {
-                        return Chip(
-                          label: Text(
-                            EventTypeLocalizations.getLocalizedEventType(context, type),
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                          padding: const EdgeInsets.all(2),
-                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    // Display selected types as chips
+                    ...selectedEventTypes.map((type) {
+                      return Chip(
+                        label: Text(
+                          EventTypeLocalizations.getLocalizedEventType(context, type),
+                          style: const TextStyle(fontSize: 12),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      );
+                    }).toList(),
+                    // (+) button to change types
+                    InkWell(
+                      onTap: () async {
+                        final result = await showChangeEventTypeDialog(
+                          context,
+                          widget.originalEvent.copyWith(eventTypes: selectedEventTypes),
+                          EventTypeLocalizations.commonEventTypes,
+                          EventTypeLocalizations.getLocalizedEventType,
                         );
-                      }).toList(),
-                    ),
-                    const SizedBox(height: 4),
-                    // Button to change types
-                    SizedBox(
-                      width: double.infinity,
-                      child: OutlinedButton.icon(
-                        onPressed: () async {
-                          final result = await showChangeEventTypeDialog(
-                            context,
-                            widget.originalEvent.copyWith(eventTypes: selectedEventTypes),
-                            EventTypeLocalizations.commonEventTypes,
-                            EventTypeLocalizations.getLocalizedEventType,
-                          );
-                          if (result != null) {
-                            setState(() {
-                              selectedEventTypes = result;
-                            });
-                          }
-                        },
-                        icon: const Icon(Icons.edit, size: 14),
-                        label: const Text('Change Types', style: TextStyle(fontSize: 12)),
+                        if (result != null) {
+                          setState(() {
+                            selectedEventTypes = result;
+                          });
+                        }
+                      },
+                      borderRadius: BorderRadius.circular(12),
+                      child: Container(
+                        width: 24,
+                        height: 24,
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade200,
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(
+                          Icons.add,
+                          size: 16,
+                          color: Colors.black54,
+                        ),
                       ),
                     ),
                   ],

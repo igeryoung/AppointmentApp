@@ -156,7 +156,7 @@ class EventMetadataSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // Event Type field with multi-select chips
+        // Event Type field with inline chips and (+) button
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
@@ -168,55 +168,58 @@ class EventMetadataSection extends StatelessWidget {
               ),
             ),
             Container(
-              padding: const EdgeInsets.all(8),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
               decoration: BoxDecoration(
                 border: Border.all(color: Colors.grey.shade400),
                 borderRadius: BorderRadius.circular(4),
               ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
                   // Display selected types as chips
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 4,
-                    children: selectedEventTypes.map((type) {
-                      // Get color for this type if callback is provided
-                      final chipColor = getEventTypeColor != null
-                          ? getEventTypeColor!(context, type).withOpacity(0.3)
-                          : Theme.of(context).colorScheme.primaryContainer;
+                  ...selectedEventTypes.map((type) {
+                    // Get color for this type if callback is provided
+                    final chipColor = getEventTypeColor != null
+                        ? getEventTypeColor!(context, type).withOpacity(0.3)
+                        : Theme.of(context).colorScheme.primaryContainer;
 
-                      return Chip(
-                        label: Text(
-                          EventTypeLocalizations.getLocalizedEventType(context, type),
-                          style: const TextStyle(fontSize: 13),
-                        ),
-                        backgroundColor: chipColor,
-                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                      );
-                    }).toList(),
-                  ),
-                  const SizedBox(height: 8),
-                  // Button to change types
-                  SizedBox(
-                    width: double.infinity,
-                    child: OutlinedButton.icon(
-                      onPressed: () async {
-                        final result = await showChangeEventTypeDialog(
-                          context,
-                          event.copyWith(eventTypes: selectedEventTypes),
-                          EventTypeLocalizations.commonEventTypes,
-                          EventTypeLocalizations.getLocalizedEventType,
-                        );
-                        if (result != null) {
-                          onEventTypesChanged(result);
-                        }
-                      },
-                      icon: const Icon(Icons.edit, size: 16),
+                    return Chip(
                       label: Text(
-                        'Change Types (${selectedEventTypes.length})',
+                        EventTypeLocalizations.getLocalizedEventType(context, type),
                         style: const TextStyle(fontSize: 13),
+                      ),
+                      backgroundColor: chipColor,
+                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    );
+                  }).toList(),
+                  // (+) button to add/change types
+                  InkWell(
+                    onTap: () async {
+                      final result = await showChangeEventTypeDialog(
+                        context,
+                        event.copyWith(eventTypes: selectedEventTypes),
+                        EventTypeLocalizations.commonEventTypes,
+                        EventTypeLocalizations.getLocalizedEventType,
+                      );
+                      if (result != null) {
+                        onEventTypesChanged(result);
+                      }
+                    },
+                    borderRadius: BorderRadius.circular(12),
+                    child: Container(
+                      width: 28,
+                      height: 28,
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade200,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.add,
+                        size: 18,
+                        color: Colors.black54,
                       ),
                     ),
                   ),
