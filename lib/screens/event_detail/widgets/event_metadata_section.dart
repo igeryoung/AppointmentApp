@@ -156,77 +156,33 @@ class EventMetadataSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // Event Type field with inline chips and (+) button
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Padding(
-              padding: const EdgeInsets.only(left: 12, bottom: 4),
-              child: Text(
-                l10n.eventType,
-                style: Theme.of(context).textTheme.bodySmall,
-              ),
+        // Event Type field (same style as name and record number)
+        InkWell(
+          onTap: () async {
+            final result = await showChangeEventTypeDialog(
+              context,
+              event.copyWith(eventTypes: selectedEventTypes),
+              EventTypeLocalizations.commonEventTypes,
+              EventTypeLocalizations.getLocalizedEventType,
+            );
+            if (result != null) {
+              onEventTypesChanged(result);
+            }
+          },
+          child: InputDecorator(
+            decoration: InputDecoration(
+              labelText: l10n.eventType,
+              border: const OutlineInputBorder(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              suffixIcon: const Icon(Icons.arrow_drop_down),
             ),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                border: Border.all(color: Colors.grey.shade400),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  // Display selected types as chips
-                  ...selectedEventTypes.map((type) {
-                    // Get color for this type if callback is provided
-                    final chipColor = getEventTypeColor != null
-                        ? getEventTypeColor!(context, type).withOpacity(0.3)
-                        : Theme.of(context).colorScheme.primaryContainer;
-
-                    return Chip(
-                      label: Text(
-                        EventTypeLocalizations.getLocalizedEventType(context, type),
-                        style: const TextStyle(fontSize: 13),
-                      ),
-                      backgroundColor: chipColor,
-                      padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
-                      materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                    );
-                  }).toList(),
-                  // (+) button to add/change types
-                  InkWell(
-                    onTap: () async {
-                      final result = await showChangeEventTypeDialog(
-                        context,
-                        event.copyWith(eventTypes: selectedEventTypes),
-                        EventTypeLocalizations.commonEventTypes,
-                        EventTypeLocalizations.getLocalizedEventType,
-                      );
-                      if (result != null) {
-                        onEventTypesChanged(result);
-                      }
-                    },
-                    borderRadius: BorderRadius.circular(12),
-                    child: Container(
-                      width: 28,
-                      height: 28,
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade200,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Icon(
-                        Icons.add,
-                        size: 18,
-                        color: Colors.black54,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+            child: Text(
+              _buildEventTypeDisplayText(context, selectedEventTypes),
+              style: const TextStyle(fontSize: 16),
+              overflow: TextOverflow.ellipsis,
+              maxLines: 1,
             ),
-          ],
+          ),
         ),
         const SizedBox(height: 8),
 
@@ -323,6 +279,37 @@ class EventMetadataSection extends StatelessWidget {
         ),
       ],
     );
+  }
+
+  /// Build display text for event types with overflow handling
+  /// Shows "Type1, Type2, +N more" format when there are too many types
+  String _buildEventTypeDisplayText(BuildContext context, List<EventType> types) {
+    if (types.isEmpty) {
+      return '';
+    }
+
+    // Get localized names
+    final typeNames = types
+        .map((type) => EventTypeLocalizations.getLocalizedEventType(context, type))
+        .toList();
+
+    // If only 1-2 types, show all
+    if (typeNames.length <= 2) {
+      return typeNames.join(', ');
+    }
+
+    // If 3 types, try to show all, but check length
+    if (typeNames.length == 3) {
+      final fullText = typeNames.join(', ');
+      // Roughly estimate if it fits (assuming ~10 chars per type on average)
+      if (fullText.length <= 30) {
+        return fullText;
+      }
+    }
+
+    // Show first 2 types and "+N more"
+    final remaining = typeNames.length - 2;
+    return '${typeNames[0]}, ${typeNames[1]}, +$remaining more';
   }
 }
 
