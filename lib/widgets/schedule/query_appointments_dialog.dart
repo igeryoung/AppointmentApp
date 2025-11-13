@@ -404,14 +404,16 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
             ),
             const SizedBox(height: 8),
 
-            // Event type
+            // Event types
             Row(
               children: [
                 Icon(Icons.category, size: 16, color: Colors.grey.shade600),
                 const SizedBox(width: 8),
-                Text(
-                  '${l10n.appointmentType}: ${EventTypeLocalizations.getLocalizedEventType(context, event.eventType)}',
-                  style: TextStyle(color: Colors.grey.shade700),
+                Expanded(
+                  child: Text(
+                    '${l10n.appointmentType}: ${event.eventTypes.map((t) => EventTypeLocalizations.getLocalizedEventType(context, t)).join(', ')}',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
                 ),
               ],
             ),

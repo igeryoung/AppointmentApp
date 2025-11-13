@@ -108,6 +108,28 @@ class ScheduleEventTileHelper {
     return '→ ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newEvent.startTime)}';
   }
 
+  /// Get colors for event types (up to 2, alphabetically sorted)
+  static List<Color> _getEventColors(BuildContext context, Event event, Color Function(BuildContext, EventType) getEventTypeColor) {
+    final sorted = EventType.sortAlphabetically(event.eventTypes);
+    final topTwo = sorted.take(2).toList();
+    return topTwo.map((type) => getEventTypeColor(context, type)).toList();
+  }
+
+  /// Build split-color background widget for multi-type events
+  static Widget _buildColorBackground(List<Color> colors, double opacity) {
+    if (colors.length == 1) {
+      return Container(color: colors[0].withOpacity(opacity));
+    } else {
+      // Vertical 50/50 split for 2 colors
+      return Row(
+        children: [
+          Expanded(child: Container(color: colors[0].withOpacity(opacity))),
+          Expanded(child: Container(color: colors[1].withOpacity(opacity))),
+        ],
+      );
+    }
+  }
+
   /// Build event tile widget
   static Widget buildEventTile({
     required BuildContext context,
@@ -125,6 +147,10 @@ class ScheduleEventTileHelper {
     final slotsSpanned = ((durationInMinutes / 15).ceil()).clamp(1, 16);
     final tileHeight = (slotsSpanned * slotHeight) - 1;
 
+    // Get colors for this event (up to 2, alphabetically sorted)
+    final colors = _getEventColors(context, event, getEventTypeColor);
+    final primaryColor = colors.first; // Use first color for borders and accents
+
     Widget eventWidget = GestureDetector(
       onTap: isMenuOpen ? null : onTap,
       onLongPressStart: (details) {
@@ -132,53 +158,68 @@ class ScheduleEventTileHelper {
           onLongPress(details.globalPosition);
         }
       },
-      child: Container(
-        height: tileHeight,
-        margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
-        padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
-        decoration: BoxDecoration(
-          color: event.isRemoved
-              ? getEventTypeColor(context, event.eventType).withOpacity(0.3)
-              : getEventTypeColor(context, event.eventType).withOpacity(0.75),
-          borderRadius: BorderRadius.circular(2),
-          border: isMenuOpen
-              ? Border.all(color: Colors.white, width: 2)
-              : event.isRemoved
-                  ? Border.all(
-                      color: getEventTypeColor(context, event.eventType).withOpacity(0.6),
-                      width: 1,
-                      style: BorderStyle.solid,
-                    )
-                  : null,
-        ),
-        child: Stack(
-          clipBehavior: Clip.none,
-          children: [
-            // Dotted line overlay for removed events
-            if (event.isRemoved && dottedBorderPainter != null)
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(2),
+        child: Container(
+          height: tileHeight,
+          margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(2),
+            border: isMenuOpen
+                ? Border.all(color: Colors.white, width: 2)
+                : event.isRemoved
+                    ? Border.all(
+                        color: primaryColor.withOpacity(0.6),
+                        width: 1,
+                        style: BorderStyle.solid,
+                      )
+                    : null,
+          ),
+          child: Stack(
+            clipBehavior: Clip.none,
+            children: [
+              // Background color layer (single or split)
               Positioned.fill(
-                child: dottedBorderPainter(getEventTypeColor(context, event.eventType).withOpacity(0.8)),
-              ),
-            // Content with height-adaptive rendering
-            buildEventTileContent(
-              event: event,
-              tileHeight: tileHeight,
-              slotHeight: slotHeight,
-              events: events,
-            ),
-            // OK indicator for checked events (top-right corner, full tile height)
-            if (event.isChecked)
-              Positioned(
-                top: -2,
-                right: -1,
-                child: Image.asset(
-                  'assets/images/icons8-ok-96.png',
-                  width: tileHeight / 2,
-                  height: tileHeight / 2,
-                  fit: BoxFit.contain,
+                child: _buildColorBackground(
+                  colors,
+                  event.isRemoved ? 0.3 : 0.75,
                 ),
               ),
-          ],
+              // Content layer with padding
+              Padding(
+                padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Dotted line overlay for removed events
+                    if (event.isRemoved && dottedBorderPainter != null)
+                      Positioned.fill(
+                        child: dottedBorderPainter(primaryColor.withOpacity(0.8)),
+                      ),
+                    // Content with height-adaptive rendering
+                    buildEventTileContent(
+                      event: event,
+                      tileHeight: tileHeight,
+                      slotHeight: slotHeight,
+                      events: events,
+                    ),
+                    // OK indicator for checked events (top-right corner, full tile height)
+                    if (event.isChecked)
+                      Positioned(
+                        top: -2,
+                        right: -1,
+                        child: Image.asset(
+                          'assets/images/icons8-ok-96.png',
+                          width: tileHeight / 2,
+                          height: tileHeight / 2,
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -192,19 +233,29 @@ class ScheduleEventTileHelper {
           borderRadius: BorderRadius.circular(2),
           child: Opacity(
             opacity: 0.7,
-            child: Container(
-              width: 100,
-              height: tileHeight,
-              padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
-              decoration: BoxDecoration(
-                color: getEventTypeColor(context, event.eventType),
-                borderRadius: BorderRadius.circular(2),
-              ),
-              child: buildEventTileContent(
-                event: event,
-                tileHeight: tileHeight,
-                slotHeight: slotHeight,
-                events: events,
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(2),
+              child: Container(
+                width: 100,
+                height: tileHeight,
+                child: Stack(
+                  children: [
+                    // Background color layer (single or split)
+                    Positioned.fill(
+                      child: _buildColorBackground(colors, 1.0),
+                    ),
+                    // Content layer
+                    Padding(
+                      padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
+                      child: buildEventTileContent(
+                        event: event,
+                        tileHeight: tileHeight,
+                        slotHeight: slotHeight,
+                        events: events,
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),

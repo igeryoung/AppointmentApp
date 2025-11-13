@@ -6,15 +6,16 @@ import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../screens/event_detail/utils/event_type_localizations.dart';
+import '../../screens/schedule/dialogs/change_event_type_dialog.dart';
 
 /// Data returned from schedule next appointment dialog
 class ScheduleNextAppointmentResult {
   final int daysFromOriginal;
-  final EventType eventType;
+  final List<EventType> eventTypes;
 
   const ScheduleNextAppointmentResult({
     required this.daysFromOriginal,
-    required this.eventType,
+    required this.eventTypes,
   });
 }
 
@@ -51,14 +52,14 @@ class _ScheduleNextAppointmentDialog extends StatefulWidget {
 
 class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointmentDialog> {
   late TextEditingController daysController;
-  late EventType selectedEventType;
+  late List<EventType> selectedEventTypes;
   String? daysError;
 
   @override
   void initState() {
     super.initState();
     daysController = TextEditingController(text: '180');
-    selectedEventType = widget.originalEvent.eventType;
+    selectedEventTypes = List.from(widget.originalEvent.eventTypes);
   }
 
   @override
@@ -105,7 +106,7 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
     Navigator.of(context).pop(
       ScheduleNextAppointmentResult(
         daysFromOriginal: days,
-        eventType: selectedEventType,
+        eventTypes: selectedEventTypes,
       ),
     );
   }
@@ -138,25 +139,65 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
           ),
           const SizedBox(height: 16),
 
-          // Event type dropdown
-          DropdownButtonFormField<EventType>(
-            value: selectedEventType,
-            decoration: InputDecoration(
-              labelText: widget.l10n.appointmentType,
-            ),
-            items: EventTypeLocalizations.commonEventTypes.map((type) {
-              return DropdownMenuItem(
-                value: type,
-                child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
-              );
-            }).toList(),
-            onChanged: (EventType? newValue) {
-              if (newValue != null) {
-                setState(() {
-                  selectedEventType = newValue;
-                });
-              }
-            },
+          // Event types selection
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                widget.l10n.appointmentType,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Display selected types
+                    Wrap(
+                      spacing: 4,
+                      runSpacing: 4,
+                      children: selectedEventTypes.map((type) {
+                        return Chip(
+                          label: Text(
+                            EventTypeLocalizations.getLocalizedEventType(context, type),
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                          padding: const EdgeInsets.all(2),
+                          materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 4),
+                    // Button to change types
+                    SizedBox(
+                      width: double.infinity,
+                      child: OutlinedButton.icon(
+                        onPressed: () async {
+                          final result = await showChangeEventTypeDialog(
+                            context,
+                            widget.originalEvent.copyWith(eventTypes: selectedEventTypes),
+                            EventTypeLocalizations.commonEventTypes,
+                            EventTypeLocalizations.getLocalizedEventType,
+                          );
+                          if (result != null) {
+                            setState(() {
+                              selectedEventTypes = result;
+                            });
+                          }
+                        },
+                        icon: const Icon(Icons.edit, size: 14),
+                        label: const Text('Change Types', style: TextStyle(fontSize: 12)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ),
           const SizedBox(height: 16),
 

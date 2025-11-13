@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'event_type.dart';
 
 /// Event model - Individual appointment entry with minimal metadata as per PRD
@@ -8,7 +9,7 @@ class Event {
   final String name;
   /// Nullable: optional field per PRD
   final String? recordNumber;
-  final EventType eventType;
+  final List<EventType> eventTypes;
   final DateTime startTime;
   /// Nullable: open-ended events have no end time (as per PRD)
   final DateTime? endTime;
@@ -23,12 +24,12 @@ class Event {
   final int? newEventId; // Reference to new event if this event's time was changed
   final bool isChecked; // Marks event as completed/checked
 
-  const Event({
+  Event({
     this.id,
     required this.bookId,
     required this.name,
     this.recordNumber,
-    required this.eventType,
+    required List<EventType> eventTypes,
     required this.startTime,
     this.endTime,
     required this.createdAt,
@@ -38,14 +39,16 @@ class Event {
     this.originalEventId,
     this.newEventId,
     this.isChecked = false,
-  });
+  }) : eventTypes = eventTypes.isEmpty
+           ? throw ArgumentError('Event must have at least one event type')
+           : eventTypes;
 
   Event copyWith({
     int? id,
     int? bookId,
     String? name,
     String? recordNumber,
-    EventType? eventType,
+    List<EventType>? eventTypes,
     DateTime? startTime,
     DateTime? endTime,
     DateTime? createdAt,
@@ -61,7 +64,7 @@ class Event {
       bookId: bookId ?? this.bookId,
       name: name ?? this.name,
       recordNumber: recordNumber ?? this.recordNumber,
-      eventType: eventType ?? this.eventType,
+      eventTypes: eventTypes ?? this.eventTypes,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       createdAt: createdAt ?? this.createdAt,
@@ -80,7 +83,7 @@ class Event {
       'book_id': bookId,
       'name': name,
       'record_number': recordNumber,
-      'event_type': eventType.toJson(), // Convert enum to string for storage
+      'event_types': EventType.toJsonList(eventTypes), // Convert list to JSON array string
       'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
       'end_time': endTime != null ? endTime!.millisecondsSinceEpoch ~/ 1000 : null,
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
@@ -94,12 +97,26 @@ class Event {
   }
 
   factory Event.fromMap(Map<String, dynamic> map) {
+    // Backward compatibility: Check for new 'event_types' field first,
+    // then fall back to old 'event_type' field
+    List<EventType> eventTypes;
+    if (map['event_types'] != null && map['event_types'].toString().isNotEmpty) {
+      // New format: JSON array string
+      eventTypes = EventType.fromStringList(map['event_types']);
+    } else if (map['event_type'] != null && map['event_type'].toString().isNotEmpty) {
+      // Old format: single string - wrap in list
+      eventTypes = [EventType.fromString(map['event_type'])];
+    } else {
+      // Fallback to 'other' type if no type specified
+      eventTypes = [EventType.other];
+    }
+
     return Event(
       id: map['id']?.toInt(),
       bookId: map['book_id']?.toInt() ?? 0,
       name: map['name'] ?? '',
       recordNumber: map['record_number'],
-      eventType: EventType.fromString(map['event_type'] ?? ''), // Parse string to enum
+      eventTypes: eventTypes,
       startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
       endTime: map['end_time'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000)
@@ -141,7 +158,7 @@ class Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, bookId: $bookId, name: $name, recordNumber: $recordNumber, eventType: $eventType, startTime: $startTime, endTime: $endTime)';
+    return 'Event(id: $id, bookId: $bookId, name: $name, recordNumber: $recordNumber, eventTypes: $eventTypes, startTime: $startTime, endTime: $endTime)';
   }
 
   @override
@@ -152,7 +169,7 @@ class Event {
         other.bookId == bookId &&
         other.name == name &&
         other.recordNumber == recordNumber &&
-        other.eventType == eventType &&
+        listEquals(other.eventTypes, eventTypes) &&
         other.startTime == startTime &&
         other.endTime == endTime &&
         other.isRemoved == isRemoved &&
@@ -164,6 +181,6 @@ class Event {
 
   @override
   int get hashCode {
-    return Object.hash(id, bookId, name, recordNumber, eventType, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked);
+    return Object.hash(id, bookId, name, recordNumber, Object.hashAll(eventTypes), startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked);
   }
 }

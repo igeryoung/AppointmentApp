@@ -4,6 +4,7 @@ import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart';
 import '../../../models/event_type.dart';
 import '../utils/event_type_localizations.dart';
+import '../../schedule/dialogs/change_event_type_dialog.dart';
 
 /// Event metadata section with name, record number, type, and time fields
 class EventMetadataSection extends StatelessWidget {
@@ -13,15 +14,16 @@ class EventMetadataSection extends StatelessWidget {
   final String recordNumber;
   final List<String> availableRecordNumbers;
   final bool isRecordNumberFieldEnabled;
-  final EventType selectedEventType;
+  final List<EventType> selectedEventTypes;
   final DateTime startTime;
   final DateTime? endTime;
   final VoidCallback onStartTimeTap;
   final VoidCallback onEndTimeTap;
   final VoidCallback onClearEndTime;
-  final ValueChanged<EventType?> onEventTypeChanged;
+  final ValueChanged<List<EventType>> onEventTypesChanged;
   final ValueChanged<String> onRecordNumberChanged;
   final Future<String?> Function() onNewRecordNumberRequested;
+  final Color Function(BuildContext, EventType)? getEventTypeColor;
 
   const EventMetadataSection({
     super.key,
@@ -31,15 +33,16 @@ class EventMetadataSection extends StatelessWidget {
     required this.recordNumber,
     required this.availableRecordNumbers,
     required this.isRecordNumberFieldEnabled,
-    required this.selectedEventType,
+    required this.selectedEventTypes,
     required this.startTime,
     this.endTime,
     required this.onStartTimeTap,
     required this.onEndTimeTap,
     required this.onClearEndTime,
-    required this.onEventTypeChanged,
+    required this.onEventTypesChanged,
     required this.onRecordNumberChanged,
     required this.onNewRecordNumberRequested,
+    this.getEventTypeColor,
   });
 
   @override
@@ -153,44 +156,71 @@ class EventMetadataSection extends StatelessWidget {
         ),
         const SizedBox(height: 8),
 
-        // Event Type field with quick selection
-        Row(
+        // Event Type field with multi-select chips
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.only(bottom: 4),
-                child: LayoutBuilder(
-                  builder: (context, constraints) {
-                    return PopupMenuButton<EventType>(
-                      position: PopupMenuPosition.under,
-                      offset: Offset(constraints.maxWidth - 200, 0),
-                      elevation: 16,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                      constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
-                      onSelected: onEventTypeChanged,
-                      itemBuilder: (context) {
-                        return EventTypeLocalizations.commonEventTypes.map((type) {
-                          return PopupMenuItem<EventType>(
-                            value: type,
-                            child: Text(EventTypeLocalizations.getLocalizedEventType(context, type)),
-                          );
-                        }).toList();
+            Padding(
+              padding: const EdgeInsets.only(left: 12, bottom: 4),
+              child: Text(
+                l10n.eventType,
+                style: Theme.of(context).textTheme.bodySmall,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.all(8),
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.grey.shade400),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Display selected types as chips
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 4,
+                    children: selectedEventTypes.map((type) {
+                      // Get color for this type if callback is provided
+                      final chipColor = getEventTypeColor != null
+                          ? getEventTypeColor!(context, type).withOpacity(0.3)
+                          : Theme.of(context).colorScheme.primaryContainer;
+
+                      return Chip(
+                        label: Text(
+                          EventTypeLocalizations.getLocalizedEventType(context, type),
+                          style: const TextStyle(fontSize: 13),
+                        ),
+                        backgroundColor: chipColor,
+                        padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 0),
+                        materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 8),
+                  // Button to change types
+                  SizedBox(
+                    width: double.infinity,
+                    child: OutlinedButton.icon(
+                      onPressed: () async {
+                        final result = await showChangeEventTypeDialog(
+                          context,
+                          event.copyWith(eventTypes: selectedEventTypes),
+                          EventTypeLocalizations.commonEventTypes,
+                          EventTypeLocalizations.getLocalizedEventType,
+                        );
+                        if (result != null) {
+                          onEventTypesChanged(result);
+                        }
                       },
-                      child: InputDecorator(
-                        decoration: InputDecoration(
-                          labelText: l10n.eventType,
-                          border: const OutlineInputBorder(),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          suffixIcon: const Icon(Icons.arrow_drop_down),
-                        ),
-                        child: Text(
-                          EventTypeLocalizations.getLocalizedEventType(context, selectedEventType),
-                          style: const TextStyle(fontSize: 16),
-                        ),
+                      icon: const Icon(Icons.edit, size: 16),
+                      label: Text(
+                        'Change Types (${selectedEventTypes.length})',
+                        style: const TextStyle(fontSize: 13),
                       ),
-                    );
-                  },
-                ),
+                    ),
+                  ),
+                ],
               ),
             ),
           ],
