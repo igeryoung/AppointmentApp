@@ -2,7 +2,7 @@ import 'package:flutter/foundation.dart';
 import '../models/cache_stats.dart';
 import '../models/note.dart';
 import '../models/schedule_drawing.dart';
-import 'prd_database_service.dart';
+import 'database/prd_database_service.dart';
 
 /// CacheManager - 智能缓存管理器
 ///
@@ -167,7 +167,7 @@ class CacheManager {
       final notesDeleted = await _db.deleteLRUNotes(batchSize);
       final drawingsDeleted = await _db.deleteLRUDrawings(batchSize);
 
-      final deleted = notesDeleted + drawingsDeleted;
+      final int deleted = notesDeleted + drawingsDeleted;
       if (deleted == 0) {
         // 没有更多可删除的条目
         break;

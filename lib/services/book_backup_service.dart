@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
-import 'prd_database_service.dart';
+import 'database/prd_database_service.dart';
 import 'server_config_service.dart';
 import 'http_client_factory.dart';
 
