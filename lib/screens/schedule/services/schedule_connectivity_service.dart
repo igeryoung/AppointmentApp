@@ -2,7 +2,7 @@ import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import '../../../services/database_service_interface.dart';
-import '../../../services/prd_database_service.dart';
+import '../../../services/database/prd_database_service.dart';
 import '../../../services/content_service.dart';
 import '../../../services/cache_manager.dart';
 import '../../../services/api_client.dart';

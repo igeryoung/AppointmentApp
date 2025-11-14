@@ -1,6 +1,6 @@
 import '../../../services/book_backup_service.dart';
 import '../../../services/database_service_interface.dart';
-import '../../../services/prd_database_service.dart';
+import '../../../services/database/prd_database_service.dart';
 import '../../../services/service_locator.dart';
 import '../utils/platform_utils.dart';
 

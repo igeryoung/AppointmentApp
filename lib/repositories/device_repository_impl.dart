@@ -1,5 +1,5 @@
 import 'package:sqflite/sqflite.dart';
-import '../services/prd_database_service.dart'; // For DeviceCredentials class
+import '../services/database/prd_database_service.dart'; // For DeviceCredentials class
 import 'device_repository.dart';
 
 /// Implementation of DeviceRepository using SQLite
