@@ -34,7 +34,7 @@ class PRDDatabaseService implements IDatabaseService {
 
     return await openDatabase(
       path,
-      version: 13, // New version for multi-type event support
+      version: 14, // Fixed version for multi-type event support (fixed event_type constraint)
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -398,26 +398,118 @@ class PRDDatabaseService implements IDatabaseService {
       // Add multi-type event support with event_types JSON array column
       debugPrint('🔄 Upgrading to database version 13 (multi-type event support)...');
 
-      // Add new event_types column to store JSON array
-      await db.execute('ALTER TABLE events ADD COLUMN event_types TEXT');
+      // SQLite doesn't support ALTER COLUMN to change constraints, so we need to recreate the table
+      await db.execute('PRAGMA foreign_keys = OFF');
 
-      // Migrate existing data: wrap single event_type in JSON array
-      // For example: "consultation" becomes ["consultation"]
-      final events = await db.query('events');
-      debugPrint('🔄 Migrating ${events.length} events to multi-type format...');
+      // Create new events table with event_type nullable and event_types NOT NULL
+      await db.execute('''
+        CREATE TABLE events_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          record_number TEXT,
+          event_type TEXT,
+          event_types TEXT NOT NULL,
+          start_time INTEGER NOT NULL,
+          end_time INTEGER,
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          is_removed INTEGER DEFAULT 0,
+          removal_reason TEXT,
+          original_event_id INTEGER,
+          new_event_id INTEGER,
+          is_checked INTEGER DEFAULT 0,
+          FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+        )
+      ''');
 
-      for (final event in events) {
-        final oldType = event['event_type'];
-        final newTypes = '["$oldType"]'; // Wrap in JSON array
-        await db.update(
-          'events',
-          {'event_types': newTypes},
-          where: 'id = ?',
-          whereArgs: [event['id']],
-        );
-      }
+      // Migrate existing data: wrap single event_type in JSON array for event_types
+      await db.execute('''
+        INSERT INTO events_new (
+          id, book_id, name, record_number, event_type, event_types, start_time, end_time,
+          created_at, updated_at, is_removed, removal_reason, original_event_id,
+          new_event_id, is_checked
+        )
+        SELECT
+          id, book_id, name, record_number, event_type,
+          '["' || event_type || '"]' as event_types,
+          start_time, end_time,
+          created_at, updated_at, is_removed, removal_reason, original_event_id,
+          new_event_id, is_checked
+        FROM events
+      ''');
+
+      // Drop old table
+      await db.execute('DROP TABLE events');
+
+      // Rename new table to original name
+      await db.execute('ALTER TABLE events_new RENAME TO events');
+
+      // Recreate indexes
+      await db.execute('CREATE INDEX idx_events_book ON events(book_id)');
+      await db.execute('CREATE INDEX idx_events_start_time ON events(start_time)');
+
+      await db.execute('PRAGMA foreign_keys = ON');
 
       debugPrint('✅ Database upgraded to version 13 (multi-type event support)');
+    }
+    if (oldVersion < 14) {
+      // Fix version 13: Recreate events table to make event_type nullable and event_types NOT NULL
+      debugPrint('🔄 Upgrading to database version 14 (fix event_type constraint)...');
+
+      await db.execute('PRAGMA foreign_keys = OFF');
+
+      // Create new events table with proper constraints
+      await db.execute('''
+        CREATE TABLE events_new (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          book_id INTEGER NOT NULL,
+          name TEXT NOT NULL,
+          record_number TEXT,
+          event_type TEXT,
+          event_types TEXT NOT NULL,
+          start_time INTEGER NOT NULL,
+          end_time INTEGER,
+          created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+          is_removed INTEGER DEFAULT 0,
+          removal_reason TEXT,
+          original_event_id INTEGER,
+          new_event_id INTEGER,
+          is_checked INTEGER DEFAULT 0,
+          FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+        )
+      ''');
+
+      // Migrate data, ensuring event_types is populated
+      await db.execute('''
+        INSERT INTO events_new (
+          id, book_id, name, record_number, event_type, event_types, start_time, end_time,
+          created_at, updated_at, is_removed, removal_reason, original_event_id,
+          new_event_id, is_checked
+        )
+        SELECT
+          id, book_id, name, record_number, event_type,
+          COALESCE(event_types, '["' || COALESCE(event_type, 'other') || '"]') as event_types,
+          start_time, end_time,
+          created_at, updated_at, is_removed, removal_reason, original_event_id,
+          new_event_id, is_checked
+        FROM events
+      ''');
+
+      // Drop old table
+      await db.execute('DROP TABLE events');
+
+      // Rename new table to original name
+      await db.execute('ALTER TABLE events_new RENAME TO events');
+
+      // Recreate indexes
+      await db.execute('CREATE INDEX idx_events_book ON events(book_id)');
+      await db.execute('CREATE INDEX idx_events_start_time ON events(start_time)');
+
+      await db.execute('PRAGMA foreign_keys = ON');
+
+      debugPrint('✅ Database upgraded to version 14 (event_type constraint fixed)');
     }
   }
 
