@@ -377,13 +377,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<bool> _onWillPop() async {
     if (!_controller.state.hasChanges) {
-      return true;
+      return true; // No changes, allow default pop
     }
 
     // If event name is empty, show discard dialog
     if (_nameController.text.trim().isEmpty) {
-      final shouldPop = await ConfirmDiscardDialog.show(context);
-      return shouldPop;
+      final shouldDiscard = await ConfirmDiscardDialog.show(context);
+      if (shouldDiscard && mounted) {
+        // User chose to discard changes, pop without reloading schedule
+        Navigator.pop(context, false);
+        return false; // Prevent default pop
+      }
+      return false; // User chose to keep editing
     }
 
     // Auto-save when name exists
@@ -418,9 +423,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             duration: const Duration(seconds: 2),
           ),
         );
+
+        // Navigate back with result=true to trigger schedule reload
+        Navigator.pop(context, true);
       }
 
-      return true; // Navigate back
+      return false; // Prevent default pop (we already popped manually)
     } catch (e) {
       if (mounted) {
         // Show error but still navigate back
@@ -431,8 +439,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             duration: const Duration(seconds: 3),
           ),
         );
+
+        // Navigate back with result=true to trigger schedule reload (data might be partially saved)
+        Navigator.pop(context, true);
       }
-      return true; // Navigate back anyway
+
+      return false; // Prevent default pop (we already popped manually)
     }
   }
 
