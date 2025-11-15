@@ -636,7 +636,10 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         get3DayWindowStart: (date) => ScheduleLayoutUtils.get3DayWindowStart(date),
         cacheManager: _cacheManager,
         getEffectiveDate: () => ScheduleLayoutUtils.getEffectiveDate(_selectedDate),
-        preloadNotes: _preloadNotesInBackground,
+        preloadNotes: (events) {
+          _currentPreloadGeneration++;
+          _preloadNotesInBackground(events, _currentPreloadGeneration);
+        },
         onDateChange: _changeDateTo,
       ),
     ), // Scaffold
