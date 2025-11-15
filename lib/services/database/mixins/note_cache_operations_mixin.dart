@@ -216,6 +216,14 @@ mixin NoteCacheOperationsMixin {
 
       debugPrint('✅ SQLite: Note saved successfully');
 
+      // Update event's hasNote field based on whether note has strokes
+      final hasStrokes = totalStrokes > 0;
+      await db.rawUpdate(
+        'UPDATE events SET has_note = ? WHERE id = ?',
+        [hasStrokes ? 1 : 0, eventId],
+      );
+      debugPrint('✅ Updated event.hasNote = $hasStrokes for event $eventId');
+
       // If event has record number, sync to all other events in same person group
       if (personKey != null) {
         final (nameNorm, recordNorm) = personKey;
@@ -240,6 +248,26 @@ mixin NoteCacheOperationsMixin {
         );
 
         debugPrint('✅ Synced note to $syncedRows other event(s) in person group');
+
+        // Update hasNote for all events in the person group
+        if (syncedRows > 0) {
+          final eventIdsResult = await db.rawQuery(
+            '''SELECT event_id FROM notes
+               WHERE person_name_normalized = ?
+                 AND record_number_normalized = ?
+                 AND event_id != ?''',
+            [nameNorm, recordNorm, eventId],
+          );
+
+          for (final row in eventIdsResult) {
+            final syncEventId = row['event_id'] as int;
+            await db.rawUpdate(
+              'UPDATE events SET has_note = ? WHERE id = ?',
+              [hasStrokes ? 1 : 0, syncEventId],
+            );
+          }
+          debugPrint('✅ Updated hasNote for ${eventIdsResult.length} events in person group');
+        }
       }
     } catch (e) {
       debugPrint('❌ SQLite: Failed to save note: $e');
