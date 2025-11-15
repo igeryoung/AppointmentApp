@@ -80,6 +80,7 @@ class ScheduleEventOverlay extends StatelessWidget {
                   onTap: () => onEditEvent(positioned.event),
                   onLongPress: (offset) => onShowEventContextMenu(positioned.event, offset),
                   isMenuOpen: selectedEventForMenu?.id == positioned.event.id,
+                  hasHandwriting: positioned.event.hasNote,
                   dottedBorderPainter: (color) => CustomPaint(
                     painter: DottedBorderPainter(color: color, strokeWidth: 1),
                   ),

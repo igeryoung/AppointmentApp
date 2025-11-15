@@ -116,18 +116,52 @@ class ScheduleEventTileHelper {
   }
 
   /// Build split-color background widget for multi-type events
-  static Widget _buildColorBackground(List<Color> colors, double opacity) {
+  /// Optionally prepends a handwriting icon (10% width) when hasHandwriting is true
+  static Widget _buildColorBackground(
+    List<Color> colors,
+    double opacity, {
+    bool hasHandwriting = false,
+  }) {
+    Widget colorWidget;
+
     if (colors.length == 1) {
-      return Container(color: colors[0].withOpacity(opacity));
+      colorWidget = Container(color: colors[0].withOpacity(opacity));
     } else {
-      // Vertical 50/50 split for 2 colors
-      return Row(
+      // Vertical split for 2 colors
+      colorWidget = Row(
         children: [
           Expanded(child: Container(color: colors[0].withOpacity(opacity))),
           Expanded(child: Container(color: colors[1].withOpacity(opacity))),
         ],
       );
     }
+
+    // Prepend icon if event has handwriting
+    if (hasHandwriting) {
+      return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch, // Force children to fill 100% height
+        children: [
+          // Icon section - 10% width, 100% height
+          Expanded(
+            flex: 10,
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              child: Image.asset(
+                'assets/images/handwirtenote.png',
+                fit: BoxFit.fill, // Stretch to fill 100% width and 100% height
+              ),
+            ),
+          ),
+          // Color section - 90% width
+          Expanded(
+            flex: 90,
+            child: colorWidget,
+          ),
+        ],
+      );
+    }
+
+    return colorWidget;
   }
 
   /// Build event tile widget
@@ -140,6 +174,7 @@ class ScheduleEventTileHelper {
     required VoidCallback onTap,
     required Function(Offset) onLongPress,
     required bool isMenuOpen,
+    bool hasHandwriting = false,
     Widget Function(Color)? dottedBorderPainter,
   }) {
     // Calculate how many 15-minute slots this event spans
@@ -183,11 +218,17 @@ class ScheduleEventTileHelper {
                 child: _buildColorBackground(
                   colors,
                   event.isRemoved ? 0.3 : 0.75,
+                  hasHandwriting: hasHandwriting,
                 ),
               ),
               // Content layer with padding
               Padding(
-                padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
+                padding: EdgeInsets.only(
+                  left: hasHandwriting ? 0 : 2, // No left padding when icon present
+                  right: 2,
+                  top: 2,
+                  bottom: 0,
+                ),
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -202,6 +243,7 @@ class ScheduleEventTileHelper {
                       tileHeight: tileHeight,
                       slotHeight: slotHeight,
                       events: events,
+                      hasHandwriting: hasHandwriting,
                     ),
                     // OK indicator for checked events (top-right corner, full tile height)
                     if (event.isChecked)
@@ -242,16 +284,22 @@ class ScheduleEventTileHelper {
                   children: [
                     // Background color layer (single or split)
                     Positioned.fill(
-                      child: _buildColorBackground(colors, 1.0),
+                      child: _buildColorBackground(colors, 1.0, hasHandwriting: hasHandwriting),
                     ),
                     // Content layer
                     Padding(
-                      padding: const EdgeInsets.only(left: 2, right: 2, top: 2, bottom: 0),
+                      padding: EdgeInsets.only(
+                        left: hasHandwriting ? 0 : 2,
+                        right: 2,
+                        top: 2,
+                        bottom: 0,
+                      ),
                       child: buildEventTileContent(
                         event: event,
                         tileHeight: tileHeight,
                         slotHeight: slotHeight,
                         events: events,
+                        hasHandwriting: hasHandwriting,
                       ),
                     ),
                   ],
@@ -280,14 +328,16 @@ class ScheduleEventTileHelper {
     required double tileHeight,
     required double slotHeight,
     required List<Event> events,
+    bool hasHandwriting = false,
   }) {
     // For closed-end events, always show simplified content
     final isClosedEnd = !shouldDisplayAsOpenEnd(event);
 
+    Widget content;
     if (isClosedEnd) {
       // Closed-end events: Always show just the name
       final fontSize = getEventNameFontSize(slotHeight, 9.0) * 0.9;
-      return Align(
+      content = Align(
         alignment: Alignment.topLeft,
         child: buildFormattedNameText(
             event: event,
@@ -301,20 +351,27 @@ class ScheduleEventTileHelper {
             maxLines: 1,
           ),
       );
-    }
-
-    // Open-end events: Height-adaptive rendering
-    if (tileHeight < 20) {
-      // Very small: Only show name with tiny font
+    } else if (tileHeight < 20) {
+      // Open-end events: Very small - Only show name with tiny font
       final baseFontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
       final fontSize = getEventNameFontSize(slotHeight, baseFontSize) * 0.9;
-      return _buildNameOnly(event, fontSize);
+      content = _buildNameOnly(event, fontSize);
     } else {
-      // Small and larger: Show name with appropriate font
+      // Open-end events: Small and larger - Show name with appropriate font
       final baseFontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
       final fontSize = getEventNameFontSize(slotHeight, baseFontSize) * 0.9;
-      return _buildNameOnly(event, fontSize);
+      content = _buildNameOnly(event, fontSize);
     }
+
+    // Add left padding when handwriting icon is present (icon takes 10% width)
+    if (hasHandwriting) {
+      return Padding(
+        padding: const EdgeInsets.only(left: 12), // Shift text right to avoid icon
+        child: content,
+      );
+    }
+
+    return content;
   }
 
   static Widget _buildNameOnly(Event event, double fontSize) {
