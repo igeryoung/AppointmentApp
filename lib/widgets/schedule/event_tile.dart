@@ -145,16 +145,10 @@ class ScheduleEventTileHelper {
             flex: 10,
             child: Container(
               color: Colors.black.withOpacity(0.3),
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  return Image.asset(
-                    'assets/images/handwirtenote.png',
-                    width: constraints.maxWidth,
-                    height: constraints.maxHeight,
-                    fit: BoxFit.contain,
-                    alignment: Alignment.centerLeft,
-                  );
-                },
+              child: Image.asset(
+                'assets/images/handwirtenote.png',
+                fit: BoxFit.fill, // Fill 100% of region without proportional scaling
+                alignment: Alignment.centerLeft,
               ),
             ),
           ),
