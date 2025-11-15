@@ -58,7 +58,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 14, // Fixed version for multi-type event support (fixed event_type constraint)
+      version: 15, // Add has_note field to events for handwriting indicator
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -535,6 +535,14 @@ class PRDDatabaseService
 
       debugPrint('✅ Database upgraded to version 14 (event_type constraint fixed)');
     }
+    if (oldVersion < 15) {
+      // Add has_note column for event handwriting indicator
+      debugPrint('🔄 Upgrading to database version 15 (has_note field for handwriting indicator)...');
+
+      await db.execute('ALTER TABLE events ADD COLUMN has_note INTEGER DEFAULT 0');
+
+      debugPrint('✅ Database upgraded to version 15 (has_note field added)');
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -572,6 +580,7 @@ class PRDDatabaseService
         original_event_id INTEGER,
         new_event_id INTEGER,
         is_checked INTEGER DEFAULT 0,
+        has_note INTEGER DEFAULT 0,
         FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
