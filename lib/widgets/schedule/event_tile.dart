@@ -140,22 +140,13 @@ class ScheduleEventTileHelper {
     if (hasHandwriting) {
       return Row(
         children: [
-          // Icon section - 10% width, left-aligned
+          // Icon section - 10% width, 100% height
           Expanded(
             flex: 10,
-            child: Container(
-              color: Colors.black.withOpacity(0.3),
-              child: const Align(
-                alignment: Alignment.centerLeft,
-                child: Padding(
-                  padding: EdgeInsets.only(left: 2),
-                  child: Icon(
-                    Icons.edit,
-                    color: Colors.white70,
-                    size: 10,
-                  ),
-                ),
-              ),
+            child: Image.asset(
+              'assets/images/handwirtenote.png',
+              fit: BoxFit.cover,
+              alignment: Alignment.centerLeft,
             ),
           ),
           // Color section - 90% width
