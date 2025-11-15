@@ -75,6 +75,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   // RACE CONDITION FIX: Preload generation counter to cancel stale preload operations
   int _currentPreloadGeneration = 0;
 
+  // Navigation state for loading overlay
+  bool _isNavigating = false;
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -110,7 +113,23 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           _lastActiveDate = lastActiveDate;
         });
       },
-      onSaveDrawing: () async => await _saveDrawing(),
+      onSaveDrawing: () async {
+        try {
+          await _saveDrawing();
+        } catch (e) {
+          // Show error and rethrow to cancel navigation
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to save drawing: $e'),
+                duration: const Duration(seconds: 3),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          rethrow;
+        }
+      },
       onLoadDrawing: () async => await _loadDrawing(),
       onUpdateCubit: (date) => context.read<ScheduleCubit>().selectDate(date),
       onShowNotification: (messageKey) {
@@ -128,16 +147,21 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       onCancelPendingSave: () => _drawingService?.cancelPendingSave(),
     );
 
-    // RACE CONDITION FIX: Set drawing mode warning callback
-    _dateService!.onShowDrawingModeWarning = () {
+    // Set navigation state callback for loading overlay
+    _dateService!.onNavigatingStateChanged = (isNavigating) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Cannot navigate while in drawing mode. Exit drawing mode first.'),
-            duration: Duration(seconds: 2),
-            backgroundColor: Colors.orange,
-          ),
-        );
+        setState(() {
+          _isNavigating = isNavigating;
+        });
+      }
+    };
+
+    // Set exit drawing mode callback
+    _dateService!.onExitDrawingMode = () {
+      if (mounted) {
+        setState(() {
+          _isDrawingMode = false;
+        });
       }
     };
 
@@ -449,7 +473,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             Navigator.of(context).pop();
           }
         },
-        child: Scaffold(
+        child: Stack(
+          children: [
+            Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -643,6 +669,33 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         onDateChange: _changeDateTo,
       ),
     ), // Scaffold
+
+            // Loading overlay (Q7: B - Spinner + "Saving..." text)
+            if (_isNavigating)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Saving...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ), // Stack
     ), // PopScope
     ); // BlocListener
   }
