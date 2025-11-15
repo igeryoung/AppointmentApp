@@ -72,6 +72,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   // FAB menu visibility state
   bool _isFabMenuVisible = false;
 
+  // RACE CONDITION FIX: Preload generation counter to cancel stale preload operations
+  int _currentPreloadGeneration = 0;
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -124,6 +127,19 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       isInDrawingMode: () => _isDrawingMode,
       onCancelPendingSave: () => _drawingService?.cancelPendingSave(),
     );
+
+    // RACE CONDITION FIX: Set drawing mode warning callback
+    _dateService!.onShowDrawingModeWarning = () {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Cannot navigate while in drawing mode. Exit drawing mode first.'),
+            duration: Duration(seconds: 2),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    };
 
     // Initialize connectivity service
     _connectivityService = ScheduleConnectivityService(
@@ -264,9 +280,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   /// This method is automatically triggered by BlocListener when events are loaded
   /// from the ScheduleCubit. It improves UX by preloading notes so they're instantly
   /// available when user taps events.
-  Future<void> _preloadNotesInBackground(List<Event> events) async {
+  ///
+  /// [generation] - Preload generation number for race condition prevention
+  Future<void> _preloadNotesInBackground(List<Event> events, int generation) async {
     if (events.isEmpty) {
-      debugPrint('📦 ScheduleScreen: No events to preload');
+      debugPrint('📦 ScheduleScreen: No events to preload (generation=$generation)');
       return;
     }
 
@@ -276,7 +294,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
 
     final preloadStartTime = DateTime.now();
-    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events');
+    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events (generation=$generation)');
 
     // Extract all event IDs (filter out null IDs)
     final eventIds = events
@@ -292,24 +310,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     debugPrint('📦 ScheduleScreen: Calling ContentService.preloadNotes with ${eventIds.length} event IDs');
 
     try {
-      // Call ContentService to preload notes with progress callback
+      // RACE CONDITION FIX: Pass generation and cancellation check to ContentService
       await _contentService!.preloadNotes(
         eventIds,
+        generation: generation,
+        isCancelled: () => generation != _currentPreloadGeneration,
         onProgress: (loaded, total) {
-          // Log progress for debugging
-          debugPrint('📦 ScheduleScreen: Progress update - $loaded/$total notes loaded');
+          // Only log progress if this preload is still active
+          if (generation == _currentPreloadGeneration) {
+            debugPrint('📦 ScheduleScreen: Progress update - $loaded/$total notes loaded (generation=$generation)');
+          }
         },
       );
 
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('✅ ScheduleScreen: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes)');
+
+      // Only log completion if this preload is still active
+      if (generation == _currentPreloadGeneration) {
+        debugPrint('✅ ScheduleScreen: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes, generation=$generation)');
+      } else {
+        debugPrint('🚫 ScheduleScreen: Preload completed but was cancelled (generation=$generation vs current=$_currentPreloadGeneration)');
+      }
     } catch (e) {
       // Preload failure is non-critical - user can still use the app
       // Notes will be fetched on-demand when user taps events
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('⚠️ ScheduleScreen: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical): $e');
+      debugPrint('⚠️ ScheduleScreen: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical, generation=$generation): $e');
     }
   }
 
@@ -382,7 +410,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       listener: (context, state) {
         // Trigger preloading when events are loaded
         if (state is ScheduleLoaded) {
-          _preloadNotesInBackground(state.events);
+          // RACE CONDITION FIX: Increment generation to cancel previous preload
+          _currentPreloadGeneration++;
+          final preloadGeneration = _currentPreloadGeneration;
+          debugPrint('🔄 ScheduleScreen: Starting preload for generation $preloadGeneration');
+          _preloadNotesInBackground(state.events, preloadGeneration);
 
           // Check if date has changed to a different 3-day window
           final currentWindow = _previousSelectedDate != null

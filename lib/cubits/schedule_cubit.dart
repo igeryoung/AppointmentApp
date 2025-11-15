@@ -26,6 +26,9 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // Current book ID being viewed
   int? _currentBookId;
 
+  // RACE CONDITION FIX: Generation counter to ignore stale event queries
+  int _currentRequestGeneration = 0;
+
   ScheduleCubit(
     this._eventRepository,
     this._drawingContentService,
@@ -44,7 +47,9 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Load events for the selected date (using 3-day window)
-  Future<void> loadEvents({DateTime? date, bool? showOldEvents}) async {
+  ///
+  /// [generation] - Request generation number for race condition prevention
+  Future<void> loadEvents({DateTime? date, bool? showOldEvents, int? generation}) async {
     if (_currentBookId == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot load events - no book selected');
       emit(const ScheduleError('No book selected'));
@@ -80,11 +85,19 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       final windowStart = _get3DayWindowStart(selectedDate);
       final windowEnd = windowStart.add(const Duration(days: 3));
 
+      debugPrint('🔄 ScheduleCubit: Fetching events for window $windowStart (generation=$generation)');
+
       final events = await _eventRepository.getByDateRange(
         _currentBookId!,
         windowStart,
         windowEnd,
       );
+
+      // RACE CONDITION FIX: Check if this request is still valid
+      if (generation != null && generation != _currentRequestGeneration) {
+        debugPrint('⚠️ ScheduleCubit: Ignoring stale event query (gen $generation vs current $_currentRequestGeneration)');
+        return; // Don't emit state for stale data
+      }
 
       // Filter old events if needed
       // Old events are those that are removed or have been rescheduled (have newEventId)
@@ -102,7 +115,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         pendingNextAppointment: pendingNextAppointment,
       ));
 
-      debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for 3-day window starting $windowStart');
+      debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for 3-day window starting $windowStart (generation=$generation)');
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to load events: $e');
       emit(ScheduleError('Failed to load events: $e'));
@@ -114,7 +127,12 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final currentState = state;
     final showOldEvents = currentState is ScheduleLoaded ? currentState.showOldEvents : true;
 
-    await loadEvents(date: date, showOldEvents: showOldEvents);
+    // RACE CONDITION FIX: Increment generation counter on each date change
+    _currentRequestGeneration++;
+    final requestGeneration = _currentRequestGeneration;
+    debugPrint('🔄 ScheduleCubit: selectDate() called, generation=$requestGeneration');
+
+    await loadEvents(date: date, showOldEvents: showOldEvents, generation: requestGeneration);
   }
 
   // ===================

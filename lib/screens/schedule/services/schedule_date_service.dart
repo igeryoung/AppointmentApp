@@ -41,6 +41,9 @@ class ScheduleDateService {
   /// Callback to cancel pending drawing saves
   final void Function() onCancelPendingSave;
 
+  /// Callback to show warning when navigation is blocked during drawing mode
+  void Function()? onShowDrawingModeWarning;
+
   ScheduleDateService({
     required DateTime initialDate,
     required this.onDateChanged,
@@ -125,6 +128,13 @@ class ScheduleDateService {
   /// Show date picker and handle date selection
   /// Returns true if date was changed, false otherwise
   Future<bool> showDatePickerDialog(BuildContext context) async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
+    if (isInDrawingMode()) {
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return false;
+    }
+
     final date = await showDatePicker(
       context: context,
       initialDate: _selectedDate,
@@ -133,11 +143,6 @@ class ScheduleDateService {
     );
 
     if (date != null) {
-      if (isInDrawingMode()) {
-        onCancelPendingSave();
-        await onSaveDrawing();
-      }
-
       _selectedDate = date;
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
@@ -150,9 +155,11 @@ class ScheduleDateService {
 
   /// Navigate to previous 3-day window
   Future<void> navigatePrevious() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.subtract(getNavigationIncrement());
@@ -163,9 +170,11 @@ class ScheduleDateService {
 
   /// Navigate to next 3-day window
   Future<void> navigateNext() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.add(getNavigationIncrement());
@@ -176,9 +185,11 @@ class ScheduleDateService {
 
   /// Navigate 3 days backward
   Future<void> navigate3DaysPrevious() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.subtract(const Duration(days: 3));
@@ -189,9 +200,11 @@ class ScheduleDateService {
 
   /// Navigate 3 days forward
   Future<void> navigate3DaysNext() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.add(const Duration(days: 3));
@@ -202,9 +215,11 @@ class ScheduleDateService {
 
   /// Navigate 90 days backward
   Future<void> navigate90DaysPrevious() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.subtract(const Duration(days: 90));
@@ -215,9 +230,11 @@ class ScheduleDateService {
 
   /// Navigate 90 days forward
   Future<void> navigate90DaysNext() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.add(const Duration(days: 90));
@@ -228,9 +245,11 @@ class ScheduleDateService {
 
   /// Navigate 180 days backward
   Future<void> navigate180DaysPrevious() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.subtract(const Duration(days: 180));
@@ -241,9 +260,11 @@ class ScheduleDateService {
 
   /// Navigate 180 days forward
   Future<void> navigate180DaysNext() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
     if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
     }
 
     _selectedDate = _selectedDate.add(const Duration(days: 180));
@@ -254,16 +275,18 @@ class ScheduleDateService {
 
   /// Jump to today's date
   Future<void> jumpToToday() async {
+    // RACE CONDITION FIX: Block navigation during drawing mode
+    if (isInDrawingMode()) {
+      debugPrint('⚠️ ScheduleDateService: Navigation blocked - in drawing mode');
+      onShowDrawingModeWarning?.call();
+      return;
+    }
+
     final now = TimeService.instance.now();
     if (_selectedDate.year == now.year &&
         _selectedDate.month == now.month &&
         _selectedDate.day == now.day) {
       return; // Already on today
-    }
-
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
     }
 
     _selectedDate = now;

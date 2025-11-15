@@ -247,11 +247,15 @@ class ContentService {
   /// 3. Save to cache
   ///
   /// [onProgress] callback reports (loaded, total) progress
+  /// [generation] - Generation number for tracking preload requests
+  /// [isCancelled] - Callback to check if this preload should be cancelled
   /// Does not block, returns immediately
   /// Failures are logged but don't throw
   Future<void> preloadNotes(
     List<int> eventIds, {
     Function(int loaded, int total)? onProgress,
+    int? generation,
+    bool Function()? isCancelled,
   }) async {
     if (eventIds.isEmpty) {
       onProgress?.call(0, 0);
@@ -259,15 +263,27 @@ class ContentService {
     }
 
     final startTime = DateTime.now();
-    debugPrint('🔄 ContentService: [${startTime.toIso8601String()}] Preload STARTED for ${eventIds.length} notes [eventIds: ${eventIds.join(', ')}]');
+    debugPrint('🔄 ContentService: [${startTime.toIso8601String()}] Preload STARTED for ${eventIds.length} notes (generation=$generation) [eventIds: ${eventIds.join(', ')}]');
 
     // Run in background, don't block caller
     Future.microtask(() async {
       try {
+        // RACE CONDITION FIX: Check if cancelled before starting
+        if (isCancelled != null && isCancelled()) {
+          debugPrint('🚫 ContentService: Preload cancelled before starting (generation=$generation)');
+          return;
+        }
+
         // Step 1: Filter out already-cached notes
         debugPrint('📦 ContentService: Checking cache for ${eventIds.length} notes...');
         final uncachedIds = <int>[];
         for (final id in eventIds) {
+          // RACE CONDITION FIX: Check cancellation during cache lookup
+          if (isCancelled != null && isCancelled()) {
+            debugPrint('🚫 ContentService: Preload cancelled during cache check (generation=$generation)');
+            return;
+          }
+
           final cached = await _cacheManager.getNote(id);
           if (cached == null) {
             uncachedIds.add(id);
@@ -275,8 +291,10 @@ class ContentService {
         }
 
         if (uncachedIds.isEmpty) {
-          debugPrint('✅ ContentService: All ${eventIds.length} notes already cached - preload complete');
-          onProgress?.call(eventIds.length, eventIds.length);
+          debugPrint('✅ ContentService: All ${eventIds.length} notes already cached - preload complete (generation=$generation)');
+          if (isCancelled == null || !isCancelled()) {
+            onProgress?.call(eventIds.length, eventIds.length);
+          }
           return;
         }
 
@@ -289,7 +307,9 @@ class ContentService {
         if (credentials == null) {
           debugPrint('❌ ContentService: Device not registered, cannot preload from server');
           debugPrint('   → Register device to enable preloading');
-          onProgress?.call(eventIds.length - uncachedIds.length, eventIds.length);
+          if (isCancelled == null || !isCancelled()) {
+            onProgress?.call(eventIds.length - uncachedIds.length, eventIds.length);
+          }
           return;
         }
         debugPrint('✅ ContentService: Device credentials found (deviceId: ${credentials.deviceId.substring(0, 8)}...)');
@@ -302,6 +322,12 @@ class ContentService {
         debugPrint('🌐 ContentService: Starting batch fetch (${uncachedIds.length} notes in $totalBatches batch${totalBatches > 1 ? 'es' : ''})');
 
         for (int i = 0; i < uncachedIds.length; i += batchSize) {
+          // RACE CONDITION FIX: Check cancellation before each batch
+          if (isCancelled != null && isCancelled()) {
+            debugPrint('🚫 ContentService: Preload cancelled during batch processing (generation=$generation)');
+            return;
+          }
+
           final batch = uncachedIds.skip(i).take(batchSize).toList();
           final batchNumber = (i ~/ batchSize) + 1;
 
@@ -313,6 +339,13 @@ class ContentService {
               deviceId: credentials.deviceId,
               deviceToken: credentials.deviceToken,
             );
+
+            // RACE CONDITION FIX: Check cancellation after fetch completes
+            if (isCancelled != null && isCancelled()) {
+              debugPrint('🚫 ContentService: Preload cancelled after batch fetch (generation=$generation)');
+              return;
+            }
+
             debugPrint('✅ ContentService: Batch API returned ${serverNotes.length} notes');
 
             // Step 3: Save each to cache
@@ -326,8 +359,10 @@ class ContentService {
               }
             }
 
-            // Report progress after each batch
-            onProgress?.call(loaded, eventIds.length);
+            // Report progress after each batch (only if not cancelled)
+            if (isCancelled == null || !isCancelled()) {
+              onProgress?.call(loaded, eventIds.length);
+            }
 
             debugPrint('✅ ContentService: Batch $batchNumber/${totalBatches} completed ($loaded/${eventIds.length} total)');
           } catch (e) {
@@ -338,11 +373,11 @@ class ContentService {
 
         final endTime = DateTime.now();
         final duration = endTime.difference(startTime);
-        debugPrint('✅ ContentService: Preload COMPLETED - $loaded/${eventIds.length} notes loaded in ${duration.inMilliseconds}ms');
+        debugPrint('✅ ContentService: Preload COMPLETED - $loaded/${eventIds.length} notes loaded in ${duration.inMilliseconds}ms (generation=$generation)');
       } catch (e) {
         final endTime = DateTime.now();
         final duration = endTime.difference(startTime);
-        debugPrint('❌ ContentService: Preload FAILED after ${duration.inMilliseconds}ms: $e');
+        debugPrint('❌ ContentService: Preload FAILED after ${duration.inMilliseconds}ms (generation=$generation): $e');
       }
     });
   }
