@@ -139,6 +139,7 @@ class ScheduleEventTileHelper {
     // Prepend icon if event has handwriting
     if (hasHandwriting) {
       return Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch, // Force children to fill 100% height
         children: [
           // Icon section - 10% width, 100% height
           Expanded(
@@ -147,8 +148,7 @@ class ScheduleEventTileHelper {
               color: Colors.black.withOpacity(0.3),
               child: Image.asset(
                 'assets/images/handwirtenote.png',
-                fit: BoxFit.fill, // Fill 100% of region without proportional scaling
-                alignment: Alignment.centerLeft,
+                fit: BoxFit.fill, // Stretch to fill 100% width and 100% height
               ),
             ),
           ),
