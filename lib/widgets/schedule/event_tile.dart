@@ -143,10 +143,19 @@ class ScheduleEventTileHelper {
           // Icon section - 10% width, 100% height
           Expanded(
             flex: 10,
-            child: Image.asset(
-              'assets/images/handwirtenote.png',
-              fit: BoxFit.cover,
-              alignment: Alignment.centerLeft,
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  return Image.asset(
+                    'assets/images/handwirtenote.png',
+                    width: constraints.maxWidth,
+                    height: constraints.maxHeight,
+                    fit: BoxFit.contain,
+                    alignment: Alignment.centerLeft,
+                  );
+                },
+              ),
             ),
           ),
           // Color section - 90% width
