@@ -23,6 +23,7 @@ class Event {
   /// Nullable: only set for time-change related events
   final int? newEventId; // Reference to new event if this event's time was changed
   final bool isChecked; // Marks event as completed/checked
+  final bool hasNote; // Indicates if this event has a handwriting note with strokes
 
   Event({
     this.id,
@@ -39,6 +40,7 @@ class Event {
     this.originalEventId,
     this.newEventId,
     this.isChecked = false,
+    this.hasNote = false,
   }) : eventTypes = eventTypes.isEmpty
            ? throw ArgumentError('Event must have at least one event type')
            : eventTypes;
@@ -58,6 +60,7 @@ class Event {
     int? originalEventId,
     int? newEventId,
     bool? isChecked,
+    bool? hasNote,
   }) {
     return Event(
       id: id ?? this.id,
@@ -74,6 +77,7 @@ class Event {
       originalEventId: originalEventId ?? this.originalEventId,
       newEventId: newEventId ?? this.newEventId,
       isChecked: isChecked ?? this.isChecked,
+      hasNote: hasNote ?? this.hasNote,
     );
   }
 
@@ -93,6 +97,7 @@ class Event {
       'original_event_id': originalEventId,
       'new_event_id': newEventId,
       'is_checked': isChecked ? 1 : 0,
+      'has_note': hasNote ? 1 : 0,
     };
   }
 
@@ -128,6 +133,7 @@ class Event {
       originalEventId: map['original_event_id']?.toInt(),
       newEventId: map['new_event_id']?.toInt(),
       isChecked: (map['is_checked'] ?? 0) == 1,
+      hasNote: (map['has_note'] ?? 0) == 1,
     );
   }
 
@@ -176,11 +182,12 @@ class Event {
         other.removalReason == removalReason &&
         other.originalEventId == originalEventId &&
         other.newEventId == newEventId &&
-        other.isChecked == isChecked;
+        other.isChecked == isChecked &&
+        other.hasNote == hasNote;
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, bookId, name, recordNumber, Object.hashAll(eventTypes), startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked);
+    return Object.hash(id, bookId, name, recordNumber, Object.hashAll(eventTypes), startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked, hasNote);
   }
 }
