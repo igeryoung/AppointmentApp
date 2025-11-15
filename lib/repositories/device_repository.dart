@@ -1,4 +1,4 @@
-import '../services/prd_database_service.dart'; // For DeviceCredentials class
+import '../services/database/prd_database_service.dart'; // For DeviceCredentials class
 
 /// Repository interface for Device credentials operations
 abstract class IDeviceRepository {

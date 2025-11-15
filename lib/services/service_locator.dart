@@ -1,7 +1,7 @@
 import 'package:get_it/get_it.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'database_service_interface.dart';
-import 'prd_database_service.dart';
+import 'database/prd_database_service.dart';
 import 'web_prd_database_service.dart';
 import 'time_service.dart';
 import 'api_client.dart';

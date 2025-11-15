@@ -5,7 +5,7 @@ import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
-import '../../services/prd_database_service.dart';
+import '../../services/database/prd_database_service.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_manager.dart';

@@ -1,5 +1,5 @@
 import 'package:flutter/foundation.dart';
-import 'prd_database_service.dart';
+import 'database/prd_database_service.dart';
 
 /// Service for managing server URL configuration
 class ServerConfigService {

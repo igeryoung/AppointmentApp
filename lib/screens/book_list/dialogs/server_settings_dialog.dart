@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../../../services/prd_database_service.dart';
+import '../../../services/database/prd_database_service.dart';
 import '../../../services/api_client.dart';
 
 /// Result of server settings dialog

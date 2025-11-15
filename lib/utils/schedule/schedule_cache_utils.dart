@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../../models/event.dart';
 import '../../services/cache_manager.dart';
 import '../../services/database_service_interface.dart';
-import '../../services/prd_database_service.dart';
+import '../../services/database/prd_database_service.dart';
 
 /// Utility class for cache management in ScheduleScreen
 class ScheduleCacheUtils {
