@@ -123,6 +123,7 @@ class ScheduleBody extends StatelessWidget {
                                 onEditEvent: onEditEvent,
                                 onShowEventContextMenu: onShowEventContextMenu,
                                 selectedEventForMenu: selectedEventForMenu,
+                                currentDrawing: currentDrawing,
                               ),
                             ],
                           ),

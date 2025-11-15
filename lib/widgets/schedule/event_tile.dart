@@ -116,18 +116,58 @@ class ScheduleEventTileHelper {
   }
 
   /// Build split-color background widget for multi-type events
-  static Widget _buildColorBackground(List<Color> colors, double opacity) {
+  /// Optionally prepends a handwriting icon (10% width) when hasHandwriting is true
+  static Widget _buildColorBackground(
+    List<Color> colors,
+    double opacity, {
+    bool hasHandwriting = false,
+  }) {
+    Widget colorWidget;
+
     if (colors.length == 1) {
-      return Container(color: colors[0].withOpacity(opacity));
+      colorWidget = Container(color: colors[0].withOpacity(opacity));
     } else {
-      // Vertical 50/50 split for 2 colors
-      return Row(
+      // Vertical split for 2 colors
+      colorWidget = Row(
         children: [
           Expanded(child: Container(color: colors[0].withOpacity(opacity))),
           Expanded(child: Container(color: colors[1].withOpacity(opacity))),
         ],
       );
     }
+
+    // Prepend icon if event has handwriting
+    if (hasHandwriting) {
+      return Row(
+        children: [
+          // Icon section - 10% width, left-aligned
+          Expanded(
+            flex: 10,
+            child: Container(
+              color: Colors.black.withOpacity(0.3),
+              child: const Align(
+                alignment: Alignment.centerLeft,
+                child: Padding(
+                  padding: EdgeInsets.only(left: 2),
+                  child: Icon(
+                    Icons.edit,
+                    color: Colors.white70,
+                    size: 10,
+                  ),
+                ),
+              ),
+            ),
+          ),
+          // Color section - 90% width
+          Expanded(
+            flex: 90,
+            child: colorWidget,
+          ),
+        ],
+      );
+    }
+
+    return colorWidget;
   }
 
   /// Build event tile widget
@@ -140,6 +180,7 @@ class ScheduleEventTileHelper {
     required VoidCallback onTap,
     required Function(Offset) onLongPress,
     required bool isMenuOpen,
+    bool hasHandwriting = false,
     Widget Function(Color)? dottedBorderPainter,
   }) {
     // Calculate how many 15-minute slots this event spans
@@ -183,6 +224,7 @@ class ScheduleEventTileHelper {
                 child: _buildColorBackground(
                   colors,
                   event.isRemoved ? 0.3 : 0.75,
+                  hasHandwriting: hasHandwriting,
                 ),
               ),
               // Content layer with padding
@@ -242,7 +284,7 @@ class ScheduleEventTileHelper {
                   children: [
                     // Background color layer (single or split)
                     Positioned.fill(
-                      child: _buildColorBackground(colors, 1.0),
+                      child: _buildColorBackground(colors, 1.0, hasHandwriting: hasHandwriting),
                     ),
                     // Content layer
                     Padding(
