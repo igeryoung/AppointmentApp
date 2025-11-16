@@ -34,10 +34,11 @@ class ScheduleEventTileHelper {
   }
 
   /// Build formatted name text with last 2 digits of record number
-  /// Record number is displayed at 0.7x the name font size
+  /// Record number is displayed at 0.4 × slotHeight
   static Widget buildFormattedNameText({
     required Event event,
     required double fontSize,
+    required double slotHeight,
     required Color color,
     required double height,
     TextDecoration? decoration,
@@ -69,7 +70,7 @@ class ScheduleEventTileHelper {
             TextSpan(
               text: '($lastTwoDigits)',
               style: TextStyle(
-                fontSize: fontSize * 0.7,
+                fontSize: slotHeight * 0.4,
               ),
             ),
           ],
@@ -245,15 +246,15 @@ class ScheduleEventTileHelper {
                       events: events,
                       hasHandwriting: hasHandwriting,
                     ),
-                    // OK indicator for checked events (top-right corner, full tile height)
+                    // OK indicator for checked events (top-right corner, 0.5 × slotHeight)
                     if (event.isChecked)
                       Positioned(
                         top: -2,
                         right: -1,
                         child: Image.asset(
                           'assets/images/icons8-ok-96.png',
-                          width: tileHeight / 2,
-                          height: tileHeight / 2,
+                          width: slotHeight * 0.5,
+                          height: slotHeight * 0.5,
                           fit: BoxFit.contain,
                         ),
                       ),
@@ -334,14 +335,17 @@ class ScheduleEventTileHelper {
     final isClosedEnd = !shouldDisplayAsOpenEnd(event);
 
     Widget content;
+    // Name font size = 0.6 × slotHeight
+    final fontSize = slotHeight * 0.6;
+
     if (isClosedEnd) {
       // Closed-end events: Always show just the name
-      final fontSize = getEventNameFontSize(slotHeight, 9.0) * 0.9;
       content = Align(
         alignment: Alignment.topLeft,
         child: buildFormattedNameText(
             event: event,
             fontSize: fontSize,
+            slotHeight: slotHeight,
             color: event.isRemoved ? Colors.white70 : Colors.white,
             height: 1.2,
             decoration: event.isRemoved ? TextDecoration.lineThrough : null,
@@ -353,14 +357,10 @@ class ScheduleEventTileHelper {
       );
     } else if (tileHeight < 20) {
       // Open-end events: Very small - Only show name with tiny font
-      final baseFontSize = (tileHeight * 0.4).clamp(8.0, 10.0);
-      final fontSize = getEventNameFontSize(slotHeight, baseFontSize) * 0.9;
-      content = _buildNameOnly(event, fontSize);
+      content = _buildNameOnly(event, fontSize, slotHeight);
     } else {
       // Open-end events: Small and larger - Show name with appropriate font
-      final baseFontSize = (tileHeight * 0.35).clamp(8.0, 10.0);
-      final fontSize = getEventNameFontSize(slotHeight, baseFontSize) * 0.9;
-      content = _buildNameOnly(event, fontSize);
+      content = _buildNameOnly(event, fontSize, slotHeight);
     }
 
     // Add left padding when handwriting icon is present (icon takes 10% width)
@@ -374,12 +374,13 @@ class ScheduleEventTileHelper {
     return content;
   }
 
-  static Widget _buildNameOnly(Event event, double fontSize) {
+  static Widget _buildNameOnly(Event event, double fontSize, double slotHeight) {
     return Align(
       alignment: Alignment.topLeft,
       child: buildFormattedNameText(
         event: event,
         fontSize: fontSize,
+        slotHeight: slotHeight,
         color: event.isRemoved ? Colors.white70 : Colors.white,
         height: 1.2,
         decoration: event.isRemoved ? TextDecoration.lineThrough : null,
