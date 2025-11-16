@@ -41,6 +41,12 @@ class ScheduleDateService {
   /// Callback to cancel pending drawing saves
   final void Function() onCancelPendingSave;
 
+  /// Callback to exit drawing mode after auto-save
+  void Function()? onExitDrawingMode;
+
+  /// Callback to notify when navigation state changes (for loading overlay)
+  void Function(bool isNavigating)? onNavigatingStateChanged;
+
   ScheduleDateService({
     required DateTime initialDate,
     required this.onDateChanged,
@@ -122,6 +128,25 @@ class ScheduleDateService {
     }
   }
 
+  /// Auto-save and exit drawing mode before navigation
+  /// Returns true if successful, false if save failed
+  Future<bool> _autoSaveAndExitDrawingMode() async {
+    if (isInDrawingMode()) {
+      debugPrint('📝 Auto-saving drawing before navigation...');
+      try {
+        onCancelPendingSave();
+        await onSaveDrawing();
+        onExitDrawingMode?.call();
+        debugPrint('✅ Drawing saved and exited drawing mode');
+        return true;
+      } catch (e) {
+        debugPrint('❌ Failed to save drawing: $e');
+        return false;
+      }
+    }
+    return true;
+  }
+
   /// Show date picker and handle date selection
   /// Returns true if date was changed, false otherwise
   Future<bool> showDatePickerDialog(BuildContext context) async {
@@ -133,16 +158,22 @@ class ScheduleDateService {
     );
 
     if (date != null) {
-      if (isInDrawingMode()) {
-        onCancelPendingSave();
-        await onSaveDrawing();
-      }
+      onNavigatingStateChanged?.call(true);
+      try {
+        // Auto-save and exit drawing mode if needed
+        final saveSuccess = await _autoSaveAndExitDrawingMode();
+        if (!saveSuccess) {
+          return false; // Cancel navigation if save failed
+        }
 
-      _selectedDate = date;
-      onDateChanged(_selectedDate, _lastActiveDate);
-      onUpdateCubit(_selectedDate);
-      await onLoadDrawing();
-      return true;
+        _selectedDate = date;
+        onDateChanged(_selectedDate, _lastActiveDate);
+        onUpdateCubit(_selectedDate);
+        await onLoadDrawing();
+        return true;
+      } finally {
+        onNavigatingStateChanged?.call(false);
+      }
     }
 
     return false;
@@ -150,106 +181,154 @@ class ScheduleDateService {
 
   /// Navigate to previous 3-day window
   Future<void> navigatePrevious() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.subtract(getNavigationIncrement());
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.subtract(getNavigationIncrement());
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate to next 3-day window
   Future<void> navigateNext() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.add(getNavigationIncrement());
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.add(getNavigationIncrement());
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate 3 days backward
   Future<void> navigate3DaysPrevious() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.subtract(const Duration(days: 3));
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.subtract(const Duration(days: 3));
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate 3 days forward
   Future<void> navigate3DaysNext() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.add(const Duration(days: 3));
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.add(const Duration(days: 3));
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate 90 days backward
   Future<void> navigate90DaysPrevious() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.subtract(const Duration(days: 90));
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.subtract(const Duration(days: 90));
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate 90 days forward
   Future<void> navigate90DaysNext() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.add(const Duration(days: 90));
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.add(const Duration(days: 90));
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate 180 days backward
   Future<void> navigate180DaysPrevious() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.subtract(const Duration(days: 180));
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.subtract(const Duration(days: 180));
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Navigate 180 days forward
   Future<void> navigate180DaysNext() async {
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = _selectedDate.add(const Duration(days: 180));
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = _selectedDate.add(const Duration(days: 180));
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Jump to today's date
@@ -261,15 +340,21 @@ class ScheduleDateService {
       return; // Already on today
     }
 
-    if (isInDrawingMode()) {
-      onCancelPendingSave();
-      await onSaveDrawing();
-    }
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return; // Cancel navigation if save failed
+      }
 
-    _selectedDate = now;
-    onDateChanged(_selectedDate, _lastActiveDate);
-    onUpdateCubit(_selectedDate);
-    await onLoadDrawing();
+      _selectedDate = now;
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
   }
 
   /// Get navigation increment duration (always 3 days for 3-day view)

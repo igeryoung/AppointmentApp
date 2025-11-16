@@ -72,6 +72,15 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   // FAB menu visibility state
   bool _isFabMenuVisible = false;
 
+  // RACE CONDITION FIX: Preload generation counter to cancel stale preload operations
+  int _currentPreloadGeneration = 0;
+
+  // RACE CONDITION FIX: Navigation generation counter to prevent stale state updates
+  int _navigationGeneration = 0;
+
+  // Navigation state for loading overlay
+  bool _isNavigating = false;
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -102,14 +111,36 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     _dateService = ScheduleDateService(
       initialDate: _selectedDate,
       onDateChanged: (selectedDate, lastActiveDate) {
+        // RACE CONDITION FIX: Increment navigation generation on each date change
+        _navigationGeneration++;
         setState(() {
           _selectedDate = selectedDate;
           _lastActiveDate = lastActiveDate;
         });
       },
-      onSaveDrawing: () async => await _saveDrawing(),
+      onSaveDrawing: () async {
+        try {
+          await _saveDrawing();
+        } catch (e) {
+          // Show error and rethrow to cancel navigation
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to save drawing: $e'),
+                duration: const Duration(seconds: 3),
+                backgroundColor: Colors.red,
+              ),
+            );
+          }
+          rethrow;
+        }
+      },
       onLoadDrawing: () async => await _loadDrawing(),
-      onUpdateCubit: (date) => context.read<ScheduleCubit>().selectDate(date),
+      onUpdateCubit: (date) {
+        // RACE CONDITION FIX: Pass navigation generation to cubit
+        debugPrint('🚀 ScheduleScreen: Navigation gen $_navigationGeneration for date $date');
+        context.read<ScheduleCubit>().selectDate(date);
+      },
       onShowNotification: (messageKey) {
         if (messageKey == 'dateChangedToToday') {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -124,6 +155,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       isInDrawingMode: () => _isDrawingMode,
       onCancelPendingSave: () => _drawingService?.cancelPendingSave(),
     );
+
+    // Set navigation state callback for loading overlay
+    _dateService!.onNavigatingStateChanged = (isNavigating) {
+      if (mounted) {
+        setState(() {
+          _isNavigating = isNavigating;
+        });
+      }
+    };
+
+    // Set exit drawing mode callback
+    _dateService!.onExitDrawingMode = () {
+      if (mounted) {
+        setState(() {
+          _isDrawingMode = false;
+        });
+      }
+    };
 
     // Initialize connectivity service
     _connectivityService = ScheduleConnectivityService(
@@ -264,9 +313,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   /// This method is automatically triggered by BlocListener when events are loaded
   /// from the ScheduleCubit. It improves UX by preloading notes so they're instantly
   /// available when user taps events.
-  Future<void> _preloadNotesInBackground(List<Event> events) async {
+  ///
+  /// [generation] - Preload generation number for race condition prevention
+  Future<void> _preloadNotesInBackground(List<Event> events, int generation) async {
     if (events.isEmpty) {
-      debugPrint('📦 ScheduleScreen: No events to preload');
+      debugPrint('📦 ScheduleScreen: No events to preload (generation=$generation)');
       return;
     }
 
@@ -276,7 +327,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     }
 
     final preloadStartTime = DateTime.now();
-    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events');
+    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events (generation=$generation)');
 
     // Extract all event IDs (filter out null IDs)
     final eventIds = events
@@ -292,24 +343,34 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     debugPrint('📦 ScheduleScreen: Calling ContentService.preloadNotes with ${eventIds.length} event IDs');
 
     try {
-      // Call ContentService to preload notes with progress callback
+      // RACE CONDITION FIX: Pass generation and cancellation check to ContentService
       await _contentService!.preloadNotes(
         eventIds,
+        generation: generation,
+        isCancelled: () => generation != _currentPreloadGeneration,
         onProgress: (loaded, total) {
-          // Log progress for debugging
-          debugPrint('📦 ScheduleScreen: Progress update - $loaded/$total notes loaded');
+          // Only log progress if this preload is still active
+          if (generation == _currentPreloadGeneration) {
+            debugPrint('📦 ScheduleScreen: Progress update - $loaded/$total notes loaded (generation=$generation)');
+          }
         },
       );
 
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('✅ ScheduleScreen: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes)');
+
+      // Only log completion if this preload is still active
+      if (generation == _currentPreloadGeneration) {
+        debugPrint('✅ ScheduleScreen: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes, generation=$generation)');
+      } else {
+        debugPrint('🚫 ScheduleScreen: Preload completed but was cancelled (generation=$generation vs current=$_currentPreloadGeneration)');
+      }
     } catch (e) {
       // Preload failure is non-critical - user can still use the app
       // Notes will be fetched on-demand when user taps events
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('⚠️ ScheduleScreen: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical): $e');
+      debugPrint('⚠️ ScheduleScreen: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical, generation=$generation): $e');
     }
   }
 
@@ -382,24 +443,40 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       listener: (context, state) {
         // Trigger preloading when events are loaded
         if (state is ScheduleLoaded) {
-          _preloadNotesInBackground(state.events);
+          // RACE CONDITION FIX: Increment generation to cancel previous preload
+          _currentPreloadGeneration++;
+          final preloadGeneration = _currentPreloadGeneration;
+          debugPrint('🔄 ScheduleScreen: Starting preload for generation $preloadGeneration');
+          _preloadNotesInBackground(state.events, preloadGeneration);
 
           // Check if date has changed to a different 3-day window
           final currentWindow = _previousSelectedDate != null
               ? ScheduleLayoutUtils.get3DayWindowStart(_previousSelectedDate!)
               : null;
           final newWindow = ScheduleLayoutUtils.get3DayWindowStart(state.selectedDate);
+          final localWindow = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
 
           if (currentWindow != newWindow) {
-            // Date changed to a different 3-day window - update internal state and reload drawing
-            _previousSelectedDate = state.selectedDate;
-            if (_selectedDate != state.selectedDate) {
-              setState(() {
-                _selectedDate = state.selectedDate;
-              });
+            // Date changed to a different 3-day window
+
+            // RACE CONDITION FIX: Check if this state is for our current local window or a different one
+            if (newWindow == localWindow) {
+              // State is for the same window we're already in locally
+              // This is likely a stale state from an old navigation that completed late
+              debugPrint('⚠️ ScheduleScreen: Ignoring stale state (state: ${state.selectedDate}, local: $_selectedDate, both in window: $localWindow)');
+              _previousSelectedDate = state.selectedDate; // Track that we saw this state
+            } else {
+              // State is for a different window - this is a new navigation completing
+              debugPrint('✅ ScheduleScreen: Accepting state for new window (state: ${state.selectedDate}, new window: $newWindow, local: $_selectedDate in $localWindow)');
+              _previousSelectedDate = state.selectedDate;
+              if (_selectedDate != state.selectedDate) {
+                setState(() {
+                  _selectedDate = state.selectedDate;
+                });
+              }
+              // Reload drawing for the new date
+              _loadDrawing();
             }
-            // Reload drawing for the new date
-            _loadDrawing();
           }
         }
       },
@@ -417,7 +494,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             Navigator.of(context).pop();
           }
         },
-        child: Scaffold(
+        child: Stack(
+          children: [
+            Scaffold(
       appBar: AppBar(
         title: Row(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -604,10 +683,40 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         get3DayWindowStart: (date) => ScheduleLayoutUtils.get3DayWindowStart(date),
         cacheManager: _cacheManager,
         getEffectiveDate: () => ScheduleLayoutUtils.getEffectiveDate(_selectedDate),
-        preloadNotes: _preloadNotesInBackground,
+        preloadNotes: (events) {
+          _currentPreloadGeneration++;
+          _preloadNotesInBackground(events, _currentPreloadGeneration);
+        },
         onDateChange: _changeDateTo,
       ),
     ), // Scaffold
+
+            // Loading overlay (Q7: B - Spinner + "Saving..." text)
+            if (_isNavigating)
+              Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(
+                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                      ),
+                      SizedBox(height: 16),
+                      Text(
+                        'Saving...',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        ), // Stack
     ), // PopScope
     ); // BlocListener
   }

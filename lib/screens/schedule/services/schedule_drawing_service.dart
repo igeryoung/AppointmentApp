@@ -32,6 +32,9 @@ class ScheduleDrawingService {
   bool _isSaving = false;
   int _lastSavedCanvasVersion = 0;
 
+  // RACE CONDITION FIX: Drawing load generation counter
+  int _drawingLoadGeneration = 0;
+
   ScheduleDrawingService({
     required IDatabaseService dbService,
     required this.bookId,
@@ -65,6 +68,11 @@ class ScheduleDrawingService {
 
   /// Load drawing for the selected date (cache-first with server fallback)
   Future<void> loadDrawing(DateTime selectedDate) async {
+    // RACE CONDITION FIX: Increment generation counter
+    _drawingLoadGeneration++;
+    final loadGeneration = _drawingLoadGeneration;
+    debugPrint('🔄 ScheduleDrawingService: loadDrawing() called, generation=$loadGeneration');
+
     try {
       // Reset current drawing to avoid carrying old IDs
       _currentDrawing = null;
@@ -76,7 +84,7 @@ class ScheduleDrawingService {
       // Use ContentService for cache-first strategy with server fallback
       ScheduleDrawing? drawing;
       if (_contentService != null) {
-        debugPrint('📖 Loading drawing via ContentService (cache-first with server fallback)...');
+        debugPrint('📖 Loading drawing via ContentService (cache-first with server fallback, generation=$loadGeneration)...');
         drawing = await _contentService!.getDrawing(
           bookId: bookId,
           date: effectiveDate,
@@ -85,7 +93,7 @@ class ScheduleDrawingService {
         );
       } else {
         // Fallback to direct database access
-        debugPrint('⚠️ ContentService not available, loading drawing from cache only');
+        debugPrint('⚠️ ContentService not available, loading drawing from cache only (generation=$loadGeneration)');
         drawing = await _dbService.getCachedDrawing(
           bookId,
           effectiveDate,
@@ -93,17 +101,33 @@ class ScheduleDrawingService {
         );
       }
 
+      // RACE CONDITION FIX: Check if this load is still valid
+      if (loadGeneration != _drawingLoadGeneration) {
+        debugPrint('⚠️ ScheduleDrawingService: Ignoring stale drawing load (gen $loadGeneration vs current $_drawingLoadGeneration)');
+        return;
+      }
+
       _currentDrawing = drawing;
       onDrawingChanged();
 
       // Load strokes into canvas (use post-frame callback)
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        _loadStrokesIntoCanvas(selectedDate, drawing);
+        // RACE CONDITION FIX: Check again before loading into canvas
+        if (loadGeneration == _drawingLoadGeneration) {
+          _loadStrokesIntoCanvas(selectedDate, drawing);
+        } else {
+          debugPrint('⚠️ ScheduleDrawingService: Skipping canvas load for stale drawing (gen $loadGeneration vs current $_drawingLoadGeneration)');
+        }
       });
+
+      debugPrint('✅ ScheduleDrawingService: Drawing loaded successfully (generation=$loadGeneration)');
     } catch (e) {
-      debugPrint('❌ Error loading drawing: $e');
-      _currentDrawing = null;
-      onDrawingChanged();
+      debugPrint('❌ Error loading drawing (generation=$loadGeneration): $e');
+      // Only update state if this load is still current
+      if (loadGeneration == _drawingLoadGeneration) {
+        _currentDrawing = null;
+        onDrawingChanged();
+      }
     }
   }
 
@@ -143,6 +167,10 @@ class ScheduleDrawingService {
       debugPrint('⚠️ Save already in progress, skipping...');
       return;
     }
+
+    // RACE CONDITION FIX: Capture date at save start for validation
+    final dateAtSaveStart = selectedDate;
+    final effectiveDateAtStart = ScheduleLayoutUtils.getEffectiveDate(dateAtSaveStart);
 
     final canvasKey = getCanvasKey(selectedDate);
     final canvasState = canvasKey.currentState;
@@ -198,7 +226,14 @@ class ScheduleDrawingService {
         debugPrint('💾 Saving drawing via ContentService (syncs to server + cache)...');
         await _contentService!.saveDrawing(drawing);
 
-        // Race condition check
+        // RACE CONDITION FIX: Verify date hasn't changed during save
+        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
+        if (effectiveDateAtStart != effectiveDateAfterSave) {
+          debugPrint('⚠️ ScheduleDrawingService: Date changed during save ($effectiveDateAtStart → $effectiveDateAfterSave). Aborting state update.');
+          return;
+        }
+
+        // Race condition check - canvas version
         final currentStateAfterSave = canvasKey.currentState;
         if (currentStateAfterSave != null &&
             currentStateAfterSave.canvasVersion != currentCanvasVersion) {
@@ -217,7 +252,14 @@ class ScheduleDrawingService {
         debugPrint('⚠️ ContentService not available, saving to cache only');
         final savedDrawing = await _dbService.saveCachedDrawing(drawing);
 
-        // Race condition check
+        // RACE CONDITION FIX: Verify date hasn't changed during save
+        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
+        if (effectiveDateAtStart != effectiveDateAfterSave) {
+          debugPrint('⚠️ ScheduleDrawingService: Date changed during save ($effectiveDateAtStart → $effectiveDateAfterSave). Aborting state update.');
+          return;
+        }
+
+        // Race condition check - canvas version
         final currentStateAfterSave = canvasKey.currentState;
         if (currentStateAfterSave != null &&
             currentStateAfterSave.canvasVersion != currentCanvasVersion) {
