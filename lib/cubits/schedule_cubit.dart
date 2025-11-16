@@ -158,7 +158,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       debugPrint('✅ ScheduleCubit: Created event "${newEvent.name}" (id: ${newEvent.id})');
 
       // Reload events to update UI
-      await loadEvents();
+      await loadEvents(generation: _currentRequestGeneration);
       return newEvent;
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to create event: $e');
@@ -179,7 +179,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       debugPrint('✅ ScheduleCubit: Updated event "${event.name}"');
 
       // Reload events to update UI
-      await loadEvents();
+      await loadEvents(generation: _currentRequestGeneration);
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to update event: $e');
       emit(ScheduleError('Failed to update event: $e'));
@@ -193,7 +193,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       debugPrint('✅ ScheduleCubit: Deleted event (id: $eventId)');
 
       // Reload events to update UI
-      await loadEvents();
+      await loadEvents(generation: _currentRequestGeneration);
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to delete event: $e');
       emit(ScheduleError('Failed to delete event: $e'));
@@ -207,7 +207,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       debugPrint('✅ ScheduleCubit: Hard deleted event (id: $eventId)');
 
       // Reload events to update UI
-      await loadEvents();
+      await loadEvents(generation: _currentRequestGeneration);
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to hard delete event: $e');
       emit(ScheduleError('Failed to hard delete event: $e'));
@@ -231,7 +231,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       debugPrint('✅ ScheduleCubit: Changed event time for "${originalEvent.name}" (old id: ${originalEvent.id}, new id: ${newEvent.id})');
 
       // Reload events to update UI
-      await loadEvents();
+      await loadEvents(generation: _currentRequestGeneration);
       return newEvent;
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to change event time: $e');
@@ -336,7 +336,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final newShowOldEvents = !currentState.showOldEvents;
 
     // Filter events based on new setting
-    loadEvents(showOldEvents: newShowOldEvents);
+    loadEvents(showOldEvents: newShowOldEvents, generation: _currentRequestGeneration);
   }
 
   /// Toggle visibility of drawing overlay

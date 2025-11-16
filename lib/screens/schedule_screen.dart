@@ -75,6 +75,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   // RACE CONDITION FIX: Preload generation counter to cancel stale preload operations
   int _currentPreloadGeneration = 0;
 
+  // RACE CONDITION FIX: Navigation generation counter to prevent stale state updates
+  int _navigationGeneration = 0;
+
   // Navigation state for loading overlay
   bool _isNavigating = false;
 
@@ -108,6 +111,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     _dateService = ScheduleDateService(
       initialDate: _selectedDate,
       onDateChanged: (selectedDate, lastActiveDate) {
+        // RACE CONDITION FIX: Increment navigation generation on each date change
+        _navigationGeneration++;
         setState(() {
           _selectedDate = selectedDate;
           _lastActiveDate = lastActiveDate;
@@ -131,7 +136,11 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         }
       },
       onLoadDrawing: () async => await _loadDrawing(),
-      onUpdateCubit: (date) => context.read<ScheduleCubit>().selectDate(date),
+      onUpdateCubit: (date) {
+        // RACE CONDITION FIX: Pass navigation generation to cubit
+        debugPrint('🚀 ScheduleScreen: Navigation gen $_navigationGeneration for date $date');
+        context.read<ScheduleCubit>().selectDate(date);
+      },
       onShowNotification: (messageKey) {
         if (messageKey == 'dateChangedToToday') {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -445,17 +454,29 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               ? ScheduleLayoutUtils.get3DayWindowStart(_previousSelectedDate!)
               : null;
           final newWindow = ScheduleLayoutUtils.get3DayWindowStart(state.selectedDate);
+          final localWindow = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
 
           if (currentWindow != newWindow) {
-            // Date changed to a different 3-day window - update internal state and reload drawing
-            _previousSelectedDate = state.selectedDate;
-            if (_selectedDate != state.selectedDate) {
-              setState(() {
-                _selectedDate = state.selectedDate;
-              });
+            // Date changed to a different 3-day window
+
+            // RACE CONDITION FIX: Check if this state is for our current local window or a different one
+            if (newWindow == localWindow) {
+              // State is for the same window we're already in locally
+              // This is likely a stale state from an old navigation that completed late
+              debugPrint('⚠️ ScheduleScreen: Ignoring stale state (state: ${state.selectedDate}, local: $_selectedDate, both in window: $localWindow)');
+              _previousSelectedDate = state.selectedDate; // Track that we saw this state
+            } else {
+              // State is for a different window - this is a new navigation completing
+              debugPrint('✅ ScheduleScreen: Accepting state for new window (state: ${state.selectedDate}, new window: $newWindow, local: $_selectedDate in $localWindow)');
+              _previousSelectedDate = state.selectedDate;
+              if (_selectedDate != state.selectedDate) {
+                setState(() {
+                  _selectedDate = state.selectedDate;
+                });
+              }
+              // Reload drawing for the new date
+              _loadDrawing();
             }
-            // Reload drawing for the new date
-            _loadDrawing();
           }
         }
       },
