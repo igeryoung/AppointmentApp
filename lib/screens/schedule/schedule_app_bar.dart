@@ -70,19 +70,6 @@ class ScheduleAppBar extends StatelessWidget implements PreferredSizeWidget {
         ],
       ),
       actions: [
-        // Toggle old events visibility
-        BlocBuilder<ScheduleCubit, ScheduleState>(
-          builder: (context, state) {
-            final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
-            return IconButton(
-              icon: Icon(showOldEvents ? Icons.visibility : Icons.visibility_off),
-              onPressed: () {
-                context.read<ScheduleCubit>().toggleOldEvents();
-              },
-              tooltip: showOldEvents ? l10n.hideOldEvents : l10n.showOldEvents,
-            );
-          },
-        ),
         // Go to today button
         IconButton(
           icon: const Icon(Icons.today),

@@ -60,9 +60,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final selectedDate = date ??
         (currentState is ScheduleLoaded ? currentState.selectedDate : _timeService.now());
 
-    // Preserve showOldEvents from current state if not explicitly provided
-    final effectiveShowOldEvents = showOldEvents ??
-        (currentState is ScheduleLoaded ? currentState.showOldEvents : true);
+    // Always show all events (hardcoded to true)
+    final effectiveShowOldEvents = true;
 
     // Preserve showDrawing from current state
     final effectiveShowDrawing = currentState is ScheduleLoaded ? currentState.showDrawing : true;
@@ -99,11 +98,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         return; // Don't emit state for stale data
       }
 
-      // Filter old events if needed
-      // Old events are those that are removed or have been rescheduled (have newEventId)
-      final filteredEvents = effectiveShowOldEvents
-          ? events
-          : events.where((e) => !e.isRemoved && e.newEventId == null).toList();
+      // Always show all events - no filtering by removed/rescheduled status
+      final filteredEvents = events;
 
       emit(ScheduleLoaded(
         selectedDate: selectedDate,
@@ -124,15 +120,12 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Select a different date and load its events
   Future<void> selectDate(DateTime date) async {
-    final currentState = state;
-    final showOldEvents = currentState is ScheduleLoaded ? currentState.showOldEvents : true;
-
     // RACE CONDITION FIX: Increment generation counter on each date change
     _currentRequestGeneration++;
     final requestGeneration = _currentRequestGeneration;
     debugPrint('🔄 ScheduleCubit: selectDate() called, generation=$requestGeneration');
 
-    await loadEvents(date: date, showOldEvents: showOldEvents, generation: requestGeneration);
+    await loadEvents(date: date, showOldEvents: true, generation: requestGeneration);
   }
 
   // ===================
@@ -329,14 +322,11 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // ===================
 
   /// Toggle visibility of old events (removed events and time-changed old versions)
+  /// NOTE: This method is deprecated - all events are now always visible
+  @Deprecated('All events are now always visible')
   void toggleOldEvents() {
-    final currentState = state;
-    if (currentState is! ScheduleLoaded) return;
-
-    final newShowOldEvents = !currentState.showOldEvents;
-
-    // Filter events based on new setting
-    loadEvents(showOldEvents: newShowOldEvents, generation: _currentRequestGeneration);
+    // No-op: All events are always visible now
+    debugPrint('⚠️ ScheduleCubit: toggleOldEvents() called but is deprecated');
   }
 
   /// Toggle visibility of drawing overlay
