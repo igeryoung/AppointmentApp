@@ -587,19 +587,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               );
             },
           ),
-          // Toggle old events visibility
-          BlocBuilder<ScheduleCubit, ScheduleState>(
-            builder: (context, state) {
-              final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
-              return IconButton(
-                icon: Icon(showOldEvents ? Icons.visibility : Icons.visibility_off),
-                onPressed: () {
-                  context.read<ScheduleCubit>().toggleOldEvents();
-                },
-                tooltip: showOldEvents ? l10n.hideOldEvents : l10n.showOldEvents,
-              );
-            },
-          ),
+          // Small loading indicator for page navigation
+          if (_isNavigating)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
           // Go to today button
           IconButton(
             icon: const Icon(Icons.today),
@@ -690,31 +689,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         onDateChange: _changeDateTo,
       ),
     ), // Scaffold
-
-            // Loading overlay (Q7: B - Spinner + "Saving..." text)
-            if (_isNavigating)
-              Container(
-                color: Colors.black54,
-                child: const Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircularProgressIndicator(
-                        valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                      ),
-                      SizedBox(height: 16),
-                      Text(
-                        'Saving...',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w500,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
           ],
         ), // Stack
     ), // PopScope
