@@ -335,8 +335,8 @@ class ScheduleEventTileHelper {
     final isClosedEnd = !shouldDisplayAsOpenEnd(event);
 
     Widget content;
-    // Name font size = 0.6 × slotHeight
-    final fontSize = slotHeight * 0.6;
+    // Name font size = 0.4 × slotHeight
+    final fontSize = slotHeight * 0.4;
 
     if (isClosedEnd) {
       // Closed-end events: Always show just the name
