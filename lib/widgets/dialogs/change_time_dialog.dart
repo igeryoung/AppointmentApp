@@ -1,16 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../../../l10n/app_localizations.dart';
-import '../../../utils/datetime_picker_utils.dart';
-import '../../../constants/change_reasons.dart';
+import '../../l10n/app_localizations.dart';
+import '../../utils/datetime_picker_utils.dart';
+import '../../constants/change_reasons.dart';
 
 /// Result class for change time dialog
-class ChangeTimeResult {
+class ChangeEventTimeResult {
   final DateTime startTime;
   final DateTime? endTime;
   final String reason;
 
-  ChangeTimeResult({
+  const ChangeEventTimeResult({
     required this.startTime,
     required this.endTime,
     required this.reason,
@@ -19,7 +19,7 @@ class ChangeTimeResult {
 
 /// Dialog to change event time with reason
 class ChangeTimeDialog {
-  static Future<ChangeTimeResult?> show(
+  static Future<ChangeEventTimeResult?> show(
     BuildContext context, {
     required DateTime initialStartTime,
     required DateTime? initialEndTime,
@@ -204,7 +204,7 @@ class ChangeTimeDialog {
 
     if (result == null) return null;
 
-    return ChangeTimeResult(
+    return ChangeEventTimeResult(
       startTime: result['startTime'],
       endTime: result['endTime'],
       reason: result['reason'],

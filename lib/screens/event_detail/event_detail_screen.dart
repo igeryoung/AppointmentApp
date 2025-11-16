@@ -14,7 +14,7 @@ import 'widgets/handwriting_section.dart';
 import 'dialogs/confirm_discard_dialog.dart';
 import 'dialogs/delete_event_dialog.dart';
 import 'dialogs/remove_event_dialog.dart';
-import 'dialogs/change_time_dialog.dart';
+import '../../widgets/dialogs/change_time_dialog.dart';
 
 /// Event Detail screen with handwriting notes - refactored version
 class EventDetailScreen extends StatefulWidget {
