@@ -574,6 +574,18 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           ],
         ),
         actions: [
+          // Small loading indicator for page navigation
+          if (_isNavigating)
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8.0),
+              child: SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                ),
+              ),
+            ),
           // Toggle drawing visibility
           BlocBuilder<ScheduleCubit, ScheduleState>(
             builder: (context, state) {
@@ -587,18 +599,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               );
             },
           ),
-          // Small loading indicator for page navigation
-          if (_isNavigating)
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 8.0),
-              child: SizedBox(
-                width: 20,
-                height: 20,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                ),
-              ),
-            ),
           // Go to today button
           IconButton(
             icon: const Icon(Icons.today),
