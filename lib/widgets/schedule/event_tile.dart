@@ -70,7 +70,7 @@ class ScheduleEventTileHelper {
             TextSpan(
               text: '($lastTwoDigits)',
               style: TextStyle(
-                fontSize: slotHeight * 0.4,
+                fontSize: slotHeight * 0.3,
               ),
             ),
           ],
@@ -227,7 +227,7 @@ class ScheduleEventTileHelper {
                 padding: EdgeInsets.only(
                   left: hasHandwriting ? 0 : 2, // No left padding when icon present
                   right: 2,
-                  top: 2,
+                  top: slotHeight * 0.15, // 10% top padding
                   bottom: 0,
                 ),
                 child: Stack(
@@ -336,7 +336,7 @@ class ScheduleEventTileHelper {
 
     Widget content;
     // Name font size = 0.4 × slotHeight
-    final fontSize = slotHeight * 0.4;
+    final fontSize = slotHeight * 0.5;
 
     if (isClosedEnd) {
       // Closed-end events: Always show just the name
