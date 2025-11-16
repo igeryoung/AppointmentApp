@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../utils/datetime_picker_utils.dart';
+import '../../../constants/change_reasons.dart';
 
 /// Result class for change time dialog
 class ChangeTimeResult {
@@ -30,12 +31,15 @@ class ChangeTimeDialog {
       builder: (context) {
         DateTime newStartTime = initialStartTime;
         DateTime? newEndTime = initialEndTime;
-        final reasonController = TextEditingController();
-        bool showReasonError = false;
+        final additionalTextController = TextEditingController();
+        String? selectedReason;
+        String? reasonErrorMessage;
 
         return StatefulBuilder(
           builder: (context, setState) {
-            final bool hasValidReason = reasonController.text.trim().isNotEmpty;
+            final showAdditionalField = ChangeReasons.requiresAdditionalInput(selectedReason);
+            final bool hasValidReason = selectedReason != null &&
+                (!showAdditionalField || additionalTextController.text.trim().isNotEmpty);
 
             return AlertDialog(
               title: Text(l10n.changeEventTimeTitle),
@@ -103,32 +107,50 @@ class ChangeTimeDialog {
                   const SizedBox(height: 16),
                   Text(l10n.reasonForTimeChangeField, style: const TextStyle(fontWeight: FontWeight.w500)),
                   const SizedBox(height: 8),
-                  TextField(
-                    controller: reasonController,
+                  // Dropdown for reason selection
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
                     decoration: InputDecoration(
-                      hintText: l10n.enterReasonForTimeChange,
+                      hintText: '請選擇原因',
                       border: const OutlineInputBorder(),
-                      errorText: showReasonError ? l10n.reasonRequired : null,
-                      errorBorder: showReasonError
-                          ? const OutlineInputBorder(borderSide: BorderSide(color: Colors.red))
-                          : null,
+                      errorText: reasonErrorMessage,
                     ),
-                    maxLines: 2,
-                    autofocus: true,
+                    isExpanded: true,
+                    items: ChangeReasons.allReasons.map((reason) {
+                      return DropdownMenuItem(
+                        value: reason,
+                        child: Text(reason),
+                      );
+                    }).toList(),
                     onChanged: (value) {
                       setState(() {
-                        showReasonError = false;
+                        selectedReason = value;
+                        reasonErrorMessage = null;
+                        // Clear additional text when switching away from "other"
+                        if (!ChangeReasons.requiresAdditionalInput(value)) {
+                          additionalTextController.clear();
+                        }
                       });
                     },
                   ),
-                  if (showReasonError)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 8),
-                      child: Text(
-                        l10n.reasonRequiredMessage,
-                        style: const TextStyle(color: Colors.red, fontSize: 12),
+                  // Conditional text field for "other" option
+                  if (showAdditionalField) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: additionalTextController,
+                      decoration: const InputDecoration(
+                        hintText: '請輸入其他原因...',
+                        border: OutlineInputBorder(),
                       ),
+                      maxLines: 2,
+                      autofocus: true,
+                      onChanged: (value) {
+                        setState(() {
+                          // Trigger rebuild to update button state
+                        });
+                      },
                     ),
+                  ],
                 ],
               ),
               actions: [
@@ -138,17 +160,33 @@ class ChangeTimeDialog {
                 ),
                 TextButton(
                   onPressed: () {
-                    final reason = reasonController.text.trim();
-                    if (reason.isEmpty) {
+                    // Validation
+                    if (selectedReason == null) {
                       setState(() {
-                        showReasonError = true;
+                        reasonErrorMessage = '請選擇原因';
                       });
                       return;
                     }
+
+                    // Format the reason based on selection
+                    String finalReason;
+                    if (showAdditionalField) {
+                      final additionalText = additionalTextController.text.trim();
+                      if (additionalText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('請輸入其他原因')),
+                        );
+                        return;
+                      }
+                      finalReason = ChangeReasons.formatReason(selectedReason!, additionalText);
+                    } else {
+                      finalReason = selectedReason!;
+                    }
+
                     Navigator.pop(context, {
                       'startTime': newStartTime,
                       'endTime': newEndTime,
-                      'reason': reason,
+                      'reason': finalReason,
                     });
                   },
                   style: TextButton.styleFrom(
