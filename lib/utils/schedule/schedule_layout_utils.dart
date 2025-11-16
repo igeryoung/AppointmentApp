@@ -74,9 +74,8 @@ class ScheduleLayoutUtils {
 
   /// Determine if an event should be displayed as open-end (single slot)
   static bool shouldDisplayAsOpenEnd(Event event) {
-    // Removed events or old events with new time should be displayed as open-end (single slot)
-    // NEW events (isTimeChanged) should display normally with full duration
-    return event.isRemoved || event.hasNewTime || event.isOpenEnded;
+    // Only truly open-ended events (no end time) display as single slot
+    return event.isOpenEnded;
   }
 
   /// Get the display duration in minutes for an event
@@ -154,9 +153,7 @@ class ScheduleLayoutUtils {
     bool showOldEvents,
   ) {
     return allEvents.where((event) {
-      if (!showOldEvents && (event.isRemoved || event.hasNewTime)) {
-        return false;
-      }
+      // Always show all events regardless of removed/time-changed status
       return event.startTime.year == date.year &&
           event.startTime.month == date.month &&
           event.startTime.day == date.day;
@@ -219,9 +216,15 @@ class ScheduleLayoutUtils {
       final closeEndEvents = slotEvents.where((e) => !shouldDisplayAsOpenEnd(e)).toList();
       final openEndEvents = slotEvents.where((e) => shouldDisplayAsOpenEnd(e)).toList();
 
-      // Sort each list by ID for stable ordering
-      closeEndEvents.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
-      openEndEvents.sort((a, b) => (a.id ?? 0).compareTo(b.id ?? 0));
+      // Sort each list by creation time for stable ordering (with ID as fallback)
+      closeEndEvents.sort((a, b) {
+        final timeComparison = a.createdAt.compareTo(b.createdAt);
+        return timeComparison != 0 ? timeComparison : (a.id ?? 0).compareTo(b.id ?? 0);
+      });
+      openEndEvents.sort((a, b) {
+        final timeComparison = a.createdAt.compareTo(b.createdAt);
+        return timeComparison != 0 ? timeComparison : (a.id ?? 0).compareTo(b.id ?? 0);
+      });
 
       // Process in order: close-end events first, then open-end events
       final orderedEvents = [...closeEndEvents, ...openEndEvents];

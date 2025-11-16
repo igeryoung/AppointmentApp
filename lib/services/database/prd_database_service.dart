@@ -58,7 +58,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 15, // Add has_note field to events for handwriting indicator
+      version: 16, // Add version and is_dirty columns for server sync
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -543,6 +543,28 @@ class PRDDatabaseService
 
       debugPrint('✅ Database upgraded to version 15 (has_note field added)');
     }
+    if (oldVersion < 16) {
+      // Add version and is_dirty columns for server sync
+      // These were added in v6 but lost during v13/v14 table recreations
+      debugPrint('🔄 Upgrading to database version 16 (re-adding server sync columns)...');
+
+      // Check if columns already exist to avoid errors
+      try {
+        await db.execute('ALTER TABLE events ADD COLUMN version INTEGER DEFAULT 1');
+        debugPrint('✅ Added version column to events table');
+      } catch (e) {
+        debugPrint('ℹ️ version column already exists in events table');
+      }
+
+      try {
+        await db.execute('ALTER TABLE events ADD COLUMN is_dirty INTEGER DEFAULT 0');
+        debugPrint('✅ Added is_dirty column to events table');
+      } catch (e) {
+        debugPrint('ℹ️ is_dirty column already exists in events table');
+      }
+
+      debugPrint('✅ Database upgraded to version 16 (server sync columns ensured)');
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
@@ -581,6 +603,8 @@ class PRDDatabaseService
         new_event_id INTEGER,
         is_checked INTEGER DEFAULT 0,
         has_note INTEGER DEFAULT 0,
+        version INTEGER DEFAULT 1,
+        is_dirty INTEGER DEFAULT 0,
         FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
