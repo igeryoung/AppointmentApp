@@ -194,78 +194,76 @@ class ScheduleEventTileHelper {
           onLongPress(details.globalPosition);
         }
       },
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(2),
-        child: Container(
-          height: tileHeight,
-          margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(2),
-            border: isMenuOpen
-                ? Border.all(color: Colors.white, width: 2)
-                : event.isRemoved
-                    ? Border.all(
-                        color: primaryColor.withOpacity(0.6),
-                        width: 1,
-                        style: BorderStyle.solid,
-                      )
-                    : null,
-          ),
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              // Background color layer (single or split)
-              Positioned.fill(
-                child: _buildColorBackground(
-                  colors,
-                  event.isRemoved ? 0.3 : 0.75,
-                  hasHandwriting: hasHandwriting,
-                ),
+      child: Container(
+        height: tileHeight,
+        margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(2),
+          border: isMenuOpen
+              ? Border.all(color: Colors.white, width: 2)
+              : event.isRemoved
+                  ? Border.all(
+                      color: primaryColor.withOpacity(0.6),
+                      width: 1,
+                      style: BorderStyle.solid,
+                    )
+                  : null,
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            // Background color layer (single or split)
+            Positioned.fill(
+              child: _buildColorBackground(
+                colors,
+                event.isRemoved ? 0.3 : 0.75,
+                hasHandwriting: hasHandwriting,
               ),
-              // Content layer with padding
-              Padding(
-                padding: EdgeInsets.only(
-                  left: hasHandwriting ? 0 : 2, // No left padding when icon present
-                  right: 2,
-                  top: slotHeight * 0.15, // 10% top padding
-                  bottom: 0,
-                ),
-                child: Stack(
-                  clipBehavior: Clip.none,
-                  children: [
-                    // Dotted line overlay for removed events
-                    if (event.isRemoved && dottedBorderPainter != null)
-                      Positioned.fill(
-                        child: dottedBorderPainter(primaryColor.withOpacity(0.8)),
-                      ),
-                    // Content with height-adaptive rendering
-                    buildEventTileContent(
-                      event: event,
-                      tileHeight: tileHeight,
-                      slotHeight: slotHeight,
-                      events: events,
-                      hasHandwriting: hasHandwriting,
+            ),
+            // Content layer with padding
+            Padding(
+              padding: EdgeInsets.only(
+                left: hasHandwriting ? 0 : 2, // No left padding when icon present
+                right: 2,
+                top: slotHeight * 0.15, // 10% top padding
+                bottom: 0,
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  // Dotted line overlay for removed events
+                  if (event.isRemoved && dottedBorderPainter != null)
+                    Positioned.fill(
+                      child: dottedBorderPainter(primaryColor.withOpacity(0.8)),
                     ),
-                    // OK indicator for checked events (top-right corner, 0.5 × slotHeight)
-                    if (event.isChecked)
-                      Positioned(
-                        top: -2,
-                        right: -1,
-                        child: Image.asset(
-                          'assets/images/icons8-ok-96.png',
-                          width: slotHeight * 0.5,
-                          height: slotHeight * 0.5,
-                          fit: BoxFit.contain,
-                        ),
+                  // Content with height-adaptive rendering
+                  buildEventTileContent(
+                    event: event,
+                    tileHeight: tileHeight,
+                    slotHeight: slotHeight,
+                    events: events,
+                    hasHandwriting: hasHandwriting,
+                  ),
+                  // OK indicator for checked events (top-right corner, 0.5 × slotHeight)
+                  if (event.isChecked)
+                    Positioned(
+                      top: -8,
+                      right: -1,
+                      child: Image.asset(
+                        'assets/images/icons8-ok-96.png',
+                        width: slotHeight * 0.6,
+                        height: slotHeight * 0.6,
+                        fit: BoxFit.contain,
                       ),
-                  ],
-                ),
+                    ),
+                ],
               ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );
+  
 
     // Make event draggable only when menu is open
     if (isMenuOpen) {

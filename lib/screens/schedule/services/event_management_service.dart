@@ -5,10 +5,11 @@ import '../../../services/database_service_interface.dart';
 import '../../../services/time_service.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../cubits/schedule_state.dart';
-import '../../../widgets/schedule/change_event_time_dialog.dart';
+import '../../../widgets/dialogs/change_time_dialog.dart';
 import '../../../widgets/schedule/schedule_next_appointment_dialog.dart';
 import '../dialogs/change_event_type_dialog.dart';
 import '../../event_detail_screen.dart';
+import '../../../constants/change_reasons.dart';
 
 /// Service for managing event CRUD operations, context menu interactions,
 /// and event-related UI dialogs. Handles creation, editing, deletion,
@@ -270,7 +271,11 @@ class EventManagementService {
 
   /// Change event time from schedule view
   Future<void> changeEventTimeFromSchedule(Event event, BuildContext context) async {
-    final result = await showChangeEventTimeDialog(context, event);
+    final result = await ChangeTimeDialog.show(
+      context,
+      initialStartTime: event.startTime,
+      initialEndTime: event.endTime,
+    );
     if (result == null) return;
 
     try {
@@ -307,40 +312,97 @@ class EventManagementService {
     final reason = await showDialog<String>(
       context: context,
       builder: (context) {
-        final reasonController = TextEditingController();
-        return AlertDialog(
-          title: Text(l10n.removeEvent),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(l10n.removeEventDescription),
-              const SizedBox(height: 12),
-              TextField(
-                controller: reasonController,
-                decoration: InputDecoration(
-                  labelText: l10n.reasonForRemovalLabel,
-                  hintText: l10n.enterReasonHint,
-                ),
-                autofocus: true,
-                maxLines: 2,
+        final additionalTextController = TextEditingController();
+        String? selectedReason;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final showAdditionalField = ChangeReasons.requiresAdditionalInput(selectedReason);
+
+            return AlertDialog(
+              title: Text(l10n.removeEvent),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(l10n.removeEventDescription),
+                  const SizedBox(height: 12),
+                  // Dropdown for reason selection
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    decoration: InputDecoration(
+                      labelText: l10n.reasonForRemovalLabel,
+                      hintText: '請選擇原因',
+                      errorText: errorMessage,
+                    ),
+                    isExpanded: true,
+                    items: ChangeReasons.allReasons.map((reason) {
+                      return DropdownMenuItem(
+                        value: reason,
+                        child: Text(reason),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedReason = value;
+                        errorMessage = null;
+                        // Clear additional text when switching away from "other"
+                        if (!ChangeReasons.requiresAdditionalInput(value)) {
+                          additionalTextController.clear();
+                        }
+                      });
+                    },
+                  ),
+                  // Conditional text field for "other" option
+                  if (showAdditionalField) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: additionalTextController,
+                      decoration: const InputDecoration(
+                        hintText: '請輸入其他原因...',
+                      ),
+                      maxLines: 2,
+                      autofocus: true,
+                    ),
+                  ],
+                ],
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () {
-                if (reasonController.text.trim().isNotEmpty) {
-                  Navigator.pop(context, reasonController.text.trim());
-                }
-              },
-              style: TextButton.styleFrom(foregroundColor: Colors.orange),
-              child: Text(l10n.ok),
-            ),
-          ],
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(l10n.cancel),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Validation
+                    if (selectedReason == null) {
+                      setState(() {
+                        errorMessage = '請選擇原因';
+                      });
+                      return;
+                    }
+
+                    // If "other" option, validate additional text
+                    if (showAdditionalField) {
+                      final additionalText = additionalTextController.text.trim();
+                      if (additionalText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('請輸入其他原因')),
+                        );
+                        return;
+                      }
+                      final formattedReason = ChangeReasons.formatReason(selectedReason!, additionalText);
+                      Navigator.pop(context, formattedReason);
+                    } else {
+                      Navigator.pop(context, selectedReason);
+                    }
+                  },
+                  style: TextButton.styleFrom(foregroundColor: Colors.orange),
+                  child: Text(l10n.ok),
+                ),
+              ],
+            );
+          },
         );
       },
     );
@@ -420,36 +482,98 @@ class EventManagementService {
 
     final l10n = AppLocalizations.of(context)!;
 
-    // Show reason dialog
+    // Show reason dialog with dropdown
     final reason = await showDialog<String>(
       context: context,
       builder: (context) {
-        final reasonController = TextEditingController(text: l10n.timeChangedViaDrag);
-        return AlertDialog(
-          title: Text(l10n.changeEventType),
-          content: TextField(
-            controller: reasonController,
-            decoration: InputDecoration(
-              labelText: l10n.reasonForTimeChangeLabel,
-              hintText: l10n.enterReasonHint,
-            ),
-            autofocus: true,
-            maxLines: 2,
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: Text(l10n.cancel),
-            ),
-            TextButton(
-              onPressed: () {
-                if (reasonController.text.trim().isNotEmpty) {
-                  Navigator.pop(context, reasonController.text.trim());
-                }
-              },
-              child: Text(l10n.ok),
-            ),
-          ],
+        final additionalTextController = TextEditingController();
+        String? selectedReason;
+        String? errorMessage;
+
+        return StatefulBuilder(
+          builder: (context, setState) {
+            final showAdditionalField = ChangeReasons.requiresAdditionalInput(selectedReason);
+
+            return AlertDialog(
+              title: Text(l10n.changeEventType),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Dropdown for reason selection
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    decoration: InputDecoration(
+                      labelText: l10n.reasonForTimeChangeLabel,
+                      hintText: '請選擇原因',
+                      errorText: errorMessage,
+                    ),
+                    isExpanded: true,
+                    items: ChangeReasons.allReasons.map((reason) {
+                      return DropdownMenuItem(
+                        value: reason,
+                        child: Text(reason),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        selectedReason = value;
+                        errorMessage = null;
+                        // Clear additional text when switching away from "other"
+                        if (!ChangeReasons.requiresAdditionalInput(value)) {
+                          additionalTextController.clear();
+                        }
+                      });
+                    },
+                  ),
+                  // Conditional text field for "other" option
+                  if (showAdditionalField) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: additionalTextController,
+                      decoration: const InputDecoration(
+                        hintText: '請輸入其他原因...',
+                      ),
+                      maxLines: 2,
+                      autofocus: true,
+                    ),
+                  ],
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(context),
+                  child: Text(l10n.cancel),
+                ),
+                TextButton(
+                  onPressed: () {
+                    // Validation
+                    if (selectedReason == null) {
+                      setState(() {
+                        errorMessage = '請選擇原因';
+                      });
+                      return;
+                    }
+
+                    // If "other" option, validate additional text
+                    if (showAdditionalField) {
+                      final additionalText = additionalTextController.text.trim();
+                      if (additionalText.isEmpty) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('請輸入其他原因')),
+                        );
+                        return;
+                      }
+                      final formattedReason = ChangeReasons.formatReason(selectedReason!, additionalText);
+                      Navigator.pop(context, formattedReason);
+                    } else {
+                      Navigator.pop(context, selectedReason);
+                    }
+                  },
+                  child: Text(l10n.ok),
+                ),
+              ],
+            );
+          },
         );
       },
     );
