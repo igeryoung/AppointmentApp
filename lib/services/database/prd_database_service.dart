@@ -581,6 +581,8 @@ class PRDDatabaseService
         new_event_id INTEGER,
         is_checked INTEGER DEFAULT 0,
         has_note INTEGER DEFAULT 0,
+        version INTEGER DEFAULT 1,
+        is_dirty INTEGER DEFAULT 0,
         FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
       )
     ''');
