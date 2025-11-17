@@ -61,142 +61,291 @@ class ChangeTimeDialog {
             }
 
             return AlertDialog(
-              title: Text(l10n.changeEventTimeTitle),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(l10n.changeTimeMessage),
-                  const SizedBox(height: 16),
-                  // Start Time Picker
-                  Row(
-                    children: [
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () async {
-                            final result = await DateTimePickerUtils.pickDateTime(
-                              context,
-                              initialDateTime: newStartTime,
-                            );
-                            if (result == null) return;
+              title: Text(
+                l10n.changeEventTimeTitle,
+                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      l10n.changeTimeMessage,
+                      style: TextStyle(fontSize: 14, color: Colors.grey[700]),
+                    ),
+                    const SizedBox(height: 20),
 
-                            setState(() {
-                              newStartTime = result;
-                            });
-                          },
-                          child: Text(
-                            'Start: ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(newStartTime)}',
-                            style: const TextStyle(fontSize: 12),
-                          ),
-                        ),
+                    // Time Section Card
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
                       ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  // Duration Input Section
-                  Row(
-                    children: [
-                      Text('Duration: ', style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-                      const SizedBox(width: 8),
-                      // Duration picker button
-                      Expanded(
-                        child: TextButton(
-                          onPressed: () async {
-                            await _showDurationPicker(
-                              context,
-                              initialHours: durationHours,
-                              initialMinutes: durationMinutes,
-                              onChanged: (hours, minutes) {
-                                setState(() {
-                                  durationHours = hours;
-                                  durationMinutes = minutes;
-                                });
-                              },
-                            );
-                          },
-                          child: Text(
-                            (durationHours > 0 || durationMinutes > 0)
-                                ? '${durationHours}h ${durationMinutes}m'
-                                : 'Set Duration (Optional)',
-                            style: const TextStyle(fontSize: 12),
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Start Time
+                          Row(
+                            children: [
+                              Icon(Icons.access_time, size: 20, color: Colors.blue[700]),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Start Time',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                            ],
                           ),
-                        ),
-                      ),
-                      if (durationHours > 0 || durationMinutes > 0)
-                        IconButton(
-                          onPressed: () => setState(() {
-                            durationHours = 0;
-                            durationMinutes = 0;
-                          }),
-                          icon: const Icon(Icons.clear, size: 16),
-                        ),
-                    ],
-                  ),
-                  // Show calculated end time
-                  if (calculatedEndTime != null)
-                    Padding(
-                      padding: const EdgeInsets.only(top: 4, left: 8),
-                      child: Text(
-                        'End: ${DateFormat('MMM d, HH:mm', Localizations.localeOf(context).toString()).format(calculatedEndTime)}',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: () async {
+                              final result = await DateTimePickerUtils.pickDateTime(
+                                context,
+                                initialDateTime: newStartTime,
+                              );
+                              if (result == null) return;
+
+                              setState(() {
+                                newStartTime = result;
+                              });
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.grey[300]!),
+                              ),
+                              child: Text(
+                                DateFormat('MMM d, yyyy • HH:mm', Localizations.localeOf(context).toString()).format(newStartTime),
+                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                              ),
+                            ),
+                          ),
+
+                          const SizedBox(height: 16),
+                          const Divider(height: 1),
+                          const SizedBox(height: 16),
+
+                          // Duration
+                          Row(
+                            children: [
+                              Icon(Icons.timer_outlined, size: 20, color: Colors.orange[700]),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Duration',
+                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              ),
+                              const Spacer(),
+                              if (durationHours > 0 || durationMinutes > 0)
+                                TextButton.icon(
+                                  onPressed: () => setState(() {
+                                    durationHours = 0;
+                                    durationMinutes = 0;
+                                  }),
+                                  icon: const Icon(Icons.clear, size: 16),
+                                  label: const Text('Clear', style: TextStyle(fontSize: 12)),
+                                  style: TextButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    minimumSize: Size.zero,
+                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                  ),
+                                ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          InkWell(
+                            onTap: () async {
+                              await _showDurationPicker(
+                                context,
+                                initialHours: durationHours,
+                                initialMinutes: durationMinutes,
+                                onChanged: (hours, minutes) {
+                                  setState(() {
+                                    durationHours = hours;
+                                    durationMinutes = minutes;
+                                  });
+                                },
+                              );
+                            },
+                            borderRadius: BorderRadius.circular(8),
+                            child: Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(
+                                  color: (durationHours > 0 || durationMinutes > 0)
+                                    ? Colors.orange[300]!
+                                    : Colors.grey[300]!,
+                                  width: (durationHours > 0 || durationMinutes > 0) ? 1.5 : 1,
+                                ),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    (durationHours > 0 || durationMinutes > 0)
+                                        ? '${durationHours}h ${durationMinutes}min'
+                                        : 'Tap to set duration (optional)',
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: (durationHours > 0 || durationMinutes > 0)
+                                        ? FontWeight.w500
+                                        : FontWeight.w400,
+                                      color: (durationHours > 0 || durationMinutes > 0)
+                                        ? Colors.black87
+                                        : Colors.grey[600],
+                                    ),
+                                  ),
+                                  Icon(
+                                    Icons.chevron_right,
+                                    color: Colors.grey[400],
+                                    size: 20,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+
+                          // Calculated End Time
+                          if (calculatedEndTime != null) ...[
+                            const SizedBox(height: 12),
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.blue[50],
+                                borderRadius: BorderRadius.circular(8),
+                                border: Border.all(color: Colors.blue[200]!),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(Icons.event_available, size: 16, color: Colors.blue[700]),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'End: ${DateFormat('MMM d • HH:mm', Localizations.localeOf(context).toString()).format(calculatedEndTime)}',
+                                    style: TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                      color: Colors.blue[900],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
                       ),
                     ),
-                  const SizedBox(height: 16),
-                  Text(l10n.reasonForTimeChangeField, style: const TextStyle(fontWeight: FontWeight.w500)),
-                  const SizedBox(height: 8),
-                  // Dropdown for reason selection
-                  DropdownButtonFormField<String>(
-                    value: selectedReason,
-                    decoration: InputDecoration(
-                      hintText: '請選擇原因',
-                      border: const OutlineInputBorder(),
-                      errorText: reasonErrorMessage,
+
+                    const SizedBox(height: 20),
+
+                    // Reason Section
+                    Text(
+                      l10n.reasonForTimeChangeField,
+                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
                     ),
-                    isExpanded: true,
-                    items: ChangeReasons.allReasons.map((reason) {
-                      return DropdownMenuItem(
-                        value: reason,
-                        child: Text(reason),
-                      );
-                    }).toList(),
-                    onChanged: (value) {
-                      setState(() {
-                        selectedReason = value;
-                        reasonErrorMessage = null;
-                        // Clear additional text when switching away from "other"
-                        if (!ChangeReasons.requiresAdditionalInput(value)) {
-                          additionalTextController.clear();
-                        }
-                      });
-                    },
-                  ),
-                  // Conditional text field for "other" option
-                  if (showAdditionalField) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: additionalTextController,
-                      decoration: const InputDecoration(
-                        hintText: '請輸入其他原因...',
-                        border: OutlineInputBorder(),
+                    const SizedBox(height: 10),
+                    DropdownButtonFormField<String>(
+                      value: selectedReason,
+                      decoration: InputDecoration(
+                        hintText: '請選擇原因',
+                        hintStyle: TextStyle(color: Colors.grey[500]),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Colors.grey[300]!),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                          borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                        ),
+                        errorText: reasonErrorMessage,
+                        filled: true,
+                        fillColor: Colors.white,
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
                       ),
-                      maxLines: 2,
-                      autofocus: true,
+                      isExpanded: true,
+                      icon: const Icon(Icons.arrow_drop_down),
+                      items: ChangeReasons.allReasons.map((reason) {
+                        return DropdownMenuItem(
+                          value: reason,
+                          child: Text(reason, style: const TextStyle(fontSize: 14)),
+                        );
+                      }).toList(),
                       onChanged: (value) {
                         setState(() {
-                          // Trigger rebuild to update button state
+                          selectedReason = value;
+                          reasonErrorMessage = null;
+                          if (!ChangeReasons.requiresAdditionalInput(value)) {
+                            additionalTextController.clear();
+                          }
                         });
                       },
                     ),
+
+                    // Additional text field for "other" option
+                    if (showAdditionalField) ...[
+                      const SizedBox(height: 12),
+                      TextField(
+                        controller: additionalTextController,
+                        decoration: InputDecoration(
+                          hintText: '請輸入其他原因...',
+                          hintStyle: TextStyle(color: Colors.grey[500]),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          focusedBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                          ),
+                          filled: true,
+                          fillColor: Colors.white,
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        maxLines: 2,
+                        autofocus: true,
+                        onChanged: (value) {
+                          setState(() {});
+                        },
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
+              actionsPadding: const EdgeInsets.fromLTRB(24, 0, 24, 20),
               actions: [
                 TextButton(
                   onPressed: () => Navigator.pop(context, null),
-                  child: Text(l10n.cancel),
+                  style: TextButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: Text(
+                    l10n.cancel,
+                    style: const TextStyle(fontSize: 15),
+                  ),
                 ),
-                TextButton(
-                  onPressed: () {
+                const SizedBox(width: 8),
+                ElevatedButton(
+                  onPressed: hasValidReason ? () {
                     // Validation
                     if (selectedReason == null) {
                       setState(() {
@@ -225,12 +374,22 @@ class ChangeTimeDialog {
                       'endTime': calculatedEndTime,
                       'reason': finalReason,
                     });
-                  },
-                  style: TextButton.styleFrom(
-                    backgroundColor: hasValidReason ? Theme.of(context).primaryColor : Colors.grey.shade300,
-                    foregroundColor: hasValidReason ? Colors.white : Colors.grey.shade600,
+                  } : null,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Theme.of(context).primaryColor,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    elevation: 0,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    disabledBackgroundColor: Colors.grey.shade300,
+                    disabledForegroundColor: Colors.grey.shade600,
                   ),
-                  child: Text(l10n.changeTimeButton),
+                  child: Text(
+                    l10n.changeTimeButton,
+                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
                 ),
               ],
             );
@@ -268,39 +427,79 @@ class ChangeTimeDialog {
 
     await showModalBottomSheet(
       context: context,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
         return Container(
-          height: 300,
-          color: Colors.white,
+          height: 340,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+          ),
           child: Column(
             children: [
-              // Header with Done button
+              // Handle bar
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                margin: const EdgeInsets.only(top: 12, bottom: 8),
+                width: 40,
+                height: 4,
                 decoration: BoxDecoration(
-                  border: Border(bottom: BorderSide(color: Colors.grey.shade300)),
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(2),
                 ),
+              ),
+
+              // Header with Done button
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     TextButton(
                       onPressed: () => Navigator.pop(context),
-                      child: const Text('Cancel'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.grey[600],
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontSize: 16),
+                      ),
                     ),
-                    const Text(
-                      'Duration',
-                      style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                    Row(
+                      children: [
+                        Icon(Icons.timer_outlined, color: Colors.orange[700], size: 20),
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Set Duration',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
                     ),
                     TextButton(
                       onPressed: () {
                         onChanged(selectedHours, selectedMinutes);
                         Navigator.pop(context);
                       },
-                      child: const Text('Done', style: TextStyle(fontWeight: FontWeight.bold)),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Theme.of(context).primaryColor,
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
+
+              const Divider(height: 1),
+              const SizedBox(height: 8),
+
               // Spinner pickers
               Expanded(
                 child: Row(
@@ -308,46 +507,99 @@ class ChangeTimeDialog {
                   children: [
                     // Hours picker
                     Expanded(
+                      flex: 2,
                       child: CupertinoPicker(
                         scrollController: hoursController,
-                        itemExtent: 40,
+                        itemExtent: 48,
+                        squeeze: 1.1,
+                        diameterRatio: 1.5,
                         onSelectedItemChanged: (int index) {
                           selectedHours = index;
                         },
+                        selectionOverlay: Container(
+                          decoration: BoxDecoration(
+                            border: Border.symmetric(
+                              horizontal: BorderSide(
+                                color: Colors.grey[300]!,
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                        ),
                         children: List<Widget>.generate(13, (int index) {
                           return Center(
                             child: Text(
                               '$index',
-                              style: const TextStyle(fontSize: 24),
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                           );
                         }),
                       ),
                     ),
-                    const Text('hours', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
-                    const SizedBox(width: 16),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      child: Text(
+                        'hours',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
+
                     // Minutes picker
                     Expanded(
+                      flex: 2,
                       child: CupertinoPicker(
                         scrollController: minutesController,
-                        itemExtent: 40,
+                        itemExtent: 48,
+                        squeeze: 1.1,
+                        diameterRatio: 1.5,
                         onSelectedItemChanged: (int index) {
                           selectedMinutes = index;
                         },
+                        selectionOverlay: Container(
+                          decoration: BoxDecoration(
+                            border: Border.symmetric(
+                              horizontal: BorderSide(
+                                color: Colors.grey[300]!,
+                                width: 1,
+                              ),
+                            ),
+                          ),
+                        ),
                         children: List<Widget>.generate(60, (int index) {
                           return Center(
                             child: Text(
                               '$index',
-                              style: const TextStyle(fontSize: 24),
+                              style: const TextStyle(
+                                fontSize: 28,
+                                fontWeight: FontWeight.w400,
+                              ),
                             ),
                           );
                         }),
                       ),
                     ),
-                    const Text('min', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w500)),
+                    Padding(
+                      padding: const EdgeInsets.only(right: 16, left: 8),
+                      child: Text(
+                        'min',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                          color: Colors.grey[700],
+                        ),
+                      ),
+                    ),
                   ],
                 ),
               ),
+              const SizedBox(height: 16),
             ],
           ),
         );
