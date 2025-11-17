@@ -247,13 +247,10 @@ class EventMetadataSection extends StatelessWidget {
                             Flexible(
                               child: Text(l10n.endTime, style: const TextStyle(fontSize: 13)),
                             ),
-                            if (endTime != null)
-                              IconButton(
-                                icon: const Icon(Icons.clear, size: 14),
-                                onPressed: onClearEndTime,
-                                padding: EdgeInsets.zero,
-                                constraints: const BoxConstraints(minWidth: 20, minHeight: 20),
-                              ),
+                            if (endTime != null) ...[
+                              const SizedBox(width: 4),
+                              _buildClearEndTimeButton(onClearEndTime),
+                            ],
                           ],
                         ),
                         subtitle: Text(
@@ -286,11 +283,10 @@ class EventMetadataSection extends StatelessWidget {
                       title: Row(
                         children: [
                           Text(l10n.endTime),
-                          if (endTime != null)
-                            IconButton(
-                              icon: const Icon(Icons.clear, size: 16),
-                              onPressed: onClearEndTime,
-                            ),
+                          if (endTime != null) ...[
+                            const SizedBox(width: 4),
+                            _buildClearEndTimeButton(onClearEndTime),
+                          ],
                         ],
                       ),
                       subtitle: Text(endTime != null
@@ -338,6 +334,26 @@ class EventMetadataSection extends StatelessWidget {
     // Show first 2 types and "+N more"
     final remaining = typeNames.length - 2;
     return '${typeNames[0]}, ${typeNames[1]}, +$remaining more';
+  }
+
+  /// Compact clear button used inside the end time rows so the tile height
+  /// remains stable when the optional action is shown.
+  Widget _buildClearEndTimeButton(VoidCallback onClearEndTime) {
+    return SizedBox(
+      width: 24,
+      height: 24,
+      child: Material(
+        color: Colors.transparent,
+        shape: const CircleBorder(),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onClearEndTime,
+          child: const Center(
+            child: Icon(Icons.clear, size: 16),
+          ),
+        ),
+      ),
+    );
   }
 }
 
