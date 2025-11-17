@@ -101,6 +101,7 @@ class EventDetailController {
       if (!isNew) {
         await loadNote();
         await loadChargeItems(); // Load charge items from person_charge_items table
+        await loadPhone(); // Load phone from person_info table
         if (event.hasNewTime) {
           await _loadNewEvent();
         }
@@ -345,6 +346,11 @@ class EventDetailController {
         }
       }
 
+      // Save phone number to person_info table if record number is present
+      if (recordNumberText.isNotEmpty) {
+        await savePhone();
+      }
+
       // Save handwriting note using offline-first strategy
       await saveNoteWithOfflineFirst(savedEvent.id!, pages);
 
@@ -494,11 +500,15 @@ class EventDetailController {
 
     _updateState(_state.copyWith(recordNumber: recordNumber, hasChanges: true));
 
-    // Reload charge items if record number changed (debounced)
+    // Reload charge items and phone if record number changed (debounced)
     if (oldRecordNumber != newRecordNumber) {
       // Load charge items asynchronously (don't wait for it)
       loadChargeItems().catchError((e) {
         debugPrint('❌ EventDetailController: Failed to reload charge items after record number change: $e');
+      });
+      // Load phone asynchronously (don't wait for it)
+      loadPhone().catchError((e) {
+        debugPrint('❌ EventDetailController: Failed to reload phone after record number change: $e');
       });
     }
   }
@@ -548,6 +558,73 @@ class EventDetailController {
       debugPrint('✅ EventDetailController: Loaded ${chargeItems.length} charge items for $name + $recordNumber');
     } catch (e) {
       debugPrint('❌ EventDetailController: Failed to load charge items: $e');
+    }
+  }
+
+  /// Load phone number for the current event (based on name + record number)
+  Future<void> loadPhone() async {
+    final name = _state.name.trim();
+    final recordNumber = _state.recordNumber.trim();
+
+    // Only load if we have both name and record number
+    if (name.isEmpty || recordNumber.isEmpty) {
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+
+      // Get person phone
+      final phone = await prdDb.getPersonPhone(
+        personNameNormalized: nameNormalized,
+        recordNumberNormalized: recordNumberNormalized,
+      );
+
+      if (phone != null && phone.isNotEmpty) {
+        _updateState(_state.copyWith(phone: phone));
+        debugPrint('✅ EventDetailController: Loaded phone number for $name + $recordNumber');
+      }
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to load phone: $e');
+    }
+  }
+
+  /// Save phone number to person_info table
+  Future<void> savePhone() async {
+    final name = _state.name.trim();
+    final recordNumber = _state.recordNumber.trim();
+    final phone = _state.phone.trim();
+
+    // Only save if we have both name and record number
+    if (name.isEmpty || recordNumber.isEmpty) {
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+
+      // Save person phone
+      await prdDb.setPersonPhone(
+        personNameNormalized: nameNormalized,
+        recordNumberNormalized: recordNumberNormalized,
+        phone: phone.isEmpty ? null : phone,
+      );
+
+      debugPrint('✅ EventDetailController: Saved phone number for $name + $recordNumber');
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to save phone: $e');
     }
   }
 

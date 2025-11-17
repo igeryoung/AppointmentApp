@@ -23,6 +23,7 @@ import 'mixins/cache_management_operations_mixin.dart';
 import 'mixins/person_info_utilities_mixin.dart';
 import 'mixins/lock_mechanism_mixin.dart';
 import 'mixins/person_charge_item_operations_mixin.dart';
+import 'mixins/person_info_operations_mixin.dart';
 
 export 'mixins/device_info_operations_mixin.dart' show DeviceCredentials;
 
@@ -38,7 +39,8 @@ class PRDDatabaseService
         CacheManagementOperationsMixin,
         PersonInfoUtilitiesMixin,
         LockMechanismMixin,
-        PersonChargeItemOperationsMixin
+        PersonChargeItemOperationsMixin,
+        PersonInfoOperationsMixin
     implements IDatabaseService {
   static PRDDatabaseService? _instance;
   static Database? _database;
@@ -62,7 +64,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 18, // v18 adds person_charge_items table for shared charge items
+      version: 19, // v19 adds person_info table for synced phone numbers
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -95,6 +97,23 @@ class PRDDatabaseService
       await _migrateToPersonChargeItems(db);
     }
 
+    // Version 18 to 19: Add person_info table for synced phone numbers
+    if (oldVersion == 18 && newVersion >= 19) {
+      debugPrint('Upgrading database from v18 to v19: adding person_info table');
+      await _migrateToPersonInfo(db);
+    }
+
+    // Handle skipped versions (e.g., 17 -> 19, 16 -> 19)
+    if (oldVersion == 17 && newVersion >= 19) {
+      debugPrint('Upgrading database from v17 to v19: migrating phone numbers');
+      await _migrateToPersonInfo(db);
+    }
+
+    if (oldVersion == 16 && newVersion >= 19) {
+      debugPrint('Upgrading database from v16 to v19: migrating phone numbers');
+      await _migrateToPersonInfo(db);
+    }
+
     // For versions older than v16, require reinstall
     if (oldVersion < 16) {
       debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion is not supported.');
@@ -108,11 +127,12 @@ class PRDDatabaseService
   }
 
   Future<void> _createTables(Database db, int version) async {
-    // Version 18 schema - includes all features
+    // Version 19 schema - includes all features
     // - Books with UUID and sync columns
     // - Events with multi-type support, phone, charge items, completion status, and sync columns
     // - Notes with multi-page support, person sharing, locks, cache, and sync columns
-    // - Person charge items with shared sync across events (new in v18)
+    // - Person charge items with shared sync across events (v18)
+    // - Person info with synced phone numbers (new in v19)
     // - Schedule drawings with cache and sync columns
     // - Device info, sync metadata, and cache policy tables
 
@@ -228,6 +248,25 @@ class PRDDatabaseService
     await db.execute('''
       CREATE INDEX idx_person_charge_items_dirty
       ON person_charge_items(is_dirty)
+    ''');
+
+    // Person Info table - Stores person-level data like phone numbers (synced across all events)
+    await db.execute('''
+      CREATE TABLE person_info (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name_normalized TEXT NOT NULL,
+        record_number_normalized TEXT NOT NULL,
+        phone TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        UNIQUE(person_name_normalized, record_number_normalized)
+      )
+    ''');
+
+    // Index for person info lookups
+    await db.execute('''
+      CREATE INDEX idx_person_info_person_key
+      ON person_info(person_name_normalized, record_number_normalized)
     ''');
 
     // Schedule Drawings table - Handwriting overlay on schedule views
@@ -403,8 +442,85 @@ class PRDDatabaseService
     debugPrint('Successfully migrated ${migratedItems.length} unique charge items');
   }
 
+  /// Migrate existing phone numbers from events to person_info table
+  Future<void> _migrateToPersonInfo(Database db) async {
+    debugPrint('Starting migration to person_info table');
+
+    // Create the person_info table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS person_info (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name_normalized TEXT NOT NULL,
+        record_number_normalized TEXT NOT NULL,
+        phone TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        UNIQUE(person_name_normalized, record_number_normalized)
+      )
+    ''');
+
+    // Create index
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_person_info_person_key
+      ON person_info(person_name_normalized, record_number_normalized)
+    ''');
+
+    // Fetch all events with record numbers and phone numbers
+    final events = await db.query(
+      'events',
+      where: 'record_number IS NOT NULL AND record_number != "" AND phone IS NOT NULL AND phone != ""',
+    );
+
+    debugPrint('Found ${events.length} events with phone numbers to migrate');
+
+    // Track unique person+phone combinations
+    final personPhones = <String, Map<String, dynamic>>{};
+
+    for (final eventMap in events) {
+      final name = eventMap['name'] as String;
+      final recordNumber = eventMap['record_number'] as String;
+      final phone = eventMap['phone'] as String?;
+
+      if (phone == null || phone.isEmpty) {
+        continue;
+      }
+
+      // Normalize person info
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+
+      // Create unique key for this person
+      final personKey = '$nameNormalized+$recordNumberNormalized';
+
+      // Use the first phone number found for this person (or keep existing if already set)
+      if (!personPhones.containsKey(personKey)) {
+        personPhones[personKey] = {
+          'person_name_normalized': nameNormalized,
+          'record_number_normalized': recordNumberNormalized,
+          'phone': phone,
+        };
+      }
+    }
+
+    // Insert all unique person info into person_info table
+    for (final personData in personPhones.values) {
+      try {
+        await db.insert(
+          'person_info',
+          personData,
+          conflictAlgorithm: ConflictAlgorithm.ignore, // Skip if already exists
+        );
+      } catch (e) {
+        debugPrint('Failed to migrate person info: ${personData['person_name_normalized']}+${personData['record_number_normalized']}, error: $e');
+      }
+    }
+
+    debugPrint('Successfully migrated ${personPhones.length} unique person info records');
+  }
+
   Future<void> clearAllData() async {
     final db = await database;
+    await db.delete('person_info');
     await db.delete('person_charge_items');
     await db.delete('schedule_drawings');
     await db.delete('notes');
