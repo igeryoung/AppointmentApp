@@ -11,6 +11,7 @@ import 'event_detail_state.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/event_metadata_section.dart';
 import 'widgets/handwriting_section.dart';
+import 'widgets/charge_items_section.dart';
 import 'dialogs/confirm_discard_dialog.dart';
 import 'dialogs/delete_event_dialog.dart';
 import 'dialogs/remove_event_dialog.dart';
@@ -614,7 +615,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               availableRecordNumbers: _availableRecordNumbers,
                               isRecordNumberFieldEnabled: _nameController.text.trim().isNotEmpty,
                               selectedEventTypes: state.selectedEventTypes,
-                              chargeItems: state.chargeItems,
                               startTime: state.startTime,
                               endTime: state.endTime,
                               onStartTimeTap: _selectStartTime,
@@ -624,12 +624,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 _controller.updateEventTypes(eventTypes);
                               },
                               onRecordNumberChanged: _handleRecordNumberChanged,
-                              onChargeItemsChanged: (chargeItems) {
-                                _controller.updateChargeItems(chargeItems);
-                              },
                               onNewRecordNumberRequested: _showNewRecordNumberDialog,
                             ),
                           ),
+                        ),
+                      ),
+                      // Charge Items Section (between metadata and handwriting)
+                      Padding(
+                        padding: EdgeInsets.symmetric(horizontal: padding),
+                        child: ChargeItemsSection(
+                          chargeItems: state.chargeItems,
+                          onChargeItemsChanged: (chargeItems) {
+                            _controller.updateChargeItems(chargeItems);
+                          },
                         ),
                       ),
                       // Handwriting section

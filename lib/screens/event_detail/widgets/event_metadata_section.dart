@@ -3,10 +3,8 @@ import 'package:intl/intl.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../models/event.dart';
 import '../../../models/event_type.dart';
-import '../../../models/charge_item.dart';
 import '../utils/event_type_localizations.dart';
 import '../../schedule/dialogs/change_event_type_dialog.dart';
-import 'charge_items_section.dart';
 
 /// Event metadata section with name, record number, type, and time fields
 class EventMetadataSection extends StatelessWidget {
@@ -18,7 +16,6 @@ class EventMetadataSection extends StatelessWidget {
   final List<String> availableRecordNumbers;
   final bool isRecordNumberFieldEnabled;
   final List<EventType> selectedEventTypes;
-  final List<ChargeItem> chargeItems;
   final DateTime startTime;
   final DateTime? endTime;
   final VoidCallback onStartTimeTap;
@@ -26,7 +23,6 @@ class EventMetadataSection extends StatelessWidget {
   final VoidCallback onClearEndTime;
   final ValueChanged<List<EventType>> onEventTypesChanged;
   final ValueChanged<String> onRecordNumberChanged;
-  final ValueChanged<List<ChargeItem>> onChargeItemsChanged;
   final Future<String?> Function() onNewRecordNumberRequested;
   final Color Function(BuildContext, EventType)? getEventTypeColor;
 
@@ -40,7 +36,6 @@ class EventMetadataSection extends StatelessWidget {
     required this.availableRecordNumbers,
     required this.isRecordNumberFieldEnabled,
     required this.selectedEventTypes,
-    required this.chargeItems,
     required this.startTime,
     this.endTime,
     required this.onStartTimeTap,
@@ -48,7 +43,6 @@ class EventMetadataSection extends StatelessWidget {
     required this.onClearEndTime,
     required this.onEventTypesChanged,
     required this.onRecordNumberChanged,
-    required this.onChargeItemsChanged,
     required this.onNewRecordNumberRequested,
     this.getEventTypeColor,
   });
@@ -219,13 +213,6 @@ class EventMetadataSection extends StatelessWidget {
           ],
         ),
         const SizedBox(height: 12),
-
-        // Charge Items Section (collapsible)
-        ChargeItemsSection(
-          chargeItems: chargeItems,
-          onChargeItemsChanged: onChargeItemsChanged,
-        ),
-        const SizedBox(height: 8),
 
         // Time fields with responsive layout
         LayoutBuilder(
