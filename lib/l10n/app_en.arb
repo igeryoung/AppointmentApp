@@ -104,5 +104,60 @@
   "noMatchingRecordNumbers": "No matching record numbers",
   "@noMatchingRecordNumbers": {
     "description": "Message when no record numbers match the entered name"
+  },
+
+  "phone": "Phone",
+  "@phone": {
+    "description": "Label for phone field"
+  },
+
+  "chargeItems": "Charge Items",
+  "@chargeItems": {
+    "description": "Label for charge items section"
+  },
+
+  "chargeItemName": "Item Name",
+  "@chargeItemName": {
+    "description": "Label for charge item name field"
+  },
+
+  "chargeItemCost": "Cost",
+  "@chargeItemCost": {
+    "description": "Label for charge item cost field"
+  },
+
+  "addChargeItem": "Add Charge Item",
+  "@addChargeItem": {
+    "description": "Button text for adding a charge item"
+  },
+
+  "addChargeItemTitle": "Add Charge Item",
+  "@addChargeItemTitle": {
+    "description": "Title for add charge item dialog"
+  },
+
+  "editChargeItemTitle": "Edit Charge Item",
+  "@editChargeItemTitle": {
+    "description": "Title for edit charge item dialog"
+  },
+
+  "paid": "Paid",
+  "@paid": {
+    "description": "Label showing paid amount"
+  },
+
+  "total": "Total",
+  "@total": {
+    "description": "Label for total amount"
+  },
+
+  "chargeItemNameRequired": "Item name is required",
+  "@chargeItemNameRequired": {
+    "description": "Validation error for empty charge item name"
+  },
+
+  "chargeItemCostInvalid": "Cost must be a positive integer",
+  "@chargeItemCostInvalid": {
+    "description": "Validation error for invalid cost"
   }
 }
