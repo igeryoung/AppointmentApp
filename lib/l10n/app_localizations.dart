@@ -399,6 +399,72 @@ abstract class AppLocalizations {
   /// **'病例號為必填項目'**
   String get recordNumberRequired;
 
+  /// Label for phone field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'電話'**
+  String get phone;
+
+  /// Label for charge items section
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'收費項目'**
+  String get chargeItems;
+
+  /// Label for charge item name field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'項目名稱'**
+  String get chargeItemName;
+
+  /// Label for charge item cost field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'費用'**
+  String get chargeItemCost;
+
+  /// Button text for adding a charge item
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增收費項目'**
+  String get addChargeItem;
+
+  /// Title for add charge item dialog
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增收費項目'**
+  String get addChargeItemTitle;
+
+  /// Title for edit charge item dialog
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'編輯收費項目'**
+  String get editChargeItemTitle;
+
+  /// Label showing paid amount out of total
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已付'**
+  String get paid;
+
+  /// Label for total amount
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'總額'**
+  String get total;
+
+  /// Validation error for empty charge item name
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'項目名稱為必填項目'**
+  String get chargeItemNameRequired;
+
+  /// Validation error for invalid cost
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'費用必須為正整數'**
+  String get chargeItemCostInvalid;
+
   /// Label for event type field
   ///
   /// In zh_TW, this message translates to:

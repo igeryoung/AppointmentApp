@@ -1,5 +1,6 @@
 import '../../models/event.dart';
 import '../../models/event_type.dart';
+import '../../models/charge_item.dart';
 import '../../models/note.dart';
 import '../../widgets/handwriting_canvas.dart';
 
@@ -8,7 +9,9 @@ class EventDetailState {
   // Event metadata
   final String name;
   final String recordNumber;
+  final String phone;
   final List<EventType> selectedEventTypes;
+  final List<ChargeItem> chargeItems;
   final DateTime startTime;
   final DateTime? endTime;
 
@@ -30,7 +33,9 @@ class EventDetailState {
   const EventDetailState({
     required this.name,
     required this.recordNumber,
+    required this.phone,
     required this.selectedEventTypes,
+    required this.chargeItems,
     required this.startTime,
     this.endTime,
     this.note,
@@ -49,7 +54,9 @@ class EventDetailState {
     return EventDetailState(
       name: event.name,
       recordNumber: event.recordNumber ?? '',
+      phone: event.phone ?? '',
       selectedEventTypes: event.eventTypes,
+      chargeItems: event.chargeItems,
       startTime: event.startTime,
       endTime: event.endTime,
     );
@@ -59,7 +66,9 @@ class EventDetailState {
   EventDetailState copyWith({
     String? name,
     String? recordNumber,
+    String? phone,
     List<EventType>? selectedEventTypes,
+    List<ChargeItem>? chargeItems,
     DateTime? startTime,
     DateTime? endTime,
     Note? note,
@@ -77,7 +86,9 @@ class EventDetailState {
     return EventDetailState(
       name: name ?? this.name,
       recordNumber: recordNumber ?? this.recordNumber,
+      phone: phone ?? this.phone,
       selectedEventTypes: selectedEventTypes ?? this.selectedEventTypes,
+      chargeItems: chargeItems ?? this.chargeItems,
       startTime: startTime ?? this.startTime,
       endTime: clearEndTime ? null : (endTime ?? this.endTime),
       note: note ?? this.note,

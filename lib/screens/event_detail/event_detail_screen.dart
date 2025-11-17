@@ -34,6 +34,7 @@ class EventDetailScreen extends StatefulWidget {
 class _EventDetailScreenState extends State<EventDetailScreen> {
   late EventDetailController _controller;
   late TextEditingController _nameController;
+  late TextEditingController _phoneController;
   final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
 
   // Callback to save current page before final save
@@ -54,6 +55,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     // Initialize text controllers
     _nameController = TextEditingController(text: widget.event.name);
+    _phoneController = TextEditingController(text: widget.event.phone ?? '');
 
     // Initialize controller FIRST
     _controller = EventDetailController(
@@ -72,6 +74,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _controller.updateName(_nameController.text);
       // Fetch available record numbers when name changes
       _fetchAvailableRecordNumbers();
+    });
+
+    // Add listener for phone changes
+    _phoneController.addListener(() {
+      _controller.updatePhone(_phoneController.text);
     });
 
     // Initialize services and load data asynchronously
@@ -100,6 +107,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   @override
   void dispose() {
     _nameController.dispose();
+    _phoneController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -601,10 +609,12 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               event: widget.event,
                               newEvent: state.newEvent,
                               nameController: _nameController,
+                              phoneController: _phoneController,
                               recordNumber: state.recordNumber,
                               availableRecordNumbers: _availableRecordNumbers,
                               isRecordNumberFieldEnabled: _nameController.text.trim().isNotEmpty,
                               selectedEventTypes: state.selectedEventTypes,
+                              chargeItems: state.chargeItems,
                               startTime: state.startTime,
                               endTime: state.endTime,
                               onStartTimeTap: _selectStartTime,
@@ -614,6 +624,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 _controller.updateEventTypes(eventTypes);
                               },
                               onRecordNumberChanged: _handleRecordNumberChanged,
+                              onChargeItemsChanged: (chargeItems) {
+                                _controller.updateChargeItems(chargeItems);
+                              },
                               onNewRecordNumberRequested: _showNewRecordNumberDialog,
                             ),
                           ),

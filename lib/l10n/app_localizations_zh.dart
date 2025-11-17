@@ -877,6 +877,39 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get recordNumberRequired => '病例號為必填項目';
 
   @override
+  String get phone => '電話';
+
+  @override
+  String get chargeItems => '收費項目';
+
+  @override
+  String get chargeItemName => '項目名稱';
+
+  @override
+  String get chargeItemCost => '費用';
+
+  @override
+  String get addChargeItem => '新增收費項目';
+
+  @override
+  String get addChargeItemTitle => '新增收費項目';
+
+  @override
+  String get editChargeItemTitle => '編輯收費項目';
+
+  @override
+  String get paid => '已付';
+
+  @override
+  String get total => '總額';
+
+  @override
+  String get chargeItemNameRequired => '項目名稱為必填項目';
+
+  @override
+  String get chargeItemCostInvalid => '費用必須為正整數';
+
+  @override
   String get eventType => '約診類型 *';
 
   @override
