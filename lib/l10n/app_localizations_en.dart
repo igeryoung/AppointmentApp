@@ -181,6 +181,39 @@ class AppLocalizationsEn extends AppLocalizations {
   String get recordNumberRequired => '病例號為必填項目';
 
   @override
+  String get phone => 'Phone';
+
+  @override
+  String get chargeItems => 'Charge Items';
+
+  @override
+  String get chargeItemName => 'Item Name';
+
+  @override
+  String get chargeItemCost => 'Cost';
+
+  @override
+  String get addChargeItem => 'Add Charge Item';
+
+  @override
+  String get addChargeItemTitle => 'Add Charge Item';
+
+  @override
+  String get editChargeItemTitle => 'Edit Charge Item';
+
+  @override
+  String get paid => 'Paid';
+
+  @override
+  String get total => 'Total';
+
+  @override
+  String get chargeItemNameRequired => 'Item name is required';
+
+  @override
+  String get chargeItemCostInvalid => 'Cost must be a positive integer';
+
+  @override
   String get eventType => '約診類型 *';
 
   @override

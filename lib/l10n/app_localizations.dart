@@ -441,7 +441,7 @@ abstract class AppLocalizations {
   /// **'編輯收費項目'**
   String get editChargeItemTitle;
 
-  /// Label showing paid amount out of total
+  /// Label showing paid amount
   ///
   /// In zh_TW, this message translates to:
   /// **'已付'**
