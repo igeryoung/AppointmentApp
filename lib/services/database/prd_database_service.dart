@@ -58,7 +58,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 16, // v16 is now the baseline version (all features included)
+      version: 17, // v17 adds phone and charge_items fields
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -70,22 +70,31 @@ class PRDDatabaseService
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    // Version 16 is now the baseline version.
-    // All old migrations (v2-v15) have been removed.
-    // Users on versions older than v16 will need to reinstall.
-    debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion is not supported.');
-    debugPrint('⚠️ Version 16 is the baseline. Please clear app data and reinstall.');
+    debugPrint('Database upgrade from v$oldVersion to v$newVersion');
 
-    throw Exception(
-      'Database upgrade from version $oldVersion to $newVersion is not supported. '
-      'Version 16 is the baseline version. Please clear app data and reinstall.'
-    );
+    // Version 16 to 17: Add phone and charge_items columns
+    if (oldVersion == 16 && newVersion >= 17) {
+      debugPrint('Upgrading database from v16 to v17: adding phone and charge_items columns');
+      await db.execute('ALTER TABLE events ADD COLUMN phone TEXT');
+      await db.execute('ALTER TABLE events ADD COLUMN charge_items TEXT DEFAULT "[]"');
+    }
+
+    // For versions older than v16, require reinstall
+    if (oldVersion < 16) {
+      debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion is not supported.');
+      debugPrint('⚠️ Version 16 is the baseline. Please clear app data and reinstall.');
+
+      throw Exception(
+        'Database upgrade from version $oldVersion to $newVersion is not supported. '
+        'Version 16 is the baseline version. Please clear app data and reinstall.'
+      );
+    }
   }
 
   Future<void> _createTables(Database db, int version) async {
-    // Version 16 baseline schema - includes all features
+    // Version 17 schema - includes all features
     // - Books with UUID and sync columns
-    // - Events with multi-type support, completion status, and sync columns
+    // - Events with multi-type support, phone, charge items, completion status, and sync columns
     // - Notes with multi-page support, person sharing, locks, cache, and sync columns
     // - Schedule drawings with cache and sync columns
     // - Device info, sync metadata, and cache policy tables
@@ -113,8 +122,10 @@ class PRDDatabaseService
         book_id INTEGER NOT NULL,
         name TEXT NOT NULL,
         record_number TEXT,
+        phone TEXT,
         event_type TEXT,
         event_types TEXT NOT NULL,
+        charge_items TEXT DEFAULT "[]",
         start_time INTEGER NOT NULL,
         end_time INTEGER,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),

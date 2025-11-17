@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
+import '../../models/charge_item.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/database/prd_database_service.dart';
@@ -274,10 +275,13 @@ class EventDetailController {
 
     try {
       final recordNumberText = _state.recordNumber.trim();
+      final phoneText = _state.phone.trim();
       final eventToSave = event.copyWith(
         name: _state.name.trim(),
         recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
+        phone: phoneText.isEmpty ? null : phoneText,
         eventTypes: _state.selectedEventTypes,
+        chargeItems: _state.chargeItems,
         startTime: _state.startTime,
         endTime: _state.endTime,
       );
@@ -485,9 +489,19 @@ class EventDetailController {
     _updateState(_state.copyWith(recordNumber: recordNumber, hasChanges: true));
   }
 
+  /// Update phone
+  void updatePhone(String phone) {
+    _updateState(_state.copyWith(phone: phone, hasChanges: true));
+  }
+
   /// Update event types
   void updateEventTypes(List<EventType> eventTypes) {
     _updateState(_state.copyWith(selectedEventTypes: eventTypes, hasChanges: true));
+  }
+
+  /// Update charge items
+  void updateChargeItems(List<ChargeItem> chargeItems) {
+    _updateState(_state.copyWith(chargeItems: chargeItems, hasChanges: true));
   }
 
   /// Check for existing person note when record number is set (for NEW events only)

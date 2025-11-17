@@ -11,6 +11,7 @@ class EventMetadataSection extends StatelessWidget {
   final Event event;
   final Event? newEvent;
   final TextEditingController nameController;
+  final TextEditingController phoneController;
   final String recordNumber;
   final List<String> availableRecordNumbers;
   final bool isRecordNumberFieldEnabled;
@@ -30,6 +31,7 @@ class EventMetadataSection extends StatelessWidget {
     required this.event,
     this.newEvent,
     required this.nameController,
+    required this.phoneController,
     required this.recordNumber,
     required this.availableRecordNumbers,
     required this.isRecordNumberFieldEnabled,
@@ -131,60 +133,86 @@ class EventMetadataSection extends StatelessWidget {
           const SizedBox(height: 16),
         ],
 
-        // Name field
-        TextField(
-          controller: nameController,
-          decoration: InputDecoration(
-            labelText: l10n.eventName,
-            border: const OutlineInputBorder(),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Record Number dropdown field
-        Padding(
-          padding: const EdgeInsets.only(bottom: 4),
-          child: _RecordNumberDropdown(
-            value: recordNumber,
-            availableRecordNumbers: availableRecordNumbers,
-            isEnabled: isRecordNumberFieldEnabled,
-            labelText: l10n.recordNumber,
-            onChanged: onRecordNumberChanged,
-            onNewRecordNumberRequested: onNewRecordNumberRequested,
-          ),
-        ),
-        const SizedBox(height: 8),
-
-        // Event Type field (same style as name and record number)
-        InkWell(
-          onTap: () async {
-            final result = await showChangeEventTypeDialog(
-              context,
-              event.copyWith(eventTypes: selectedEventTypes),
-              EventTypeLocalizations.commonEventTypes,
-              EventTypeLocalizations.getLocalizedEventType,
-            );
-            if (result != null) {
-              onEventTypesChanged(result);
-            }
-          },
-          child: InputDecorator(
-            decoration: InputDecoration(
-              labelText: l10n.eventType,
-              border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              suffixIcon: const Icon(Icons.arrow_drop_down),
+        // Two-column layout for name/recordNumber and phone/eventType
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Left column: Name and Phone
+            Expanded(
+              child: Column(
+                children: [
+                  // Name field
+                  TextField(
+                    controller: nameController,
+                    decoration: InputDecoration(
+                      labelText: l10n.eventName,
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  // Phone field
+                  TextField(
+                    controller: phoneController,
+                    decoration: InputDecoration(
+                      labelText: l10n.phone,
+                      border: const OutlineInputBorder(),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    ),
+                    keyboardType: TextInputType.phone,
+                  ),
+                ],
+              ),
             ),
-            child: Text(
-              _buildEventTypeDisplayText(context, selectedEventTypes),
-              style: const TextStyle(fontSize: 16),
-              overflow: TextOverflow.ellipsis,
-              maxLines: 1,
+            const SizedBox(width: 12),
+            // Right column: Record Number and Event Type
+            Expanded(
+              child: Column(
+                children: [
+                  // Record Number dropdown field
+                  _RecordNumberDropdown(
+                    value: recordNumber,
+                    availableRecordNumbers: availableRecordNumbers,
+                    isEnabled: isRecordNumberFieldEnabled,
+                    labelText: l10n.recordNumber,
+                    onChanged: onRecordNumberChanged,
+                    onNewRecordNumberRequested: onNewRecordNumberRequested,
+                  ),
+                  const SizedBox(height: 8),
+                  // Event Type field
+                  InkWell(
+                    onTap: () async {
+                      final result = await showChangeEventTypeDialog(
+                        context,
+                        event.copyWith(eventTypes: selectedEventTypes),
+                        EventTypeLocalizations.commonEventTypes,
+                        EventTypeLocalizations.getLocalizedEventType,
+                      );
+                      if (result != null) {
+                        onEventTypesChanged(result);
+                      }
+                    },
+                    child: InputDecorator(
+                      decoration: InputDecoration(
+                        labelText: l10n.eventType,
+                        border: const OutlineInputBorder(),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        suffixIcon: const Icon(Icons.arrow_drop_down),
+                      ),
+                      child: Text(
+                        _buildEventTypeDisplayText(context, selectedEventTypes),
+                        style: const TextStyle(fontSize: 16),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
+          ],
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 12),
 
         // Time fields with responsive layout
         LayoutBuilder(

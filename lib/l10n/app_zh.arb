@@ -306,6 +306,61 @@
     "description": "Validation error for empty record number (deprecated - field is now optional)"
   },
 
+  "phone": "電話",
+  "@phone": {
+    "description": "Label for phone field"
+  },
+
+  "chargeItems": "收費項目",
+  "@chargeItems": {
+    "description": "Label for charge items section"
+  },
+
+  "chargeItemName": "項目名稱",
+  "@chargeItemName": {
+    "description": "Label for charge item name field"
+  },
+
+  "chargeItemCost": "費用",
+  "@chargeItemCost": {
+    "description": "Label for charge item cost field"
+  },
+
+  "addChargeItem": "新增收費項目",
+  "@addChargeItem": {
+    "description": "Button text for adding a charge item"
+  },
+
+  "addChargeItemTitle": "新增收費項目",
+  "@addChargeItemTitle": {
+    "description": "Title for add charge item dialog"
+  },
+
+  "editChargeItemTitle": "編輯收費項目",
+  "@editChargeItemTitle": {
+    "description": "Title for edit charge item dialog"
+  },
+
+  "paid": "已付",
+  "@paid": {
+    "description": "Label showing paid amount"
+  },
+
+  "total": "總額",
+  "@total": {
+    "description": "Label for total amount"
+  },
+
+  "chargeItemNameRequired": "項目名稱為必填項目",
+  "@chargeItemNameRequired": {
+    "description": "Validation error for empty charge item name"
+  },
+
+  "chargeItemCostInvalid": "費用必須為正整數",
+  "@chargeItemCostInvalid": {
+    "description": "Validation error for invalid cost"
+  },
+
   "eventType": "活動類型 *",
   "@eventType": {
     "description": "Label for event type field"
