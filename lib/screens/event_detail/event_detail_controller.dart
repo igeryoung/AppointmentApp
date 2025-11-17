@@ -8,6 +8,7 @@ import '../../models/note.dart';
 import '../../models/person_charge_item.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/database/prd_database_service.dart';
+import '../../services/database/mixins/person_info_utilities_mixin.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
 import '../../services/cache_manager.dart';
@@ -529,8 +530,8 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = prdDb.normalizeName(name);
-      final recordNumberNormalized = prdDb.normalizeRecordNumber(recordNumber);
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
 
       // Get person charge items
       final personChargeItems = await prdDb.getPersonChargeItems(
@@ -566,8 +567,8 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = prdDb.normalizeName(name);
-      final recordNumberNormalized = prdDb.normalizeRecordNumber(recordNumber);
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
 
       // Check if item already exists
       final exists = await prdDb.personChargeItemExists(
@@ -618,8 +619,8 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = prdDb.normalizeName(_state.name.trim());
-      final recordNumberNormalized = prdDb.normalizeRecordNumber(_state.recordNumber.trim());
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(_state.name.trim());
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(_state.recordNumber.trim());
 
       // Check if new name conflicts with existing item
       final exists = await prdDb.personChargeItemExists(

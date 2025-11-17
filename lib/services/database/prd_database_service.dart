@@ -353,8 +353,8 @@ class PRDDatabaseService
       }
 
       // Normalize person info
-      final nameNormalized = normalizeName(name);
-      final recordNumberNormalized = normalizeRecordNumber(recordNumber);
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
 
       // Parse charge items
       final chargeItems = ChargeItem.fromJsonList(chargeItemsJson);
