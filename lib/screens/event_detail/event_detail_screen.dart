@@ -634,9 +634,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         padding: EdgeInsets.symmetric(horizontal: padding),
                         child: ChargeItemsSection(
                           chargeItems: state.chargeItems,
-                          onChargeItemsChanged: (chargeItems) {
-                            _controller.updateChargeItems(chargeItems);
-                          },
+                          controller: _controller,
+                          hasRecordNumber: state.recordNumber.trim().isNotEmpty,
                         ),
                       ),
                       // Handwriting section

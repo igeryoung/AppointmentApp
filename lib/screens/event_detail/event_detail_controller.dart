@@ -5,6 +5,7 @@ import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';
 import '../../models/note.dart';
+import '../../models/person_charge_item.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/database/prd_database_service.dart';
 import '../../services/content_service.dart';
@@ -98,6 +99,7 @@ class EventDetailController {
       // Step 2: Load initial data (now that ContentService is ready)
       if (!isNew) {
         await loadNote();
+        await loadChargeItems(); // Load charge items from person_charge_items table
         if (event.hasNewTime) {
           await _loadNewEvent();
         }
@@ -281,7 +283,7 @@ class EventDetailController {
         recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
         phone: phoneText.isEmpty ? null : phoneText,
         eventTypes: _state.selectedEventTypes,
-        chargeItems: _state.chargeItems,
+        // Note: chargeItems are now stored in person_charge_items table, not in events
         startTime: _state.startTime,
         endTime: _state.endTime,
       );
@@ -486,7 +488,18 @@ class EventDetailController {
 
   /// Update record number
   void updateRecordNumber(String recordNumber) {
+    final oldRecordNumber = _state.recordNumber.trim();
+    final newRecordNumber = recordNumber.trim();
+
     _updateState(_state.copyWith(recordNumber: recordNumber, hasChanges: true));
+
+    // Reload charge items if record number changed (debounced)
+    if (oldRecordNumber != newRecordNumber) {
+      // Load charge items asynchronously (don't wait for it)
+      loadChargeItems().catchError((e) {
+        debugPrint('❌ EventDetailController: Failed to reload charge items after record number change: $e');
+      });
+    }
   }
 
   /// Update phone
@@ -499,7 +512,207 @@ class EventDetailController {
     _updateState(_state.copyWith(selectedEventTypes: eventTypes, hasChanges: true));
   }
 
-  /// Update charge items
+  /// Load charge items for the current event (based on name + record number)
+  Future<void> loadChargeItems() async {
+    final name = _state.name.trim();
+    final recordNumber = _state.recordNumber.trim();
+
+    // Only load if we have both name and record number
+    if (name.isEmpty || recordNumber.isEmpty) {
+      _updateState(_state.copyWith(chargeItems: []));
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final nameNormalized = prdDb.normalizeName(name);
+      final recordNumberNormalized = prdDb.normalizeRecordNumber(recordNumber);
+
+      // Get person charge items
+      final personChargeItems = await prdDb.getPersonChargeItems(
+        personNameNormalized: nameNormalized,
+        recordNumberNormalized: recordNumberNormalized,
+      );
+
+      // Convert to ChargeItem list
+      final chargeItems = personChargeItems
+          .map((item) => ChargeItem.fromPersonChargeItem(item))
+          .toList();
+
+      _updateState(_state.copyWith(chargeItems: chargeItems));
+      debugPrint('✅ EventDetailController: Loaded ${chargeItems.length} charge items for $name + $recordNumber');
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to load charge items: $e');
+    }
+  }
+
+  /// Add a new charge item
+  Future<void> addChargeItem(ChargeItem item) async {
+    final name = _state.name.trim();
+    final recordNumber = _state.recordNumber.trim();
+
+    if (name.isEmpty || recordNumber.isEmpty) {
+      debugPrint('⚠️ EventDetailController: Cannot add charge item - name or record number is empty');
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final nameNormalized = prdDb.normalizeName(name);
+      final recordNumberNormalized = prdDb.normalizeRecordNumber(recordNumber);
+
+      // Check if item already exists
+      final exists = await prdDb.personChargeItemExists(
+        personNameNormalized: nameNormalized,
+        recordNumberNormalized: recordNumberNormalized,
+        itemName: item.itemName,
+      );
+
+      if (exists) {
+        debugPrint('⚠️ EventDetailController: Charge item "${item.itemName}" already exists');
+        // TODO: Show error message to user
+        return;
+      }
+
+      // Create PersonChargeItem
+      final personItem = PersonChargeItem(
+        personNameNormalized: nameNormalized,
+        recordNumberNormalized: recordNumberNormalized,
+        itemName: item.itemName,
+        cost: item.cost,
+        isPaid: item.isPaid,
+        createdAt: DateTime.now(),
+        updatedAt: DateTime.now(),
+      );
+
+      // Save to database
+      final savedItem = await prdDb.savePersonChargeItem(personItem);
+
+      // Reload all charge items
+      await loadChargeItems();
+
+      debugPrint('✅ EventDetailController: Added charge item "${item.itemName}"');
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to add charge item: $e');
+    }
+  }
+
+  /// Edit an existing charge item
+  Future<void> editChargeItem(ChargeItem item) async {
+    if (item.id == null) {
+      debugPrint('⚠️ EventDetailController: Cannot edit charge item - ID is null');
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final nameNormalized = prdDb.normalizeName(_state.name.trim());
+      final recordNumberNormalized = prdDb.normalizeRecordNumber(_state.recordNumber.trim());
+
+      // Check if new name conflicts with existing item
+      final exists = await prdDb.personChargeItemExists(
+        personNameNormalized: nameNormalized,
+        recordNumberNormalized: recordNumberNormalized,
+        itemName: item.itemName,
+        excludeId: item.id,
+      );
+
+      if (exists) {
+        debugPrint('⚠️ EventDetailController: Charge item "${item.itemName}" already exists');
+        // TODO: Show error message to user
+        return;
+      }
+
+      // Get existing item
+      final existingItem = await prdDb.getPersonChargeItemById(item.id!);
+      if (existingItem == null) {
+        debugPrint('⚠️ EventDetailController: Charge item not found');
+        return;
+      }
+
+      // Update item
+      final updatedItem = existingItem.copyWith(
+        itemName: item.itemName,
+        cost: item.cost,
+        isPaid: item.isPaid,
+      );
+
+      await prdDb.savePersonChargeItem(updatedItem);
+
+      // Reload all charge items
+      await loadChargeItems();
+
+      debugPrint('✅ EventDetailController: Edited charge item "${item.itemName}"');
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to edit charge item: $e');
+    }
+  }
+
+  /// Delete a charge item
+  Future<void> deleteChargeItem(ChargeItem item) async {
+    if (item.id == null) {
+      debugPrint('⚠️ EventDetailController: Cannot delete charge item - ID is null');
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      await prdDb.deletePersonChargeItem(item.id!);
+
+      // Reload all charge items
+      await loadChargeItems();
+
+      debugPrint('✅ EventDetailController: Deleted charge item "${item.itemName}"');
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to delete charge item: $e');
+    }
+  }
+
+  /// Toggle paid status of a charge item
+  Future<void> toggleChargeItemPaidStatus(ChargeItem item) async {
+    if (item.id == null) {
+      debugPrint('⚠️ EventDetailController: Cannot toggle charge item - ID is null');
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      await prdDb.updatePersonChargeItemPaidStatus(
+        id: item.id!,
+        isPaid: !item.isPaid,
+      );
+
+      // Reload all charge items
+      await loadChargeItems();
+
+      debugPrint('✅ EventDetailController: Toggled paid status for "${item.itemName}"');
+    } catch (e) {
+      debugPrint('❌ EventDetailController: Failed to toggle charge item: $e');
+    }
+  }
+
+  /// Update charge items (legacy method - kept for compatibility but now loads from database)
+  @Deprecated('Use addChargeItem, editChargeItem, deleteChargeItem, or toggleChargeItemPaidStatus instead')
   void updateChargeItems(List<ChargeItem> chargeItems) {
     _updateState(_state.copyWith(chargeItems: chargeItems, hasChanges: true));
   }

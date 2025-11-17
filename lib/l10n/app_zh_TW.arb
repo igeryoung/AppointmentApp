@@ -1349,5 +1349,10 @@
   "noMatchingRecordNumbers": "沒有符合的病例號",
   "@noMatchingRecordNumbers": {
     "description": "Message when no record numbers match the entered name"
+  },
+
+  "chargeItemsRequireRecordNumber": "請新增病例號以追蹤收費項目",
+  "@chargeItemsRequireRecordNumber": {
+    "description": "Message shown when trying to add charge items without a record number"
   }
 }

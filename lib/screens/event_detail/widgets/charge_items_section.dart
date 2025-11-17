@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import '../../../models/charge_item.dart';
 import '../../../l10n/app_localizations.dart';
 import '../../../widgets/dialogs/charge_item_dialog.dart';
+import '../event_detail_controller.dart';
 
 /// Floating overlay section for managing charge items
 /// Displays as a collapsed header that expands into an overlay panel
+/// Charge items are synced across all events with the same name + record number
 class ChargeItemsSection extends StatefulWidget {
   final List<ChargeItem> chargeItems;
-  final Function(List<ChargeItem>) onChargeItemsChanged;
+  final EventDetailController controller;
+  final bool hasRecordNumber; // Whether the event has a record number set
 
   const ChargeItemsSection({
     super.key,
     required this.chargeItems,
-    required this.onChargeItemsChanged,
+    required this.controller,
+    required this.hasRecordNumber,
   });
 
   @override
@@ -215,6 +219,15 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
   }
 
   void _addChargeItem() async {
+    // Check if record number is set
+    if (!widget.hasRecordNumber) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber ?? 'Please add a record number to track charge items')),
+      );
+      return;
+    }
+
     final result = await _runDialogWithOverlayPaused(
       () => showDialog<ChargeItem>(
         context: context,
@@ -223,38 +236,35 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
     );
 
     if (result != null) {
-      final updatedItems = [...widget.chargeItems, result];
-      widget.onChargeItemsChanged(updatedItems);
+      await widget.controller.addChargeItem(result);
     }
   }
 
   void _editChargeItem(int index) async {
+    final item = widget.chargeItems[index];
+
     final result = await _runDialogWithOverlayPaused(
       () => showDialog<ChargeItem>(
         context: context,
-        builder: (context) => ChargeItemDialog(existingItem: widget.chargeItems[index]),
+        builder: (context) => ChargeItemDialog(existingItem: item),
       ),
     );
 
     if (result != null) {
-      final updatedItems = [...widget.chargeItems];
-      updatedItems[index] = result;
-      widget.onChargeItemsChanged(updatedItems);
+      // Preserve the ID from the original item
+      final updatedItem = result.copyWith(id: item.id);
+      await widget.controller.editChargeItem(updatedItem);
     }
   }
 
-  void _deleteChargeItem(int index) {
-    final updatedItems = [...widget.chargeItems];
-    updatedItems.removeAt(index);
-    widget.onChargeItemsChanged(updatedItems);
+  void _deleteChargeItem(int index) async {
+    final item = widget.chargeItems[index];
+    await widget.controller.deleteChargeItem(item);
   }
 
-  void _togglePaidStatus(int index) {
-    final updatedItems = [...widget.chargeItems];
-    updatedItems[index] = updatedItems[index].copyWith(
-      isPaid: !updatedItems[index].isPaid,
-    );
-    widget.onChargeItemsChanged(updatedItems);
+  void _togglePaidStatus(int index) async {
+    final item = widget.chargeItems[index];
+    await widget.controller.toggleChargeItemPaidStatus(item);
   }
 
   void _scheduleOverlayRebuild() {
