@@ -65,6 +65,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       dbService: _dbService,
       onStateChanged: (state) {
         if (mounted) {
+          // Update phone controller if state changed (to sync from loadPhone)
+          // Check to avoid infinite loop: only update if different
+          if (_phoneController.text != state.phone) {
+            _phoneController.text = state.phone;
+          }
           setState(() {});
         }
       },
@@ -634,9 +639,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         padding: EdgeInsets.symmetric(horizontal: padding),
                         child: ChargeItemsSection(
                           chargeItems: state.chargeItems,
-                          onChargeItemsChanged: (chargeItems) {
-                            _controller.updateChargeItems(chargeItems);
-                          },
+                          controller: _controller,
+                          hasRecordNumber: state.recordNumber.trim().isNotEmpty,
                         ),
                       ),
                       // Handwriting section

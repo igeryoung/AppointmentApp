@@ -5,8 +5,10 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../../models/book.dart';
 import '../../models/cache_policy.dart';
+import '../../models/charge_item.dart';
 import '../../models/event.dart';
 import '../../models/note.dart';
+import '../../models/person_charge_item.dart';
 import '../../models/schedule_drawing.dart';
 import '../database_service_interface.dart';
 
@@ -20,6 +22,8 @@ import 'mixins/device_info_operations_mixin.dart';
 import 'mixins/cache_management_operations_mixin.dart';
 import 'mixins/person_info_utilities_mixin.dart';
 import 'mixins/lock_mechanism_mixin.dart';
+import 'mixins/person_charge_item_operations_mixin.dart';
+import 'mixins/person_info_operations_mixin.dart';
 
 export 'mixins/device_info_operations_mixin.dart' show DeviceCredentials;
 
@@ -34,7 +38,9 @@ class PRDDatabaseService
         DeviceInfoOperationsMixin,
         CacheManagementOperationsMixin,
         PersonInfoUtilitiesMixin,
-        LockMechanismMixin
+        LockMechanismMixin,
+        PersonChargeItemOperationsMixin,
+        PersonInfoOperationsMixin
     implements IDatabaseService {
   static PRDDatabaseService? _instance;
   static Database? _database;
@@ -58,7 +64,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 17, // v17 adds phone and charge_items fields
+      version: 19, // v19 adds person_info table for synced phone numbers
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -79,6 +85,35 @@ class PRDDatabaseService
       await db.execute('ALTER TABLE events ADD COLUMN charge_items TEXT DEFAULT "[]"');
     }
 
+    // Version 17 to 18: Add person_charge_items table for shared charge items
+    if (oldVersion == 17 && newVersion >= 18) {
+      debugPrint('Upgrading database from v17 to v18: adding person_charge_items table');
+      await _migrateToPersonChargeItems(db);
+    }
+
+    // Handle skipped versions (e.g., 16 -> 18)
+    if (oldVersion == 16 && newVersion >= 18) {
+      debugPrint('Upgrading database from v16 to v18: migrating charge items');
+      await _migrateToPersonChargeItems(db);
+    }
+
+    // Version 18 to 19: Add person_info table for synced phone numbers
+    if (oldVersion == 18 && newVersion >= 19) {
+      debugPrint('Upgrading database from v18 to v19: adding person_info table');
+      await _migrateToPersonInfo(db);
+    }
+
+    // Handle skipped versions (e.g., 17 -> 19, 16 -> 19)
+    if (oldVersion == 17 && newVersion >= 19) {
+      debugPrint('Upgrading database from v17 to v19: migrating phone numbers');
+      await _migrateToPersonInfo(db);
+    }
+
+    if (oldVersion == 16 && newVersion >= 19) {
+      debugPrint('Upgrading database from v16 to v19: migrating phone numbers');
+      await _migrateToPersonInfo(db);
+    }
+
     // For versions older than v16, require reinstall
     if (oldVersion < 16) {
       debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion is not supported.');
@@ -92,10 +127,12 @@ class PRDDatabaseService
   }
 
   Future<void> _createTables(Database db, int version) async {
-    // Version 17 schema - includes all features
+    // Version 19 schema - includes all features
     // - Books with UUID and sync columns
     // - Events with multi-type support, phone, charge items, completion status, and sync columns
     // - Notes with multi-page support, person sharing, locks, cache, and sync columns
+    // - Person charge items with shared sync across events (v18)
+    // - Person info with synced phone numbers (new in v19)
     // - Schedule drawings with cache and sync columns
     // - Device info, sync metadata, and cache policy tables
 
@@ -186,6 +223,52 @@ class PRDDatabaseService
       ON notes(locked_by_device_id)
     ''');
 
+    // Person Charge Items table - Shared charge items across all events for a person (name + record number)
+    await db.execute('''
+      CREATE TABLE person_charge_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name_normalized TEXT NOT NULL,
+        record_number_normalized TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        cost INTEGER NOT NULL,
+        is_paid INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        version INTEGER DEFAULT 1,
+        is_dirty INTEGER DEFAULT 0,
+        UNIQUE(person_name_normalized, record_number_normalized, item_name)
+      )
+    ''');
+
+    // Indexes for person charge items
+    await db.execute('''
+      CREATE INDEX idx_person_charge_items_person_key
+      ON person_charge_items(person_name_normalized, record_number_normalized)
+    ''');
+    await db.execute('''
+      CREATE INDEX idx_person_charge_items_dirty
+      ON person_charge_items(is_dirty)
+    ''');
+
+    // Person Info table - Stores person-level data like phone numbers (synced across all events)
+    await db.execute('''
+      CREATE TABLE person_info (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name_normalized TEXT NOT NULL,
+        record_number_normalized TEXT NOT NULL,
+        phone TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        UNIQUE(person_name_normalized, record_number_normalized)
+      )
+    ''');
+
+    // Index for person info lookups
+    await db.execute('''
+      CREATE INDEX idx_person_info_person_key
+      ON person_info(person_name_normalized, record_number_normalized)
+    ''');
+
     // Schedule Drawings table - Handwriting overlay on schedule views
     await db.execute('''
       CREATE TABLE schedule_drawings (
@@ -257,8 +340,188 @@ class PRDDatabaseService
     await db.execute('CREATE INDEX idx_drawings_cached ON schedule_drawings(cached_at DESC)');
   }
 
+  /// Migrate existing charge items from events.charge_items to person_charge_items table
+  Future<void> _migrateToPersonChargeItems(Database db) async {
+    debugPrint('Starting migration to person_charge_items table');
+
+    // Create the person_charge_items table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS person_charge_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name_normalized TEXT NOT NULL,
+        record_number_normalized TEXT NOT NULL,
+        item_name TEXT NOT NULL,
+        cost INTEGER NOT NULL,
+        is_paid INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        version INTEGER DEFAULT 1,
+        is_dirty INTEGER DEFAULT 0,
+        UNIQUE(person_name_normalized, record_number_normalized, item_name)
+      )
+    ''');
+
+    // Create indexes
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_person_charge_items_person_key
+      ON person_charge_items(person_name_normalized, record_number_normalized)
+    ''');
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_person_charge_items_dirty
+      ON person_charge_items(is_dirty)
+    ''');
+
+    // Fetch all events with record numbers and charge items
+    final events = await db.query(
+      'events',
+      where: 'record_number IS NOT NULL AND record_number != "" AND charge_items IS NOT NULL AND charge_items != "[]"',
+    );
+
+    debugPrint('Found ${events.length} events with charge items to migrate');
+
+    // Track unique person+item combinations to avoid duplicates
+    final migratedItems = <String, Map<String, dynamic>>{};
+
+    for (final eventMap in events) {
+      final name = eventMap['name'] as String;
+      final recordNumber = eventMap['record_number'] as String;
+      final chargeItemsJson = eventMap['charge_items'] as String?;
+
+      if (chargeItemsJson == null || chargeItemsJson.isEmpty || chargeItemsJson == '[]') {
+        continue;
+      }
+
+      // Normalize person info
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+
+      // Parse charge items
+      final chargeItems = ChargeItem.fromJsonList(chargeItemsJson);
+
+      for (final chargeItem in chargeItems) {
+        // Create unique key for this person+item combination
+        final uniqueKey = '$nameNormalized+$recordNumberNormalized+${chargeItem.itemName}';
+
+        // Check if we've already migrated this item
+        if (!migratedItems.containsKey(uniqueKey)) {
+          // First occurrence - use its paid status and cost
+          migratedItems[uniqueKey] = {
+            'person_name_normalized': nameNormalized,
+            'record_number_normalized': recordNumberNormalized,
+            'item_name': chargeItem.itemName,
+            'cost': chargeItem.cost,
+            'is_paid': chargeItem.isPaid ? 1 : 0,
+          };
+        } else {
+          // Duplicate found - merge logic: if any occurrence is paid, consider it paid
+          final existing = migratedItems[uniqueKey]!;
+          if (chargeItem.isPaid) {
+            existing['is_paid'] = 1;
+          }
+          // Use the higher cost if they differ (safety check)
+          if (chargeItem.cost > (existing['cost'] as int)) {
+            existing['cost'] = chargeItem.cost;
+          }
+        }
+      }
+    }
+
+    // Insert all unique items into person_charge_items
+    for (final itemData in migratedItems.values) {
+      try {
+        await db.insert(
+          'person_charge_items',
+          itemData,
+          conflictAlgorithm: ConflictAlgorithm.ignore, // Skip if already exists
+        );
+      } catch (e) {
+        debugPrint('Failed to migrate charge item: ${itemData['item_name']}, error: $e');
+      }
+    }
+
+    debugPrint('Successfully migrated ${migratedItems.length} unique charge items');
+  }
+
+  /// Migrate existing phone numbers from events to person_info table
+  Future<void> _migrateToPersonInfo(Database db) async {
+    debugPrint('Starting migration to person_info table');
+
+    // Create the person_info table
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS person_info (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        person_name_normalized TEXT NOT NULL,
+        record_number_normalized TEXT NOT NULL,
+        phone TEXT,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        UNIQUE(person_name_normalized, record_number_normalized)
+      )
+    ''');
+
+    // Create index
+    await db.execute('''
+      CREATE INDEX IF NOT EXISTS idx_person_info_person_key
+      ON person_info(person_name_normalized, record_number_normalized)
+    ''');
+
+    // Fetch all events with record numbers and phone numbers
+    final events = await db.query(
+      'events',
+      where: 'record_number IS NOT NULL AND record_number != "" AND phone IS NOT NULL AND phone != ""',
+    );
+
+    debugPrint('Found ${events.length} events with phone numbers to migrate');
+
+    // Track unique person+phone combinations
+    final personPhones = <String, Map<String, dynamic>>{};
+
+    for (final eventMap in events) {
+      final name = eventMap['name'] as String;
+      final recordNumber = eventMap['record_number'] as String;
+      final phone = eventMap['phone'] as String?;
+
+      if (phone == null || phone.isEmpty) {
+        continue;
+      }
+
+      // Normalize person info
+      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+
+      // Create unique key for this person
+      final personKey = '$nameNormalized+$recordNumberNormalized';
+
+      // Use the first phone number found for this person (or keep existing if already set)
+      if (!personPhones.containsKey(personKey)) {
+        personPhones[personKey] = {
+          'person_name_normalized': nameNormalized,
+          'record_number_normalized': recordNumberNormalized,
+          'phone': phone,
+        };
+      }
+    }
+
+    // Insert all unique person info into person_info table
+    for (final personData in personPhones.values) {
+      try {
+        await db.insert(
+          'person_info',
+          personData,
+          conflictAlgorithm: ConflictAlgorithm.ignore, // Skip if already exists
+        );
+      } catch (e) {
+        debugPrint('Failed to migrate person info: ${personData['person_name_normalized']}+${personData['record_number_normalized']}, error: $e');
+      }
+    }
+
+    debugPrint('Successfully migrated ${personPhones.length} unique person info records');
+  }
+
   Future<void> clearAllData() async {
     final db = await database;
+    await db.delete('person_info');
+    await db.delete('person_charge_items');
     await db.delete('schedule_drawings');
     await db.delete('notes');
     await db.delete('events');

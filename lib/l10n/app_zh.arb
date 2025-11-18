@@ -964,5 +964,10 @@
   "noMatchingRecordNumbers": "沒有符合的病例號",
   "@noMatchingRecordNumbers": {
     "description": "Message when no record numbers match the entered name"
+  },
+
+  "chargeItemsRequireRecordNumber": "请添加记录编号以追踪收费项目",
+  "@chargeItemsRequireRecordNumber": {
+    "description": "Message shown when trying to add charge items without a record number"
   }
 }

@@ -732,4 +732,8 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get noMatchingRecordNumbers => 'No matching record numbers';
+
+  @override
+  String get chargeItemsRequireRecordNumber =>
+      'Please add a record number to track charge items';
 }

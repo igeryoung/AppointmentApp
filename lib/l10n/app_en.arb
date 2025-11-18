@@ -159,5 +159,10 @@
   "chargeItemCostInvalid": "Cost must be a positive integer",
   "@chargeItemCostInvalid": {
     "description": "Validation error for invalid cost"
+  },
+
+  "chargeItemsRequireRecordNumber": "Please add a record number to track charge items",
+  "@chargeItemsRequireRecordNumber": {
+    "description": "Message shown when trying to add charge items without a record number"
   }
 }
