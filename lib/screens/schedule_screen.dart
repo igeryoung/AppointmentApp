@@ -719,6 +719,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           startTime: startTime,
           name: pendingNextAppointment?.name,
           recordNumber: pendingNextAppointment?.recordNumber,
+          phone: pendingNextAppointment?.phone,
           eventTypes: pendingNextAppointment?.eventTypes,
         );
         // Clear pending data after using it

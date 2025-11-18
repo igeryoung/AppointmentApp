@@ -97,6 +97,7 @@ class EventManagementService {
     DateTime? startTime,
     String? name,
     String? recordNumber,
+    String? phone,
     List<EventType>? eventTypes,
   }) async {
     final now = TimeService.instance.now();
@@ -107,6 +108,7 @@ class EventManagementService {
       bookId: _bookId,
       name: name ?? '',
       recordNumber: recordNumber ?? '',
+      phone: phone,
       eventTypes: eventTypes ?? [EventType.consultation], // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
@@ -153,6 +155,7 @@ class EventManagementService {
       PendingNextAppointment(
         name: originalEvent.name,
         recordNumber: originalEvent.recordNumber ?? '',
+        phone: originalEvent.phone,
         eventTypes: result.eventTypes,
       ),
     );
