@@ -85,6 +85,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       dbService: _dbService,
       onStateChanged: (state) {
         if (mounted) {
+          // Update name controller if state changed (e.g., from record number selection)
+          // Check to avoid infinite loop: only update if different
+          if (_nameController.text != state.name) {
+            _nameController.text = state.name;
+            _lastNameValue = state.name;
+          }
+
           // Update phone controller if state changed (to sync from loadPhone)
           // Check to avoid infinite loop: only update if different
           if (_phoneController.text != state.phone) {
