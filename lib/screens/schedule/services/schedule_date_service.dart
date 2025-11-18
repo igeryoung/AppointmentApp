@@ -17,6 +17,10 @@ class ScheduleDateService {
   /// Current selected date
   DateTime _selectedDate;
 
+  /// Page offset from "today" (for displaying relative navigation like "+60 page")
+  /// Each page is 3 days, so offset = days / 3
+  int _pageOffset = 0;
+
   /// Callback to trigger state update in the parent widget
   final void Function(DateTime selectedDate, DateTime lastActiveDate) onDateChanged;
 
@@ -106,6 +110,7 @@ class ScheduleDateService {
         // Update to new today
         _selectedDate = now;
         _lastActiveDate = now;
+        _pageOffset = 0; // Reset page offset when auto-updating to today
         onDateChanged(_selectedDate, _lastActiveDate);
 
         if (isMounted()) {
@@ -122,8 +127,10 @@ class ScheduleDateService {
         }
       } else {
         // User is viewing a different window - just update last active date
-        debugPrint('📅 User viewing different window - keeping current view');
+        // Recalculate page offset based on new "today"
+        debugPrint('📅 User viewing different window - keeping current view, recalculating offset');
         _lastActiveDate = now;
+        _pageOffset = _calculatePageOffsetFromToday(_selectedDate);
       }
     }
   }
@@ -167,6 +174,8 @@ class ScheduleDateService {
         }
 
         _selectedDate = date;
+        // Calculate page offset from today
+        _pageOffset = _calculatePageOffsetFromToday(date);
         onDateChanged(_selectedDate, _lastActiveDate);
         onUpdateCubit(_selectedDate);
         await onLoadDrawing();
@@ -177,6 +186,20 @@ class ScheduleDateService {
     }
 
     return false;
+  }
+
+  /// Calculate page offset from today's date
+  /// Each page is 3 days, returns number of pages from today
+  int _calculatePageOffsetFromToday(DateTime date) {
+    final now = TimeService.instance.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final targetDate = DateTime(date.year, date.month, date.day);
+
+    final windowStartToday = ScheduleLayoutUtils.get3DayWindowStart(today);
+    final windowStartTarget = ScheduleLayoutUtils.get3DayWindowStart(targetDate);
+
+    final daysDiff = windowStartTarget.difference(windowStartToday).inDays;
+    return daysDiff ~/ 3;
   }
 
   /// Navigate to previous 3-day window
@@ -228,6 +251,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.subtract(const Duration(days: 3));
+      _pageOffset -= 1; // Decrement page offset
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -247,6 +271,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.add(const Duration(days: 3));
+      _pageOffset += 1; // Increment page offset
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -266,6 +291,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.subtract(const Duration(days: 90));
+      _pageOffset -= 30; // 90 days = 30 pages (90 / 3)
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -285,6 +311,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.add(const Duration(days: 90));
+      _pageOffset += 30; // 90 days = 30 pages (90 / 3)
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -304,6 +331,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.subtract(const Duration(days: 180));
+      _pageOffset -= 60; // 180 days = 60 pages (180 / 3)
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -323,6 +351,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.add(const Duration(days: 180));
+      _pageOffset += 60; // 180 days = 60 pages (180 / 3)
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -349,6 +378,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = now;
+      _pageOffset = 0; // Reset page offset when jumping to today
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -364,6 +394,13 @@ class ScheduleDateService {
 
   /// Get date display text for the current 3-day window
   String getDateDisplayText(BuildContext context) {
+    // If page offset is not zero, show relative page number
+    if (_pageOffset != 0) {
+      final sign = _pageOffset > 0 ? '+' : '';
+      return '$sign$_pageOffset page';
+    }
+
+    // Otherwise show absolute dates
     final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
     final windowEnd = windowStart.add(const Duration(days: 2));
     final locale = Localizations.localeOf(context).toString();
