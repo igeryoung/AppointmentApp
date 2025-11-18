@@ -10,6 +10,7 @@ import '../../../widgets/schedule/schedule_next_appointment_dialog.dart';
 import '../dialogs/change_event_type_dialog.dart';
 import '../../event_detail_screen.dart';
 import '../../../constants/change_reasons.dart';
+import 'schedule_date_service.dart';
 
 /// Service for managing event CRUD operations, context menu interactions,
 /// and event-related UI dialogs. Handles creation, editing, deletion,
@@ -63,8 +64,8 @@ class EventManagementService {
   /// Callback to set pending next appointment data
   final void Function(PendingNextAppointment) onSetPendingNextAppointment;
 
-  /// Callback to change date
-  final Future<void> Function(DateTime) onChangeDate;
+  /// Date service for navigating to different dates
+  final ScheduleDateService dateService;
 
   EventManagementService({
     required IDatabaseService dbService,
@@ -81,7 +82,7 @@ class EventManagementService {
     required this.getLocalizedString,
     required this.onSyncEvent,
     required this.onSetPendingNextAppointment,
-    required this.onChangeDate,
+    required this.dateService,
   })  : _dbService = dbService,
         _bookId = bookId;
 
@@ -96,6 +97,7 @@ class EventManagementService {
     DateTime? startTime,
     String? name,
     String? recordNumber,
+    String? phone,
     List<EventType>? eventTypes,
   }) async {
     final now = TimeService.instance.now();
@@ -106,6 +108,7 @@ class EventManagementService {
       bookId: _bookId,
       name: name ?? '',
       recordNumber: recordNumber ?? '',
+      phone: phone,
       eventTypes: eventTypes ?? [EventType.consultation], // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
@@ -152,12 +155,13 @@ class EventManagementService {
       PendingNextAppointment(
         name: originalEvent.name,
         recordNumber: originalEvent.recordNumber ?? '',
+        phone: originalEvent.phone,
         eventTypes: result.eventTypes,
       ),
     );
 
-    // Navigate to target date
-    await onChangeDate(targetDate);
+    // Navigate to target date using date service
+    await dateService.navigateToDate(targetDate);
 
     // Close menu
     closeEventMenu();

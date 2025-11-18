@@ -254,7 +254,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       getLocalizedString: (getter) => getter(AppLocalizations.of(context)!),
       onSyncEvent: (event) async => await _connectivityService?.syncEventToServer(event),
       onSetPendingNextAppointment: (pending) => context.read<ScheduleCubit>().setPendingNextAppointment(pending),
-      onChangeDate: (date) async => await context.read<ScheduleCubit>().changeDate(date),
+      dateService: _dateService!,
     );
 
     // Start services
@@ -719,6 +719,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           startTime: startTime,
           name: pendingNextAppointment?.name,
           recordNumber: pendingNextAppointment?.recordNumber,
+          phone: pendingNextAppointment?.phone,
           eventTypes: pendingNextAppointment?.eventTypes,
         );
         // Clear pending data after using it
