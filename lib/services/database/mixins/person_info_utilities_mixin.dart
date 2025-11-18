@@ -112,4 +112,86 @@ mixin PersonInfoUtilitiesMixin {
 
     return recordNumbers.toList()..sort();
   }
+
+  /// Get all unique names in a book
+  /// Returns a sorted list of distinct names from events (excluding removed events)
+  Future<List<String>> getAllNamesInBook(int bookId) async {
+    final db = await database;
+
+    final result = await db.rawQuery('''
+      SELECT DISTINCT name
+      FROM events
+      WHERE book_id = ?
+        AND name IS NOT NULL
+        AND TRIM(name) != ''
+        AND is_removed = 0
+      ORDER BY name
+    ''', [bookId]);
+
+    return result
+        .map((row) => row['name'] as String)
+        .where((name) => name.trim().isNotEmpty)
+        .toList();
+  }
+
+  /// Get all record numbers with their associated names
+  /// Returns a list of maps with 'recordNumber' and 'name' keys
+  /// Record number is unique, so each record number maps to exactly one name
+  Future<List<Map<String, String>>> getAllRecordNumbersWithNames(
+      int bookId) async {
+    final db = await database;
+
+    // Get record numbers with their most recent associated name
+    // Since record number is unique per name, we get the most recent event for each record number
+    final result = await db.rawQuery('''
+      SELECT record_number, name
+      FROM (
+        SELECT record_number, name, MAX(updated_at) as latest_update
+        FROM events
+        WHERE book_id = ?
+          AND record_number IS NOT NULL
+          AND TRIM(record_number) != ''
+          AND name IS NOT NULL
+          AND TRIM(name) != ''
+          AND is_removed = 0
+        GROUP BY record_number
+      )
+      ORDER BY record_number
+    ''', [bookId]);
+
+    return result
+        .map((row) => {
+              'recordNumber': (row['record_number'] as String).trim(),
+              'name': (row['name'] as String).trim(),
+            })
+        .toList();
+  }
+
+  /// Get the name associated with a specific record number
+  /// Returns null if record number is not found
+  /// Since record number is unique, returns the single associated name
+  Future<String?> getNameByRecordNumber(
+      int bookId, String recordNumber) async {
+    if (recordNumber.trim().isEmpty) {
+      return null;
+    }
+
+    final db = await database;
+
+    final result = await db.rawQuery('''
+      SELECT name
+      FROM events
+      WHERE book_id = ?
+        AND record_number = ?
+        AND is_removed = 0
+      ORDER BY updated_at DESC
+      LIMIT 1
+    ''', [bookId, recordNumber.trim()]);
+
+    if (result.isEmpty) {
+      return null;
+    }
+
+    return (result.first['name'] as String?)?.trim();
+  }
 }

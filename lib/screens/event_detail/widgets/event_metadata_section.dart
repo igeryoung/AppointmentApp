@@ -5,6 +5,7 @@ import '../../../models/event.dart';
 import '../../../models/event_type.dart';
 import '../utils/event_type_localizations.dart';
 import '../../schedule/dialogs/change_event_type_dialog.dart';
+import '../event_detail_controller.dart';
 
 /// Event metadata section with name, record number, type, and time fields
 class EventMetadataSection extends StatelessWidget {
@@ -26,6 +27,17 @@ class EventMetadataSection extends StatelessWidget {
   final Future<String?> Function() onNewRecordNumberRequested;
   final Color Function(BuildContext, EventType)? getEventTypeColor;
 
+  // New parameters for autocomplete functionality
+  final FocusNode? nameFocusNode;
+  final FocusNode? recordNumberFocusNode;
+  final List<String> allNames;
+  final List<RecordNumberOption> allRecordNumberOptions;
+  final VoidCallback? onNameFieldFocused;
+  final VoidCallback? onRecordNumberFieldFocused;
+  final ValueChanged<String>? onNameSelected;
+  final ValueChanged<String>? onRecordNumberSelected;
+  final bool isNameReadOnly;
+
   const EventMetadataSection({
     super.key,
     required this.event,
@@ -45,6 +57,16 @@ class EventMetadataSection extends StatelessWidget {
     required this.onRecordNumberChanged,
     required this.onNewRecordNumberRequested,
     this.getEventTypeColor,
+    // Autocomplete parameters
+    this.nameFocusNode,
+    this.recordNumberFocusNode,
+    this.allNames = const [],
+    this.allRecordNumberOptions = const [],
+    this.onNameFieldFocused,
+    this.onRecordNumberFieldFocused,
+    this.onNameSelected,
+    this.onRecordNumberSelected,
+    this.isNameReadOnly = false,
   });
 
   @override
@@ -141,14 +163,92 @@ class EventMetadataSection extends StatelessWidget {
             Expanded(
               child: Column(
                 children: [
-                  // Name field
-                  TextField(
-                    controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: l10n.eventName,
-                      border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    ),
+                  // Name field with autocomplete
+                  Autocomplete<String>(
+                    initialValue: TextEditingValue(text: nameController.text),
+                    optionsBuilder: (TextEditingValue textEditingValue) {
+                      if (textEditingValue.text.isEmpty) {
+                        return allNames;
+                      }
+                      return allNames.where((String option) {
+                        return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+                      });
+                    },
+                    onSelected: (String selection) {
+                      nameController.text = selection;
+                      if (onNameSelected != null) {
+                        onNameSelected!(selection);
+                      }
+                    },
+                    fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+                      // Sync with parent controller
+                      nameController.addListener(() {
+                        if (textEditingController.text != nameController.text) {
+                          textEditingController.text = nameController.text;
+                        }
+                      });
+                      textEditingController.text = nameController.text;
+
+                      // Merge focus nodes if provided
+                      if (nameFocusNode != null) {
+                        focusNode = nameFocusNode!;
+                      }
+
+                      return Focus(
+                        onFocusChange: (hasFocus) {
+                          if (hasFocus && onNameFieldFocused != null) {
+                            onNameFieldFocused!();
+                          }
+                        },
+                        child: TextField(
+                          controller: textEditingController,
+                          focusNode: focusNode,
+                          readOnly: isNameReadOnly,
+                          decoration: InputDecoration(
+                            labelText: l10n.eventName,
+                            border: const OutlineInputBorder(),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                            suffixIcon: isNameReadOnly
+                              ? const Icon(Icons.lock_outline, size: 18)
+                              : null,
+                            filled: isNameReadOnly,
+                            fillColor: isNameReadOnly ? Colors.grey.shade100 : null,
+                          ),
+                          onChanged: (value) {
+                            nameController.text = value;
+                          },
+                        ),
+                      );
+                    },
+                    optionsViewBuilder: (context, onSelected, options) {
+                      return Align(
+                        alignment: Alignment.topLeft,
+                        child: Material(
+                          elevation: 4.0,
+                          borderRadius: BorderRadius.circular(8),
+                          child: ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+                            child: ListView.builder(
+                              padding: const EdgeInsets.all(8.0),
+                              shrinkWrap: true,
+                              itemCount: options.length,
+                              itemBuilder: (BuildContext context, int index) {
+                                final String option = options.elementAt(index);
+                                return InkWell(
+                                  onTap: () {
+                                    onSelected(option);
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
+                                    child: Text(option),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                        ),
+                      );
+                    },
                   ),
                   const SizedBox(height: 8),
                   // Phone field
@@ -169,14 +269,19 @@ class EventMetadataSection extends StatelessWidget {
             Expanded(
               child: Column(
                 children: [
-                  // Record Number dropdown field
-                  _RecordNumberDropdown(
+                  // Record Number autocomplete field
+                  _RecordNumberAutocomplete(
                     value: recordNumber,
-                    availableRecordNumbers: availableRecordNumbers,
-                    isEnabled: isRecordNumberFieldEnabled,
+                    allRecordNumberOptions: allRecordNumberOptions,
+                    isEnabled: true,  // Always enabled for new behavior
                     labelText: l10n.recordNumber,
-                    onChanged: onRecordNumberChanged,
+                    onRecordNumberSelected: onRecordNumberSelected,
+                    onRecordNumberCleared: () {
+                      onRecordNumberChanged('');
+                    },
                     onNewRecordNumberRequested: onNewRecordNumberRequested,
+                    focusNode: recordNumberFocusNode,
+                    onFocused: onRecordNumberFieldFocused,
                   ),
                   const SizedBox(height: 8),
                   // Event Type field
@@ -358,109 +463,192 @@ class EventMetadataSection extends StatelessWidget {
 }
 
 /// Private widget for record number dropdown with special options
-class _RecordNumberDropdown extends StatefulWidget {
-  static const String _emptyOption = '__EMPTY__';
-  static const String _newOption = '__NEW__';
-
+/// Record number autocomplete widget with "留空" and "新病例號" options
+class _RecordNumberAutocomplete extends StatefulWidget {
   final String value;
-  final List<String> availableRecordNumbers;
+  final List<RecordNumberOption> allRecordNumberOptions;
   final bool isEnabled;
   final String labelText;
-  final ValueChanged<String> onChanged;
+  final ValueChanged<String>? onRecordNumberSelected;
+  final VoidCallback? onRecordNumberCleared;
   final Future<String?> Function() onNewRecordNumberRequested;
+  final FocusNode? focusNode;
+  final VoidCallback? onFocused;
 
-  const _RecordNumberDropdown({
+  const _RecordNumberAutocomplete({
     required this.value,
-    required this.availableRecordNumbers,
+    required this.allRecordNumberOptions,
     required this.isEnabled,
     required this.labelText,
-    required this.onChanged,
+    this.onRecordNumberSelected,
+    this.onRecordNumberCleared,
     required this.onNewRecordNumberRequested,
+    this.focusNode,
+    this.onFocused,
   });
 
   @override
-  State<_RecordNumberDropdown> createState() => _RecordNumberDropdownState();
+  State<_RecordNumberAutocomplete> createState() => _RecordNumberAutocompleteState();
 }
 
-class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
+class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
+  static const String _emptyOption = '__EMPTY__';
+  static const String _newOption = '__NEW__';
   bool _isProcessing = false;
+  late TextEditingController _textController;
+  late FocusNode _internalFocusNode;
+
+  @override
+  void initState() {
+    super.initState();
+    _textController = TextEditingController(text: widget.value);
+    _internalFocusNode = widget.focusNode ?? FocusNode();
+  }
+
+  @override
+  void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.value != oldWidget.value) {
+      _textController.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    if (widget.focusNode == null) {
+      _internalFocusNode.dispose();
+    }
+    _textController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
-    // Build popup menu items
-    final items = <PopupMenuItem<String>>[];
+    return Autocomplete<String>(
+      initialValue: TextEditingValue(text: widget.value),
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        // Always show special options first
+        final options = <String>[_emptyOption, _newOption];
 
-    // Add available record numbers
-    for (final recordNum in widget.availableRecordNumbers) {
-      items.add(PopupMenuItem<String>(
-        value: recordNum,
-        child: Text(recordNum),
-      ));
-    }
+        // Add filtered record numbers
+        if (textEditingValue.text.isEmpty) {
+          options.addAll(widget.allRecordNumberOptions.map((opt) => opt.displayText));
+        } else {
+          final filtered = widget.allRecordNumberOptions.where((opt) {
+            return opt.recordNumber.toLowerCase().contains(textEditingValue.text.toLowerCase()) ||
+                   opt.name.toLowerCase().contains(textEditingValue.text.toLowerCase());
+          }).map((opt) => opt.displayText);
+          options.addAll(filtered);
+        }
 
-    // Add special options
-    items.add(PopupMenuItem<String>(
-      value: _RecordNumberDropdown._emptyOption,
-      child: Text('留空'),
-    ));
-    items.add(PopupMenuItem<String>(
-      value: _RecordNumberDropdown._newOption,
-      child: Text('新病例號'),
-    ));
+        return options;
+      },
+      displayStringForOption: (String option) {
+        if (option == _emptyOption) return '留空';
+        if (option == _newOption) return '新病例號';
+        // Extract just the record number from "number - name" format
+        final parts = option.split(' - ');
+        return parts.isNotEmpty ? parts[0] : option;
+      },
+      onSelected: (String selection) {
+        if (selection == _emptyOption) {
+          _textController.text = '';
+          if (widget.onRecordNumberCleared != null) {
+            widget.onRecordNumberCleared!();
+          }
+        } else if (selection == _newOption) {
+          _handleNewRecordNumber();
+        } else {
+          // Extract record number from "number - name" format
+          final parts = selection.split(' - ');
+          final recordNumber = parts.isNotEmpty ? parts[0] : selection;
+          _textController.text = recordNumber;
+          if (widget.onRecordNumberSelected != null) {
+            widget.onRecordNumberSelected!(recordNumber);
+          }
+        }
+      },
+      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+        // Sync with our controller
+        textEditingController.text = _textController.text;
+        _textController.addListener(() {
+          if (textEditingController.text != _textController.text) {
+            textEditingController.text = _textController.text;
+          }
+        });
 
-    // Determine display text
-    String displayText;
-    if (widget.value.isEmpty) {
-      displayText = '留空';
-    } else {
-      displayText = widget.value;
-    }
-
-    // Add custom value to items if not in list
-    if (widget.value.isNotEmpty && !widget.availableRecordNumbers.contains(widget.value)) {
-      if (!items.any((item) => item.value == widget.value)) {
-        items.insert(0, PopupMenuItem<String>(
-          value: widget.value,
-          child: Text(widget.value),
-        ));
-      }
-    }
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return PopupMenuButton<String>(
-          position: PopupMenuPosition.under,
-          offset: Offset(constraints.maxWidth - 200, 0),
-          elevation: 16,
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          constraints: const BoxConstraints(maxHeight: 300, minWidth: 200, maxWidth: 200),
-          enabled: widget.isEnabled && !_isProcessing,
-          onSelected: (String newValue) {
-            if (newValue == _RecordNumberDropdown._emptyOption) {
-              // User selected "留空"
-              widget.onChanged('');
-            } else if (newValue == _RecordNumberDropdown._newOption) {
-              // User selected "新病例號", show dialog
-              _handleNewRecordNumber();
-            } else {
-              // User selected an existing record number
-              widget.onChanged(newValue);
+        return Focus(
+          onFocusChange: (hasFocus) {
+            if (hasFocus && widget.onFocused != null) {
+              widget.onFocused!();
             }
           },
-          itemBuilder: (context) => items,
-          child: InputDecorator(
+          child: TextField(
+            controller: textEditingController,
+            focusNode: _internalFocusNode,
+            enabled: widget.isEnabled && !_isProcessing,
             decoration: InputDecoration(
               labelText: widget.labelText,
               border: const OutlineInputBorder(),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              suffixIcon: const Icon(Icons.arrow_drop_down),
               enabled: widget.isEnabled && !_isProcessing,
             ),
-            child: Text(
-              displayText,
-              style: TextStyle(
-                fontSize: 16,
-                color: widget.isEnabled && !_isProcessing ? null : Colors.grey,
+            onChanged: (value) {
+              _textController.text = value;
+            },
+          ),
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4.0,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 250, maxWidth: 300),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8.0),
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  String displayText;
+
+                  if (option == _emptyOption) {
+                    displayText = '留空';
+                  } else if (option == _newOption) {
+                    displayText = '新病例號';
+                  } else {
+                    displayText = option;  // Already in "number - name" format
+                  }
+
+                  return InkWell(
+                    onTap: () {
+                      onSelected(option);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.grey.shade200,
+                            width: 1.0,
+                          ),
+                        ),
+                      ),
+                      child: Text(
+                        displayText,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: option == _emptyOption || option == _newOption
+                              ? FontWeight.bold
+                              : FontWeight.normal,
+                        ),
+                      ),
+                    ),
+                  );
+                },
               ),
             ),
           ),
@@ -479,7 +667,10 @@ class _RecordNumberDropdownState extends State<_RecordNumberDropdown> {
     try {
       final result = await widget.onNewRecordNumberRequested();
       if (result != null && result.trim().isNotEmpty && mounted) {
-        widget.onChanged(result.trim());
+        _textController.text = result.trim();
+        if (widget.onRecordNumberSelected != null) {
+          widget.onRecordNumberSelected!(result.trim());
+        }
       }
     } finally {
       if (mounted) {

@@ -850,6 +850,99 @@ class EventDetailController {
     return [];
   }
 
+  /// Get all unique names for autocomplete
+  /// Returns empty list if DB service is not PRD
+  Future<List<String>> getAllNamesForAutocomplete() async {
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      return await prdDb.getAllNamesInBook(event.bookId);
+    }
+    return [];
+  }
+
+  /// Get all record numbers with names for autocomplete
+  /// Returns empty list if DB service is not PRD
+  Future<List<RecordNumberOption>> getAllRecordNumbersForAutocomplete() async {
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      final results = await prdDb.getAllRecordNumbersWithNames(event.bookId);
+      return results
+          .map((item) => RecordNumberOption(
+                recordNumber: item['recordNumber']!,
+                name: item['name']!,
+              ))
+          .toList();
+    }
+    return [];
+  }
+
+  /// Handle name field focused - clear record number
+  void onNameFieldFocused() {
+    if (_state.recordNumber.trim().isNotEmpty) {
+      _updateState(_state.copyWith(
+        recordNumber: '',
+        isNameReadOnly: false,
+        hasChanges: true,
+      ));
+    }
+  }
+
+  /// Handle record number field focused - clear name
+  void onRecordNumberFieldFocused() {
+    if (_state.name.trim().isNotEmpty) {
+      _updateState(_state.copyWith(
+        name: '',
+        isNameReadOnly: false,
+        hasChanges: true,
+      ));
+    }
+  }
+
+  /// Handle record number selected - auto-fill name and set read-only
+  Future<void> onRecordNumberSelected(String recordNumber) async {
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final name = await prdDb.getNameByRecordNumber(event.bookId, recordNumber);
+
+    if (name != null && name.isNotEmpty) {
+      _updateState(_state.copyWith(
+        name: name,
+        recordNumber: recordNumber,
+        isNameReadOnly: true,
+        hasChanges: true,
+      ));
+
+      // Load associated data (charge items and phone)
+      loadChargeItems().catchError((e) {
+        debugPrint('❌ EventDetailController: Failed to load charge items after record number selection: $e');
+      });
+      loadPhone().catchError((e) {
+        debugPrint('❌ EventDetailController: Failed to load phone after record number selection: $e');
+      });
+    }
+  }
+
+  /// Handle name selected from autocomplete - set editable mode
+  void onNameSelected(String name) {
+    _updateState(_state.copyWith(
+      name: name,
+      isNameReadOnly: false,
+      hasChanges: true,
+    ));
+  }
+
+  /// Clear record number (called when "留空" option is selected)
+  void clearRecordNumber() {
+    _updateState(_state.copyWith(
+      recordNumber: '',
+      isNameReadOnly: false,
+      hasChanges: true,
+    ));
+  }
+
   /// Update start time
   void updateStartTime(DateTime startTime) {
     _updateState(_state.copyWith(startTime: startTime, hasChanges: true));
@@ -881,4 +974,30 @@ class EventDetailController {
     _connectivitySubscription?.cancel();
     _connectivityWatcher.dispose();
   }
+}
+
+/// Helper class for record number autocomplete options
+/// Represents a record number with its associated name
+class RecordNumberOption {
+  final String recordNumber;
+  final String name;
+
+  RecordNumberOption({
+    required this.recordNumber,
+    required this.name,
+  });
+
+  /// Display text for the dropdown: "recordNumber - name"
+  String get displayText => '$recordNumber - $name';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is RecordNumberOption &&
+          runtimeType == other.runtimeType &&
+          recordNumber == other.recordNumber &&
+          name == other.name;
+
+  @override
+  int get hashCode => recordNumber.hashCode ^ name.hashCode;
 }

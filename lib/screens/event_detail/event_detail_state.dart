@@ -27,6 +27,9 @@ class EventDetailState {
   final bool isOffline;
   final bool isServicesReady;
 
+  // Name field state (for autocomplete behavior)
+  final bool isNameReadOnly;
+
   // New event reference (for time changes)
   final Event? newEvent;
 
@@ -46,6 +49,7 @@ class EventDetailState {
     this.hasUnsyncedChanges = false,
     this.isOffline = false,
     this.isServicesReady = false,
+    this.isNameReadOnly = false,
     this.newEvent,
   });
 
@@ -79,6 +83,7 @@ class EventDetailState {
     bool? hasUnsyncedChanges,
     bool? isOffline,
     bool? isServicesReady,
+    bool? isNameReadOnly,
     Event? newEvent,
     bool clearEndTime = false,
     bool clearNewEvent = false,
@@ -99,6 +104,7 @@ class EventDetailState {
       hasUnsyncedChanges: hasUnsyncedChanges ?? this.hasUnsyncedChanges,
       isOffline: isOffline ?? this.isOffline,
       isServicesReady: isServicesReady ?? this.isServicesReady,
+      isNameReadOnly: isNameReadOnly ?? this.isNameReadOnly,
       newEvent: clearNewEvent ? null : (newEvent ?? this.newEvent),
     );
   }

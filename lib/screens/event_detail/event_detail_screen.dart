@@ -47,6 +47,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   // Available record numbers for dropdown
   List<String> _availableRecordNumbers = [];
 
+  // Focus nodes for autocomplete
+  late FocusNode _nameFocusNode;
+  late FocusNode _recordNumberFocusNode;
+
+  // Autocomplete options
+  List<String> _allNames = [];
+  List<RecordNumberOption> _allRecordNumberOptions = [];
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -57,6 +65,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Initialize text controllers
     _nameController = TextEditingController(text: widget.event.name);
     _phoneController = TextEditingController(text: widget.event.phone ?? '');
+
+    // Initialize focus nodes
+    _nameFocusNode = FocusNode();
+    _recordNumberFocusNode = FocusNode();
 
     // Initialize controller FIRST
     _controller = EventDetailController(
@@ -87,6 +99,19 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _controller.updatePhone(_phoneController.text);
     });
 
+    // Add focus listeners
+    _nameFocusNode.addListener(() {
+      if (_nameFocusNode.hasFocus) {
+        _controller.onNameFieldFocused();
+      }
+    });
+
+    _recordNumberFocusNode.addListener(() {
+      if (_recordNumberFocusNode.hasFocus) {
+        _controller.onRecordNumberFieldFocused();
+      }
+    });
+
     // Initialize services and load data asynchronously
     _initialize();
   }
@@ -95,6 +120,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     try {
       // Fetch available record numbers after controller is ready
       await _fetchAvailableRecordNumbers();
+      // Fetch all names and record numbers for autocomplete
+      await _fetchAllNamesAndRecordNumbers();
       await _controller.initialize();
       _controller.setupConnectivityMonitoring();
     } catch (e) {
@@ -114,6 +141,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _nameFocusNode.dispose();
+    _recordNumberFocusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -124,6 +153,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (mounted) {
       setState(() {
         _availableRecordNumbers = recordNumbers;
+      });
+    }
+  }
+
+  Future<void> _fetchAllNamesAndRecordNumbers() async {
+    final names = await _controller.getAllNamesForAutocomplete();
+    final recordNumbers = await _controller.getAllRecordNumbersForAutocomplete();
+    debugPrint('📋 EventDetail: Fetched ${names.length} names and ${recordNumbers.length} record numbers for autocomplete');
+    if (mounted) {
+      setState(() {
+        _allNames = names;
+        _allRecordNumberOptions = recordNumbers;
       });
     }
   }
@@ -697,6 +738,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               },
                               onRecordNumberChanged: _handleRecordNumberChanged,
                               onNewRecordNumberRequested: _showNewRecordNumberDialog,
+                              // New autocomplete parameters
+                              nameFocusNode: _nameFocusNode,
+                              recordNumberFocusNode: _recordNumberFocusNode,
+                              allNames: _allNames,
+                              allRecordNumberOptions: _allRecordNumberOptions,
+                              onNameFieldFocused: () => _controller.onNameFieldFocused(),
+                              onRecordNumberFieldFocused: () => _controller.onRecordNumberFieldFocused(),
+                              onNameSelected: (name) => _controller.onNameSelected(name),
+                              onRecordNumberSelected: (recordNumber) => _controller.onRecordNumberSelected(recordNumber),
+                              isNameReadOnly: state.isNameReadOnly,
                             ),
                           ),
                         ),
