@@ -153,6 +153,30 @@ class ScheduleDateService {
     return true;
   }
 
+  /// Navigate to a specific date
+  /// Handles auto-save, state updates, and drawing reload
+  /// Returns true if navigation was successful, false otherwise
+  Future<bool> navigateToDate(DateTime date) async {
+    onNavigatingStateChanged?.call(true);
+    try {
+      // Auto-save and exit drawing mode if needed
+      final saveSuccess = await _autoSaveAndExitDrawingMode();
+      if (!saveSuccess) {
+        return false; // Cancel navigation if save failed
+      }
+
+      _selectedDate = date;
+      // Calculate day offset from today
+      _dayOffset = _calculateDayOffsetFromToday(date);
+      onDateChanged(_selectedDate, _lastActiveDate);
+      onUpdateCubit(_selectedDate);
+      await onLoadDrawing();
+      return true;
+    } finally {
+      onNavigatingStateChanged?.call(false);
+    }
+  }
+
   /// Show date picker and handle date selection
   /// Returns true if date was changed, false otherwise
   Future<bool> showDatePickerDialog(BuildContext context) async {
@@ -164,24 +188,7 @@ class ScheduleDateService {
     );
 
     if (date != null) {
-      onNavigatingStateChanged?.call(true);
-      try {
-        // Auto-save and exit drawing mode if needed
-        final saveSuccess = await _autoSaveAndExitDrawingMode();
-        if (!saveSuccess) {
-          return false; // Cancel navigation if save failed
-        }
-
-        _selectedDate = date;
-        // Calculate day offset from today
-        _dayOffset = _calculateDayOffsetFromToday(date);
-        onDateChanged(_selectedDate, _lastActiveDate);
-        onUpdateCubit(_selectedDate);
-        await onLoadDrawing();
-        return true;
-      } finally {
-        onNavigatingStateChanged?.call(false);
-      }
+      return await navigateToDate(date);
     }
 
     return false;
@@ -397,13 +404,7 @@ class ScheduleDateService {
     final locale = Localizations.localeOf(context).toString();
     final dateRange = '${DateFormat('MMM d', locale).format(windowStart)} - ${DateFormat('MMM d, y', locale).format(windowEnd)}';
 
-    // If day offset is not zero, append the offset
-    if (_dayOffset != 0) {
-      final sign = _dayOffset > 0 ? '+' : '';
-      return '$dateRange ($sign$_dayOffset days)';
-    }
-
-    // Otherwise show only absolute dates
+    // Return only absolute dates without day offset
     return dateRange;
   }
 
