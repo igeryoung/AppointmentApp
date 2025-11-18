@@ -36,6 +36,7 @@ class EventMetadataSection extends StatelessWidget {
   final VoidCallback? onRecordNumberFieldFocused;
   final ValueChanged<String>? onNameSelected;
   final ValueChanged<String>? onRecordNumberSelected;
+  final ValueChanged<String>? onRecordNumberTextChanged;  // When record number text changes (for clearing name)
   final bool isNameReadOnly;
 
   const EventMetadataSection({
@@ -66,6 +67,7 @@ class EventMetadataSection extends StatelessWidget {
     this.onRecordNumberFieldFocused,
     this.onNameSelected,
     this.onRecordNumberSelected,
+    this.onRecordNumberTextChanged,
     this.isNameReadOnly = false,
   });
 
@@ -164,91 +166,12 @@ class EventMetadataSection extends StatelessWidget {
               child: Column(
                 children: [
                   // Name field with autocomplete
-                  Autocomplete<String>(
-                    initialValue: TextEditingValue(text: nameController.text),
-                    optionsBuilder: (TextEditingValue textEditingValue) {
-                      if (textEditingValue.text.isEmpty) {
-                        return allNames;
-                      }
-                      return allNames.where((String option) {
-                        return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-                      });
-                    },
-                    onSelected: (String selection) {
-                      nameController.text = selection;
-                      if (onNameSelected != null) {
-                        onNameSelected!(selection);
-                      }
-                    },
-                    fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-                      // Sync with parent controller
-                      nameController.addListener(() {
-                        if (textEditingController.text != nameController.text) {
-                          textEditingController.text = nameController.text;
-                        }
-                      });
-                      textEditingController.text = nameController.text;
-
-                      // Merge focus nodes if provided
-                      if (nameFocusNode != null) {
-                        focusNode = nameFocusNode!;
-                      }
-
-                      return Focus(
-                        onFocusChange: (hasFocus) {
-                          if (hasFocus && onNameFieldFocused != null) {
-                            onNameFieldFocused!();
-                          }
-                        },
-                        child: TextField(
-                          controller: textEditingController,
-                          focusNode: focusNode,
-                          readOnly: isNameReadOnly,
-                          decoration: InputDecoration(
-                            labelText: l10n.eventName,
-                            border: const OutlineInputBorder(),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                            suffixIcon: isNameReadOnly
-                              ? const Icon(Icons.lock_outline, size: 18)
-                              : null,
-                            filled: isNameReadOnly,
-                            fillColor: isNameReadOnly ? Colors.grey.shade100 : null,
-                          ),
-                          onChanged: (value) {
-                            nameController.text = value;
-                          },
-                        ),
-                      );
-                    },
-                    optionsViewBuilder: (context, onSelected, options) {
-                      return Align(
-                        alignment: Alignment.topLeft,
-                        child: Material(
-                          elevation: 4.0,
-                          borderRadius: BorderRadius.circular(8),
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
-                            child: ListView.builder(
-                              padding: const EdgeInsets.all(8.0),
-                              shrinkWrap: true,
-                              itemCount: options.length,
-                              itemBuilder: (BuildContext context, int index) {
-                                final String option = options.elementAt(index);
-                                return InkWell(
-                                  onTap: () {
-                                    onSelected(option);
-                                  },
-                                  child: Container(
-                                    padding: const EdgeInsets.symmetric(vertical: 8.0, horizontal: 12.0),
-                                    child: Text(option),
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-                        ),
-                      );
-                    },
+                  _NameAutocompleteField(
+                    controller: nameController,
+                    labelText: l10n.eventName,
+                    allNames: allNames,
+                    isReadOnly: isNameReadOnly,
+                    onNameSelected: onNameSelected,
                   ),
                   const SizedBox(height: 8),
                   // Phone field
@@ -282,6 +205,7 @@ class EventMetadataSection extends StatelessWidget {
                     onNewRecordNumberRequested: onNewRecordNumberRequested,
                     focusNode: recordNumberFocusNode,
                     onFocused: onRecordNumberFieldFocused,
+                    onTextChanged: onRecordNumberTextChanged,  // Callback when user types to clear name
                   ),
                   const SizedBox(height: 8),
                   // Event Type field
@@ -462,7 +386,6 @@ class EventMetadataSection extends StatelessWidget {
   }
 }
 
-/// Private widget for record number dropdown with special options
 /// Record number autocomplete widget with "留空" and "新病例號" options
 class _RecordNumberAutocomplete extends StatefulWidget {
   final String value;
@@ -474,6 +397,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   final Future<String?> Function() onNewRecordNumberRequested;
   final FocusNode? focusNode;
   final VoidCallback? onFocused;
+  final ValueChanged<String>? onTextChanged;  // New callback for when text changes
 
   const _RecordNumberAutocomplete({
     required this.value,
@@ -485,6 +409,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
     required this.onNewRecordNumberRequested,
     this.focusNode,
     this.onFocused,
+    this.onTextChanged,
   });
 
   @override
@@ -495,108 +420,82 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   static const String _emptyOption = '__EMPTY__';
   static const String _newOption = '__NEW__';
   bool _isProcessing = false;
-  late TextEditingController _textController;
-  late FocusNode _internalFocusNode;
-
-  @override
-  void initState() {
-    super.initState();
-    _textController = TextEditingController(text: widget.value);
-    _internalFocusNode = widget.focusNode ?? FocusNode();
-  }
-
-  @override
-  void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (widget.value != oldWidget.value) {
-      _textController.text = widget.value;
-    }
-  }
-
-  @override
-  void dispose() {
-    if (widget.focusNode == null) {
-      _internalFocusNode.dispose();
-    }
-    _textController.dispose();
-    super.dispose();
-  }
 
   @override
   Widget build(BuildContext context) {
-    return Autocomplete<String>(
-      initialValue: TextEditingValue(text: widget.value),
+    // Build the combined options list
+    List<_RecordNumberOptionItem> buildOptions(String query) {
+      final options = <_RecordNumberOptionItem>[];
+
+      // Always add special options first
+      options.add(_RecordNumberOptionItem(displayText: '留空', value: _emptyOption, isSpecial: true));
+      options.add(_RecordNumberOptionItem(displayText: '新病例號', value: _newOption, isSpecial: true));
+
+      // Add filtered record numbers
+      if (query.isEmpty) {
+        options.addAll(widget.allRecordNumberOptions.map((opt) =>
+          _RecordNumberOptionItem(
+            displayText: opt.displayText,
+            value: opt.recordNumber,
+            isSpecial: false,
+          )
+        ));
+      } else {
+        final filtered = widget.allRecordNumberOptions.where((opt) {
+          return opt.recordNumber.toLowerCase().contains(query.toLowerCase()) ||
+                 opt.name.toLowerCase().contains(query.toLowerCase());
+        });
+        options.addAll(filtered.map((opt) =>
+          _RecordNumberOptionItem(
+            displayText: opt.displayText,
+            value: opt.recordNumber,
+            isSpecial: false,
+          )
+        ));
+      }
+
+      return options;
+    }
+
+    return Autocomplete<_RecordNumberOptionItem>(
       optionsBuilder: (TextEditingValue textEditingValue) {
-        // Always show special options first
-        final options = <String>[_emptyOption, _newOption];
-
-        // Add filtered record numbers
-        if (textEditingValue.text.isEmpty) {
-          options.addAll(widget.allRecordNumberOptions.map((opt) => opt.displayText));
-        } else {
-          final filtered = widget.allRecordNumberOptions.where((opt) {
-            return opt.recordNumber.toLowerCase().contains(textEditingValue.text.toLowerCase()) ||
-                   opt.name.toLowerCase().contains(textEditingValue.text.toLowerCase());
-          }).map((opt) => opt.displayText);
-          options.addAll(filtered);
-        }
-
-        return options;
+        return buildOptions(textEditingValue.text);
       },
-      displayStringForOption: (String option) {
-        if (option == _emptyOption) return '留空';
-        if (option == _newOption) return '新病例號';
-        // Extract just the record number from "number - name" format
-        final parts = option.split(' - ');
-        return parts.isNotEmpty ? parts[0] : option;
+      displayStringForOption: (_RecordNumberOptionItem option) {
+        if (option.isSpecial) return option.displayText;
+        return option.value;  // Show just the number in the text field
       },
-      onSelected: (String selection) {
-        if (selection == _emptyOption) {
-          _textController.text = '';
+      onSelected: (_RecordNumberOptionItem selection) async {
+        if (selection.value == _emptyOption) {
           if (widget.onRecordNumberCleared != null) {
             widget.onRecordNumberCleared!();
           }
-        } else if (selection == _newOption) {
-          _handleNewRecordNumber();
+        } else if (selection.value == _newOption) {
+          await _handleNewRecordNumber();
         } else {
-          // Extract record number from "number - name" format
-          final parts = selection.split(' - ');
-          final recordNumber = parts.isNotEmpty ? parts[0] : selection;
-          _textController.text = recordNumber;
           if (widget.onRecordNumberSelected != null) {
-            widget.onRecordNumberSelected!(recordNumber);
+            widget.onRecordNumberSelected!(selection.value);
           }
         }
       },
       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Sync with our controller
-        textEditingController.text = _textController.text;
-        _textController.addListener(() {
-          if (textEditingController.text != _textController.text) {
-            textEditingController.text = _textController.text;
-          }
-        });
+        // Initialize with current value
+        textEditingController.text = widget.value;
 
-        return Focus(
-          onFocusChange: (hasFocus) {
-            if (hasFocus && widget.onFocused != null) {
-              widget.onFocused!();
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          enabled: widget.isEnabled && !_isProcessing,
+          decoration: InputDecoration(
+            labelText: widget.labelText,
+            border: const OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          ),
+          onChanged: (value) {
+            if (widget.onTextChanged != null) {
+              widget.onTextChanged!(value);
             }
           },
-          child: TextField(
-            controller: textEditingController,
-            focusNode: _internalFocusNode,
-            enabled: widget.isEnabled && !_isProcessing,
-            decoration: InputDecoration(
-              labelText: widget.labelText,
-              border: const OutlineInputBorder(),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              enabled: widget.isEnabled && !_isProcessing,
-            ),
-            onChanged: (value) {
-              _textController.text = value;
-            },
-          ),
         );
       },
       optionsViewBuilder: (context, onSelected, options) {
@@ -612,16 +511,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
                 shrinkWrap: true,
                 itemCount: options.length,
                 itemBuilder: (BuildContext context, int index) {
-                  final String option = options.elementAt(index);
-                  String displayText;
-
-                  if (option == _emptyOption) {
-                    displayText = '留空';
-                  } else if (option == _newOption) {
-                    displayText = '新病例號';
-                  } else {
-                    displayText = option;  // Already in "number - name" format
-                  }
+                  final option = options.elementAt(index);
 
                   return InkWell(
                     onTap: () {
@@ -638,10 +528,10 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
                         ),
                       ),
                       child: Text(
-                        displayText,
+                        option.displayText,
                         style: TextStyle(
                           fontSize: 14,
-                          fontWeight: option == _emptyOption || option == _newOption
+                          fontWeight: option.isSpecial
                               ? FontWeight.bold
                               : FontWeight.normal,
                         ),
@@ -667,7 +557,6 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
     try {
       final result = await widget.onNewRecordNumberRequested();
       if (result != null && result.trim().isNotEmpty && mounted) {
-        _textController.text = result.trim();
         if (widget.onRecordNumberSelected != null) {
           widget.onRecordNumberSelected!(result.trim());
         }
@@ -679,5 +568,130 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
         });
       }
     }
+  }
+}
+
+/// Helper class for record number dropdown items
+class _RecordNumberOptionItem {
+  final String displayText;
+  final String value;
+  final bool isSpecial;
+
+  _RecordNumberOptionItem({
+    required this.displayText,
+    required this.value,
+    required this.isSpecial,
+  });
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _RecordNumberOptionItem &&
+          runtimeType == other.runtimeType &&
+          value == other.value;
+
+  @override
+  int get hashCode => value.hashCode;
+}
+
+/// Name field with simple autocomplete dropdown
+class _NameAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final List<String> allNames;
+  final bool isReadOnly;
+  final ValueChanged<String>? onNameSelected;
+
+  const _NameAutocompleteField({
+    required this.controller,
+    required this.labelText,
+    required this.allNames,
+    required this.isReadOnly,
+    this.onNameSelected,
+  });
+
+  @override
+  State<_NameAutocompleteField> createState() => _NameAutocompleteFieldState();
+}
+
+class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
+  @override
+  Widget build(BuildContext context) {
+    return Autocomplete<String>(
+      optionsBuilder: (TextEditingValue textEditingValue) {
+        if (textEditingValue.text.isEmpty) {
+          return const Iterable<String>.empty();
+        }
+        return widget.allNames.where((String option) {
+          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        });
+      },
+      onSelected: (String selection) {
+        widget.controller.text = selection;
+        if (widget.onNameSelected != null) {
+          widget.onNameSelected!(selection);
+        }
+      },
+      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
+        // Initialize with current value
+        textEditingController.text = widget.controller.text;
+
+        return TextField(
+          controller: textEditingController,
+          focusNode: focusNode,
+          readOnly: widget.isReadOnly,
+          decoration: InputDecoration(
+            labelText: widget.labelText,
+            border: const OutlineInputBorder(),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            suffixIcon: widget.isReadOnly
+                ? const Icon(Icons.lock_outline, size: 18)
+                : null,
+            filled: widget.isReadOnly,
+            fillColor: widget.isReadOnly ? Colors.grey.shade100 : null,
+          ),
+          onChanged: (value) {
+            widget.controller.text = value;
+          },
+        );
+      },
+      optionsViewBuilder: (context, onSelected, options) {
+        return Align(
+          alignment: Alignment.topLeft,
+          child: Material(
+            elevation: 4.0,
+            borderRadius: BorderRadius.circular(8),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
+              child: ListView.builder(
+                padding: const EdgeInsets.all(8.0),
+                shrinkWrap: true,
+                itemCount: options.length,
+                itemBuilder: (BuildContext context, int index) {
+                  final String option = options.elementAt(index);
+                  return InkWell(
+                    onTap: () {
+                      onSelected(option);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                      decoration: BoxDecoration(
+                        border: Border(
+                          bottom: BorderSide(
+                            color: Colors.grey.shade200,
+                            width: 1.0,
+                          ),
+                        ),
+                      ),
+                      child: Text(option),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ),
+        );
+      },
+    );
   }
 }

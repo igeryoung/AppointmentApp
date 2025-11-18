@@ -55,6 +55,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   List<String> _allNames = [];
   List<RecordNumberOption> _allRecordNumberOptions = [];
 
+  // Tracks for clearing behavior - clear other field only when starting to type
+  String _lastNameValue = '';
+  String _lastRecordNumberValue = '';
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -65,6 +69,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Initialize text controllers
     _nameController = TextEditingController(text: widget.event.name);
     _phoneController = TextEditingController(text: widget.event.phone ?? '');
+
+    // Initialize last values for clearing behavior
+    _lastNameValue = widget.event.name;
+    _lastRecordNumberValue = widget.event.recordNumber ?? '';
 
     // Initialize focus nodes
     _nameFocusNode = FocusNode();
@@ -89,7 +97,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     // Add listener for name changes AFTER controller is initialized
     _nameController.addListener(() {
-      _controller.updateName(_nameController.text);
+      final newValue = _nameController.text;
+
+      // Clear record number when user starts typing in name field
+      if (newValue != _lastNameValue && newValue.isNotEmpty) {
+        if (_controller.state.recordNumber.isNotEmpty) {
+          _controller.updateRecordNumber('');
+        }
+      }
+
+      _controller.updateName(newValue);
+      _lastNameValue = newValue;
+
       // Fetch available record numbers when name changes
       _fetchAvailableRecordNumbers();
     });
@@ -97,19 +116,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // Add listener for phone changes
     _phoneController.addListener(() {
       _controller.updatePhone(_phoneController.text);
-    });
-
-    // Add focus listeners
-    _nameFocusNode.addListener(() {
-      if (_nameFocusNode.hasFocus) {
-        _controller.onNameFieldFocused();
-      }
-    });
-
-    _recordNumberFocusNode.addListener(() {
-      if (_recordNumberFocusNode.hasFocus) {
-        _controller.onRecordNumberFieldFocused();
-      }
     });
 
     // Initialize services and load data asynchronously
@@ -743,10 +749,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               recordNumberFocusNode: _recordNumberFocusNode,
                               allNames: _allNames,
                               allRecordNumberOptions: _allRecordNumberOptions,
-                              onNameFieldFocused: () => _controller.onNameFieldFocused(),
-                              onRecordNumberFieldFocused: () => _controller.onRecordNumberFieldFocused(),
                               onNameSelected: (name) => _controller.onNameSelected(name),
                               onRecordNumberSelected: (recordNumber) => _controller.onRecordNumberSelected(recordNumber),
+                              onRecordNumberTextChanged: (text) {
+                                // Clear name when user starts typing in record number field
+                                if (text != _lastRecordNumberValue && text.isNotEmpty) {
+                                  if (_nameController.text.isNotEmpty) {
+                                    _nameController.text = '';
+                                  }
+                                }
+                                _lastRecordNumberValue = text;
+                              },
                               isNameReadOnly: state.isNameReadOnly,
                             ),
                           ),
