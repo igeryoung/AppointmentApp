@@ -498,94 +498,95 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           children: [
             Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Date navigation - Previous 180 days
-            IconButton(
-              onPressed: () => _dateService?.navigate180DaysPrevious(),
-              icon: const Text('-180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '-180 days',
-            ),
-            // Date navigation - Previous 90 days
-            IconButton(
-              onPressed: () => _dateService?.navigate90DaysPrevious(),
-              icon: const Text('-90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '-90 days',
-            ),
-            // Date navigation - Previous page (2 or 3 days depending on mode)
-            BlocBuilder<ScheduleCubit, ScheduleState>(
-              builder: (context, state) {
-                final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
-                final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
-                return IconButton(
-                  onPressed: () => _dateService?.navigatePagePrevious(),
-                  icon: const Icon(Icons.chevron_left, size: 18),
-                  iconSize: 18,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                  padding: EdgeInsets.zero,
-                  tooltip: '-$windowSize days',
-                );
-              },
-            ),
-            // Date display (centered with Expanded)
-            Expanded(
-              child: Center(
-                child: GestureDetector(
-                  onTap: () => _dateService?.showDatePickerDialog(context),
-                  child: Text(
-                    _dateService?.getDateDisplayText(context) ?? '',
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 13,
-                    ),
-                    textAlign: TextAlign.center,
-                    overflow: TextOverflow.ellipsis,
-                    maxLines: 1,
+        title: Padding(
+          padding: const EdgeInsets.only(left: 40.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Date navigation - Previous 180 days
+              IconButton(
+                onPressed: () => _dateService?.navigate180DaysPrevious(),
+                icon: const Text('-180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '-180 days',
+              ),
+              // Date navigation - Previous 90 days
+              IconButton(
+                onPressed: () => _dateService?.navigate90DaysPrevious(),
+                icon: const Text('-90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '-90 days',
+              ),
+              // Date navigation - Previous page (2 or 3 days depending on mode)
+              BlocBuilder<ScheduleCubit, ScheduleState>(
+                builder: (context, state) {
+                  final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+                  final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+                  return IconButton(
+                    onPressed: () => _dateService?.navigatePagePrevious(),
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    iconSize: 18,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    padding: EdgeInsets.zero,
+                    tooltip: '-$windowSize days',
+                  );
+                },
+              ),
+              const SizedBox(width: 4),
+              // Date display
+              GestureDetector(
+                onTap: () => _dateService?.showDatePickerDialog(context),
+                child: Text(
+                  _dateService?.getDateDisplayText(context) ?? '',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 13,
                   ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
                 ),
               ),
-            ),
-            // Date navigation - Next page (2 or 3 days depending on mode)
-            BlocBuilder<ScheduleCubit, ScheduleState>(
-              builder: (context, state) {
-                final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
-                final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
-                return IconButton(
-                  onPressed: () => _dateService?.navigatePageNext(),
-                  icon: const Icon(Icons.chevron_right, size: 18),
-                  iconSize: 18,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                  padding: EdgeInsets.zero,
-                  tooltip: '+$windowSize days',
-                );
-              },
-            ),
-            // Date navigation - Next 90 days
-            IconButton(
-              onPressed: () => _dateService?.navigate90DaysNext(),
-              icon: const Text('+90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '+90 days',
-            ),
-            // Date navigation - Next 180 days
-            IconButton(
-              onPressed: () => _dateService?.navigate180DaysNext(),
-              icon: const Text('+180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '+180 days',
-            ),
-          ],
+              const SizedBox(width: 4),
+              // Date navigation - Next page (2 or 3 days depending on mode)
+              BlocBuilder<ScheduleCubit, ScheduleState>(
+                builder: (context, state) {
+                  final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+                  final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+                  return IconButton(
+                    onPressed: () => _dateService?.navigatePageNext(),
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    iconSize: 18,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    padding: EdgeInsets.zero,
+                    tooltip: '+$windowSize days',
+                  );
+                },
+              ),
+              // Date navigation - Next 90 days
+              IconButton(
+                onPressed: () => _dateService?.navigate90DaysNext(),
+                icon: const Text('+90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '+90 days',
+              ),
+              // Date navigation - Next 180 days
+              IconButton(
+                onPressed: () => _dateService?.navigate180DaysNext(),
+                icon: const Text('+180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '+180 days',
+              ),
+            ],
+          ),
         ),
         actions: [
           // Small loading indicator for page navigation (space always reserved)
