@@ -568,6 +568,8 @@ class EventDetailController {
 
     // Only load if we have both name and record number
     if (name.isEmpty || recordNumber.isEmpty) {
+      // Clear phone if no record number
+      _updateState(_state.copyWith(phone: ''));
       return;
     }
 
@@ -586,12 +588,13 @@ class EventDetailController {
         recordNumberNormalized: recordNumberNormalized,
       );
 
-      if (phone != null && phone.isNotEmpty) {
-        _updateState(_state.copyWith(phone: phone));
-        debugPrint('✅ EventDetailController: Loaded phone number for $name + $recordNumber');
-      }
+      // Always update phone state (even if null/empty) to clear old values
+      _updateState(_state.copyWith(phone: phone ?? ''));
+      debugPrint('✅ EventDetailController: Loaded phone number for $name + $recordNumber: ${phone ?? "(empty)"}');
     } catch (e) {
       debugPrint('❌ EventDetailController: Failed to load phone: $e');
+      // Clear phone on error
+      _updateState(_state.copyWith(phone: ''));
     }
   }
 
