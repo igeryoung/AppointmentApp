@@ -397,7 +397,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   final Future<String?> Function() onNewRecordNumberRequested;
   final FocusNode? focusNode;
   final VoidCallback? onFocused;
-  final ValueChanged<String>? onTextChanged;  // New callback for when text changes
+  final ValueChanged<String>? onTextChanged;
 
   const _RecordNumberAutocomplete({
     required this.value,
@@ -420,152 +420,164 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   static const String _emptyOption = '__EMPTY__';
   static const String _newOption = '__NEW__';
   bool _isProcessing = false;
-  final TextEditingController _internalController = TextEditingController();
+  final TextEditingController _controller = TextEditingController();
+  final FocusNode _focusNode = FocusNode();
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
-    _internalController.text = widget.value;
+    _controller.text = widget.value;
+    _focusNode.addListener(_onFocusChanged);
+    _controller.addListener(_onTextChanged);
   }
 
   @override
   void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
     super.didUpdateWidget(oldWidget);
-    // Update internal controller when external value changes
-    if (widget.value != oldWidget.value && _internalController.text != widget.value) {
-      _internalController.text = widget.value;
+    if (widget.value != oldWidget.value && _controller.text != widget.value) {
+      _controller.text = widget.value;
     }
   }
 
   @override
   void dispose() {
-    _internalController.dispose();
+    _focusNode.removeListener(_onFocusChanged);
+    _controller.removeListener(_onTextChanged);
+    _removeOverlay();
+    _focusNode.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Build the combined options list
-    List<_RecordNumberOptionItem> buildOptions(String query) {
-      final options = <_RecordNumberOptionItem>[];
-
-      // Always add special options first
-      options.add(_RecordNumberOptionItem(displayText: '留空', value: _emptyOption, isSpecial: true));
-      options.add(_RecordNumberOptionItem(displayText: '新病例號', value: _newOption, isSpecial: true));
-
-      // Add filtered record numbers
-      if (query.isEmpty) {
-        options.addAll(widget.allRecordNumberOptions.map((opt) =>
-          _RecordNumberOptionItem(
-            displayText: opt.displayText,
-            value: opt.recordNumber,
-            isSpecial: false,
-          )
-        ));
-      } else {
-        final filtered = widget.allRecordNumberOptions.where((opt) {
-          return opt.recordNumber.toLowerCase().contains(query.toLowerCase()) ||
-                 opt.name.toLowerCase().contains(query.toLowerCase());
-        });
-        options.addAll(filtered.map((opt) =>
-          _RecordNumberOptionItem(
-            displayText: opt.displayText,
-            value: opt.recordNumber,
-            isSpecial: false,
-          )
-        ));
-      }
-
-      return options;
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus && widget.isEnabled) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
     }
+  }
 
-    return Autocomplete<_RecordNumberOptionItem>(
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        return buildOptions(textEditingValue.text);
-      },
-      displayStringForOption: (_RecordNumberOptionItem option) {
-        if (option.isSpecial) return option.displayText;
-        return option.value;  // Show just the number in the text field
-      },
-      onSelected: (_RecordNumberOptionItem selection) async {
-        if (selection.value == _emptyOption) {
-          if (widget.onRecordNumberCleared != null) {
-            widget.onRecordNumberCleared!();
-          }
-        } else if (selection.value == _newOption) {
-          await _handleNewRecordNumber();
-        } else {
-          if (widget.onRecordNumberSelected != null) {
-            widget.onRecordNumberSelected!(selection.value);
-          }
-        }
-      },
-      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Sync internal controller to autocomplete's controller
-        textEditingController.text = _internalController.text;
+  void _onTextChanged() {
+    if (widget.onTextChanged != null) {
+      widget.onTextChanged!(_controller.text);
+    }
+    if (_focusNode.hasFocus && widget.isEnabled) {
+      _updateOverlay();
+    }
+  }
 
-        // Keep them in sync
-        textEditingController.addListener(() {
-          if (_internalController.text != textEditingController.text) {
-            _internalController.text = textEditingController.text;
-            if (widget.onTextChanged != null) {
-              widget.onTextChanged!(textEditingController.text);
-            }
-          }
-        });
+  List<_RecordNumberOptionItem> _getFilteredOptions() {
+    final options = <_RecordNumberOptionItem>[];
+    // Always add special options first
+    options.add(_RecordNumberOptionItem(displayText: '留空', value: _emptyOption, isSpecial: true));
+    options.add(_RecordNumberOptionItem(displayText: '新病例號', value: _newOption, isSpecial: true));
 
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          enabled: widget.isEnabled && !_isProcessing,
-          decoration: InputDecoration(
-            labelText: widget.labelText,
-            border: const OutlineInputBorder(),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          ),
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4.0,
-            borderRadius: BorderRadius.circular(8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 250, maxWidth: 300),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8.0),
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final option = options.elementAt(index);
+    final query = _controller.text.toLowerCase();
+    if (query.isEmpty) {
+      options.addAll(widget.allRecordNumberOptions.map((opt) =>
+        _RecordNumberOptionItem(
+          displayText: opt.displayText,
+          value: opt.recordNumber,
+          isSpecial: false,
+        )
+      ));
+    } else {
+      final filtered = widget.allRecordNumberOptions.where((opt) {
+        return opt.recordNumber.toLowerCase().contains(query) ||
+               opt.name.toLowerCase().contains(query);
+      });
+      options.addAll(filtered.map((opt) =>
+        _RecordNumberOptionItem(
+          displayText: opt.displayText,
+          value: opt.recordNumber,
+          isSpecial: false,
+        )
+      ));
+    }
+    return options;
+  }
 
-                  return InkWell(
-                    onTap: () {
-                      onSelected(option);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Colors.grey.shade200,
-                            width: 1.0,
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _updateOverlay() {
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        final options = _getFilteredOptions();
+
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 5),
+            child: Material(
+              elevation: 4.0,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 250),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    return InkWell(
+                      onTap: () async {
+                        if (option.value == _emptyOption) {
+                          _controller.text = '';
+                          if (widget.onRecordNumberCleared != null) {
+                            widget.onRecordNumberCleared!();
+                          }
+                        } else if (option.value == _newOption) {
+                          await _handleNewRecordNumber();
+                        } else {
+                          _controller.text = option.value;
+                          if (widget.onRecordNumberSelected != null) {
+                            widget.onRecordNumberSelected!(option.value);
+                          }
+                        }
+                        _removeOverlay();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade200,
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                        child: Text(
+                          option.displayText,
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: option.isSpecial ? FontWeight.bold : FontWeight.normal,
                           ),
                         ),
                       ),
-                      child: Text(
-                        option.displayText,
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: option.isSpecial
-                              ? FontWeight.bold
-                              : FontWeight.normal,
-                        ),
-                      ),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),
@@ -584,6 +596,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
     try {
       final result = await widget.onNewRecordNumberRequested();
       if (result != null && result.trim().isNotEmpty && mounted) {
+        _controller.text = result.trim();
         if (widget.onRecordNumberSelected != null) {
           widget.onRecordNumberSelected!(result.trim());
         }
@@ -595,6 +608,23 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
         });
       }
     }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextField(
+        controller: _controller,
+        focusNode: _focusNode,
+        enabled: widget.isEnabled && !_isProcessing,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+      ),
+    );
   }
 }
 
@@ -621,7 +651,7 @@ class _RecordNumberOptionItem {
   int get hashCode => value.hashCode;
 }
 
-/// Name field with simple autocomplete dropdown
+/// Name field with RawAutocomplete dropdown
 class _NameAutocompleteField extends StatefulWidget {
   final TextEditingController controller;
   final String labelText;
@@ -642,123 +672,142 @@ class _NameAutocompleteField extends StatefulWidget {
 }
 
 class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
-  final TextEditingController _internalController = TextEditingController();
-  bool _isInternalUpdate = false;
+  final FocusNode _focusNode = FocusNode();
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
-    _internalController.text = widget.controller.text;
-
-    // Listen to external controller changes (e.g., from record number selection)
-    widget.controller.addListener(_onExternalControllerChanged);
-
-    // Listen to internal controller changes (user typing)
-    _internalController.addListener(_onInternalControllerChanged);
+    _focusNode.addListener(_onFocusChanged);
+    widget.controller.addListener(_onTextChanged);
   }
 
   @override
   void dispose() {
-    widget.controller.removeListener(_onExternalControllerChanged);
-    _internalController.dispose();
+    _focusNode.removeListener(_onFocusChanged);
+    widget.controller.removeListener(_onTextChanged);
+    _removeOverlay();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _onExternalControllerChanged() {
-    if (!_isInternalUpdate && _internalController.text != widget.controller.text) {
-      _internalController.text = widget.controller.text;
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus && !widget.isReadOnly) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
     }
   }
 
-  void _onInternalControllerChanged() {
-    _isInternalUpdate = true;
-    if (widget.controller.text != _internalController.text) {
-      widget.controller.text = _internalController.text;
+  void _onTextChanged() {
+    if (_focusNode.hasFocus && !widget.isReadOnly) {
+      _updateOverlay();
     }
-    _isInternalUpdate = false;
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Autocomplete<String>(
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        if (textEditingValue.text.trim().isEmpty) {
-          return const Iterable<String>.empty();
-        }
-        final matches = widget.allNames.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
-        });
-        return matches;
-      },
-      onSelected: (String selection) {
-        if (widget.onNameSelected != null) {
-          widget.onNameSelected!(selection);
-        }
-      },
-      fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Sync internal controller to autocomplete's controller
-        textEditingController.text = _internalController.text;
+  List<String> _getFilteredOptions() {
+    final text = widget.controller.text.toLowerCase();
+    if (text.isEmpty) {
+      return widget.allNames; // Show all names when empty (user requested)
+    }
+    return widget.allNames.where((name) => name.toLowerCase().contains(text)).toList();
+  }
 
-        // Keep them in sync
-        textEditingController.addListener(() {
-          if (_internalController.text != textEditingController.text) {
-            _internalController.text = textEditingController.text;
-          }
-        });
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
 
-        return TextField(
-          controller: textEditingController,
-          focusNode: focusNode,
-          readOnly: widget.isReadOnly,
-          decoration: InputDecoration(
-            labelText: widget.labelText,
-            border: const OutlineInputBorder(),
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-            suffixIcon: widget.isReadOnly
-                ? const Icon(Icons.lock_outline, size: 18)
-                : null,
-            filled: widget.isReadOnly,
-            fillColor: widget.isReadOnly ? Colors.grey.shade100 : null,
-          ),
-        );
-      },
-      optionsViewBuilder: (context, onSelected, options) {
-        return Align(
-          alignment: Alignment.topLeft,
-          child: Material(
-            elevation: 4.0,
-            borderRadius: BorderRadius.circular(8),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxHeight: 200, maxWidth: 300),
-              child: ListView.builder(
-                padding: const EdgeInsets.all(8.0),
-                shrinkWrap: true,
-                itemCount: options.length,
-                itemBuilder: (BuildContext context, int index) {
-                  final String option = options.elementAt(index);
-                  return InkWell(
-                    onTap: () {
-                      onSelected(option);
-                    },
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
-                      decoration: BoxDecoration(
-                        border: Border(
-                          bottom: BorderSide(
-                            color: Colors.grey.shade200,
-                            width: 1.0,
+  void _updateOverlay() {
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        final options = _getFilteredOptions();
+        if (options.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 5),
+            child: Material(
+              elevation: 4.0,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 200),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    return InkWell(
+                      onTap: () {
+                        widget.controller.text = option;
+                        if (widget.onNameSelected != null) {
+                          widget.onNameSelected!(option);
+                        }
+                        _removeOverlay();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade200,
+                              width: 1.0,
+                            ),
                           ),
                         ),
+                        child: Text(option),
                       ),
-                      child: Text(option),
-                    ),
-                  );
-                },
+                    );
+                  },
+                ),
               ),
             ),
           ),
         );
       },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        readOnly: widget.isReadOnly,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          suffixIcon: widget.isReadOnly
+              ? const Icon(Icons.lock_outline, size: 18)
+              : null,
+          filled: widget.isReadOnly,
+          fillColor: widget.isReadOnly ? Colors.grey.shade100 : null,
+        ),
+      ),
     );
   }
 }
