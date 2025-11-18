@@ -1364,6 +1364,12 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'沒有符合的病例號'**
   String get noMatchingRecordNumbers;
+
+  /// Message shown when trying to add charge items without a record number
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請新增病例號以追蹤收費項目'**
+  String get chargeItemsRequireRecordNumber;
 }
 
 class _AppLocalizationsDelegate

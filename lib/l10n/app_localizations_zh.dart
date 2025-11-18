@@ -731,6 +731,9 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get noMatchingRecordNumbers => '沒有符合的病例號';
+
+  @override
+  String get chargeItemsRequireRecordNumber => '请添加记录编号以追踪收费项目';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1460,4 +1463,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get noMatchingRecordNumbers => '沒有符合的病例號';
+
+  @override
+  String get chargeItemsRequireRecordNumber => '請新增病例號以追蹤收費項目';
 }
