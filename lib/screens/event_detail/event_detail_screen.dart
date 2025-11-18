@@ -390,12 +390,79 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   Future<bool> _onWillPop() async {
+    final hasName = _nameController.text.trim().isNotEmpty;
+
+    // For NEW events with a name (even without changes), auto-save
+    // This handles the case where data is pre-filled from "schedule next appointment"
+    if (widget.isNew && hasName) {
+      try {
+        // Save current canvas state
+        debugPrint('🔍 DEBUG _onWillPop: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');
+        _saveCurrentPageCallback?.call();
+        debugPrint('🔍 DEBUG _onWillPop: Callback invoked, now calling controller.saveEvent()');
+
+        // Save the event
+        await _controller.saveEvent();
+
+        if (mounted) {
+          // Show success feedback
+          final isOffline = _controller.state.isOffline;
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: [
+                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      isOffline
+                          ? 'Saved locally (offline - will sync when online)'
+                          : 'Saved locally (syncing to server...)',
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: Colors.green,
+              duration: const Duration(seconds: 2),
+            ),
+          );
+
+          // Navigate back with result=true to trigger schedule reload
+          Navigator.pop(context, true);
+        }
+
+        return false; // Prevent default pop (we already popped manually)
+      } catch (e) {
+        if (mounted) {
+          // Show error but still navigate back
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error saving: ${e.toString()}'),
+              backgroundColor: Colors.red,
+              duration: const Duration(seconds: 3),
+            ),
+          );
+
+          // Navigate back with result=true to trigger schedule reload (data might be partially saved)
+          Navigator.pop(context, true);
+        }
+
+        return false; // Prevent default pop (we already popped manually)
+      }
+    }
+
+    // For NEW events without a name, allow default pop without saving
+    if (widget.isNew && !hasName) {
+      return true; // No name, nothing to save
+    }
+
+    // For EXISTING events without changes, allow default pop
     if (!_controller.state.hasChanges) {
       return true; // No changes, allow default pop
     }
 
-    // If event name is empty, show discard dialog
-    if (_nameController.text.trim().isEmpty) {
+    // For EXISTING events with changes but no name, show discard dialog
+    if (!hasName) {
       final shouldDiscard = await ConfirmDiscardDialog.show(context);
       if (shouldDiscard && mounted) {
         // User chose to discard changes, pop without reloading schedule
@@ -405,7 +472,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       return false; // User chose to keep editing
     }
 
-    // Auto-save when name exists
+    // For EXISTING events with changes and a name, auto-save
     try {
       // Save current canvas state
       debugPrint('🔍 DEBUG _onWillPop: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');

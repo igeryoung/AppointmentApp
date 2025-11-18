@@ -17,6 +17,9 @@ class ScheduleDateService {
   /// Current selected date
   DateTime _selectedDate;
 
+  /// Day offset from "today" (for displaying relative navigation like "+180 days")
+  int _dayOffset = 0;
+
   /// Callback to trigger state update in the parent widget
   final void Function(DateTime selectedDate, DateTime lastActiveDate) onDateChanged;
 
@@ -106,6 +109,7 @@ class ScheduleDateService {
         // Update to new today
         _selectedDate = now;
         _lastActiveDate = now;
+        _dayOffset = 0; // Reset day offset when auto-updating to today
         onDateChanged(_selectedDate, _lastActiveDate);
 
         if (isMounted()) {
@@ -122,8 +126,10 @@ class ScheduleDateService {
         }
       } else {
         // User is viewing a different window - just update last active date
-        debugPrint('📅 User viewing different window - keeping current view');
+        // Recalculate day offset based on new "today"
+        debugPrint('📅 User viewing different window - keeping current view, recalculating offset');
         _lastActiveDate = now;
+        _dayOffset = _calculateDayOffsetFromToday(_selectedDate);
       }
     }
   }
@@ -167,6 +173,8 @@ class ScheduleDateService {
         }
 
         _selectedDate = date;
+        // Calculate day offset from today
+        _dayOffset = _calculateDayOffsetFromToday(date);
         onDateChanged(_selectedDate, _lastActiveDate);
         onUpdateCubit(_selectedDate);
         await onLoadDrawing();
@@ -177,6 +185,19 @@ class ScheduleDateService {
     }
 
     return false;
+  }
+
+  /// Calculate day offset from today's date
+  /// Returns the number of days difference between target date's window start and today's window start
+  int _calculateDayOffsetFromToday(DateTime date) {
+    final now = TimeService.instance.now();
+    final today = DateTime(now.year, now.month, now.day);
+    final targetDate = DateTime(date.year, date.month, date.day);
+
+    final windowStartToday = ScheduleLayoutUtils.get3DayWindowStart(today);
+    final windowStartTarget = ScheduleLayoutUtils.get3DayWindowStart(targetDate);
+
+    return windowStartTarget.difference(windowStartToday).inDays;
   }
 
   /// Navigate to previous 3-day window
@@ -228,6 +249,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.subtract(const Duration(days: 3));
+      _dayOffset -= 3; // Decrement by 3 days
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -247,6 +269,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.add(const Duration(days: 3));
+      _dayOffset += 3; // Increment by 3 days
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -266,6 +289,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.subtract(const Duration(days: 90));
+      _dayOffset -= 90; // Decrement by 90 days
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -285,6 +309,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.add(const Duration(days: 90));
+      _dayOffset += 90; // Increment by 90 days
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -304,6 +329,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.subtract(const Duration(days: 180));
+      _dayOffset -= 180; // Decrement by 180 days
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -323,6 +349,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = _selectedDate.add(const Duration(days: 180));
+      _dayOffset += 180; // Increment by 180 days
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -349,6 +376,7 @@ class ScheduleDateService {
       }
 
       _selectedDate = now;
+      _dayOffset = 0; // Reset day offset when jumping to today
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -367,7 +395,16 @@ class ScheduleDateService {
     final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
     final windowEnd = windowStart.add(const Duration(days: 2));
     final locale = Localizations.localeOf(context).toString();
-    return '${DateFormat('MMM d', locale).format(windowStart)} - ${DateFormat('MMM d, y', locale).format(windowEnd)}';
+    final dateRange = '${DateFormat('MMM d', locale).format(windowStart)} - ${DateFormat('MMM d, y', locale).format(windowEnd)}';
+
+    // If day offset is not zero, append the offset
+    if (_dayOffset != 0) {
+      final sign = _dayOffset > 0 ? '+' : '';
+      return '$dateRange ($sign$_dayOffset days)';
+    }
+
+    // Otherwise show only absolute dates
+    return dateRange;
   }
 
   /// Check if currently viewing today
