@@ -164,5 +164,25 @@
   "chargeItemsRequireRecordNumber": "Please add a record number to track charge items",
   "@chargeItemsRequireRecordNumber": {
     "description": "Message shown when trying to add charge items without a record number"
+  },
+
+  "day": "Day",
+  "@day": {
+    "description": "Day view tab"
+  },
+
+  "twoDays": "2 Days",
+  "@twoDays": {
+    "description": "2-day view tab"
+  },
+
+  "threeDays": "3 Days",
+  "@threeDays": {
+    "description": "3-day view tab"
+  },
+
+  "week": "Week",
+  "@week": {
+    "description": "Week view tab"
   }
 }

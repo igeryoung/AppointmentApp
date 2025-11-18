@@ -191,6 +191,11 @@
     "description": "Day view tab"
   },
 
+  "twoDays": "两日",
+  "@twoDays": {
+    "description": "2-day view tab"
+  },
+
   "threeDays": "三日",
   "@threeDays": {
     "description": "3-day view tab"

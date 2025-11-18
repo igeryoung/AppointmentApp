@@ -3,9 +3,10 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../../services/time_service.dart';
 import '../../../utils/schedule/schedule_layout_utils.dart';
+import '../../../models/schedule_drawing.dart';
 
 /// Service for managing date navigation, selection, and automatic date change detection
-/// in the schedule screen. Handles 3-day window navigation and auto-reload when
+/// in the schedule screen. Handles 2-day and 3-day window navigation and auto-reload when
 /// the system date changes.
 class ScheduleDateService {
   /// Timer for periodically checking date changes
@@ -19,6 +20,9 @@ class ScheduleDateService {
 
   /// Day offset from "today" (for displaying relative navigation like "+180 days")
   int _dayOffset = 0;
+
+  /// Current view mode (2-day or 3-day)
+  int _viewMode = ScheduleDrawing.VIEW_MODE_2DAY;
 
   /// Callback to trigger state update in the parent widget
   final void Function(DateTime selectedDate, DateTime lastActiveDate) onDateChanged;
@@ -69,6 +73,28 @@ class ScheduleDateService {
   /// Get the last active date
   DateTime get lastActiveDate => _lastActiveDate;
 
+  /// Get current view mode
+  int get viewMode => _viewMode;
+
+  /// Set view mode (2-day or 3-day)
+  void setViewMode(int viewMode) {
+    _viewMode = viewMode;
+  }
+
+  /// Get window size based on current view mode
+  int getWindowSize() {
+    return _viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+  }
+
+  /// Get window start based on current view mode
+  DateTime getWindowStart() {
+    if (_viewMode == ScheduleDrawing.VIEW_MODE_2DAY) {
+      return ScheduleLayoutUtils.get2DayWindowStart(_selectedDate);
+    } else {
+      return ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
+    }
+  }
+
   /// Start timer to periodically check for date changes (every minute)
   void startPeriodicCheck() {
     _dateCheckTimer = Timer.periodic(const Duration(minutes: 1), (timer) {
@@ -91,9 +117,10 @@ class ScheduleDateService {
     if (currentDate != lastActiveDate) {
       debugPrint('📅 Date changed detected: $lastActiveDate → $currentDate');
 
-      // Check if user is viewing a 3-day window that contains "today" (the new current date)
-      final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
-      final windowEnd = windowStart.add(const Duration(days: 3));
+      // Check if user is viewing a window that contains "today" (the new current date)
+      final windowStart = getWindowStart();
+      final windowSize = getWindowSize();
+      final windowEnd = windowStart.add(Duration(days: windowSize));
       // Check if the old "today" (lastActiveDate) is in the current viewing window
       final isViewingWindowContainingToday = lastActiveDate.isAfter(windowStart.subtract(const Duration(days: 1))) &&
                                           lastActiveDate.isBefore(windowEnd);
@@ -245,8 +272,8 @@ class ScheduleDateService {
     }
   }
 
-  /// Navigate 3 days backward
-  Future<void> navigate3DaysPrevious() async {
+  /// Navigate backward by window size (2 or 3 days based on view mode)
+  Future<void> navigatePagePrevious() async {
     onNavigatingStateChanged?.call(true);
     try {
       // Auto-save and exit drawing mode if needed
@@ -255,8 +282,9 @@ class ScheduleDateService {
         return; // Cancel navigation if save failed
       }
 
-      _selectedDate = _selectedDate.subtract(const Duration(days: 3));
-      _dayOffset -= 3; // Decrement by 3 days
+      final windowSize = getWindowSize();
+      _selectedDate = _selectedDate.subtract(Duration(days: windowSize));
+      _dayOffset -= windowSize;
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
@@ -265,8 +293,8 @@ class ScheduleDateService {
     }
   }
 
-  /// Navigate 3 days forward
-  Future<void> navigate3DaysNext() async {
+  /// Navigate forward by window size (2 or 3 days based on view mode)
+  Future<void> navigatePageNext() async {
     onNavigatingStateChanged?.call(true);
     try {
       // Auto-save and exit drawing mode if needed
@@ -275,14 +303,27 @@ class ScheduleDateService {
         return; // Cancel navigation if save failed
       }
 
-      _selectedDate = _selectedDate.add(const Duration(days: 3));
-      _dayOffset += 3; // Increment by 3 days
+      final windowSize = getWindowSize();
+      _selectedDate = _selectedDate.add(Duration(days: windowSize));
+      _dayOffset += windowSize;
       onDateChanged(_selectedDate, _lastActiveDate);
       onUpdateCubit(_selectedDate);
       await onLoadDrawing();
     } finally {
       onNavigatingStateChanged?.call(false);
     }
+  }
+
+  /// Navigate 3 days backward (deprecated - use navigatePagePrevious)
+  @Deprecated('Use navigatePagePrevious for dynamic window navigation')
+  Future<void> navigate3DaysPrevious() async {
+    await navigatePagePrevious();
+  }
+
+  /// Navigate 3 days forward (deprecated - use navigatePageNext)
+  @Deprecated('Use navigatePageNext for dynamic window navigation')
+  Future<void> navigate3DaysNext() async {
+    await navigatePageNext();
   }
 
   /// Navigate 90 days backward
@@ -397,10 +438,11 @@ class ScheduleDateService {
     return const Duration(days: 3);
   }
 
-  /// Get date display text for the current 3-day window
+  /// Get date display text for the current window (2-day or 3-day)
   String getDateDisplayText(BuildContext context) {
-    final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
-    final windowEnd = windowStart.add(const Duration(days: 2));
+    final windowStart = getWindowStart();
+    final windowSize = getWindowSize();
+    final windowEnd = windowStart.add(Duration(days: windowSize - 1));
     final locale = Localizations.localeOf(context).toString();
     final dateRange = '${DateFormat('MMM d', locale).format(windowStart)} - ${DateFormat('MMM d, y', locale).format(windowEnd)}';
 
@@ -414,10 +456,5 @@ class ScheduleDateService {
     return _selectedDate.year == now.year &&
         _selectedDate.month == now.month &&
         _selectedDate.day == now.day;
-  }
-
-  /// Get the start of the current 3-day window
-  DateTime getWindowStart() {
-    return ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
   }
 }

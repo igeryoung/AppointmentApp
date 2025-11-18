@@ -30,6 +30,7 @@ class ScheduleLoaded extends ScheduleState {
   final bool showOldEvents;
   final bool showDrawing;
   final PendingNextAppointment? pendingNextAppointment;
+  final int viewMode;
 
   const ScheduleLoaded({
     required this.selectedDate,
@@ -39,10 +40,11 @@ class ScheduleLoaded extends ScheduleState {
     this.showOldEvents = true,
     this.showDrawing = true,
     this.pendingNextAppointment,
+    this.viewMode = ScheduleDrawing.VIEW_MODE_2DAY,
   });
 
   @override
-  List<Object?> get props => [selectedDate, events, drawing, isOffline, showOldEvents, showDrawing, pendingNextAppointment];
+  List<Object?> get props => [selectedDate, events, drawing, isOffline, showOldEvents, showDrawing, pendingNextAppointment, viewMode];
 
   /// Create a copy with updated values
   ScheduleLoaded copyWith({
@@ -55,6 +57,7 @@ class ScheduleLoaded extends ScheduleState {
     bool clearDrawing = false,
     PendingNextAppointment? pendingNextAppointment,
     bool clearPendingNextAppointment = false,
+    int? viewMode,
   }) {
     return ScheduleLoaded(
       selectedDate: selectedDate ?? this.selectedDate,
@@ -64,6 +67,7 @@ class ScheduleLoaded extends ScheduleState {
       showOldEvents: showOldEvents ?? this.showOldEvents,
       showDrawing: showDrawing ?? this.showDrawing,
       pendingNextAppointment: clearPendingNextAppointment ? null : (pendingNextAppointment ?? this.pendingNextAppointment),
+      viewMode: viewMode ?? this.viewMode,
     );
   }
 }
