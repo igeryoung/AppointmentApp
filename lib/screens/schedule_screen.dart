@@ -534,22 +534,24 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                 );
               },
             ),
-            const SizedBox(width: 4),
-            // Date display
-            GestureDetector(
-              onTap: () => _dateService?.showDatePickerDialog(context),
-              child: Text(
-                _dateService?.getDateDisplayText(context) ?? '',
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 13,
+            // Date display (centered with Expanded)
+            Expanded(
+              child: Center(
+                child: GestureDetector(
+                  onTap: () => _dateService?.showDatePickerDialog(context),
+                  child: Text(
+                    _dateService?.getDateDisplayText(context) ?? '',
+                    style: const TextStyle(
+                      color: Colors.black,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.center,
+                    overflow: TextOverflow.ellipsis,
+                    maxLines: 1,
+                  ),
                 ),
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
               ),
             ),
-            const SizedBox(width: 4),
             // Date navigation - Next page (2 or 3 days depending on mode)
             BlocBuilder<ScheduleCubit, ScheduleState>(
               builder: (context, state) {
