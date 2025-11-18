@@ -46,7 +46,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     await selectDate(today);
   }
 
-  /// Load events for the selected date (using 3-day window)
+  /// Load events for the selected date (using view mode window)
   ///
   /// [generation] - Request generation number for race condition prevention
   Future<void> loadEvents({DateTime? date, bool? showOldEvents, int? generation}) async {
@@ -60,6 +60,9 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final selectedDate = date ??
         (currentState is ScheduleLoaded ? currentState.selectedDate : _timeService.now());
 
+    // Get view mode from current state or default to 2-day
+    final viewMode = currentState is ScheduleLoaded ? currentState.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+
     // Always show all events (hardcoded to true)
     final effectiveShowOldEvents = true;
 
@@ -71,20 +74,20 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
     // Check if date is changing - if so, clear drawing to avoid showing old drawing on new date
     final isDateChanging = currentState is ScheduleLoaded &&
-        _get3DayWindowStart(currentState.selectedDate) != _get3DayWindowStart(selectedDate);
+        _getWindowStart(currentState.selectedDate, viewMode) != _getWindowStart(selectedDate, viewMode);
 
-    // Only preserve drawing if date is NOT changing (same 3-day window)
+    // Only preserve drawing if date is NOT changing (same window)
     final currentDrawing = (currentState is ScheduleLoaded && !isDateChanging) ? currentState.drawing : null;
 
     emit(const ScheduleLoading());
 
     try {
-      // IMPORTANT: Load events for 3-day window (not just selected date)
-      // This matches ScheduleScreen's 3-day view display
-      final windowStart = _get3DayWindowStart(selectedDate);
-      final windowEnd = windowStart.add(const Duration(days: 3));
+      // Load events for the current view mode window (2-day or 3-day)
+      final windowStart = _getWindowStart(selectedDate, viewMode);
+      final windowSize = _getWindowSize(viewMode);
+      final windowEnd = windowStart.add(Duration(days: windowSize));
 
-      debugPrint('🔄 ScheduleCubit: Fetching events for window $windowStart (generation=$generation)');
+      debugPrint('🔄 ScheduleCubit: Fetching events for $windowSize-day window $windowStart (generation=$generation)');
 
       final events = await _eventRepository.getByDateRange(
         _currentBookId!,
@@ -109,9 +112,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         showOldEvents: effectiveShowOldEvents,
         showDrawing: effectiveShowDrawing,
         pendingNextAppointment: pendingNextAppointment,
+        viewMode: viewMode,
       ));
 
-      debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for 3-day window starting $windowStart (generation=$generation)');
+      debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for $windowSize-day window starting $windowStart (generation=$generation)');
     } catch (e) {
       debugPrint('❌ ScheduleCubit: Failed to load events: $e');
       emit(ScheduleError('Failed to load events: $e'));
@@ -339,6 +343,24 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     debugPrint('✅ ScheduleCubit: Drawing visibility updated: $newShowDrawing');
   }
 
+  /// Change view mode (2-day or 3-day)
+  Future<void> changeViewMode(int viewMode) async {
+    final currentState = state;
+    if (currentState is! ScheduleLoaded) return;
+
+    debugPrint('🔄 ScheduleCubit: Changing view mode to $viewMode');
+
+    // Clear drawing when changing view mode (different view modes have different drawings)
+    emit(currentState.copyWith(viewMode: viewMode, clearDrawing: true));
+
+    // Reload events for the new view mode window
+    _currentRequestGeneration++;
+    await loadEvents(date: currentState.selectedDate, generation: _currentRequestGeneration);
+
+    // Load drawing for the new view mode
+    await loadDrawing(viewMode: viewMode);
+  }
+
   /// Update offline status
   void setOfflineStatus(bool isOffline) {
     final currentState = state;
@@ -376,6 +398,16 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // Helper Methods
   // ===================
 
+  /// Calculate the start of the 2-day window for a given date
+  /// Uses fixed anchor (2000-01-01) to ensure stable window boundaries
+  DateTime _get2DayWindowStart(DateTime date) {
+    final anchor = DateTime(2000, 1, 1); // Fixed epoch anchor
+    final daysSinceAnchor = date.difference(anchor).inDays;
+    final windowIndex = daysSinceAnchor ~/ 2;
+    final windowStart = anchor.add(Duration(days: windowIndex * 2));
+    return DateTime(windowStart.year, windowStart.month, windowStart.day);
+  }
+
   /// Calculate the start of the 3-day window for a given date
   /// Uses fixed anchor (2000-01-01) to ensure stable window boundaries
   /// This matches the logic in ScheduleScreen._get3DayWindowStart()
@@ -385,5 +417,19 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final windowIndex = daysSinceAnchor ~/ 3;
     final windowStart = anchor.add(Duration(days: windowIndex * 3));
     return DateTime(windowStart.year, windowStart.month, windowStart.day);
+  }
+
+  /// Get window start based on view mode
+  DateTime _getWindowStart(DateTime date, int viewMode) {
+    if (viewMode == ScheduleDrawing.VIEW_MODE_2DAY) {
+      return _get2DayWindowStart(date);
+    } else {
+      return _get3DayWindowStart(date);
+    }
+  }
+
+  /// Get window size (number of days) based on view mode
+  int _getWindowSize(int viewMode) {
+    return viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
   }
 }

@@ -37,6 +37,17 @@ class ScheduleLayoutUtils {
   // Large screen detection threshold for text scaling
   static const double largeScreenSlotHeightThreshold = 15.0;
 
+  /// Get the 2-day window start date for a given date
+  /// This ensures stable 2-day windows even when the real-world date changes
+  static DateTime get2DayWindowStart(DateTime date) {
+    // Use fixed anchor to calculate stable 2-day windows
+    final anchor = DateTime(2000, 1, 1); // Fixed epoch anchor
+    final daysSinceAnchor = date.difference(anchor).inDays;
+    final windowIndex = daysSinceAnchor ~/ 2;
+    final windowStart = anchor.add(Duration(days: windowIndex * 2));
+    return DateTime(windowStart.year, windowStart.month, windowStart.day);
+  }
+
   /// Get the 3-day window start date for a given date
   /// This ensures stable 3-day windows even when the real-world date changes
   static DateTime get3DayWindowStart(DateTime date) {

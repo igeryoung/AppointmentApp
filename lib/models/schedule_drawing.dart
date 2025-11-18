@@ -3,7 +3,9 @@ import 'note.dart';
 
 /// Schedule Drawing model - Handwriting overlay on schedule view
 class ScheduleDrawing {
-  /// Constant for 3-day view mode (only supported mode)
+  /// Constant for 2-day view mode
+  static const int VIEW_MODE_2DAY = 2;
+  /// Constant for 3-day view mode
   static const int VIEW_MODE_3DAY = 1;
 
   final int? id;

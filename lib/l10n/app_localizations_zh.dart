@@ -115,6 +115,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get day => '日';
 
   @override
+  String get twoDays => '两日';
+
+  @override
   String get threeDays => '三日';
 
   @override
@@ -845,6 +848,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get day => '日';
+
+  @override
+  String get twoDays => '兩日';
 
   @override
   String get threeDays => '三日';

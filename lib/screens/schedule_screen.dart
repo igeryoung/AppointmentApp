@@ -498,80 +498,95 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           children: [
             Scaffold(
       appBar: AppBar(
-        title: Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            // Date navigation - Previous 180 days
-            IconButton(
-              onPressed: () => _dateService?.navigate180DaysPrevious(),
-              icon: const Text('-180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '-180 days',
-            ),
-            // Date navigation - Previous 90 days
-            IconButton(
-              onPressed: () => _dateService?.navigate90DaysPrevious(),
-              icon: const Text('-90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '-90 days',
-            ),
-            // Date navigation - Previous 3 days (<)
-            IconButton(
-              onPressed: () => _dateService?.navigate3DaysPrevious(),
-              icon: const Icon(Icons.chevron_left, size: 18),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '-3 days',
-            ),
-            const SizedBox(width: 4),
-            // Date display
-            GestureDetector(
-              onTap: () => _dateService?.showDatePickerDialog(context),
-              child: Text(
-                _dateService?.getDateDisplayText(context) ?? '',
-                style: const TextStyle(
-                  color: Colors.black,
-                  fontSize: 13,
-                ),
-                textAlign: TextAlign.center,
-                overflow: TextOverflow.ellipsis,
-                maxLines: 1,
+        title: Padding(
+          padding: const EdgeInsets.only(left: 160.0),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              // Date navigation - Previous 180 days
+              IconButton(
+                onPressed: () => _dateService?.navigate180DaysPrevious(),
+                icon: const Text('-180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '-180 days',
               ),
-            ),
-            const SizedBox(width: 4),
-            // Date navigation - Next 3 days (>)
-            IconButton(
-              onPressed: () => _dateService?.navigate3DaysNext(),
-              icon: const Icon(Icons.chevron_right, size: 18),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '+3 days',
-            ),
-            // Date navigation - Next 90 days
-            IconButton(
-              onPressed: () => _dateService?.navigate90DaysNext(),
-              icon: const Text('+90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '+90 days',
-            ),
-            // Date navigation - Next 180 days
-            IconButton(
-              onPressed: () => _dateService?.navigate180DaysNext(),
-              icon: const Text('+180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
-              iconSize: 18,
-              constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
-              padding: EdgeInsets.zero,
-              tooltip: '+180 days',
-            ),
-          ],
+              // Date navigation - Previous 90 days
+              IconButton(
+                onPressed: () => _dateService?.navigate90DaysPrevious(),
+                icon: const Text('-90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '-90 days',
+              ),
+              // Date navigation - Previous page (2 or 3 days depending on mode)
+              BlocBuilder<ScheduleCubit, ScheduleState>(
+                builder: (context, state) {
+                  final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+                  final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+                  return IconButton(
+                    onPressed: () => _dateService?.navigatePagePrevious(),
+                    icon: const Icon(Icons.chevron_left, size: 18),
+                    iconSize: 18,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    padding: EdgeInsets.zero,
+                    tooltip: '-$windowSize days',
+                  );
+                },
+              ),
+              const SizedBox(width: 4),
+              // Date display
+              GestureDetector(
+                onTap: () => _dateService?.showDatePickerDialog(context),
+                child: Text(
+                  _dateService?.getDateDisplayText(context) ?? '',
+                  style: const TextStyle(
+                    color: Colors.black,
+                    fontSize: 13,
+                  ),
+                  textAlign: TextAlign.center,
+                  overflow: TextOverflow.ellipsis,
+                  maxLines: 1,
+                ),
+              ),
+              const SizedBox(width: 4),
+              // Date navigation - Next page (2 or 3 days depending on mode)
+              BlocBuilder<ScheduleCubit, ScheduleState>(
+                builder: (context, state) {
+                  final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+                  final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+                  return IconButton(
+                    onPressed: () => _dateService?.navigatePageNext(),
+                    icon: const Icon(Icons.chevron_right, size: 18),
+                    iconSize: 18,
+                    constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+                    padding: EdgeInsets.zero,
+                    tooltip: '+$windowSize days',
+                  );
+                },
+              ),
+              // Date navigation - Next 90 days
+              IconButton(
+                onPressed: () => _dateService?.navigate90DaysNext(),
+                icon: const Text('+90', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '+90 days',
+              ),
+              // Date navigation - Next 180 days
+              IconButton(
+                onPressed: () => _dateService?.navigate180DaysNext(),
+                icon: const Text('+180', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                iconSize: 18,
+                constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
+                padding: EdgeInsets.zero,
+                tooltip: '+180 days',
+              ),
+            ],
+          ),
         ),
         actions: [
           // Small loading indicator for page navigation (space always reserved)
@@ -586,6 +601,50 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                     )
                   : const SizedBox.shrink(),
             ),
+          ),
+          // View mode dropdown
+          BlocBuilder<ScheduleCubit, ScheduleState>(
+            builder: (context, state) {
+              final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+              return PopupMenuButton<int>(
+                icon: const Icon(Icons.view_day),
+                offset: const Offset(0, 40),
+                onSelected: (int newViewMode) async {
+                  // Update date service view mode
+                  _dateService?.setViewMode(newViewMode);
+                  // Update cubit view mode and reload
+                  await context.read<ScheduleCubit>().changeViewMode(newViewMode);
+                },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
+                  PopupMenuItem<int>(
+                    value: ScheduleDrawing.VIEW_MODE_2DAY,
+                    child: Row(
+                      children: [
+                        if (viewMode == ScheduleDrawing.VIEW_MODE_2DAY)
+                          const Icon(Icons.check, size: 16)
+                        else
+                          const SizedBox(width: 16),
+                        const SizedBox(width: 8),
+                        Text(l10n.twoDays),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<int>(
+                    value: ScheduleDrawing.VIEW_MODE_3DAY,
+                    child: Row(
+                      children: [
+                        if (viewMode == ScheduleDrawing.VIEW_MODE_3DAY)
+                          const Icon(Icons.check, size: 16)
+                        else
+                          const SizedBox(width: 16),
+                        const SizedBox(width: 8),
+                        Text(l10n.threeDays),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           // Toggle drawing visibility
           BlocBuilder<ScheduleCubit, ScheduleState>(
@@ -637,6 +696,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           final showOldEvents = state is ScheduleLoaded ? state.showOldEvents : true;
           final showDrawing = state is ScheduleLoaded ? state.showDrawing : true;
           final pendingNextAppointment = state is ScheduleLoaded ? state.pendingNextAppointment : null;
+          final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
 
           return Stack(
             children: [
@@ -645,7 +705,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                   Expanded(
                     child: isLoading
                         ? const Center(child: CircularProgressIndicator())
-                        : _build3DayView(events, showOldEvents, showDrawing, pendingNextAppointment),
+                        : _build3DayView(events, showOldEvents, showDrawing, pendingNextAppointment, viewMode),
                   ),
                 ],
               ),
@@ -697,10 +757,16 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   }
 
 
-  /// Build 3-day view using ScheduleBody component
-  Widget _build3DayView(List<Event> events, bool showOldEvents, bool showDrawing, PendingNextAppointment? pendingNextAppointment) {
-    final windowStart = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
-    final dates = List.generate(3, (index) => windowStart.add(Duration(days: index)));
+  /// Build schedule view (2-day or 3-day) using ScheduleBody component
+  Widget _build3DayView(List<Event> events, bool showOldEvents, bool showDrawing, PendingNextAppointment? pendingNextAppointment, int viewMode) {
+    // Get window start based on view mode
+    final windowStart = viewMode == ScheduleDrawing.VIEW_MODE_2DAY
+        ? ScheduleLayoutUtils.get2DayWindowStart(_selectedDate)
+        : ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
+
+    // Generate dates based on view mode (2 or 3 days)
+    final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+    final dates = List.generate(windowSize, (index) => windowStart.add(Duration(days: index)));
 
     return ScheduleBody(
       dates: dates,
