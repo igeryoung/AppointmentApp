@@ -279,6 +279,12 @@ abstract class AppLocalizations {
   /// **'日'**
   String get day;
 
+  /// 2-day view tab
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'兩日'**
+  String get twoDays;
+
   /// 3-day view tab
   ///
   /// In zh_TW, this message translates to:

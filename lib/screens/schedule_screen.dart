@@ -499,7 +499,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             Scaffold(
       appBar: AppBar(
         title: Padding(
-          padding: const EdgeInsets.only(left: 40.0),
+          padding: const EdgeInsets.only(left: 160.0),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [

@@ -112,13 +112,16 @@ class AppLocalizationsEn extends AppLocalizations {
   }
 
   @override
-  String get day => '日';
+  String get day => 'Day';
 
   @override
-  String get threeDays => '三日';
+  String get twoDays => '2 Days';
 
   @override
-  String get week => '週';
+  String get threeDays => '3 Days';
+
+  @override
+  String get week => 'Week';
 
   @override
   String get goToToday => '前往今天';
