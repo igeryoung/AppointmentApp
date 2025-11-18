@@ -550,53 +550,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
               ),
             ),
             const SizedBox(width: 4),
-            // View mode dropdown
-            BlocBuilder<ScheduleCubit, ScheduleState>(
-              builder: (context, state) {
-                final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
-                return PopupMenuButton<int>(
-                  icon: const Icon(Icons.view_day, size: 18),
-                  iconSize: 18,
-                  padding: EdgeInsets.zero,
-                  offset: const Offset(0, 40),
-                  onSelected: (int newViewMode) async {
-                    // Update date service view mode
-                    _dateService?.setViewMode(newViewMode);
-                    // Update cubit view mode and reload
-                    await context.read<ScheduleCubit>().changeViewMode(newViewMode);
-                  },
-                  itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
-                    PopupMenuItem<int>(
-                      value: ScheduleDrawing.VIEW_MODE_2DAY,
-                      child: Row(
-                        children: [
-                          if (viewMode == ScheduleDrawing.VIEW_MODE_2DAY)
-                            const Icon(Icons.check, size: 16)
-                          else
-                            const SizedBox(width: 16),
-                          const SizedBox(width: 8),
-                          Text(l10n.twoDays),
-                        ],
-                      ),
-                    ),
-                    PopupMenuItem<int>(
-                      value: ScheduleDrawing.VIEW_MODE_3DAY,
-                      child: Row(
-                        children: [
-                          if (viewMode == ScheduleDrawing.VIEW_MODE_3DAY)
-                            const Icon(Icons.check, size: 16)
-                          else
-                            const SizedBox(width: 16),
-                          const SizedBox(width: 8),
-                          Text(l10n.threeDays),
-                        ],
-                      ),
-                    ),
-                  ],
-                );
-              },
-            ),
-            const SizedBox(width: 4),
             // Date navigation - Next page (2 or 3 days depending on mode)
             BlocBuilder<ScheduleCubit, ScheduleState>(
               builder: (context, state) {
@@ -645,6 +598,50 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                     )
                   : const SizedBox.shrink(),
             ),
+          ),
+          // View mode dropdown
+          BlocBuilder<ScheduleCubit, ScheduleState>(
+            builder: (context, state) {
+              final viewMode = state is ScheduleLoaded ? state.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+              return PopupMenuButton<int>(
+                icon: const Icon(Icons.view_day),
+                offset: const Offset(0, 40),
+                onSelected: (int newViewMode) async {
+                  // Update date service view mode
+                  _dateService?.setViewMode(newViewMode);
+                  // Update cubit view mode and reload
+                  await context.read<ScheduleCubit>().changeViewMode(newViewMode);
+                },
+                itemBuilder: (BuildContext context) => <PopupMenuEntry<int>>[
+                  PopupMenuItem<int>(
+                    value: ScheduleDrawing.VIEW_MODE_2DAY,
+                    child: Row(
+                      children: [
+                        if (viewMode == ScheduleDrawing.VIEW_MODE_2DAY)
+                          const Icon(Icons.check, size: 16)
+                        else
+                          const SizedBox(width: 16),
+                        const SizedBox(width: 8),
+                        Text(l10n.twoDays),
+                      ],
+                    ),
+                  ),
+                  PopupMenuItem<int>(
+                    value: ScheduleDrawing.VIEW_MODE_3DAY,
+                    child: Row(
+                      children: [
+                        if (viewMode == ScheduleDrawing.VIEW_MODE_3DAY)
+                          const Icon(Icons.check, size: 16)
+                        else
+                          const SizedBox(width: 16),
+                        const SizedBox(width: 8),
+                        Text(l10n.threeDays),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
           // Toggle drawing visibility
           BlocBuilder<ScheduleCubit, ScheduleState>(
