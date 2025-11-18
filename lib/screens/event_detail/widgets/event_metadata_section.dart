@@ -420,6 +420,28 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   static const String _emptyOption = '__EMPTY__';
   static const String _newOption = '__NEW__';
   bool _isProcessing = false;
+  final TextEditingController _internalController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _internalController.text = widget.value;
+  }
+
+  @override
+  void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    // Update internal controller when external value changes
+    if (widget.value != oldWidget.value && _internalController.text != widget.value) {
+      _internalController.text = widget.value;
+    }
+  }
+
+  @override
+  void dispose() {
+    _internalController.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -479,8 +501,18 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
         }
       },
       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Initialize with current value
-        textEditingController.text = widget.value;
+        // Sync internal controller to autocomplete's controller
+        textEditingController.text = _internalController.text;
+
+        // Keep them in sync
+        textEditingController.addListener(() {
+          if (_internalController.text != textEditingController.text) {
+            _internalController.text = textEditingController.text;
+            if (widget.onTextChanged != null) {
+              widget.onTextChanged!(textEditingController.text);
+            }
+          }
+        });
 
         return TextField(
           controller: textEditingController,
@@ -491,11 +523,6 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
             border: const OutlineInputBorder(),
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           ),
-          onChanged: (value) {
-            if (widget.onTextChanged != null) {
-              widget.onTextChanged!(value);
-            }
-          },
         );
       },
       optionsViewBuilder: (context, onSelected, options) {
@@ -615,26 +642,69 @@ class _NameAutocompleteField extends StatefulWidget {
 }
 
 class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
+  final TextEditingController _internalController = TextEditingController();
+  bool _isInternalUpdate = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _internalController.text = widget.controller.text;
+
+    // Listen to external controller changes (e.g., from record number selection)
+    widget.controller.addListener(_onExternalControllerChanged);
+
+    // Listen to internal controller changes (user typing)
+    _internalController.addListener(_onInternalControllerChanged);
+  }
+
+  @override
+  void dispose() {
+    widget.controller.removeListener(_onExternalControllerChanged);
+    _internalController.dispose();
+    super.dispose();
+  }
+
+  void _onExternalControllerChanged() {
+    if (!_isInternalUpdate && _internalController.text != widget.controller.text) {
+      _internalController.text = widget.controller.text;
+    }
+  }
+
+  void _onInternalControllerChanged() {
+    _isInternalUpdate = true;
+    if (widget.controller.text != _internalController.text) {
+      widget.controller.text = _internalController.text;
+    }
+    _isInternalUpdate = false;
+  }
+
   @override
   Widget build(BuildContext context) {
     return Autocomplete<String>(
       optionsBuilder: (TextEditingValue textEditingValue) {
-        if (textEditingValue.text.isEmpty) {
+        if (textEditingValue.text.trim().isEmpty) {
           return const Iterable<String>.empty();
         }
-        return widget.allNames.where((String option) {
+        final matches = widget.allNames.where((String option) {
           return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
         });
+        return matches;
       },
       onSelected: (String selection) {
-        widget.controller.text = selection;
         if (widget.onNameSelected != null) {
           widget.onNameSelected!(selection);
         }
       },
       fieldViewBuilder: (context, textEditingController, focusNode, onFieldSubmitted) {
-        // Initialize with current value
-        textEditingController.text = widget.controller.text;
+        // Sync internal controller to autocomplete's controller
+        textEditingController.text = _internalController.text;
+
+        // Keep them in sync
+        textEditingController.addListener(() {
+          if (_internalController.text != textEditingController.text) {
+            _internalController.text = textEditingController.text;
+          }
+        });
 
         return TextField(
           controller: textEditingController,
@@ -650,9 +720,6 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
             filled: widget.isReadOnly,
             fillColor: widget.isReadOnly ? Colors.grey.shade100 : null,
           ),
-          onChanged: (value) {
-            widget.controller.text = value;
-          },
         );
       },
       optionsViewBuilder: (context, onSelected, options) {
