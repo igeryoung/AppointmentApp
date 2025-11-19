@@ -428,9 +428,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   @override
   void initState() {
     super.initState();
-    debugPrint('🔍 _RecordNumberAutocomplete.initState: widget.value = "${widget.value}"');
     _controller.text = widget.value;
-    debugPrint('🔍 _RecordNumberAutocomplete.initState: _controller.text = "${_controller.text}"');
     _focusNode.addListener(_onFocusChanged);
     _controller.addListener(_onTextChanged);
   }
@@ -438,11 +436,9 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   @override
   void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
     super.didUpdateWidget(oldWidget);
-    debugPrint('🔍 _RecordNumberAutocomplete.didUpdateWidget: oldWidget.value = "${oldWidget.value}", widget.value = "${widget.value}", _controller.text = "${_controller.text}"');
     // Always sync controller with widget value to handle all state changes
     // This fixes the bug where record number disappears after reopening the event
     if (_controller.text != widget.value) {
-      debugPrint('🔍 _RecordNumberAutocomplete.didUpdateWidget: Updating controller from "${_controller.text}" to "${widget.value}"');
       _controller.text = widget.value;
     }
   }
