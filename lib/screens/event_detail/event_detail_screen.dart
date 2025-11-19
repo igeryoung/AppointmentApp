@@ -85,9 +85,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       dbService: _dbService,
       onStateChanged: (state) {
         if (mounted) {
+          debugPrint('🔍 EventDetailScreen.onStateChanged: state.name = "${state.name}", state.recordNumber = "${state.recordNumber}", state.phone = "${state.phone}"');
           // Update name controller if state changed (e.g., from record number selection)
           // Check to avoid infinite loop: only update if different
           if (_nameController.text != state.name) {
+            debugPrint('🔍 EventDetailScreen.onStateChanged: Updating name controller from "${_nameController.text}" to "${state.name}"');
             _nameController.text = state.name;
             _lastNameValue = state.name;
           }
@@ -95,6 +97,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           // Update phone controller if state changed (to sync from loadPhone)
           // Check to avoid infinite loop: only update if different
           if (_phoneController.text != state.phone) {
+            debugPrint('🔍 EventDetailScreen.onStateChanged: Updating phone controller from "${_phoneController.text}" to "${state.phone}"');
             _phoneController.text = state.phone;
           }
           setState(() {});

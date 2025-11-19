@@ -563,17 +563,20 @@ class EventDetailController {
 
   /// Load phone number for the current event (based on name + record number)
   Future<void> loadPhone() async {
+    debugPrint('🔍 EventDetailController.loadPhone: START - state.name = "${_state.name}", state.recordNumber = "${_state.recordNumber}"');
     final name = _state.name.trim();
     final recordNumber = _state.recordNumber.trim();
 
     // Only load if we have both name and record number
     if (name.isEmpty || recordNumber.isEmpty) {
+      debugPrint('⚠️ EventDetailController.loadPhone: name or recordNumber is empty, clearing phone');
       // Clear phone if no record number
       _updateState(_state.copyWith(phone: ''));
       return;
     }
 
     if (_dbService is! PRDDatabaseService) {
+      debugPrint('⚠️ EventDetailController.loadPhone: dbService is not PRDDatabaseService');
       return;
     }
 
@@ -581,6 +584,7 @@ class EventDetailController {
       final prdDb = _dbService as PRDDatabaseService;
       final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
       final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+      debugPrint('🔍 EventDetailController.loadPhone: Normalized keys - name: "$nameNormalized", recordNumber: "$recordNumberNormalized"');
 
       // Get person phone
       final phone = await prdDb.getPersonPhone(
@@ -588,9 +592,10 @@ class EventDetailController {
         recordNumberNormalized: recordNumberNormalized,
       );
 
+      debugPrint('🔍 EventDetailController.loadPhone: Retrieved phone from DB: "${phone ?? "(null)"}"');
       // Always update phone state (even if null/empty) to clear old values
       _updateState(_state.copyWith(phone: phone ?? ''));
-      debugPrint('✅ EventDetailController: Loaded phone number for $name + $recordNumber: ${phone ?? "(empty)"}');
+      debugPrint('✅ EventDetailController.loadPhone: Updated state with phone: "${phone ?? "(empty)"}", state.phone = "${_state.phone}"');
     } catch (e) {
       debugPrint('❌ EventDetailController: Failed to load phone: $e');
       // Clear phone on error

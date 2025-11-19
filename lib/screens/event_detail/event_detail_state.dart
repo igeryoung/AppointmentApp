@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';
@@ -56,6 +57,7 @@ class EventDetailState {
   /// Create initial state from event
   factory EventDetailState.fromEvent(Event event) {
     final hasRecordNumber = event.recordNumber != null && event.recordNumber!.trim().isNotEmpty;
+    debugPrint('🔍 EventDetailState.fromEvent: event.recordNumber = "${event.recordNumber}", event.phone = "${event.phone}"');
     return EventDetailState(
       name: event.name,
       recordNumber: event.recordNumber ?? '',
