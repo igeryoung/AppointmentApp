@@ -55,6 +55,7 @@ class EventDetailState {
 
   /// Create initial state from event
   factory EventDetailState.fromEvent(Event event) {
+    final hasRecordNumber = event.recordNumber != null && event.recordNumber!.trim().isNotEmpty;
     return EventDetailState(
       name: event.name,
       recordNumber: event.recordNumber ?? '',
@@ -63,6 +64,7 @@ class EventDetailState {
       chargeItems: event.chargeItems,
       startTime: event.startTime,
       endTime: event.endTime,
+      isNameReadOnly: hasRecordNumber,
     );
   }
 
