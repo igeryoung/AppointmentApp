@@ -47,6 +47,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   // Available record numbers for dropdown
   List<String> _availableRecordNumbers = [];
 
+  // Focus nodes for autocomplete
+  late FocusNode _nameFocusNode;
+  late FocusNode _recordNumberFocusNode;
+
+  // Autocomplete options
+  List<String> _allNames = [];
+  List<RecordNumberOption> _allRecordNumberOptions = [];
+
+  // Tracks for clearing behavior - clear other field only when starting to type
+  String _lastNameValue = '';
+  String _lastRecordNumberValue = '';
+
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
 
@@ -58,6 +70,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     _nameController = TextEditingController(text: widget.event.name);
     _phoneController = TextEditingController(text: widget.event.phone ?? '');
 
+    // Initialize last values for clearing behavior
+    _lastNameValue = widget.event.name;
+    _lastRecordNumberValue = widget.event.recordNumber ?? '';
+
+    // Initialize focus nodes
+    _nameFocusNode = FocusNode();
+    _recordNumberFocusNode = FocusNode();
+
     // Initialize controller FIRST
     _controller = EventDetailController(
       event: widget.event,
@@ -65,6 +85,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       dbService: _dbService,
       onStateChanged: (state) {
         if (mounted) {
+          // Update name controller if state changed (e.g., from record number selection)
+          // Check to avoid infinite loop: only update if different
+          if (_nameController.text != state.name) {
+            _nameController.text = state.name;
+            _lastNameValue = state.name;
+          }
+
           // Update phone controller if state changed (to sync from loadPhone)
           // Check to avoid infinite loop: only update if different
           if (_phoneController.text != state.phone) {
@@ -77,7 +104,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     // Add listener for name changes AFTER controller is initialized
     _nameController.addListener(() {
-      _controller.updateName(_nameController.text);
+      final newValue = _nameController.text;
+
+      // Clear record number when user starts typing in name field
+      if (newValue != _lastNameValue && newValue.isNotEmpty) {
+        if (_controller.state.recordNumber.isNotEmpty) {
+          _controller.updateRecordNumber('');
+        }
+      }
+
+      _controller.updateName(newValue);
+      _lastNameValue = newValue;
+
       // Fetch available record numbers when name changes
       _fetchAvailableRecordNumbers();
     });
@@ -95,6 +133,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     try {
       // Fetch available record numbers after controller is ready
       await _fetchAvailableRecordNumbers();
+      // Fetch all names and record numbers for autocomplete
+      await _fetchAllNamesAndRecordNumbers();
       await _controller.initialize();
       _controller.setupConnectivityMonitoring();
     } catch (e) {
@@ -114,6 +154,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   void dispose() {
     _nameController.dispose();
     _phoneController.dispose();
+    _nameFocusNode.dispose();
+    _recordNumberFocusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -124,6 +166,18 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (mounted) {
       setState(() {
         _availableRecordNumbers = recordNumbers;
+      });
+    }
+  }
+
+  Future<void> _fetchAllNamesAndRecordNumbers() async {
+    final names = await _controller.getAllNamesForAutocomplete();
+    final recordNumbers = await _controller.getAllRecordNumbersForAutocomplete();
+    debugPrint('📋 EventDetail: Fetched ${names.length} names and ${recordNumbers.length} record numbers for autocomplete');
+    if (mounted) {
+      setState(() {
+        _allNames = names;
+        _allRecordNumberOptions = recordNumbers;
       });
     }
   }
@@ -697,6 +751,23 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               },
                               onRecordNumberChanged: _handleRecordNumberChanged,
                               onNewRecordNumberRequested: _showNewRecordNumberDialog,
+                              // New autocomplete parameters
+                              nameFocusNode: _nameFocusNode,
+                              recordNumberFocusNode: _recordNumberFocusNode,
+                              allNames: _allNames,
+                              allRecordNumberOptions: _allRecordNumberOptions,
+                              onNameSelected: (name) => _controller.onNameSelected(name),
+                              onRecordNumberSelected: (recordNumber) => _controller.onRecordNumberSelected(recordNumber),
+                              onRecordNumberTextChanged: (text) {
+                                // Clear name when user starts typing in record number field
+                                if (text != _lastRecordNumberValue && text.isNotEmpty) {
+                                  if (_nameController.text.isNotEmpty) {
+                                    _nameController.text = '';
+                                  }
+                                }
+                                _lastRecordNumberValue = text;
+                              },
+                              isNameReadOnly: state.isNameReadOnly,
                             ),
                           ),
                         ),
