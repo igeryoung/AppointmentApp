@@ -915,13 +915,27 @@ class EventDetailController {
         hasChanges: true,
       ));
 
-      // Load associated data (charge items and phone)
+      // Load associated data (charge items, phone, and handwritten note)
       loadChargeItems().catchError((e) {
         debugPrint('❌ EventDetailController: Failed to load charge items after record number selection: $e');
       });
       loadPhone().catchError((e) {
         debugPrint('❌ EventDetailController: Failed to load phone after record number selection: $e');
       });
+
+      // Load existing person note if it exists
+      try {
+        final existingNote = await prdDb.findExistingPersonNote(name, recordNumber);
+        if (existingNote != null && existingNote.isNotEmpty) {
+          final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+          debugPrint('✅ EventDetailController: Found existing person note (${existingNote.pages.length} pages, $totalStrokes strokes), loading it');
+          loadExistingPersonNote(existingNote);
+        } else {
+          debugPrint('ℹ️ EventDetailController: No existing person note found for $name + $recordNumber');
+        }
+      } catch (e) {
+        debugPrint('❌ EventDetailController: Failed to load existing person note: $e');
+      }
     }
   }
 

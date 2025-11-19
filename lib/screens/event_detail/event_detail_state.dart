@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';

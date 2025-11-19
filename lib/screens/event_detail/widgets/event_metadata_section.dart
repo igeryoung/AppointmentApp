@@ -436,7 +436,9 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   @override
   void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (widget.value != oldWidget.value && _controller.text != widget.value) {
+    // Always sync controller with widget value to handle all state changes
+    // This fixes the bug where record number disappears after reopening the event
+    if (_controller.text != widget.value) {
       _controller.text = widget.value;
     }
   }

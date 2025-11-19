@@ -87,9 +87,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         if (mounted) {
           // Update name controller if state changed (e.g., from record number selection)
           // Check to avoid infinite loop: only update if different
+          // IMPORTANT: Update _lastNameValue BEFORE _nameController.text to prevent
+          // the name listener from thinking user typed and clearing record number
           if (_nameController.text != state.name) {
-            _nameController.text = state.name;
-            _lastNameValue = state.name;
+            _lastNameValue = state.name;  // Update tracking variable first!
+            _nameController.text = state.name;  // Then update controller
           }
 
           // Update phone controller if state changed (to sync from loadPhone)
