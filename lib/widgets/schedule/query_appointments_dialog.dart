@@ -265,51 +265,33 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                   ),
                   const SizedBox(height: 16),
 
-                  // Record number dropdown with name-record pairs
-                  DropdownMenu<String>(
+                  // Record number autocomplete field with name-record pairs
+                  _RecordNumberAutocompleteField(
                     controller: recordNumberController,
-                    initialSelection: selectedRecordNumber,
-                    label: Text(l10n.recordNumber),
-                    hintText: filteredNameRecordPairs.isEmpty
-                        ? l10n.noMatchingRecordNumbers
-                        : l10n.selectRecordNumber,
-                    expandedInsets: EdgeInsets.zero,
-                    menuHeight: 300,
+                    labelText: l10n.recordNumber,
+                    allNameRecordPairs: filteredNameRecordPairs,
                     errorText: recordNumberError,
-                    inputDecorationTheme: const InputDecorationTheme(
-                      border: OutlineInputBorder(),
-                    ),
-                    dropdownMenuEntries: filteredNameRecordPairs.map((pair) {
-                      return DropdownMenuEntry<String>(
-                        value: pair.recordNumber,
-                        label: pair.displayText, // Format: [name] - [record number]
-                      );
-                    }).toList(),
-                    onSelected: (String? newValue) {
-                      if (newValue != null) {
-                        // Find the corresponding pair to extract the name
-                        final selectedPair = filteredNameRecordPairs.firstWhere(
-                          (pair) => pair.recordNumber == newValue,
-                        );
+                    onRecordSelected: (pair) {
+                      // Set flag to prevent onChanged from clearing selection
+                      _isProgrammaticNameChange = true;
 
-                        // Set flag to prevent onChanged from clearing selection
-                        _isProgrammaticNameChange = true;
+                      // Auto-fill name field
+                      nameController.text = pair.name;
 
-                        // Auto-fill name field
-                        nameController.text = selectedPair.name;
+                      setState(() {
+                        selectedRecordNumber = pair.recordNumber;
+                        recordNumberError = null;
+                        nameError = null;
+                      });
 
-                        // Set record number field to show only the record number
-                        recordNumberController.text = newValue;
-
-                        setState(() {
-                          selectedRecordNumber = newValue;
-                          recordNumberError = null;
-                          nameError = null;
-                        });
-
-                        // Reset flag after state update
-                        _isProgrammaticNameChange = false;
-                      }
+                      // Reset flag after state update
+                      _isProgrammaticNameChange = false;
+                    },
+                    onChanged: (value) {
+                      setState(() {
+                        recordNumberError = null;
+                        selectedRecordNumber = null;
+                      });
                     },
                   ),
                   const SizedBox(height: 16),
@@ -603,6 +585,168 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
                           ),
                         ),
                         child: Text(option),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          errorText: widget.errorText,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+      ),
+    );
+  }
+}
+
+/// Record number autocomplete field with name-record pairs
+class _RecordNumberAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final List<NameRecordPair> allNameRecordPairs;
+  final String? errorText;
+  final ValueChanged<NameRecordPair>? onRecordSelected;
+  final ValueChanged<String>? onChanged;
+
+  const _RecordNumberAutocompleteField({
+    required this.controller,
+    required this.labelText,
+    required this.allNameRecordPairs,
+    this.errorText,
+    this.onRecordSelected,
+    this.onChanged,
+  });
+
+  @override
+  State<_RecordNumberAutocompleteField> createState() => _RecordNumberAutocompleteFieldState();
+}
+
+class _RecordNumberAutocompleteFieldState extends State<_RecordNumberAutocompleteField> {
+  final FocusNode _focusNode = FocusNode();
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    widget.controller.removeListener(_onTextChanged);
+    _removeOverlay();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _onTextChanged() {
+    if (_focusNode.hasFocus) {
+      _updateOverlay();
+    }
+    widget.onChanged?.call(widget.controller.text);
+  }
+
+  List<NameRecordPair> _getFilteredOptions() {
+    final text = widget.controller.text.toLowerCase();
+    if (text.isEmpty) {
+      return widget.allNameRecordPairs;
+    }
+    // Filter by record number
+    return widget.allNameRecordPairs
+        .where((pair) => pair.recordNumber.toLowerCase().contains(text))
+        .toList();
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _updateOverlay() {
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        final options = _getFilteredOptions();
+        if (options.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 5),
+            child: Material(
+              elevation: 4.0,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 250),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final pair = options[index];
+                    return InkWell(
+                      onTap: () {
+                        // Set field to show only record number
+                        widget.controller.text = pair.recordNumber;
+                        widget.onRecordSelected?.call(pair);
+                        _removeOverlay();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade200,
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                        // Display full format: [name] - [record number]
+                        child: Text(pair.displayText),
                       ),
                     );
                   },
