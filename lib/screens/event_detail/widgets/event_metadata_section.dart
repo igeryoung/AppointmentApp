@@ -36,7 +36,6 @@ class EventMetadataSection extends StatelessWidget {
   final VoidCallback? onRecordNumberFieldFocused;
   final ValueChanged<String>? onNameSelected;
   final ValueChanged<String>? onRecordNumberSelected;
-  final ValueChanged<String>? onRecordNumberTextChanged;  // When record number text changes (for clearing name)
   final bool isNameReadOnly;
 
   const EventMetadataSection({
@@ -67,9 +66,29 @@ class EventMetadataSection extends StatelessWidget {
     this.onRecordNumberFieldFocused,
     this.onNameSelected,
     this.onRecordNumberSelected,
-    this.onRecordNumberTextChanged,
     this.isNameReadOnly = false,
   });
+
+  /// Filter record number options based on current name
+  /// If name is not empty, only show record numbers that match the name
+  /// If name is empty, show all record numbers
+  List<RecordNumberOption> _getFilteredRecordNumberOptions() {
+    final currentName = nameController.text.trim();
+
+    // If name is empty, show all record numbers
+    if (currentName.isEmpty) {
+      return allRecordNumberOptions;
+    }
+
+    // If name is not empty, filter by availableRecordNumbers (which are filtered by name)
+    // Convert availableRecordNumbers to a Set for O(1) lookup
+    final availableSet = availableRecordNumbers.toSet();
+
+    // Filter allRecordNumberOptions to only include those in availableRecordNumbers
+    return allRecordNumberOptions
+        .where((option) => availableSet.contains(option.recordNumber))
+        .toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -195,7 +214,7 @@ class EventMetadataSection extends StatelessWidget {
                   // Record Number autocomplete field
                   _RecordNumberAutocomplete(
                     value: recordNumber,
-                    allRecordNumberOptions: allRecordNumberOptions,
+                    allRecordNumberOptions: _getFilteredRecordNumberOptions(),
                     isEnabled: true,  // Always enabled for new behavior
                     labelText: l10n.recordNumber,
                     onRecordNumberSelected: onRecordNumberSelected,
@@ -205,7 +224,7 @@ class EventMetadataSection extends StatelessWidget {
                     onNewRecordNumberRequested: onNewRecordNumberRequested,
                     focusNode: recordNumberFocusNode,
                     onFocused: onRecordNumberFieldFocused,
-                    onTextChanged: onRecordNumberTextChanged,  // Callback when user types to clear name
+                    // Removed onTextChanged callback to fix race condition bug
                   ),
                   const SizedBox(height: 8),
                   // Event Type field
@@ -397,7 +416,6 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   final Future<String?> Function() onNewRecordNumberRequested;
   final FocusNode? focusNode;
   final VoidCallback? onFocused;
-  final ValueChanged<String>? onTextChanged;
 
   const _RecordNumberAutocomplete({
     required this.value,
@@ -409,7 +427,6 @@ class _RecordNumberAutocomplete extends StatefulWidget {
     required this.onNewRecordNumberRequested,
     this.focusNode,
     this.onFocused,
-    this.onTextChanged,
   });
 
   @override
@@ -462,9 +479,6 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   }
 
   void _onTextChanged() {
-    if (widget.onTextChanged != null) {
-      widget.onTextChanged!(_controller.text);
-    }
     if (_focusNode.hasFocus && widget.isEnabled) {
       _updateOverlay();
     }

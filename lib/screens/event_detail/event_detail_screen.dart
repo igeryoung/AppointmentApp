@@ -55,9 +55,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   List<String> _allNames = [];
   List<RecordNumberOption> _allRecordNumberOptions = [];
 
-  // Tracks for clearing behavior - clear other field only when starting to type
+  // Tracks for clearing behavior - clear record number when starting to type name
   String _lastNameValue = '';
-  String _lastRecordNumberValue = '';
 
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
@@ -72,7 +71,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     // Initialize last values for clearing behavior
     _lastNameValue = widget.event.name;
-    _lastRecordNumberValue = widget.event.recordNumber ?? '';
 
     // Initialize focus nodes
     _nameFocusNode = FocusNode();
@@ -760,15 +758,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               allRecordNumberOptions: _allRecordNumberOptions,
                               onNameSelected: (name) => _controller.onNameSelected(name),
                               onRecordNumberSelected: (recordNumber) => _controller.onRecordNumberSelected(recordNumber),
-                              onRecordNumberTextChanged: (text) {
-                                // Clear name when user starts typing in record number field
-                                if (text != _lastRecordNumberValue && text.isNotEmpty) {
-                                  if (_nameController.text.isNotEmpty) {
-                                    _nameController.text = '';
-                                  }
-                                }
-                                _lastRecordNumberValue = text;
-                              },
+                              // Removed onRecordNumberTextChanged to fix race condition bug
+                              // Only name field typing clears record number, not vice versa
                               isNameReadOnly: state.isNameReadOnly,
                             ),
                           ),
