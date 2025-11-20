@@ -38,6 +38,7 @@ class _QueryAppointmentsDialog extends StatefulWidget {
 
 class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController nameController;
+  late TextEditingController recordNumberController;
   Timer? _debounceTimer;
   String? selectedRecordNumber;
   List<String> allNames = [];
@@ -54,6 +55,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   void initState() {
     super.initState();
     nameController = TextEditingController();
+    recordNumberController = TextEditingController();
     _loadAllNames();
     _loadAllNameRecordPairs();
   }
@@ -62,6 +64,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   void dispose() {
     _debounceTimer?.cancel();
     nameController.dispose();
+    recordNumberController.dispose();
     super.dispose();
   }
 
@@ -111,6 +114,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       setState(() {
         filteredNameRecordPairs = allNameRecordPairs;
         selectedRecordNumber = null;
+        recordNumberController.clear(); // Clear the field
       });
       return;
     }
@@ -123,6 +127,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     setState(() {
       filteredNameRecordPairs = filtered;
       selectedRecordNumber = null; // Clear selection when name changes
+      recordNumberController.clear(); // Clear the field
     });
   }
 
@@ -236,6 +241,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null;
+                        recordNumberController.clear(); // Clear record number field
                       });
                       _filterNameRecordPairsByName();
                     },
@@ -248,6 +254,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null;
+                        recordNumberController.clear(); // Clear record number field
                       });
 
                       _debounceTimer?.cancel();
@@ -260,6 +267,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
 
                   // Record number dropdown with name-record pairs
                   DropdownMenu<String>(
+                    controller: recordNumberController,
                     initialSelection: selectedRecordNumber,
                     label: Text(l10n.recordNumber),
                     hintText: filteredNameRecordPairs.isEmpty
@@ -289,6 +297,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
 
                         // Auto-fill name field
                         nameController.text = selectedPair.name;
+
+                        // Set record number field to show only the record number
+                        recordNumberController.text = newValue;
 
                         setState(() {
                           selectedRecordNumber = newValue;
