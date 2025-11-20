@@ -41,11 +41,11 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   Timer? _debounceTimer;
   String? selectedRecordNumber;
   List<String> allNames = [];
-  List<String> filteredRecordNumbers = [];
+  List<NameRecordPair> allNameRecordPairs = [];
+  List<NameRecordPair> filteredNameRecordPairs = [];
   List<Event> searchResults = [];
   bool isLoading = false;
   bool hasSearched = false;
-  bool isDropdownEnabled = false;
   String? nameError;
   String? recordNumberError;
 
@@ -54,6 +54,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     super.initState();
     nameController = TextEditingController();
     _loadAllNames();
+    _loadAllNameRecordPairs();
   }
 
   @override
@@ -81,41 +82,16 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     }
   }
 
-  /// Filter record numbers based on entered name (exact match, case-insensitive)
-  Future<void> _filterRecordNumbersByName() async {
-    final name = nameController.text.trim();
-
-    if (name.isEmpty) {
-      // Empty name - disable dropdown
-      setState(() {
-        filteredRecordNumbers = [];
-        isDropdownEnabled = false;
-        selectedRecordNumber = null;
-      });
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-    });
-
+  /// Load all available name-record pairs for dropdown
+  Future<void> _loadAllNameRecordPairs() async {
     try {
-      final numbers = await widget.eventRepository.getRecordNumbersByName(
-        widget.bookId,
-        name,
-      );
+      final pairs = await widget.eventRepository.getAllNameRecordPairs(widget.bookId);
       setState(() {
-        filteredRecordNumbers = numbers;
-        isDropdownEnabled = true;
-        selectedRecordNumber = null; // Always clear selection when name changes
-        isLoading = false;
+        allNameRecordPairs = pairs;
+        filteredNameRecordPairs = pairs; // Initially show all pairs
       });
     } catch (e) {
-      setState(() {
-        filteredRecordNumbers = [];
-        isDropdownEnabled = false;
-        isLoading = false;
-      });
+      // Silently fail - allNameRecordPairs will remain empty
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -123,6 +99,30 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         );
       }
     }
+  }
+
+  /// Filter name-record pairs based on entered name (case-insensitive partial match)
+  void _filterNameRecordPairsByName() {
+    final name = nameController.text.trim();
+
+    if (name.isEmpty) {
+      // Empty name - show all pairs
+      setState(() {
+        filteredNameRecordPairs = allNameRecordPairs;
+        selectedRecordNumber = null;
+      });
+      return;
+    }
+
+    // Filter pairs where name matches (case-insensitive, partial match)
+    final filtered = allNameRecordPairs
+        .where((pair) => pair.name.toLowerCase().contains(name.toLowerCase()))
+        .toList();
+
+    setState(() {
+      filteredNameRecordPairs = filtered;
+      selectedRecordNumber = null; // Clear selection when name changes
+    });
   }
 
   /// Validate and perform search
@@ -236,50 +236,60 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                         nameError = null;
                         selectedRecordNumber = null;
                       });
-                      _filterRecordNumbersByName();
+                      _filterNameRecordPairsByName();
                     },
                     onChanged: (value) {
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null;
-                        isDropdownEnabled = false;
                       });
 
                       _debounceTimer?.cancel();
                       _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-                        _filterRecordNumbersByName();
+                        _filterNameRecordPairsByName();
                       });
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // Record number dropdown
+                  // Record number dropdown with name-record pairs
                   DropdownMenu<String>(
                     initialSelection: selectedRecordNumber,
                     label: Text(l10n.recordNumber),
-                    hintText: !isDropdownEnabled
-                        ? l10n.enterNameFirst
-                        : (filteredRecordNumbers.isEmpty
-                            ? l10n.noMatchingRecordNumbers
-                            : l10n.selectRecordNumber),
-                    enabled: isDropdownEnabled,
+                    hintText: filteredNameRecordPairs.isEmpty
+                        ? l10n.noMatchingRecordNumbers
+                        : l10n.selectRecordNumber,
                     expandedInsets: EdgeInsets.zero,
                     menuHeight: 300,
                     errorText: recordNumberError,
                     inputDecorationTheme: const InputDecorationTheme(
                       border: OutlineInputBorder(),
                     ),
-                    dropdownMenuEntries: filteredRecordNumbers.map((number) {
+                    dropdownMenuEntries: filteredNameRecordPairs.map((pair) {
                       return DropdownMenuEntry<String>(
-                        value: number,
-                        label: number,
+                        value: pair.recordNumber,
+                        label: pair.displayText, // Format: [name] - [record number]
                       );
                     }).toList(),
                     onSelected: (String? newValue) {
-                      setState(() {
-                        selectedRecordNumber = newValue;
-                        recordNumberError = null;
-                      });
+                      if (newValue != null) {
+                        // Find the corresponding pair to extract the name
+                        final selectedPair = filteredNameRecordPairs.firstWhere(
+                          (pair) => pair.recordNumber == newValue,
+                        );
+
+                        // Auto-fill name field
+                        nameController.text = selectedPair.name;
+
+                        setState(() {
+                          selectedRecordNumber = newValue;
+                          recordNumberError = null;
+                          nameError = null;
+                        });
+
+                        // Update filtered pairs based on the auto-filled name
+                        _filterNameRecordPairsByName();
+                      }
                     },
                   ),
                   const SizedBox(height: 16),
