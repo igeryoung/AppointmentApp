@@ -40,6 +40,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController nameController;
   Timer? _debounceTimer;
   String? selectedRecordNumber;
+  List<String> allNames = [];
   List<String> filteredRecordNumbers = [];
   List<Event> searchResults = [];
   bool isLoading = false;
@@ -52,6 +53,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   void initState() {
     super.initState();
     nameController = TextEditingController();
+    _loadAllNames();
   }
 
   @override
@@ -59,6 +61,24 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     _debounceTimer?.cancel();
     nameController.dispose();
     super.dispose();
+  }
+
+  /// Load all available names for autocomplete
+  Future<void> _loadAllNames() async {
+    try {
+      final names = await widget.eventRepository.getAllNames(widget.bookId);
+      setState(() {
+        allNames = names;
+      });
+    } catch (e) {
+      // Silently fail - allNames will remain empty
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.errorLoadingData)),
+        );
+      }
+    }
   }
 
   /// Filter record numbers based on entered name (exact match, case-insensitive)
@@ -205,25 +225,27 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Name input field
-                  TextField(
+                  // Name autocomplete field
+                  _NameAutocompleteField(
                     controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: l10n.eventName,
-                      errorText: nameError,
-                      border: const OutlineInputBorder(),
-                    ),
+                    labelText: l10n.eventName,
+                    allNames: allNames,
+                    errorText: nameError,
+                    onNameSelected: (name) {
+                      setState(() {
+                        nameError = null;
+                        selectedRecordNumber = null;
+                      });
+                      _filterRecordNumbersByName();
+                    },
                     onChanged: (value) {
                       setState(() {
                         nameError = null;
-                        selectedRecordNumber = null; // Clear selection when name changes
-                        isDropdownEnabled = false; // Temporarily disable while typing
+                        selectedRecordNumber = null;
+                        isDropdownEnabled = false;
                       });
 
-                      // Cancel previous debounce timer
                       _debounceTimer?.cancel();
-
-                      // Start new debounce timer - filter after 500ms of no typing
                       _debounceTimer = Timer(const Duration(milliseconds: 500), () {
                         _filterRecordNumbersByName();
                       });
@@ -418,6 +440,163 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Name autocomplete field with dropdown overlay
+class _NameAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final List<String> allNames;
+  final String? errorText;
+  final ValueChanged<String>? onNameSelected;
+  final ValueChanged<String>? onChanged;
+
+  const _NameAutocompleteField({
+    required this.controller,
+    required this.labelText,
+    required this.allNames,
+    this.errorText,
+    this.onNameSelected,
+    this.onChanged,
+  });
+
+  @override
+  State<_NameAutocompleteField> createState() => _NameAutocompleteFieldState();
+}
+
+class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
+  final FocusNode _focusNode = FocusNode();
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    widget.controller.removeListener(_onTextChanged);
+    _removeOverlay();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _onTextChanged() {
+    if (_focusNode.hasFocus) {
+      _updateOverlay();
+    }
+    widget.onChanged?.call(widget.controller.text);
+  }
+
+  List<String> _getFilteredOptions() {
+    final text = widget.controller.text.toLowerCase();
+    if (text.isEmpty) {
+      return widget.allNames;
+    }
+    return widget.allNames.where((name) => name.toLowerCase().contains(text)).toList();
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _updateOverlay() {
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        final options = _getFilteredOptions();
+        if (options.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 5),
+            child: Material(
+              elevation: 4.0,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 250),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    return InkWell(
+                      onTap: () {
+                        widget.controller.text = option;
+                        widget.onNameSelected?.call(option);
+                        _removeOverlay();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade200,
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                        child: Text(option),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          errorText: widget.errorText,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
       ),
     );

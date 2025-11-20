@@ -46,6 +46,9 @@ abstract class IEventRepository {
     String reason,
   );
 
+  /// Get all unique names for a specific book
+  Future<List<String>> getAllNames(int bookId);
+
   /// Get all unique record numbers for a specific book
   Future<List<String>> getAllRecordNumbers(int bookId);
 
