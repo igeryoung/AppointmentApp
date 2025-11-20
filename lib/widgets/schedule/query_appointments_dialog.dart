@@ -286,9 +286,6 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                           recordNumberError = null;
                           nameError = null;
                         });
-
-                        // Update filtered pairs based on the auto-filled name
-                        _filterNameRecordPairsByName();
                       }
                     },
                   ),
