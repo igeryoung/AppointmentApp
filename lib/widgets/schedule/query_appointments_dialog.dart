@@ -46,6 +46,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   List<Event> searchResults = [];
   bool isLoading = false;
   bool hasSearched = false;
+  bool _isProgrammaticNameChange = false; // Flag to prevent race condition
   String? nameError;
   String? recordNumberError;
 
@@ -239,6 +240,11 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       _filterNameRecordPairsByName();
                     },
                     onChanged: (value) {
+                      // Skip if this is a programmatic change from record selection
+                      if (_isProgrammaticNameChange) {
+                        return;
+                      }
+
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null;
@@ -278,6 +284,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                           (pair) => pair.recordNumber == newValue,
                         );
 
+                        // Set flag to prevent onChanged from clearing selection
+                        _isProgrammaticNameChange = true;
+
                         // Auto-fill name field
                         nameController.text = selectedPair.name;
 
@@ -286,6 +295,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                           recordNumberError = null;
                           nameError = null;
                         });
+
+                        // Reset flag after state update
+                        _isProgrammaticNameChange = false;
                       }
                     },
                   ),
