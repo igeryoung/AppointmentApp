@@ -38,13 +38,16 @@ class _QueryAppointmentsDialog extends StatefulWidget {
 
 class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController nameController;
+  late TextEditingController recordNumberController;
   Timer? _debounceTimer;
   String? selectedRecordNumber;
-  List<String> filteredRecordNumbers = [];
+  List<String> allNames = [];
+  List<NameRecordPair> allNameRecordPairs = [];
+  List<NameRecordPair> filteredNameRecordPairs = [];
   List<Event> searchResults = [];
   bool isLoading = false;
   bool hasSearched = false;
-  bool isDropdownEnabled = false;
+  bool _isProgrammaticNameChange = false; // Flag to prevent race condition
   String? nameError;
   String? recordNumberError;
 
@@ -52,50 +55,28 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   void initState() {
     super.initState();
     nameController = TextEditingController();
+    recordNumberController = TextEditingController();
+    _loadAllNames();
+    _loadAllNameRecordPairs();
   }
 
   @override
   void dispose() {
     _debounceTimer?.cancel();
     nameController.dispose();
+    recordNumberController.dispose();
     super.dispose();
   }
 
-  /// Filter record numbers based on entered name (exact match, case-insensitive)
-  Future<void> _filterRecordNumbersByName() async {
-    final name = nameController.text.trim();
-
-    if (name.isEmpty) {
-      // Empty name - disable dropdown
-      setState(() {
-        filteredRecordNumbers = [];
-        isDropdownEnabled = false;
-        selectedRecordNumber = null;
-      });
-      return;
-    }
-
-    setState(() {
-      isLoading = true;
-    });
-
+  /// Load all available names for autocomplete
+  Future<void> _loadAllNames() async {
     try {
-      final numbers = await widget.eventRepository.getRecordNumbersByName(
-        widget.bookId,
-        name,
-      );
+      final names = await widget.eventRepository.getAllNames(widget.bookId);
       setState(() {
-        filteredRecordNumbers = numbers;
-        isDropdownEnabled = true;
-        selectedRecordNumber = null; // Always clear selection when name changes
-        isLoading = false;
+        allNames = names;
       });
     } catch (e) {
-      setState(() {
-        filteredRecordNumbers = [];
-        isDropdownEnabled = false;
-        isLoading = false;
-      });
+      // Silently fail - allNames will remain empty
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
         ScaffoldMessenger.of(context).showSnackBar(
@@ -103,6 +84,51 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         );
       }
     }
+  }
+
+  /// Load all available name-record pairs for dropdown
+  Future<void> _loadAllNameRecordPairs() async {
+    try {
+      final pairs = await widget.eventRepository.getAllNameRecordPairs(widget.bookId);
+      setState(() {
+        allNameRecordPairs = pairs;
+        filteredNameRecordPairs = pairs; // Initially show all pairs
+      });
+    } catch (e) {
+      // Silently fail - allNameRecordPairs will remain empty
+      if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.errorLoadingData)),
+        );
+      }
+    }
+  }
+
+  /// Filter name-record pairs based on entered name (case-insensitive partial match)
+  void _filterNameRecordPairsByName() {
+    final name = nameController.text.trim();
+
+    if (name.isEmpty) {
+      // Empty name - show all pairs
+      setState(() {
+        filteredNameRecordPairs = allNameRecordPairs;
+        selectedRecordNumber = null;
+        recordNumberController.clear(); // Clear the field
+      });
+      return;
+    }
+
+    // Filter pairs where name matches (case-insensitive, partial match)
+    final filtered = allNameRecordPairs
+        .where((pair) => pair.name.toLowerCase().contains(name.toLowerCase()))
+        .toList();
+
+    setState(() {
+      filteredNameRecordPairs = filtered;
+      selectedRecordNumber = null; // Clear selection when name changes
+      recordNumberController.clear(); // Clear the field
+    });
   }
 
   /// Validate and perform search
@@ -205,58 +231,66 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  // Name input field
-                  TextField(
+                  // Name autocomplete field
+                  _NameAutocompleteField(
                     controller: nameController,
-                    decoration: InputDecoration(
-                      labelText: l10n.eventName,
-                      errorText: nameError,
-                      border: const OutlineInputBorder(),
-                    ),
-                    onChanged: (value) {
+                    labelText: l10n.eventName,
+                    allNames: allNames,
+                    errorText: nameError,
+                    onNameSelected: (name) {
                       setState(() {
                         nameError = null;
-                        selectedRecordNumber = null; // Clear selection when name changes
-                        isDropdownEnabled = false; // Temporarily disable while typing
+                        selectedRecordNumber = null;
+                        recordNumberController.clear(); // Clear record number field
+                      });
+                      _filterNameRecordPairsByName();
+                    },
+                    onChanged: (value) {
+                      // Skip if this is a programmatic change from record selection
+                      if (_isProgrammaticNameChange) {
+                        return;
+                      }
+
+                      setState(() {
+                        nameError = null;
+                        selectedRecordNumber = null;
+                        recordNumberController.clear(); // Clear record number field
                       });
 
-                      // Cancel previous debounce timer
                       _debounceTimer?.cancel();
-
-                      // Start new debounce timer - filter after 500ms of no typing
                       _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-                        _filterRecordNumbersByName();
+                        _filterNameRecordPairsByName();
                       });
                     },
                   ),
                   const SizedBox(height: 16),
 
-                  // Record number dropdown
-                  DropdownMenu<String>(
-                    initialSelection: selectedRecordNumber,
-                    label: Text(l10n.recordNumber),
-                    hintText: !isDropdownEnabled
-                        ? l10n.enterNameFirst
-                        : (filteredRecordNumbers.isEmpty
-                            ? l10n.noMatchingRecordNumbers
-                            : l10n.selectRecordNumber),
-                    enabled: isDropdownEnabled,
-                    expandedInsets: EdgeInsets.zero,
-                    menuHeight: 300,
+                  // Record number autocomplete field with name-record pairs
+                  _RecordNumberAutocompleteField(
+                    controller: recordNumberController,
+                    labelText: l10n.recordNumber,
+                    allNameRecordPairs: filteredNameRecordPairs,
                     errorText: recordNumberError,
-                    inputDecorationTheme: const InputDecorationTheme(
-                      border: OutlineInputBorder(),
-                    ),
-                    dropdownMenuEntries: filteredRecordNumbers.map((number) {
-                      return DropdownMenuEntry<String>(
-                        value: number,
-                        label: number,
-                      );
-                    }).toList(),
-                    onSelected: (String? newValue) {
+                    onRecordSelected: (pair) {
+                      // Set flag to prevent onChanged from clearing selection
+                      _isProgrammaticNameChange = true;
+
+                      // Auto-fill name field
+                      nameController.text = pair.name;
+
                       setState(() {
-                        selectedRecordNumber = newValue;
+                        selectedRecordNumber = pair.recordNumber;
                         recordNumberError = null;
+                        nameError = null;
+                      });
+
+                      // Reset flag after state update
+                      _isProgrammaticNameChange = false;
+                    },
+                    onChanged: (value) {
+                      setState(() {
+                        recordNumberError = null;
+                        selectedRecordNumber = null;
                       });
                     },
                   ),
@@ -418,6 +452,325 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
               ],
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Name autocomplete field with dropdown overlay
+class _NameAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final List<String> allNames;
+  final String? errorText;
+  final ValueChanged<String>? onNameSelected;
+  final ValueChanged<String>? onChanged;
+
+  const _NameAutocompleteField({
+    required this.controller,
+    required this.labelText,
+    required this.allNames,
+    this.errorText,
+    this.onNameSelected,
+    this.onChanged,
+  });
+
+  @override
+  State<_NameAutocompleteField> createState() => _NameAutocompleteFieldState();
+}
+
+class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
+  final FocusNode _focusNode = FocusNode();
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    widget.controller.removeListener(_onTextChanged);
+    _removeOverlay();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _onTextChanged() {
+    if (_focusNode.hasFocus) {
+      _updateOverlay();
+    }
+    widget.onChanged?.call(widget.controller.text);
+  }
+
+  List<String> _getFilteredOptions() {
+    final text = widget.controller.text.toLowerCase();
+    if (text.isEmpty) {
+      return widget.allNames;
+    }
+    return widget.allNames.where((name) => name.toLowerCase().contains(text)).toList();
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _updateOverlay() {
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        final options = _getFilteredOptions();
+        if (options.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 5),
+            child: Material(
+              elevation: 4.0,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 250),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final option = options[index];
+                    return InkWell(
+                      onTap: () {
+                        widget.controller.text = option;
+                        widget.onNameSelected?.call(option);
+                        _removeOverlay();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade200,
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                        child: Text(option),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          errorText: widget.errorText,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        ),
+      ),
+    );
+  }
+}
+
+/// Record number autocomplete field with name-record pairs
+class _RecordNumberAutocompleteField extends StatefulWidget {
+  final TextEditingController controller;
+  final String labelText;
+  final List<NameRecordPair> allNameRecordPairs;
+  final String? errorText;
+  final ValueChanged<NameRecordPair>? onRecordSelected;
+  final ValueChanged<String>? onChanged;
+
+  const _RecordNumberAutocompleteField({
+    required this.controller,
+    required this.labelText,
+    required this.allNameRecordPairs,
+    this.errorText,
+    this.onRecordSelected,
+    this.onChanged,
+  });
+
+  @override
+  State<_RecordNumberAutocompleteField> createState() => _RecordNumberAutocompleteFieldState();
+}
+
+class _RecordNumberAutocompleteFieldState extends State<_RecordNumberAutocompleteField> {
+  final FocusNode _focusNode = FocusNode();
+  OverlayEntry? _overlayEntry;
+  final LayerLink _layerLink = LayerLink();
+
+  @override
+  void initState() {
+    super.initState();
+    _focusNode.addListener(_onFocusChanged);
+    widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void dispose() {
+    _focusNode.removeListener(_onFocusChanged);
+    widget.controller.removeListener(_onTextChanged);
+    _removeOverlay();
+    _focusNode.dispose();
+    super.dispose();
+  }
+
+  void _onFocusChanged() {
+    if (_focusNode.hasFocus) {
+      _showOverlay();
+    } else {
+      _removeOverlay();
+    }
+  }
+
+  void _onTextChanged() {
+    if (_focusNode.hasFocus) {
+      _updateOverlay();
+    }
+    widget.onChanged?.call(widget.controller.text);
+  }
+
+  List<NameRecordPair> _getFilteredOptions() {
+    final text = widget.controller.text.toLowerCase();
+    if (text.isEmpty) {
+      return widget.allNameRecordPairs;
+    }
+    // Filter by record number
+    return widget.allNameRecordPairs
+        .where((pair) => pair.recordNumber.toLowerCase().contains(text))
+        .toList();
+  }
+
+  void _showOverlay() {
+    _removeOverlay();
+    _overlayEntry = _createOverlayEntry();
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _updateOverlay() {
+    _overlayEntry?.markNeedsBuild();
+  }
+
+  void _removeOverlay() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  OverlayEntry _createOverlayEntry() {
+    final renderBox = context.findRenderObject() as RenderBox;
+    final size = renderBox.size;
+
+    return OverlayEntry(
+      builder: (context) {
+        final options = _getFilteredOptions();
+        if (options.isEmpty) {
+          return const SizedBox.shrink();
+        }
+
+        return Positioned(
+          width: size.width,
+          child: CompositedTransformFollower(
+            link: _layerLink,
+            showWhenUnlinked: false,
+            offset: Offset(0, size.height + 5),
+            child: Material(
+              elevation: 4.0,
+              borderRadius: BorderRadius.circular(8),
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxHeight: 250),
+                child: ListView.builder(
+                  padding: const EdgeInsets.all(8.0),
+                  shrinkWrap: true,
+                  itemCount: options.length,
+                  itemBuilder: (context, index) {
+                    final pair = options[index];
+                    return InkWell(
+                      onTap: () {
+                        // Set field to show only record number
+                        widget.controller.text = pair.recordNumber;
+                        widget.onRecordSelected?.call(pair);
+                        _removeOverlay();
+                        _focusNode.unfocus();
+                      },
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        decoration: BoxDecoration(
+                          border: Border(
+                            bottom: BorderSide(
+                              color: Colors.grey.shade200,
+                              width: 1.0,
+                            ),
+                          ),
+                        ),
+                        // Display full format: [name] - [record number]
+                        child: Text(pair.displayText),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return CompositedTransformTarget(
+      link: _layerLink,
+      child: TextField(
+        controller: widget.controller,
+        focusNode: _focusNode,
+        decoration: InputDecoration(
+          labelText: widget.labelText,
+          errorText: widget.errorText,
+          border: const OutlineInputBorder(),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         ),
       ),
     );

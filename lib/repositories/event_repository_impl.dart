@@ -226,6 +226,21 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
+  Future<List<String>> getAllNames(int bookId) async {
+    final db = await getDatabaseFn();
+    final result = await db.query(
+      'events',
+      columns: ['DISTINCT name'],
+      where: 'book_id = ? AND name IS NOT NULL AND name != ""',
+      whereArgs: [bookId],
+      orderBy: 'name ASC',
+    );
+    return result
+        .map((row) => row['name'] as String)
+        .toList();
+  }
+
+  @override
   Future<List<String>> getAllRecordNumbers(int bookId) async {
     final db = await getDatabaseFn();
     final result = await db.query(
@@ -237,6 +252,25 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     );
     return result
         .map((row) => row['record_number'] as String)
+        .toList();
+  }
+
+  @override
+  Future<List<NameRecordPair>> getAllNameRecordPairs(int bookId) async {
+    final db = await getDatabaseFn();
+    final result = await db.query(
+      'events',
+      distinct: true,
+      columns: ['name', 'record_number'],
+      where: 'book_id = ? AND name IS NOT NULL AND name != "" AND record_number IS NOT NULL AND record_number != ""',
+      whereArgs: [bookId],
+      orderBy: 'name ASC, record_number ASC',
+    );
+    return result
+        .map((row) => NameRecordPair(
+              name: row['name'] as String,
+              recordNumber: row['record_number'] as String,
+            ))
         .toList();
   }
 
@@ -264,7 +298,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     return query(
       where: 'book_id = ? AND name = ? AND record_number = ?',
       whereArgs: [bookId, name, recordNumber],
-      orderBy: 'start_time ASC',
+      orderBy: 'start_time DESC',
     );
   }
 }

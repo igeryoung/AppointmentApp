@@ -1,5 +1,30 @@
 import '../models/event.dart';
 
+/// Represents a name-record number pair
+class NameRecordPair {
+  final String name;
+  final String recordNumber;
+
+  const NameRecordPair({
+    required this.name,
+    required this.recordNumber,
+  });
+
+  /// Display format: [name] - [record number]
+  String get displayText => '$name - $recordNumber';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is NameRecordPair &&
+          runtimeType == other.runtimeType &&
+          name == other.name &&
+          recordNumber == other.recordNumber;
+
+  @override
+  int get hashCode => name.hashCode ^ recordNumber.hashCode;
+}
+
 /// Repository interface for Event entity operations
 /// Defines the contract for event data access
 abstract class IEventRepository {
@@ -46,8 +71,14 @@ abstract class IEventRepository {
     String reason,
   );
 
+  /// Get all unique names for a specific book
+  Future<List<String>> getAllNames(int bookId);
+
   /// Get all unique record numbers for a specific book
   Future<List<String>> getAllRecordNumbers(int bookId);
+
+  /// Get all unique name-record number pairs for a specific book
+  Future<List<NameRecordPair>> getAllNameRecordPairs(int bookId);
 
   /// Get unique record numbers filtered by exact name match (case-insensitive)
   Future<List<String>> getRecordNumbersByName(int bookId, String name);
