@@ -218,6 +218,7 @@ class EventMetadataSection extends StatelessWidget {
                     isEnabled: true,  // Always enabled for new behavior
                     labelText: l10n.recordNumber,
                     onRecordNumberSelected: onRecordNumberSelected,
+                    onRecordNumberChanged: onRecordNumberChanged,
                     onRecordNumberCleared: () {
                       onRecordNumberChanged('');
                     },
@@ -412,6 +413,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   final bool isEnabled;
   final String labelText;
   final ValueChanged<String>? onRecordNumberSelected;
+  final ValueChanged<String>? onRecordNumberChanged;
   final VoidCallback? onRecordNumberCleared;
   final Future<String?> Function() onNewRecordNumberRequested;
   final FocusNode? focusNode;
@@ -423,6 +425,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
     required this.isEnabled,
     required this.labelText,
     this.onRecordNumberSelected,
+    this.onRecordNumberChanged,
     this.onRecordNumberCleared,
     required this.onNewRecordNumberRequested,
     this.focusNode,
@@ -613,8 +616,10 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
       final result = await widget.onNewRecordNumberRequested();
       if (result != null && result.trim().isNotEmpty && mounted) {
         _controller.text = result.trim();
-        if (widget.onRecordNumberSelected != null) {
-          widget.onRecordNumberSelected!(result.trim());
+        // For NEW record numbers, use onRecordNumberChanged to directly update state
+        // (not onRecordNumberSelected which tries to look up existing records in DB)
+        if (widget.onRecordNumberChanged != null) {
+          widget.onRecordNumberChanged!(result.trim());
         }
       }
     } finally {
