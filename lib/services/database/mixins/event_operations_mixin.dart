@@ -127,7 +127,7 @@ mixin EventOperationsMixin {
     // Update hasChargeItems flag if event has name and record number
     // This ensures newly created events show the $ icon if charge items exist for this person
     final name = eventToCreate.name.trim();
-    final recordNumber = eventToCreate.recordNumber.trim();
+    final recordNumber = eventToCreate.recordNumber?.trim() ?? '';
     if (name.isNotEmpty && recordNumber.isNotEmpty) {
       await updateEventsHasChargeItemsFlag(
         personNameNormalized: name.toLowerCase(),
@@ -263,7 +263,7 @@ mixin EventOperationsMixin {
     // Update hasChargeItems flag if event has name and record number
     // This ensures newly created events show the $ icon if charge items exist for this person
     final name = createdEvent.name.trim();
-    final recordNumber = createdEvent.recordNumber.trim();
+    final recordNumber = createdEvent.recordNumber?.trim() ?? '';
     if (name.isNotEmpty && recordNumber.isNotEmpty) {
       await updateEventsHasChargeItemsFlag(
         personNameNormalized: name.toLowerCase(),
