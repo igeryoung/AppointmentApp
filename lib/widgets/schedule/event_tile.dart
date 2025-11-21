@@ -251,8 +251,8 @@ class ScheduleEventTileHelper {
                       right: event.isChecked ? slotHeight * 0.7 - 1 : -1,
                       child: Image.asset(
                         'assets/images/green_dollar.png',
-                        width: slotHeight * 0.6,
-                        height: slotHeight * 0.6,
+                        width: slotHeight * 0.48,
+                        height: slotHeight * 0.48,
                         fit: BoxFit.contain,
                       ),
                     ),
