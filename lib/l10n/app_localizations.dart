@@ -414,7 +414,7 @@ abstract class AppLocalizations {
   /// Label for charge items section
   ///
   /// In zh_TW, this message translates to:
-  /// **'收費項目'**
+  /// **'待收款項'**
   String get chargeItems;
 
   /// Label for charge item name field
@@ -432,19 +432,19 @@ abstract class AppLocalizations {
   /// Button text for adding a charge item
   ///
   /// In zh_TW, this message translates to:
-  /// **'新增收費項目'**
+  /// **'新增待收款項'**
   String get addChargeItem;
 
   /// Title for add charge item dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'新增收費項目'**
+  /// **'新增待收款項'**
   String get addChargeItemTitle;
 
   /// Title for edit charge item dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'編輯收費項目'**
+  /// **'編輯待收款項'**
   String get editChargeItemTitle;
 
   /// Label showing paid amount
@@ -1374,7 +1374,7 @@ abstract class AppLocalizations {
   /// Message shown when trying to add charge items without a record number
   ///
   /// In zh_TW, this message translates to:
-  /// **'請新增病例號以追蹤收費項目'**
+  /// **'請新增病例號以追蹤待收款項'**
   String get chargeItemsRequireRecordNumber;
 }
 

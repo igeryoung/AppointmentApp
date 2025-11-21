@@ -316,7 +316,7 @@
     "description": "Label for phone field"
   },
 
-  "chargeItems": "收費項目",
+  "chargeItems": "待收款項",
   "@chargeItems": {
     "description": "Label for charge items section"
   },
@@ -331,17 +331,17 @@
     "description": "Label for charge item cost field"
   },
 
-  "addChargeItem": "新增收費項目",
+  "addChargeItem": "新增待收款項",
   "@addChargeItem": {
     "description": "Button text for adding a charge item"
   },
 
-  "addChargeItemTitle": "新增收費項目",
+  "addChargeItemTitle": "新增待收款項",
   "@addChargeItemTitle": {
     "description": "Title for add charge item dialog"
   },
 
-  "editChargeItemTitle": "編輯收費項目",
+  "editChargeItemTitle": "編輯待收款項",
   "@editChargeItemTitle": {
     "description": "Title for edit charge item dialog"
   },
