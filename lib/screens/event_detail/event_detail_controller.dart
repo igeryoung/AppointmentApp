@@ -280,6 +280,10 @@ class EventDetailController {
     try {
       final recordNumberText = _state.recordNumber.trim();
       final phoneText = _state.phone.trim();
+
+      // Check if user cleared the end time (converting close-end to open-end event)
+      final shouldClearEndTime = event.endTime != null && _state.endTime == null;
+
       final eventToSave = event.copyWith(
         name: _state.name.trim(),
         recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
@@ -288,6 +292,7 @@ class EventDetailController {
         // Note: chargeItems are now stored in person_charge_items table, not in events
         startTime: _state.startTime,
         endTime: _state.endTime,
+        clearEndTime: shouldClearEndTime,
       );
 
       // Detect if record_number changed from null/empty to a value
