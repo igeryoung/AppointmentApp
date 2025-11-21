@@ -11,6 +11,12 @@ mixin EventOperationsMixin {
   /// Required for changeEventTime - must be provided by main class or another mixin
   Future<Note?> getCachedNote(int eventId);
 
+  /// Required for createEvent and changeEventTime - must be provided by PersonChargeItemOperationsMixin
+  Future<void> updateEventsHasChargeItemsFlag({
+    required String personNameNormalized,
+    required String recordNumberNormalized,
+  });
+
   // ===================
   // Event Operations
   // ===================
@@ -117,6 +123,17 @@ mixin EventOperationsMixin {
       'created_at': now.millisecondsSinceEpoch ~/ 1000,
       'updated_at': now.millisecondsSinceEpoch ~/ 1000,
     });
+
+    // Update hasChargeItems flag if event has name and record number
+    // This ensures newly created events show the $ icon if charge items exist for this person
+    final name = eventToCreate.name.trim();
+    final recordNumber = eventToCreate.recordNumber?.trim() ?? '';
+    if (name.isNotEmpty && recordNumber.isNotEmpty) {
+      await updateEventsHasChargeItemsFlag(
+        personNameNormalized: name.toLowerCase(),
+        recordNumberNormalized: recordNumber.toLowerCase(),
+      );
+    }
 
     return eventToCreate.copyWith(id: id);
   }
@@ -241,6 +258,17 @@ mixin EventOperationsMixin {
         'updated_at': now.millisecondsSinceEpoch ~/ 1000,
         'is_dirty': 1, // Mark as dirty to trigger server sync
       });
+    }
+
+    // Update hasChargeItems flag if event has name and record number
+    // This ensures newly created events show the $ icon if charge items exist for this person
+    final name = createdEvent.name.trim();
+    final recordNumber = createdEvent.recordNumber?.trim() ?? '';
+    if (name.isNotEmpty && recordNumber.isNotEmpty) {
+      await updateEventsHasChargeItemsFlag(
+        personNameNormalized: name.toLowerCase(),
+        recordNumberNormalized: recordNumber.toLowerCase(),
+      );
     }
 
     return createdEvent;
