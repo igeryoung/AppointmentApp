@@ -818,6 +818,7 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
         controller: widget.controller,
         focusNode: _focusNode,
         readOnly: widget.isReadOnly,
+        enableInteractiveSelection: !widget.isReadOnly,
         decoration: InputDecoration(
           labelText: widget.labelText,
           border: const OutlineInputBorder(),
