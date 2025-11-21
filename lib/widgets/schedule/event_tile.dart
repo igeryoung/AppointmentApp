@@ -245,7 +245,7 @@ class ScheduleEventTileHelper {
                     hasHandwriting: hasHandwriting,
                   ),
                   // Dollar indicator for events with charge items (top-right corner, left of OK icon)
-                  if (event.chargeItems.isNotEmpty)
+                  if (event.hasChargeItems)
                     Positioned(
                       top: -8,
                       right: event.isChecked ? slotHeight * 0.7 - 1 : -1,
