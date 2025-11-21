@@ -244,6 +244,18 @@ class ScheduleEventTileHelper {
                     events: events,
                     hasHandwriting: hasHandwriting,
                   ),
+                  // Dollar indicator for events with charge items (top-right corner, left of OK icon)
+                  if (event.hasChargeItems)
+                    Positioned(
+                      top: -8,
+                      right: event.isChecked ? slotHeight * 0.7 - 1 : -1,
+                      child: Image.asset(
+                        'assets/images/green_dollar.png',
+                        width: slotHeight * 0.48,
+                        height: slotHeight * 0.48,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
                   // OK indicator for checked events (top-right corner, 0.5 × slotHeight)
                   if (event.isChecked)
                     Positioned(

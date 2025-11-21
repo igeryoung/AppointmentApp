@@ -13,7 +13,10 @@ class Event {
   /// Nullable: optional phone number
   final String? phone;
   final List<EventType> eventTypes;
+  /// Legacy field - kept for detail view compatibility where charge items are loaded explicitly
   final List<ChargeItem> chargeItems;
+  /// Efficient flag to indicate if this event has charge items (loaded from person_charge_items table)
+  final bool hasChargeItems;
   final DateTime startTime;
   /// Nullable: open-ended events have no end time (as per PRD)
   final DateTime? endTime;
@@ -39,6 +42,7 @@ class Event {
     this.phone,
     required List<EventType> eventTypes,
     List<ChargeItem>? chargeItems,
+    this.hasChargeItems = false,
     required this.startTime,
     this.endTime,
     required this.createdAt,
@@ -64,6 +68,7 @@ class Event {
     String? phone,
     List<EventType>? eventTypes,
     List<ChargeItem>? chargeItems,
+    bool? hasChargeItems,
     DateTime? startTime,
     DateTime? endTime,
     DateTime? createdAt,
@@ -85,6 +90,7 @@ class Event {
       phone: phone ?? this.phone,
       eventTypes: eventTypes ?? this.eventTypes,
       chargeItems: chargeItems ?? this.chargeItems,
+      hasChargeItems: hasChargeItems ?? this.hasChargeItems,
       startTime: startTime ?? this.startTime,
       endTime: endTime ?? this.endTime,
       createdAt: createdAt ?? this.createdAt,
@@ -108,7 +114,7 @@ class Event {
       'record_number': recordNumber,
       'phone': phone,
       'event_types': EventType.toJsonList(eventTypes), // Convert list to JSON array string
-      'charge_items': ChargeItem.toJsonList(chargeItems), // Convert list to JSON array string
+      'has_charge_items': hasChargeItems ? 1 : 0,
       'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
       'end_time': endTime != null ? endTime!.millisecondsSinceEpoch ~/ 1000 : null,
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
@@ -139,11 +145,9 @@ class Event {
       eventTypes = [EventType.other];
     }
 
-    // Parse charge items
+    // chargeItems is kept empty by default - loaded separately in detail view from person_charge_items table
+    // This keeps list queries lightweight
     List<ChargeItem> chargeItems = [];
-    if (map['charge_items'] != null && map['charge_items'].toString().isNotEmpty) {
-      chargeItems = ChargeItem.fromJsonList(map['charge_items']);
-    }
 
     return Event(
       id: map['id']?.toInt(),
@@ -153,6 +157,7 @@ class Event {
       phone: map['phone'],
       eventTypes: eventTypes,
       chargeItems: chargeItems,
+      hasChargeItems: (map['has_charge_items'] ?? 0) == 1,
       startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
       endTime: map['end_time'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000)
@@ -197,7 +202,7 @@ class Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, bookId: $bookId, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, chargeItems: $chargeItems, startTime: $startTime, endTime: $endTime, version: $version, isDirty: $isDirty)';
+    return 'Event(id: $id, bookId: $bookId, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, hasChargeItems: $hasChargeItems, startTime: $startTime, endTime: $endTime, version: $version, isDirty: $isDirty)';
   }
 
   @override
@@ -210,7 +215,7 @@ class Event {
         other.recordNumber == recordNumber &&
         other.phone == phone &&
         listEquals(other.eventTypes, eventTypes) &&
-        listEquals(other.chargeItems, chargeItems) &&
+        other.hasChargeItems == hasChargeItems &&
         other.startTime == startTime &&
         other.endTime == endTime &&
         other.isRemoved == isRemoved &&
@@ -225,6 +230,6 @@ class Event {
 
   @override
   int get hashCode {
-    return Object.hash(id, bookId, name, recordNumber, phone, Object.hashAll(eventTypes), Object.hashAll(chargeItems), startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked, hasNote, version);
+    return Object.hash(id, bookId, name, recordNumber, phone, Object.hashAll(eventTypes), hasChargeItems, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked, hasNote, version);
   }
 }

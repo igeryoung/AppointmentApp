@@ -41,6 +41,7 @@ mixin PersonChargeItemOperationsMixin {
     final db = await database;
     final now = DateTime.now();
 
+    PersonChargeItem result;
     if (item.id == null) {
       // Insert new item
       final id = await db.insert(
@@ -59,11 +60,17 @@ mixin PersonChargeItemOperationsMixin {
         conflictAlgorithm: ConflictAlgorithm.fail,
       );
 
-      return item.copyWith(
+      result = item.copyWith(
         id: id,
         createdAt: now,
         updatedAt: now,
         isDirty: true,
+      );
+
+      // Update has_charge_items flag for all events of this person
+      await updateEventsHasChargeItemsFlag(
+        personNameNormalized: item.personNameNormalized,
+        recordNumberNormalized: item.recordNumberNormalized,
       );
     } else {
       // Update existing item
@@ -81,12 +88,14 @@ mixin PersonChargeItemOperationsMixin {
         whereArgs: [item.id],
       );
 
-      return item.copyWith(
+      result = item.copyWith(
         updatedAt: now,
         version: item.version + 1,
         isDirty: true,
       );
     }
+
+    return result;
   }
 
   /// Update only the paid status of a charge item
@@ -114,10 +123,22 @@ mixin PersonChargeItemOperationsMixin {
   /// This will remove it from all events for this person
   Future<void> deletePersonChargeItem(int id) async {
     final db = await database;
+
+    // First, get the item to know which person it belongs to
+    final item = await getPersonChargeItemById(id);
+    if (item == null) return; // Item doesn't exist
+
+    // Delete the item
     await db.delete(
       'person_charge_items',
       where: 'id = ?',
       whereArgs: [id],
+    );
+
+    // Update has_charge_items flag for all events of this person
+    await updateEventsHasChargeItemsFlag(
+      personNameNormalized: item.personNameNormalized,
+      recordNumberNormalized: item.recordNumberNormalized,
     );
   }
 
@@ -207,6 +228,31 @@ mixin PersonChargeItemOperationsMixin {
       {'is_dirty': 1},
       where: 'id = ?',
       whereArgs: [id],
+    );
+  }
+
+  /// Update has_charge_items flag for all events matching the person (name + record number)
+  /// Should be called after adding or deleting charge items
+  Future<void> updateEventsHasChargeItemsFlag({
+    required String personNameNormalized,
+    required String recordNumberNormalized,
+  }) async {
+    final db = await database;
+
+    // Check if any charge items exist for this person
+    final chargeItems = await getPersonChargeItems(
+      personNameNormalized: personNameNormalized,
+      recordNumberNormalized: recordNumberNormalized,
+    );
+
+    final hasChargeItems = chargeItems.isNotEmpty;
+
+    // Update all events for this person to set has_charge_items flag
+    await db.update(
+      'events',
+      {'has_charge_items': hasChargeItems ? 1 : 0},
+      where: 'LOWER(TRIM(name)) = ? AND LOWER(TRIM(record_number)) = ?',
+      whereArgs: [personNameNormalized, recordNumberNormalized],
     );
   }
 }

@@ -64,7 +64,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 19, // v19 adds person_info table for synced phone numbers
+      version: 20, // v20 adds has_charge_items flag and removes legacy charge_items column
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -114,6 +114,18 @@ class PRDDatabaseService
       await _migrateToPersonInfo(db);
     }
 
+    // Version 19 to 20: Add has_charge_items flag and remove legacy charge_items column
+    if (oldVersion == 19 && newVersion >= 20) {
+      debugPrint('Upgrading database from v19 to v20: adding has_charge_items flag');
+      await _migrateToHasChargeItemsFlag(db);
+    }
+
+    // Handle skipped versions (e.g., 16 -> 20, 17 -> 20, 18 -> 20)
+    if (oldVersion >= 16 && oldVersion < 19 && newVersion >= 20) {
+      debugPrint('Upgrading database from v$oldVersion to v20: adding has_charge_items flag');
+      await _migrateToHasChargeItemsFlag(db);
+    }
+
     // For versions older than v16, require reinstall
     if (oldVersion < 16) {
       debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion is not supported.');
@@ -127,12 +139,13 @@ class PRDDatabaseService
   }
 
   Future<void> _createTables(Database db, int version) async {
-    // Version 19 schema - includes all features
+    // Version 20 schema - includes all features
     // - Books with UUID and sync columns
-    // - Events with multi-type support, phone, charge items, completion status, and sync columns
+    // - Events with multi-type support, phone, has_charge_items flag, completion status, and sync columns
     // - Notes with multi-page support, person sharing, locks, cache, and sync columns
     // - Person charge items with shared sync across events (v18)
-    // - Person info with synced phone numbers (new in v19)
+    // - Person info with synced phone numbers (v19)
+    // - has_charge_items flag for efficient charge item presence check (v20)
     // - Schedule drawings with cache and sync columns
     // - Device info, sync metadata, and cache policy tables
 
@@ -162,7 +175,7 @@ class PRDDatabaseService
         phone TEXT,
         event_type TEXT,
         event_types TEXT NOT NULL,
-        charge_items TEXT DEFAULT "[]",
+        has_charge_items INTEGER DEFAULT 0,
         start_time INTEGER NOT NULL,
         end_time INTEGER,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
@@ -516,6 +529,91 @@ class PRDDatabaseService
     }
 
     debugPrint('Successfully migrated ${personPhones.length} unique person info records');
+  }
+
+  /// Migrate to has_charge_items flag and remove legacy charge_items column
+  Future<void> _migrateToHasChargeItemsFlag(Database db) async {
+    debugPrint('Starting migration to has_charge_items flag');
+
+    // Step 1: Add has_charge_items column (default 0)
+    await db.execute('ALTER TABLE events ADD COLUMN has_charge_items INTEGER DEFAULT 0');
+    debugPrint('Added has_charge_items column');
+
+    // Step 2: Populate has_charge_items based on person_charge_items table
+    // For each event with a record number, check if person_charge_items exist
+    await db.execute('''
+      UPDATE events
+      SET has_charge_items = 1
+      WHERE record_number IS NOT NULL
+        AND record_number != ""
+        AND EXISTS (
+          SELECT 1 FROM person_charge_items
+          WHERE person_charge_items.person_name_normalized = LOWER(TRIM(events.name))
+            AND person_charge_items.record_number_normalized = LOWER(TRIM(events.record_number))
+        )
+    ''');
+    debugPrint('Populated has_charge_items flags based on person_charge_items');
+
+    // Step 3: Remove legacy charge_items column
+    // SQLite doesn't support DROP COLUMN directly, so we need to:
+    // 1. Create new table without charge_items
+    // 2. Copy data
+    // 3. Drop old table
+    // 4. Rename new table
+
+    debugPrint('Removing legacy charge_items column...');
+
+    // Create new events table without charge_items
+    await db.execute('''
+      CREATE TABLE events_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        book_id INTEGER NOT NULL,
+        name TEXT NOT NULL,
+        record_number TEXT,
+        phone TEXT,
+        event_type TEXT,
+        event_types TEXT NOT NULL,
+        has_charge_items INTEGER DEFAULT 0,
+        start_time INTEGER NOT NULL,
+        end_time INTEGER,
+        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        is_removed INTEGER DEFAULT 0,
+        removal_reason TEXT,
+        original_event_id INTEGER,
+        new_event_id INTEGER,
+        is_checked INTEGER DEFAULT 0,
+        has_note INTEGER DEFAULT 0,
+        version INTEGER DEFAULT 1,
+        is_dirty INTEGER DEFAULT 0,
+        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+      )
+    ''');
+
+    // Copy data from old table to new table (excluding charge_items)
+    await db.execute('''
+      INSERT INTO events_new
+        (id, book_id, name, record_number, phone, event_type, event_types, has_charge_items,
+         start_time, end_time, created_at, updated_at, is_removed, removal_reason,
+         original_event_id, new_event_id, is_checked, has_note, version, is_dirty)
+      SELECT
+        id, book_id, name, record_number, phone, event_type, event_types, has_charge_items,
+        start_time, end_time, created_at, updated_at, is_removed, removal_reason,
+        original_event_id, new_event_id, is_checked, has_note, version, is_dirty
+      FROM events
+    ''');
+
+    // Drop old table
+    await db.execute('DROP TABLE events');
+
+    // Rename new table
+    await db.execute('ALTER TABLE events_new RENAME TO events');
+
+    // Recreate indexes
+    await db.execute('CREATE INDEX idx_events_book_time ON events(book_id, start_time)');
+    await db.execute('CREATE INDEX idx_events_book_date ON events(book_id, date(start_time, \'unixepoch\'))');
+
+    debugPrint('Successfully removed legacy charge_items column and completed migration to v20');
   }
 
   Future<void> clearAllData() async {

@@ -187,7 +187,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get phone => '電話';
 
   @override
-  String get chargeItems => '收費項目';
+  String get chargeItems => '待收款項';
 
   @override
   String get chargeItemName => '項目名稱';
@@ -196,13 +196,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chargeItemCost => '費用';
 
   @override
-  String get addChargeItem => '新增收費項目';
+  String get addChargeItem => '新增待收款項';
 
   @override
-  String get addChargeItemTitle => '新增收費項目';
+  String get addChargeItemTitle => '新增待收款項';
 
   @override
-  String get editChargeItemTitle => '編輯收費項目';
+  String get editChargeItemTitle => '編輯待收款項';
 
   @override
   String get paid => '已付';
@@ -922,7 +922,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get phone => '電話';
 
   @override
-  String get chargeItems => '收費項目';
+  String get chargeItems => '待收款項';
 
   @override
   String get chargeItemName => '項目名稱';
@@ -931,13 +931,13 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get chargeItemCost => '費用';
 
   @override
-  String get addChargeItem => '新增收費項目';
+  String get addChargeItem => '新增待收款項';
 
   @override
-  String get addChargeItemTitle => '新增收費項目';
+  String get addChargeItemTitle => '新增待收款項';
 
   @override
-  String get editChargeItemTitle => '編輯收費項目';
+  String get editChargeItemTitle => '編輯待收款項';
 
   @override
   String get paid => '已付';
@@ -1471,5 +1471,5 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get noMatchingRecordNumbers => '沒有符合的病例號';
 
   @override
-  String get chargeItemsRequireRecordNumber => '請新增病例號以追蹤收費項目';
+  String get chargeItemsRequireRecordNumber => '請新增病例號以追蹤待收款項';
 }
