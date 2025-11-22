@@ -203,7 +203,11 @@ class DashboardRoutes {
 
     final byType = <String, int>{};
     for (final row in eventTypeRows) {
-      byType[row['event_type'] as String] = row['count'] as int;
+      final eventType = row['event_type']?.toString() ?? 'unknown';
+      final count = (row['count'] is int)
+          ? row['count'] as int
+          : int.tryParse(row['count']?.toString() ?? '0') ?? 0;
+      byType[eventType] = count;
     }
 
     final recentEvents = await db.query(
