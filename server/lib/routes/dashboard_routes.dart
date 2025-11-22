@@ -129,34 +129,45 @@ class DashboardRoutes {
     return int.tryParse(value.toString()) ?? 0;
   }
 
+  /// Convert database rows to JSON-serializable format
+  /// Handles DateTime, UUID, and other PostgreSQL-specific types
+  List<Map<String, dynamic>> _serializeRows(List<Map<String, dynamic>> rows) {
+    return rows.map((row) => _serializeRow(row)).toList();
+  }
+
+  /// Convert a single database row to JSON-serializable format
+  Map<String, dynamic> _serializeRow(Map<String, dynamic> row) {
+    final result = <String, dynamic>{};
+    for (final entry in row.entries) {
+      result[entry.key] = _serializeValue(entry.value);
+    }
+    return result;
+  }
+
+  /// Convert a value to JSON-serializable format
+  dynamic _serializeValue(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value.toIso8601String();
+    if (value is Map) {
+      return value.map((k, v) => MapEntry(k.toString(), _serializeValue(v)));
+    }
+    if (value is List) {
+      return value.map(_serializeValue).toList();
+    }
+    // For primitive types and already serializable types
+    return value;
+  }
+
   /// Get overall dashboard statistics
   Future<Response> _getStats(Request request) async {
-    final reqLogger = _logger.request('GET', '/stats');
-    reqLogger.start();
-
     try {
-      _logger.debug('Fetching device stats...');
       final devices = await _getDeviceStats();
-
-      _logger.debug('Fetching book stats...');
       final books = await _getBookStats();
-
-      _logger.debug('Fetching event stats...');
       final events = await _getEventStats();
-
-      _logger.debug('Fetching note stats...');
       final notes = await _getNoteStats();
-
-      _logger.debug('Fetching drawing stats...');
       final drawings = await _getDrawingStats();
-
-      _logger.debug('Fetching backup stats...');
       final backups = await _getBackupStats();
-
-      _logger.debug('Fetching sync stats...');
       final sync = await _getSyncStatsData();
-
-      _logger.success('All stats fetched successfully');
 
       final response = {
         'devices': devices,
@@ -168,7 +179,6 @@ class DashboardRoutes {
         'sync': sync,
       };
 
-      reqLogger.complete(200);
       return Response.ok(
         jsonEncode(response),
         headers: {'Content-Type': 'application/json'},
@@ -179,7 +189,6 @@ class DashboardRoutes {
         error: e,
         stackTrace: stackTrace,
       );
-      reqLogger.fail(e, stackTrace: stackTrace);
 
       return Response.internalServerError(
         body: jsonEncode({
@@ -194,7 +203,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getDeviceStats() async {
     try {
-      _logger.debug('Querying device counts...');
       final totalRow = await db.querySingle('SELECT COUNT(*) as count FROM devices');
       final activeRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM devices WHERE is_active = true',
@@ -203,19 +211,16 @@ class DashboardRoutes {
       final total = _safeInt(totalRow?['count']);
       final active = _safeInt(activeRow?['count']);
 
-      _logger.debug('Querying device rows...');
       final deviceRows = await db.queryRows(
         'SELECT id, device_name, platform, registered_at, last_sync_at, is_active '
         'FROM devices ORDER BY registered_at DESC LIMIT 100',
       );
 
-      _logger.debug('Device stats completed', data: {'total': total, 'active': active});
-
       return {
         'total': total,
         'active': active,
         'inactive': total - active,
-        'devices': deviceRows,
+        'devices': _serializeRows(deviceRows),
       };
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch device stats', error: e, stackTrace: stackTrace);
@@ -225,7 +230,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getBookStats() async {
     try {
-      _logger.debug('Querying book counts...');
       final totalRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM books WHERE is_deleted = false',
       );
@@ -236,7 +240,6 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM books WHERE is_deleted = false AND archived_at IS NOT NULL',
       );
 
-      _logger.debug('Querying book details with aggregations...');
       final bookRows = await db.queryRows(
         '''
         SELECT
@@ -255,13 +258,11 @@ class DashboardRoutes {
         ''',
       );
 
-      _logger.debug('Book stats completed');
-
       return {
         'total': _safeInt(totalRow?['count']),
         'active': _safeInt(activeRow?['count']),
         'archived': _safeInt(archivedRow?['count']),
-        'books': bookRows,
+        'books': _serializeRows(bookRows),
       };
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch book stats', error: e, stackTrace: stackTrace);
@@ -271,7 +272,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getEventStats() async {
     try {
-      _logger.debug('Querying event counts...');
       final totalRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM events WHERE is_deleted = false',
       );
@@ -282,7 +282,6 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM events WHERE is_deleted = false AND is_removed = true',
       );
 
-      _logger.debug('Querying event types...');
       final eventTypeRows = await db.queryRows(
         'SELECT event_type, COUNT(*) as count FROM events WHERE is_deleted = false GROUP BY event_type',
       );
@@ -294,7 +293,6 @@ class DashboardRoutes {
         byType[eventType] = count;
       }
 
-      _logger.debug('Querying recent events...');
       final recentEvents = await db.queryRows(
         '''
         SELECT e.*, EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
@@ -305,14 +303,12 @@ class DashboardRoutes {
         ''',
       );
 
-      _logger.debug('Event stats completed');
-
       return {
         'total': _safeInt(totalRow?['count']),
         'active': _safeInt(activeRow?['count']),
         'removed': _safeInt(removedRow?['count']),
         'byType': byType,
-        'recent': recentEvents,
+        'recent': _serializeRows(recentEvents),
       };
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch event stats', error: e, stackTrace: stackTrace);
@@ -322,7 +318,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getNoteStats() async {
     try {
-      _logger.debug('Querying note counts...');
       final totalRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM notes WHERE is_deleted = false',
       );
@@ -344,18 +339,15 @@ class DashboardRoutes {
       final withNotes = _safeInt(eventsWithNotesRow?['count']);
       final totalEvents = _safeInt(totalEventsRow?['count']);
 
-      _logger.debug('Querying recent notes...');
       final recentNotes = await db.queryRows(
         'SELECT * FROM notes WHERE is_deleted = false ORDER BY updated_at DESC LIMIT 50',
       );
-
-      _logger.debug('Note stats completed');
 
       return {
         'total': total,
         'eventsWithNotes': withNotes,
         'eventsWithoutNotes': totalEvents - withNotes,
-        'recentlyUpdated': recentNotes,
+        'recentlyUpdated': _serializeRows(recentNotes),
       };
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch note stats', error: e, stackTrace: stackTrace);
@@ -365,7 +357,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getDrawingStats() async {
     try {
-      _logger.debug('Querying drawing counts...');
       final totalRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM schedule_drawings WHERE is_deleted = false',
       );
@@ -380,12 +371,9 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM schedule_drawings WHERE is_deleted = false AND view_mode = 2',
       );
 
-      _logger.debug('Querying recent drawings...');
       final recent = await db.queryRows(
         'SELECT * FROM schedule_drawings WHERE is_deleted = false ORDER BY updated_at DESC LIMIT 50',
       );
-
-      _logger.debug('Drawing stats completed');
 
       return {
         'total': _safeInt(totalRow?['count']),
@@ -394,7 +382,7 @@ class DashboardRoutes {
           'threeDay': _safeInt(threeDayRow?['count']),
           'week': _safeInt(weekRow?['count']),
         },
-        'recent': recent,
+        'recent': _serializeRows(recent),
       };
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch drawing stats', error: e, stackTrace: stackTrace);
@@ -404,7 +392,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getBackupStats() async {
     try {
-      _logger.debug('Querying backup counts and sizes...');
       final totalRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM book_backups WHERE is_deleted = false',
       );
@@ -416,7 +403,6 @@ class DashboardRoutes {
       final totalSize = _safeInt(sizeRow?['total_size']);
       final totalSizeMB = (totalSize / (1024 * 1024)).toStringAsFixed(2);
 
-      _logger.debug('Querying recent backups...');
       final recent = await db.queryRows(
         '''
         SELECT bb.*, b.name as book_name
@@ -432,13 +418,11 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM book_backups WHERE is_deleted = false AND restored_at IS NOT NULL',
       );
 
-      _logger.debug('Backup stats completed');
-
       return {
         'total': _safeInt(totalRow?['count']),
         'totalSizeBytes': totalSize,
         'totalSizeMB': totalSizeMB,
-        'recentBackups': recent,
+        'recentBackups': _serializeRows(recent),
         'restoredCount': _safeInt(restoredRow?['count']),
       };
     } catch (e, stackTrace) {
@@ -449,7 +433,6 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getSyncStatsData() async {
     try {
-      _logger.debug('Querying sync log counts...');
       final totalRow = await db.querySingle('SELECT COUNT(*) as count FROM sync_log');
       final successRow = await db.querySingle(
         "SELECT COUNT(*) as count FROM sync_log WHERE status = 'success'",
@@ -464,7 +447,6 @@ class DashboardRoutes {
       final total = _safeInt(totalRow?['count']);
       final successful = _safeInt(successRow?['count']);
 
-      _logger.debug('Querying recent sync logs...');
       final recent = await db.queryRows(
         '''
         SELECT sl.*, d.device_name
@@ -475,15 +457,13 @@ class DashboardRoutes {
         ''',
       );
 
-      _logger.debug('Sync stats completed');
-
       return {
         'totalOperations': total,
         'successfulSyncs': successful,
         'failedSyncs': _safeInt(failedRow?['count']),
         'conflictCount': _safeInt(conflictRow?['count']),
         'successRate': total > 0 ? (successful / total) * 100 : 0.0,
-        'recentSyncs': recent,
+        'recentSyncs': _serializeRows(recent),
       };
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch sync stats', error: e, stackTrace: stackTrace);
