@@ -110,7 +110,9 @@ class DashboardAPI {
 
   // Events & Notes - New Endpoints
   async getFilteredEvents(filters: EventFilters): Promise<{ events: Event[] }> {
-    const response = await this.client.get<{ events: Event[] }>('/events', { params: filters });
+    // Always include 'list' param to tell backend we want the events list, not stats
+    const params = { ...filters, list: true };
+    const response = await this.client.get<{ events: Event[] }>('/events', { params });
     return response.data;
   }
 

@@ -661,8 +661,14 @@ class DashboardRoutes {
       final name = params['name'];
       final recordNumber = params['recordNumber'];
 
-      // If filters are provided, return filtered list instead of stats
-      if (bookId != null || name != null || recordNumber != null) {
+      // Check if this is a request for the events list (not stats)
+      final wantsList = params.containsKey('bookId') ||
+                        params.containsKey('name') ||
+                        params.containsKey('recordNumber') ||
+                        params.containsKey('list');
+
+      // If requesting list or any filters are provided, return filtered list
+      if (wantsList) {
         final events = await _getFilteredEvents(bookId, name, recordNumber);
         return Response.ok(
           jsonEncode({'events': events}),
