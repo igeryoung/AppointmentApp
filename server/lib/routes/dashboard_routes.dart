@@ -136,12 +136,25 @@ class DashboardRoutes {
   }
 
   /// Convert a single database row to JSON-serializable format
+  /// Also converts snake_case column names to camelCase for frontend compatibility
   Map<String, dynamic> _serializeRow(Map<String, dynamic> row) {
     final result = <String, dynamic>{};
     for (final entry in row.entries) {
-      result[entry.key] = _serializeValue(entry.value);
+      final camelKey = _snakeToCamel(entry.key);
+      result[camelKey] = _serializeValue(entry.value);
     }
     return result;
+  }
+
+  /// Convert snake_case to camelCase
+  String _snakeToCamel(String snakeCase) {
+    final parts = snakeCase.split('_');
+    if (parts.length == 1) return snakeCase;
+
+    return parts[0] +
+           parts.skip(1).map((part) =>
+             part.isEmpty ? '' : part[0].toUpperCase() + part.substring(1)
+           ).join('');
   }
 
   /// Convert a value to JSON-serializable format
