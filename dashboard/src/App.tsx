@@ -3,6 +3,8 @@ import { Sidebar } from './components/Sidebar';
 import { Login } from './pages/Login';
 import { Overview } from './pages/Overview';
 import { Books } from './pages/Books';
+import { EventsAndNotes } from './pages/EventsAndNotes';
+import { EventDetail } from './pages/EventDetail';
 import { dashboardAPI } from './services/api';
 import './styles/index.css';
 
@@ -79,17 +81,17 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardLayout>
-                <PlaceholderPage title="Events" />
+                <EventsAndNotes />
               </DashboardLayout>
             </ProtectedRoute>
           }
         />
         <Route
-          path="/notes"
+          path="/events/:eventId"
           element={
             <ProtectedRoute>
               <DashboardLayout>
-                <PlaceholderPage title="Notes" />
+                <EventDetail />
               </DashboardLayout>
             </ProtectedRoute>
           }
