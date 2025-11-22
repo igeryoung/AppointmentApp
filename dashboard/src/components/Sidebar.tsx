@@ -3,7 +3,6 @@ import {
   LayoutDashboard,
   BookOpen,
   Calendar,
-  FileText,
   Palette,
   Database,
   RefreshCw,
@@ -16,8 +15,7 @@ const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
   { path: '/devices', label: 'Devices', icon: Users },
   { path: '/books', label: 'Books', icon: BookOpen },
-  { path: '/events', label: 'Events', icon: Calendar },
-  { path: '/notes', label: 'Notes', icon: FileText },
+  { path: '/events', label: 'Events & Notes', icon: Calendar },
   { path: '/drawings', label: 'Drawings', icon: Palette },
   { path: '/backups', label: 'Backups', icon: Database },
   { path: '/sync', label: 'Sync Logs', icon: RefreshCw },
@@ -41,7 +39,10 @@ export function Sidebar() {
       <nav className="sidebar-nav">
         {navItems.map((item) => {
           const Icon = item.icon;
-          const isActive = location.pathname === item.path;
+          // Highlight Events & Notes for both /events and /events/:id paths
+          const isActive = item.path === '/events'
+            ? location.pathname === item.path || location.pathname.startsWith('/events/')
+            : location.pathname === item.path;
 
           return (
             <Link

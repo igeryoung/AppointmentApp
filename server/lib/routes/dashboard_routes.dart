@@ -30,6 +30,12 @@ class DashboardRoutes {
     router.get('/devices', _authMiddleware(_getDevices));
     router.get('/books', _authMiddleware(_getBooks));
     router.get('/events', _authMiddleware(_getEvents));
+    router.get('/events/<eventId>', (Request request, String eventId) async {
+      return _authMiddleware((Request req) => _getEventDetail(req, eventId))(request);
+    });
+    router.get('/events/<eventId>/note', (Request request, String eventId) async {
+      return _authMiddleware((Request req) => _getEventNote(req, eventId))(request);
+    });
     router.get('/notes', _authMiddleware(_getNotes));
     router.get('/drawings', _authMiddleware(_getDrawings));
     router.get('/backups', _authMiddleware(_getBackups));
@@ -484,6 +490,138 @@ class DashboardRoutes {
     }
   }
 
+  /// Get filtered list of events with optional book, name, and record number filters
+  /// Returns all events sorted by created_at DESC (newest first)
+  Future<List<Map<String, dynamic>>> _getFilteredEvents(
+    int? bookId,
+    String? name,
+    String? recordNumber,
+  ) async {
+    try {
+      final conditions = <String>['e.is_deleted = false'];
+      final params = <String, dynamic>{};
+
+      if (bookId != null) {
+        conditions.add('e.book_id = @bookId');
+        params['bookId'] = bookId;
+      }
+
+      if (name != null && name.isNotEmpty) {
+        conditions.add('LOWER(e.name) LIKE @name');
+        params['name'] = '%${name.toLowerCase()}%';
+      }
+
+      if (recordNumber != null && recordNumber.isNotEmpty) {
+        conditions.add('LOWER(e.record_number) LIKE @recordNumber');
+        params['recordNumber'] = '%${recordNumber.toLowerCase()}%';
+      }
+
+      final whereClause = conditions.join(' AND ');
+
+      final query = '''
+        SELECT
+          e.*,
+          b.name as book_name,
+          EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
+        FROM events e
+        LEFT JOIN books b ON e.book_id = b.id
+        WHERE $whereClause
+        ORDER BY e.created_at DESC
+      ''';
+
+      final rows = await db.queryRows(query, parameters: params);
+      return _serializeRows(rows);
+    } catch (e, stackTrace) {
+      _logger.error('Failed to fetch filtered events', error: e, stackTrace: stackTrace);
+      rethrow;
+    }
+  }
+
+  /// Get single event detail by ID
+  Future<Response> _getEventDetail(Request request, String eventId) async {
+    try {
+      final id = int.tryParse(eventId);
+      if (id == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid event ID'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final row = await db.querySingle(
+        '''
+        SELECT
+          e.*,
+          b.name as book_name,
+          EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
+        FROM events e
+        LEFT JOIN books b ON e.book_id = b.id
+        WHERE e.id = @id AND e.is_deleted = false
+        ''',
+        parameters: {'id': id},
+      );
+
+      if (row == null) {
+        return Response.notFound(
+          jsonEncode({'error': 'Event not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      return Response.ok(
+        jsonEncode(_serializeRow(row)),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e, stackTrace) {
+      _logger.error('Failed to fetch event detail', error: e, stackTrace: stackTrace);
+      return Response.internalServerError(
+        body: jsonEncode({'error': '$e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  /// Get note for a specific event
+  Future<Response> _getEventNote(Request request, String eventId) async {
+    try {
+      final id = int.tryParse(eventId);
+      if (id == null) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid event ID'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final row = await db.querySingle(
+        '''
+        SELECT
+          n.*
+        FROM notes n
+        WHERE n.event_id = @eventId AND n.is_deleted = false
+        ''',
+        parameters: {'eventId': id},
+      );
+
+      if (row == null) {
+        return Response.notFound(
+          jsonEncode({'error': 'Note not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      return Response.ok(
+        jsonEncode(_serializeRow(row)),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e, stackTrace) {
+      _logger.error('Failed to fetch event note', error: e, stackTrace: stackTrace);
+      return Response.internalServerError(
+        body: jsonEncode({'error': '$e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
   // Delegate methods for individual endpoints
   Future<Response> _getDevices(Request request) async {
     try {
@@ -517,6 +655,28 @@ class DashboardRoutes {
 
   Future<Response> _getEvents(Request request) async {
     try {
+      // Get query parameters for filtering
+      final params = request.url.queryParameters;
+      final bookId = params['bookId'] != null ? int.tryParse(params['bookId']!) : null;
+      final name = params['name'];
+      final recordNumber = params['recordNumber'];
+
+      // Check if this is a request for the events list (not stats)
+      final wantsList = params.containsKey('bookId') ||
+                        params.containsKey('name') ||
+                        params.containsKey('recordNumber') ||
+                        params.containsKey('list');
+
+      // If requesting list or any filters are provided, return filtered list
+      if (wantsList) {
+        final events = await _getFilteredEvents(bookId, name, recordNumber);
+        return Response.ok(
+          jsonEncode({'events': events}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Otherwise return stats (backward compatibility)
       final stats = await _getEventStats();
       return Response.ok(
         jsonEncode(stats),

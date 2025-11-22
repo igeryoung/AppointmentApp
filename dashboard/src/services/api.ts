@@ -4,6 +4,9 @@ import type {
   AuthResponse,
   LoginCredentials,
   DashboardFilters,
+  Event,
+  Note,
+  EventFilters,
 } from '../types';
 
 class DashboardAPI {
@@ -102,6 +105,24 @@ class DashboardAPI {
 
   async getSyncLogs(filters?: DashboardFilters) {
     const response = await this.client.get('/sync-logs', { params: filters });
+    return response.data;
+  }
+
+  // Events & Notes - New Endpoints
+  async getFilteredEvents(filters: EventFilters): Promise<{ events: Event[] }> {
+    // Always include 'list' param to tell backend we want the events list, not stats
+    const params = { ...filters, list: true };
+    const response = await this.client.get<{ events: Event[] }>('/events', { params });
+    return response.data;
+  }
+
+  async getEventDetail(eventId: number): Promise<Event> {
+    const response = await this.client.get<Event>(`/events/${eventId}`);
+    return response.data;
+  }
+
+  async getEventNote(eventId: number): Promise<Note> {
+    const response = await this.client.get<Note>(`/events/${eventId}/note`);
     return response.data;
   }
 

@@ -58,14 +58,21 @@ export interface EventStats {
 export interface Event {
   id: number;
   bookId: number;
+  bookName?: string;
   deviceId: string;
   name: string;
   recordNumber: string;
-  eventType: string;
+  eventType: string; // Legacy single event type
+  eventTypes: string; // JSON array of event types
   startTime: string;
   endTime: string | null;
   isRemoved: boolean;
+  removalReason?: string | null;
+  isChecked: boolean;
   hasNote: boolean;
+  originalEventId?: number | null;
+  newEventId?: number | null;
+  version: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -81,10 +88,29 @@ export interface Note {
   id: number;
   eventId: number;
   deviceId: string;
+  pagesData: string; // JSON string: array of pages, each page is array of strokes
+  strokesData?: string; // Legacy single-page data
   createdAt: string;
   updatedAt: string;
   version: number;
 }
+
+// Handwriting stroke types for rendering
+export interface StrokePoint {
+  dx: number;
+  dy: number;
+  pressure: number;
+}
+
+export interface Stroke {
+  points: StrokePoint[];
+  strokeWidth: number;
+  color: number; // ARGB color as integer
+  strokeType: 'pen' | 'highlighter';
+}
+
+export type NotePage = Stroke[];
+export type NotePages = NotePage[];
 
 export interface DrawingStats {
   total: number;
@@ -172,4 +198,10 @@ export interface DashboardFilters {
   deviceId?: string;
   bookId?: number;
   searchQuery?: string;
+}
+
+export interface EventFilters {
+  bookId?: number;
+  name?: string;
+  recordNumber?: string;
 }
