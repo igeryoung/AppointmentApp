@@ -117,6 +117,16 @@ class DashboardRoutes {
     };
   }
 
+  /// Safely convert PostgreSQL count results to int
+  /// PostgreSQL COUNT(*) returns bigint, which may be int or BigInt in Dart
+  int _safeInt(dynamic value) {
+    if (value == null) return 0;
+    if (value is int) return value;
+    if (value is BigInt) return value.toInt();
+    // Fallback: try parsing as string
+    return int.tryParse(value.toString()) ?? 0;
+  }
+
   /// Get overall dashboard statistics
   Future<Response> _getStats(Request request) async {
     try {
@@ -154,8 +164,8 @@ class DashboardRoutes {
       'SELECT COUNT(*) as count FROM devices WHERE is_active = true',
     );
 
-    final total = totalRow?['count'] as int? ?? 0;
-    final active = activeRow?['count'] as int? ?? 0;
+    final total = _safeInt(totalRow?['count']);
+    final active = _safeInt(activeRow?['count']);
 
     final deviceRows = await db.queryRows(
       'SELECT id, device_name, platform, registered_at, last_sync_at, is_active '
@@ -200,9 +210,9 @@ class DashboardRoutes {
     );
 
     return {
-      'total': totalRow?['count'] as int? ?? 0,
-      'active': activeRow?['count'] as int? ?? 0,
-      'archived': archivedRow?['count'] as int? ?? 0,
+      'total': _safeInt(totalRow?['count']),
+      'active': _safeInt(activeRow?['count']),
+      'archived': _safeInt(archivedRow?['count']),
       'books': bookRows,
     };
   }
@@ -225,9 +235,7 @@ class DashboardRoutes {
     final byType = <String, int>{};
     for (final row in eventTypeRows) {
       final eventType = row['event_type']?.toString() ?? 'unknown';
-      final count = (row['count'] is int)
-          ? row['count'] as int
-          : int.tryParse(row['count']?.toString() ?? '0') ?? 0;
+      final count = _safeInt(row['count']);
       byType[eventType] = count;
     }
 
@@ -242,9 +250,9 @@ class DashboardRoutes {
     );
 
     return {
-      'total': totalRow?['count'] as int? ?? 0,
-      'active': activeRow?['count'] as int? ?? 0,
-      'removed': removedRow?['count'] as int? ?? 0,
+      'total': _safeInt(totalRow?['count']),
+      'active': _safeInt(activeRow?['count']),
+      'removed': _safeInt(removedRow?['count']),
       'byType': byType,
       'recent': recentEvents,
     };
@@ -268,9 +276,9 @@ class DashboardRoutes {
       'SELECT COUNT(*) as count FROM events WHERE is_deleted = false',
     );
 
-    final total = totalRow?['count'] as int? ?? 0;
-    final withNotes = eventsWithNotesRow?['count'] as int? ?? 0;
-    final totalEvents = totalEventsRow?['count'] as int? ?? 0;
+    final total = _safeInt(totalRow?['count']);
+    final withNotes = _safeInt(eventsWithNotesRow?['count']);
+    final totalEvents = _safeInt(totalEventsRow?['count']);
 
     final recentNotes = await db.queryRows(
       'SELECT * FROM notes WHERE is_deleted = false ORDER BY updated_at DESC LIMIT 50',
@@ -304,11 +312,11 @@ class DashboardRoutes {
     );
 
     return {
-      'total': totalRow?['count'] as int? ?? 0,
+      'total': _safeInt(totalRow?['count']),
       'byViewMode': {
-        'day': dayRow?['count'] as int? ?? 0,
-        'threeDay': threeDayRow?['count'] as int? ?? 0,
-        'week': weekRow?['count'] as int? ?? 0,
+        'day': _safeInt(dayRow?['count']),
+        'threeDay': _safeInt(threeDayRow?['count']),
+        'week': _safeInt(weekRow?['count']),
       },
       'recent': recent,
     };
@@ -323,7 +331,7 @@ class DashboardRoutes {
       'SELECT SUM(backup_size) as total_size FROM book_backups WHERE is_deleted = false',
     );
 
-    final totalSize = sizeRow?['total_size'] as int? ?? 0;
+    final totalSize = _safeInt(sizeRow?['total_size']);
     final totalSizeMB = (totalSize / (1024 * 1024)).toStringAsFixed(2);
 
     final recent = await db.queryRows(
@@ -342,11 +350,11 @@ class DashboardRoutes {
     );
 
     return {
-      'total': totalRow?['count'] as int? ?? 0,
+      'total': _safeInt(totalRow?['count']),
       'totalSizeBytes': totalSize,
       'totalSizeMB': totalSizeMB,
       'recentBackups': recent,
-      'restoredCount': restoredRow?['count'] as int? ?? 0,
+      'restoredCount': _safeInt(restoredRow?['count']),
     };
   }
 
@@ -362,8 +370,8 @@ class DashboardRoutes {
       "SELECT COUNT(*) as count FROM sync_log WHERE status = 'conflict'",
     );
 
-    final total = totalRow?['count'] as int? ?? 0;
-    final successful = successRow?['count'] as int? ?? 0;
+    final total = _safeInt(totalRow?['count']);
+    final successful = _safeInt(successRow?['count']);
 
     final recent = await db.queryRows(
       '''
@@ -378,8 +386,8 @@ class DashboardRoutes {
     return {
       'totalOperations': total,
       'successfulSyncs': successful,
-      'failedSyncs': failedRow?['count'] as int? ?? 0,
-      'conflictCount': conflictRow?['count'] as int? ?? 0,
+      'failedSyncs': _safeInt(failedRow?['count']),
+      'conflictCount': _safeInt(conflictRow?['count']),
       'successRate': total > 0 ? (successful / total) * 100 : 0.0,
       'recentSyncs': recent,
     };
