@@ -30,8 +30,12 @@ class DashboardRoutes {
     router.get('/devices', _authMiddleware(_getDevices));
     router.get('/books', _authMiddleware(_getBooks));
     router.get('/events', _authMiddleware(_getEvents));
-    router.get('/events/<eventId>', _authMiddleware(_getEventDetail));
-    router.get('/events/<eventId>/note', _authMiddleware(_getEventNote));
+    router.get('/events/<eventId>', (Request request, String eventId) async {
+      return _authMiddleware((Request req) => _getEventDetail(req, eventId))(request);
+    });
+    router.get('/events/<eventId>/note', (Request request, String eventId) async {
+      return _authMiddleware((Request req) => _getEventNote(req, eventId))(request);
+    });
     router.get('/notes', _authMiddleware(_getNotes));
     router.get('/drawings', _authMiddleware(_getDrawings));
     router.get('/backups', _authMiddleware(_getBackups));
@@ -525,7 +529,7 @@ class DashboardRoutes {
         ORDER BY e.created_at DESC
       ''';
 
-      final rows = await db.queryRows(query, substitutionValues: params);
+      final rows = await db.queryRows(query, parameters: params);
       return _serializeRows(rows);
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch filtered events', error: e, stackTrace: stackTrace);
@@ -554,7 +558,7 @@ class DashboardRoutes {
         LEFT JOIN books b ON e.book_id = b.id
         WHERE e.id = @id AND e.is_deleted = false
         ''',
-        substitutionValues: {'id': id},
+        parameters: {'id': id},
       );
 
       if (row == null) {
@@ -595,7 +599,7 @@ class DashboardRoutes {
         FROM notes n
         WHERE n.event_id = @eventId AND n.is_deleted = false
         ''',
-        substitutionValues: {'eventId': id},
+        parameters: {'eventId': id},
       );
 
       if (row == null) {
