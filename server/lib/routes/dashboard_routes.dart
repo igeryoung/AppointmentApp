@@ -39,16 +39,34 @@ class DashboardRoutes {
   /// Simple admin login
   Future<Response> _login(Request request) async {
     try {
+      print('🔐 Dashboard login attempt...');
       final body = await request.readAsString();
+      print('   Request body: $body');
+
+      if (body.isEmpty) {
+        print('   ❌ Empty request body');
+        return Response.badRequest(
+          body: jsonEncode({
+            'success': false,
+            'message': 'Empty request body',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
       final json = jsonDecode(body) as Map<String, dynamic>;
 
       final username = json['username'] as String?;
       final password = json['password'] as String?;
 
+      print('   Username: $username');
+      print('   Expected: $adminUsername');
+
       if (username == adminUsername && password == adminPassword) {
         // In a real app, generate a JWT token
         final token = base64Encode(utf8.encode('$username:$password'));
 
+        print('   ✅ Login successful');
         return Response.ok(
           jsonEncode({
             'success': true,
@@ -59,6 +77,7 @@ class DashboardRoutes {
         );
       }
 
+      print('   ❌ Invalid credentials');
       return Response.forbidden(
         jsonEncode({
           'success': false,
@@ -66,7 +85,9 @@ class DashboardRoutes {
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
+    } catch (e, stackTrace) {
+      print('❌ Dashboard login error: $e');
+      print('   Stack trace: $stackTrace');
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,

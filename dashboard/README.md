@@ -37,21 +37,54 @@ A real-time monitoring dashboard for the Appointment Registration App. Built wit
    npm install
    ```
 
-2. **Configure environment** (optional):
+2. **Configure backend connection**:
 
-   The dashboard connects to `/api/dashboard/*` endpoints which are proxied to `http://localhost:8080` by Vite.
+   The dashboard connects to `/api/dashboard/*` endpoints which are proxied to the Dart server by Vite.
 
-   To change the backend URL, edit `vite.config.ts`:
-   ```typescript
-   proxy: {
-     '/api': {
-       target: 'http://your-server:port',
-       changeOrigin: true,
-     },
-   }
-   ```
+   **Default configuration** (in `vite.config.ts`):
+   - Target: `https://localhost:8080` (HTTPS with self-signed cert)
+   - Port: 8080 (matches custom server configuration)
+
+   **To match your server configuration**:
+   1. Check your `../.env` file for `SERVER_PORT` value
+   2. Update `vite.config.ts` if needed:
+      ```typescript
+      const BACKEND_URL = 'https://localhost:YOUR_SERVER_PORT';
+      ```
+   3. Or set environment variable:
+      ```bash
+      export VITE_BACKEND_URL=https://localhost:8443
+      npm run dev
+      ```
+
+   **Common server configurations**:
+   - `SERVER_PORT=8080` + `ENABLE_SSL=true` → Use `https://localhost:8080`
+   - `SERVER_PORT=8443` + `ENABLE_SSL=true` → Use `https://localhost:8443` (default)
+   - `SERVER_PORT=8080` + `ENABLE_SSL=false` → Use `http://localhost:8080`
 
 ## Running the Dashboard
+
+### Test Backend Connection (Optional but Recommended)
+
+Before starting the dashboard, test the API connection:
+
+```bash
+# Make sure server is running first
+cd ../server
+dart run main.dart --dev
+
+# In another terminal, test the connection
+cd dashboard
+./test-dashboard-api.sh
+```
+
+This will verify:
+- Server is responding
+- Login endpoint is working
+- Authentication token is valid
+- Credentials are correct
+
+If the test fails, it will show debugging hints.
 
 ### Development Mode
 
@@ -212,14 +245,61 @@ This dashboard is designed for **monitoring only**:
 ## Troubleshooting
 
 ### Cannot connect to API
-1. Ensure Dart server is running on port 8080
-2. Check Vite proxy configuration in `vite.config.ts`
-3. Verify CORS settings if needed
 
-### Login fails
-1. Check server logs for dashboard credentials
-2. Verify `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` env vars
-3. Check browser console for error messages
+**Check server is running:**
+```bash
+# From server directory
+cd server
+dart run main.dart --dev
+```
+
+Look for the startup message showing the port:
+```
+✅ Server listening on https://0.0.0.0:8080
+```
+
+**Match the Vite proxy to your server:**
+1. Note the protocol (http/https) and port from server startup
+2. Update `dashboard/vite.config.ts` to match:
+   ```typescript
+   const BACKEND_URL = 'https://localhost:8080'; // Match your server
+   ```
+3. Restart the dashboard dev server
+
+**Common issues:**
+- **Connection refused**: Server not running or wrong port
+- **SSL errors**: Using `https://` in proxy but server has `ENABLE_SSL=false`
+- **Self-signed cert errors**: Already handled with `secure: false` in proxy config
+
+### Login fails (500 Internal Server Error)
+
+**Check server logs for detailed error:**
+1. Stop the server (Ctrl+C)
+2. Restart with:
+   ```bash
+   cd server
+   dart run main.dart --dev
+   ```
+3. Try logging in from the dashboard
+4. Look for these log messages:
+   ```
+   🔐 Dashboard login attempt...
+      Request body: {"username":"admin","password":"..."}
+      Username: admin
+      Expected: admin
+   ```
+
+**Common causes:**
+- **Wrong credentials**: Default is `admin` / `admin123` (check server startup logs)
+- **Environment variables**: Set `DASHBOARD_USERNAME` and `DASHBOARD_PASSWORD` in `../.env`
+- **Database connection**: Server must connect to PostgreSQL successfully
+- **JSON parsing error**: Check browser Network tab for request payload
+
+**Override default credentials** (in `../.env`):
+```bash
+DASHBOARD_USERNAME=myadmin
+DASHBOARD_PASSWORD=mypassword123
+```
 
 ### Data not loading
 1. Verify database connection on server
