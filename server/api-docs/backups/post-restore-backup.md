@@ -21,8 +21,7 @@ Requires device credentials
 - `backupId` (integer, required): Backup identifier
 
 ### Body (JSON)
-- `deviceId` (string, UUID format, required): Device identifier (must match header)
-- `deviceToken` (string, required): Device token (must match header)
+No body required.
 
 **Example Request:**
 ```
@@ -30,12 +29,6 @@ POST /api/backups/789/restore
 Headers:
 X-Device-ID: 550e8400-e29b-41d4-a716-446655440000
 X-Device-Token: abc123xyz...
-
-Body:
-{
-  "deviceId": "550e8400-e29b-41d4-a716-446655440000",
-  "deviceToken": "abc123xyz..."
-}
 ```
 
 ## Response
@@ -89,7 +82,8 @@ Restore operation failed.
 ```
 
 ## Error Scenarios
-- **400 Bad Request**: Missing required fields or invalid backupId
+- **400 Bad Request**: Invalid backupId
+- **401 Unauthorized**: Missing device credentials in headers
 - **403 Forbidden**: Invalid device credentials or no access to backup
 - **404 Not Found**: Backup doesn't exist
 - **500 Internal Server Error**: Restore process failed (database error, corrupted backup, etc.)

@@ -54,11 +54,24 @@ class BookBackupRoutes {
   /// POST /api/books/{bookId}/backup
   Future<Response> _createBackup(Request request, String bookId) async {
     try {
-      final body = await request.readAsString();
-      final json = jsonDecode(body) as Map<String, dynamic>;
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
-      final deviceId = json['deviceId'] as String;
-      final deviceToken = json['deviceToken'] as String;
+      if (deviceId == null || deviceToken == null) {
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Parse request body
+      final body = await request.readAsString();
+      final json = body.isNotEmpty ? jsonDecode(body) as Map<String, dynamic> : <String, dynamic>{};
       final backupName = json['backupName'] as String?;
 
       // Verify device
@@ -100,15 +113,20 @@ class BookBackupRoutes {
   }
 
   /// List all backups for a specific book
-  /// GET /api/books/{bookId}/backups?deviceId=xxx&deviceToken=xxx
+  /// GET /api/books/{bookId}/backups
   Future<Response> _listBookBackups(Request request, String bookId) async {
     try {
-      final deviceId = request.url.queryParameters['deviceId'];
-      final deviceToken = request.url.queryParameters['deviceToken'];
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
-        return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Missing deviceId or deviceToken'}),
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -144,15 +162,20 @@ class BookBackupRoutes {
   }
 
   /// Download a backup file (streaming)
-  /// GET /api/backups/{backupId}/download?deviceId=xxx&deviceToken=xxx
+  /// GET /api/backups/{backupId}/download
   Future<Response> _downloadBackup(Request request, String backupId) async {
     try {
-      final deviceId = request.url.queryParameters['deviceId'];
-      final deviceToken = request.url.queryParameters['deviceToken'];
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
-        return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Missing deviceId or deviceToken'}),
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -205,11 +228,20 @@ class BookBackupRoutes {
   /// POST /api/backups/{backupId}/restore
   Future<Response> _restoreBackup(Request request, String backupId) async {
     try {
-      final body = await request.readAsString();
-      final json = jsonDecode(body) as Map<String, dynamic>;
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
-      final deviceId = json['deviceId'] as String;
-      final deviceToken = json['deviceToken'] as String;
+      if (deviceId == null || deviceToken == null) {
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
@@ -261,15 +293,20 @@ class BookBackupRoutes {
   }
 
   /// Delete a backup
-  /// DELETE /api/backups/{backupId}?deviceId=xxx&deviceToken=xxx
+  /// DELETE /api/backups/{backupId}
   Future<Response> _deleteBackup(Request request, String backupId) async {
     try {
-      final deviceId = request.url.queryParameters['deviceId'];
-      final deviceToken = request.url.queryParameters['deviceToken'];
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
-        return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Missing deviceId or deviceToken'}),
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -327,11 +364,25 @@ class BookBackupRoutes {
   /// POST /api/books/upload
   Future<Response> _uploadBackupLegacy(Request request) async {
     try {
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
+
+      if (deviceId == null || deviceToken == null) {
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Parse request body
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
 
-      final deviceId = json['deviceId'] as String;
-      final deviceToken = json['deviceToken'] as String;
       final bookId = json['bookId'] as int;
       final backupName = json['backupName'] as String;
       final backupData = json['backupData'] as Map<String, dynamic>;
@@ -378,15 +429,20 @@ class BookBackupRoutes {
   }
 
   /// List all backups for a device (DEPRECATED)
-  /// GET /api/books/list?deviceId=xxx&deviceToken=xxx
+  /// GET /api/books/list
   Future<Response> _listBackupsLegacy(Request request) async {
     try {
-      final deviceId = request.url.queryParameters['deviceId'];
-      final deviceToken = request.url.queryParameters['deviceToken'];
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
-        return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Missing deviceId or deviceToken'}),
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -425,15 +481,20 @@ class BookBackupRoutes {
   }
 
   /// Download backup data directly (for client-side restore) - DEPRECATED
-  /// GET /api/books/download/{backupId}?deviceId=xxx&deviceToken=xxx
+  /// GET /api/books/download/{backupId}
   Future<Response> _downloadBackupLegacy(Request request, String backupId) async {
     try {
-      final deviceId = request.url.queryParameters['deviceId'];
-      final deviceToken = request.url.queryParameters['deviceToken'];
+      // Extract auth headers
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
-        return Response.badRequest(
-          body: jsonEncode({'success': false, 'message': 'Missing deviceId or deviceToken'}),
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }

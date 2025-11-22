@@ -5,15 +5,15 @@ Get all backups for a specific book.
 
 ## Endpoint
 ```
-GET /api/books/{bookId}/backups?deviceId={deviceId}&deviceToken={deviceToken}
+GET /api/books/{bookId}/backups
 ```
 
 ## Authentication
 Requires device credentials
 
-### Query Parameters
-- `deviceId` (string, UUID format, required): Device identifier
-- `deviceToken` (string, required): Device authentication token
+### Headers
+- `X-Device-ID` (string, UUID format, required): Device identifier
+- `X-Device-Token` (string, required): Device authentication token
 
 ## Request Parameters
 
@@ -22,7 +22,10 @@ Requires device credentials
 
 **Example:**
 ```
-GET /api/books/1/backups?deviceId=550e8400-e29b-41d4-a716-446655440000&deviceToken=abc123xyz...
+GET /api/books/1/backups
+Headers:
+X-Device-ID: 550e8400-e29b-41d4-a716-446655440000
+X-Device-Token: abc123xyz...
 ```
 
 ## Response
@@ -94,7 +97,8 @@ Unauthorized access.
 ```
 
 ## Error Scenarios
-- **400 Bad Request**: Missing deviceId or deviceToken, or invalid bookId
+- **400 Bad Request**: Invalid bookId
+- **401 Unauthorized**: Missing device credentials in headers
 - **403 Forbidden**: Invalid device credentials or no access to book
 - **404 Not Found**: Book does not exist
 
