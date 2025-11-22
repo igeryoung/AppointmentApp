@@ -21,8 +21,6 @@ Requires device credentials
 - `bookId` (integer, required): Book identifier
 
 ### Body (JSON)
-- `deviceId` (string, UUID format, required): Device identifier (must match header)
-- `deviceToken` (string, required): Device token (must match header)
 - `backupName` (string, optional): Custom name for the backup (default: auto-generated with timestamp)
 
 **Example Request:**
@@ -34,10 +32,19 @@ X-Device-Token: abc123xyz...
 
 Body:
 {
-  "deviceId": "550e8400-e29b-41d4-a716-446655440000",
-  "deviceToken": "abc123xyz...",
   "backupName": "My Backup 2025-01-20"
 }
+```
+
+**Example Request (minimal - backupName is optional):**
+```
+POST /api/books/1/backup
+Headers:
+X-Device-ID: 550e8400-e29b-41d4-a716-446655440000
+X-Device-Token: abc123xyz...
+
+Body:
+{}
 ```
 
 ## Response

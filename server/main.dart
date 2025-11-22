@@ -12,6 +12,7 @@ import 'lib/routes/book_backup_routes.dart';
 import 'lib/routes/note_routes.dart';
 import 'lib/routes/drawing_routes.dart';
 import 'lib/routes/batch_routes.dart';
+import 'lib/routes/dashboard_routes.dart';
 
 void main(List<String> args) async {
   // Load environment variables from .env file
@@ -111,6 +112,16 @@ void main(List<String> args) async {
   // Batch routes (Server-Store API - Batch Operations)
   final batchRoutes = BatchRoutes(db);
   app.mount('/api/batch/', batchRoutes.router);
+
+  // Dashboard routes (Monitoring API - Read-only)
+  final dashboardUsername = Platform.environment['DASHBOARD_USERNAME'] ?? 'admin';
+  final dashboardPassword = Platform.environment['DASHBOARD_PASSWORD'] ?? 'admin123';
+  final dashboardRoutes = DashboardRoutes(
+    db,
+    adminUsername: dashboardUsername,
+    adminPassword: dashboardPassword,
+  );
+  app.mount('/api/dashboard/', dashboardRoutes.router);
 
   // Health check endpoint
   app.get('/health', (Request request) async {
@@ -247,6 +258,11 @@ void main(List<String> args) async {
   print('');
   print('   === Batch Operations API ===');
   print('   POST /api/batch/save - Batch save notes + drawings (atomic)');
+  print('');
+  print('   === Dashboard API (Monitoring) ===');
+  print('   POST /api/dashboard/auth/login - Admin login');
+  print('   GET  /api/dashboard/stats - Dashboard statistics');
+  print('   Dashboard credentials: $dashboardUsername / $dashboardPassword');
   print('');
 
   // Graceful shutdown

@@ -5,15 +5,15 @@ Delete a backup (marks as deleted in database and removes the backup file from s
 
 ## Endpoint
 ```
-DELETE /api/backups/{backupId}?deviceId={deviceId}&deviceToken={deviceToken}
+DELETE /api/backups/{backupId}
 ```
 
 ## Authentication
 Requires device credentials
 
-### Query Parameters
-- `deviceId` (string, UUID format, required): Device identifier
-- `deviceToken` (string, required): Device authentication token
+### Headers
+- `X-Device-ID` (string, UUID format, required): Device identifier
+- `X-Device-Token` (string, required): Device authentication token
 
 ## Request Parameters
 
@@ -22,7 +22,10 @@ Requires device credentials
 
 **Example:**
 ```
-DELETE /api/backups/789?deviceId=550e8400-e29b-41d4-a716-446655440000&deviceToken=abc123xyz...
+DELETE /api/backups/789
+Headers:
+X-Device-ID: 550e8400-e29b-41d4-a716-446655440000
+X-Device-Token: abc123xyz...
 ```
 
 ## Response
@@ -65,7 +68,7 @@ Backup not found.
 ```
 
 ## Error Scenarios
-- **400 Bad Request**: Missing deviceId or deviceToken
+- **401 Unauthorized**: Missing device credentials in headers
 - **403 Forbidden**: Invalid device credentials or no access to backup
 - **404 Not Found**: Backup doesn't exist or already deleted
 
