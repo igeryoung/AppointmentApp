@@ -4,18 +4,22 @@ import 'package:flutter/foundation.dart';
 import 'database/prd_database_service.dart';
 import 'server_config_service.dart';
 import 'http_client_factory.dart';
+import '../repositories/book_repository.dart';
+import '../repositories/book_repository_impl.dart';
 
 /// Service for uploading and restoring complete books to/from server
 class BookBackupService {
   final PRDDatabaseService dbService;
   late final ServerConfigService _serverConfigService;
   late final http.Client _client;
+  late final IBookRepository _bookRepository;
 
   BookBackupService({
     required this.dbService,
   }) {
     _serverConfigService = ServerConfigService(dbService);
     _client = HttpClientFactory.createClient();
+    _bookRepository = BookRepositoryImpl(() => dbService.database);
   }
 
   /// Clean up resources
@@ -95,6 +99,11 @@ class BookBackupService {
       if (result['success'] == true) {
         final backupId = result['backupId'] as int;
         debugPrint('✅ Book uploaded successfully: Backup ID $backupId');
+
+        // Clear dirty flag after successful backup
+        await _bookRepository.clearDirtyFlag(bookId);
+        debugPrint('✅ Book dirty flag cleared');
+
         return backupId;
       } else {
         throw Exception(result['message'] ?? 'Upload failed');
@@ -297,5 +306,10 @@ class BookBackupService {
     } else {
       throw Exception('Server error: ${response.statusCode}');
     }
+  }
+
+  /// Check if a book needs backup (is marked as dirty)
+  Future<bool> checkIfBookNeedsBackup(int bookId) async {
+    return await _bookRepository.isBookDirty(bookId);
   }
 }

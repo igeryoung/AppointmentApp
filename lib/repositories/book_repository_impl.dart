@@ -45,9 +45,10 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
       'name': name.trim(),
       'book_uuid': bookUuid,
       'created_at': now.millisecondsSinceEpoch ~/ 1000,
+      'is_dirty': 1, // Mark as dirty - needs backup
     });
 
-    return Book(id: id, uuid: bookUuid, name: name.trim(), createdAt: now);
+    return Book(id: id, uuid: bookUuid, name: name.trim(), createdAt: now, isDirty: true);
   }
 
   @override
@@ -96,5 +97,34 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
     }
 
     await batch.commit(noResult: true);
+  }
+
+  /// Clear dirty flag for a book (called after successful backup)
+  Future<void> clearDirtyFlag(int bookId) async {
+    final db = await getDatabaseFn();
+    final updatedRows = await db.update(
+      'books',
+      {'is_dirty': 0},
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+    if (updatedRows == 0) {
+      throw Exception('Book not found');
+    }
+  }
+
+  /// Check if a book needs backup (is dirty)
+  Future<bool> isBookDirty(int bookId) async {
+    final db = await getDatabaseFn();
+    final result = await db.query(
+      'books',
+      columns: ['is_dirty'],
+      where: 'id = ?',
+      whereArgs: [bookId],
+    );
+    if (result.isEmpty) {
+      throw Exception('Book not found');
+    }
+    return (result.first['is_dirty'] as int) == 1;
   }
 }

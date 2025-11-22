@@ -7,6 +7,7 @@ class Book {
   final String name;
   final DateTime createdAt;
   final DateTime? archivedAt;
+  final bool isDirty;
 
   Book({
     this.id,
@@ -14,6 +15,7 @@ class Book {
     required this.name,
     required this.createdAt,
     this.archivedAt,
+    this.isDirty = false,
   }) : uuid = uuid ?? const Uuid().v4();
 
   /// Create Book instance from database record
@@ -28,6 +30,7 @@ class Book {
       archivedAt: map['archived_at'] != null
           ? DateTime.fromMillisecondsSinceEpoch(map['archived_at'] * 1000)
           : null,
+      isDirty: (map['is_dirty'] as int? ?? 0) == 1,
     );
   }
 
@@ -39,6 +42,7 @@ class Book {
       'name': name,
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'archived_at': archivedAt != null ? archivedAt!.millisecondsSinceEpoch ~/ 1000 : null,
+      'is_dirty': isDirty ? 1 : 0,
     };
   }
 
@@ -49,6 +53,7 @@ class Book {
     String? name,
     DateTime? createdAt,
     DateTime? archivedAt,
+    bool? isDirty,
   }) {
     return Book(
       id: id ?? this.id,
@@ -56,6 +61,7 @@ class Book {
       name: name ?? this.name,
       createdAt: createdAt ?? this.createdAt,
       archivedAt: archivedAt ?? this.archivedAt,
+      isDirty: isDirty ?? this.isDirty,
     );
   }
 
@@ -69,14 +75,15 @@ class Book {
         other.uuid == uuid &&
         other.name == name &&
         other.createdAt == createdAt &&
-        other.archivedAt == archivedAt;
+        other.archivedAt == archivedAt &&
+        other.isDirty == isDirty;
   }
 
   @override
-  int get hashCode => Object.hash(id, uuid, name, createdAt, archivedAt);
+  int get hashCode => Object.hash(id, uuid, name, createdAt, archivedAt, isDirty);
 
   @override
   String toString() {
-    return 'Book(id: $id, uuid: $uuid, name: $name, createdAt: $createdAt, archivedAt: $archivedAt)';
+    return 'Book(id: $id, uuid: $uuid, name: $name, createdAt: $createdAt, archivedAt: $archivedAt, isDirty: $isDirty)';
   }
 }

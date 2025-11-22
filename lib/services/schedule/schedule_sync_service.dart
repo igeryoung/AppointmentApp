@@ -11,6 +11,7 @@ import '../content_service.dart';
 import '../database_service_interface.dart';
 import '../prd_database_service.dart';
 import '../server_config_service.dart';
+import '../book_backup_service.dart';
 
 /// Service responsible for server synchronization in the schedule screen
 /// Handles connectivity monitoring, auto-sync, and note preloading
@@ -23,6 +24,7 @@ class ScheduleSyncService {
 
   ContentService? _contentService;
   CacheManager? _cacheManager;
+  BookBackupService? _bookBackupService;
   StreamSubscription<ConnectivityResult>? _connectivitySubscription;
 
   bool _isOffline = false;
@@ -53,7 +55,8 @@ class ScheduleSyncService {
       final apiClient = ApiClient(baseUrl: serverUrl);
       _cacheManager = CacheManager(prdDb);
       _contentService = ContentService(apiClient, _cacheManager!, dbService);
-      debugPrint('✅ ScheduleSyncService: ContentService initialized');
+      _bookBackupService = BookBackupService(dbService: prdDb);
+      debugPrint('✅ ScheduleSyncService: ContentService and BookBackupService initialized');
 
       // Check server connectivity
       final serverReachable = await checkServerConnectivity();
@@ -151,11 +154,74 @@ class ScheduleSyncService {
 
   /// Auto-sync dirty notes for this book in background
   Future<void> autoSyncDirtyNotes() async {
-    if (_contentService == null || _isSyncing || book.id == null) return;
+    if (_contentService == null || _bookBackupService == null || _isSyncing || book.id == null) return;
 
     _setSyncingState(true);
 
     try {
+      // Step 1: Check if book needs backup first
+      final needsBackup = await _bookBackupService!.checkIfBookNeedsBackup(book.id!);
+
+      if (needsBackup) {
+        debugPrint('📤 ScheduleSyncService: Book ${book.id} needs backup before syncing notes...');
+
+        try {
+          // Auto-backup the book
+          await _bookBackupService!.uploadBook(book.id!);
+          debugPrint('✅ ScheduleSyncService: Book ${book.id} backed up successfully');
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Book "${book.name}" backed up to server'),
+                backgroundColor: Colors.green,
+                duration: const Duration(seconds: 2),
+              ),
+            );
+          }
+        } catch (backupError) {
+          // Backup failed - show error and stop (don't sync notes)
+          _setSyncingState(false);
+          debugPrint('❌ ScheduleSyncService: Book backup failed: $backupError');
+
+          if (context.mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text('Failed to backup book: $backupError'),
+                backgroundColor: Colors.red,
+                duration: const Duration(seconds: 5),
+                action: SnackBarAction(
+                  label: 'Details',
+                  textColor: Colors.white,
+                  onPressed: () {
+                    showDialog(
+                      context: context,
+                      builder: (context) => AlertDialog(
+                        title: const Text('Backup Failed'),
+                        content: Text(
+                          'Unable to backup book "${book.name}" to server.\n\n'
+                          'Error: $backupError\n\n'
+                          'Notes cannot be synced until the book is backed up. '
+                          'Please check your connection and try again.',
+                        ),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(context),
+                            child: const Text('OK'),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            );
+          }
+          return; // Stop here - don't sync notes
+        }
+      }
+
+      // Step 2: Now sync dirty notes (book is guaranteed to exist on server)
       debugPrint('🔄 ScheduleSyncService: Auto-syncing dirty notes for book ${book.id}...');
 
       final result = await _contentService!.syncDirtyNotesForBook(book.id!);
@@ -179,7 +245,7 @@ class ScheduleSyncService {
           debugPrint('⚠️ ScheduleSyncService: ${result.success}/${result.total} notes synced, ${result.failed} failed');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('Synced ${result.success}/${result.total} notes. ${result.failed} failed - check if book is backed up'),
+              content: Text('Synced ${result.success}/${result.total} notes. ${result.failed} failed'),
               backgroundColor: Colors.orange,
               duration: const Duration(seconds: 5),
               action: SnackBarAction(
@@ -192,8 +258,8 @@ class ScheduleSyncService {
                     builder: (context) => AlertDialog(
                       title: const Text('Sync Failed'),
                       content: const Text(
-                        'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
-                        'Solution: Use the book backup feature to sync the book to the server first.',
+                        'Some notes failed to sync. This may be due to network issues.\n\n'
+                        'Please try again or check your connection.',
                       ),
                       actions: [
                         TextButton(
@@ -335,6 +401,7 @@ class ScheduleSyncService {
   /// Dispose resources
   void dispose() {
     _connectivitySubscription?.cancel();
+    _bookBackupService?.dispose();
     debugPrint('🧹 ScheduleSyncService: Disposed');
   }
 }

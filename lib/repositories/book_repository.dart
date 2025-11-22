@@ -29,4 +29,10 @@ abstract class IBookRepository {
 
   /// Reorder books by updating their order field
   Future<void> reorder(List<Book> books);
+
+  /// Clear dirty flag for a book (called after successful backup)
+  Future<void> clearDirtyFlag(int bookId);
+
+  /// Check if a book needs backup (is dirty)
+  Future<bool> isBookDirty(int bookId);
 }
