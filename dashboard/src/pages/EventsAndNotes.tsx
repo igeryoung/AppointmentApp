@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { RefreshCw, Download } from 'lucide-react';
 import { EventFilterBar, EventsTable } from '../components';
 import type { Event, EventFilters } from '../types';
 import { dashboardAPI } from '../services/api';
@@ -35,16 +36,8 @@ export const EventsAndNotes: React.FC = () => {
       setError(null);
 
       // If no filters, fetch all events
-      const hasFilters = filters.bookId || filters.name || filters.recordNumber;
-
-      if (hasFilters) {
-        const response = await dashboardAPI.getFilteredEvents(filters);
-        setEvents(response.events || []);
-      } else {
-        // Fetch all events by passing empty filter object
-        const response = await dashboardAPI.getFilteredEvents({});
-        setEvents(response.events || []);
-      }
+      const response = await dashboardAPI.getFilteredEvents(filters.bookId || filters.name || filters.recordNumber ? filters : {});
+      setEvents(response.events || []);
     } catch (err) {
       console.error('Failed to load events:', err);
       setError('Failed to load events. Please try again.');
@@ -67,43 +60,35 @@ export const EventsAndNotes: React.FC = () => {
   };
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div>
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">Events & Notes</h1>
-        <p className="text-gray-600">
-          View and manage all events with their handwritten notes
-        </p>
+      <div className="page-header">
+        <h1 className="page-title">Events & Notes</h1>
+        <p className="page-subtitle">View and manage all events with their handwritten notes</p>
       </div>
 
       {/* Controls */}
-      <div className="flex justify-between items-center mb-4">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={handleRefresh}
-            disabled={loading}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600 disabled:bg-gray-300"
-          >
+      <div className="toolbar">
+        <div className="toolbar-section">
+          <button onClick={handleRefresh} className="btn btn-primary btn-sm" disabled={loading}>
+            <RefreshCw size={16} />
             {loading ? 'Loading...' : 'Refresh'}
           </button>
 
-          <label className="flex items-center gap-2 text-sm text-gray-700">
+          <button onClick={handleExport} className="btn btn-secondary btn-sm">
+            <Download size={16} />
+            Export
+          </button>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', fontSize: '0.875rem' }}>
             <input
               type="checkbox"
               checked={autoRefresh}
               onChange={(e) => setAutoRefresh(e.target.checked)}
-              className="rounded"
             />
             Auto-refresh (30s)
           </label>
         </div>
-
-        <button
-          onClick={handleExport}
-          className="px-4 py-2 bg-green-500 text-white rounded hover:bg-green-600"
-        >
-          Export CSV
-        </button>
       </div>
 
       {/* Filters */}
@@ -111,8 +96,10 @@ export const EventsAndNotes: React.FC = () => {
 
       {/* Error Message */}
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded mb-4">
-          {error}
+        <div className="card" style={{ marginBottom: '1.5rem', backgroundColor: '#fef2f2', borderLeft: '4px solid #ef4444' }}>
+          <div className="card-body" style={{ color: '#dc2626' }}>
+            {error}
+          </div>
         </div>
       )}
 

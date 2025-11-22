@@ -62,21 +62,33 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
   const hasFilters = filters.bookId || filters.name || filters.recordNumber;
 
   return (
-    <div className="bg-white p-4 rounded-lg shadow-sm border border-gray-200 mb-4">
-      <div className="flex flex-col gap-4">
-        <h3 className="text-lg font-semibold text-gray-700">Filters</h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+    <div className="card" style={{ marginBottom: '1.5rem' }}>
+      <div className="card-header">
+        <h3 className="card-title">Filters</h3>
+        {hasFilters && (
+          <button onClick={handleClear} className="btn btn-secondary btn-sm">
+            Clear Filters
+          </button>
+        )}
+      </div>
+      <div className="card-body">
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(250px, 1fr))', gap: '1rem' }}>
           {/* Book Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500' }}>
               Book
             </label>
             <select
               value={filters.bookId || ''}
               onChange={handleBookChange}
               disabled={loading}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              style={{
+                width: '100%',
+                padding: '0.5rem 0.75rem',
+                border: '1px solid #e5e7eb',
+                borderRadius: '0.375rem',
+                fontSize: '0.875rem',
+              }}
             >
               <option value="">All Books</option>
               {books.map((book) => (
@@ -89,7 +101,7 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
 
           {/* Patient Name Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500' }}>
               Patient Name
             </label>
             <input
@@ -97,13 +109,13 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
               value={filters.name || ''}
               onChange={handleNameChange}
               placeholder="Search by name..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input"
             />
           </div>
 
           {/* Record Number Filter */}
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label style={{ display: 'block', marginBottom: '0.5rem', fontSize: '0.875rem', fontWeight: '500' }}>
               Record Number
             </label>
             <input
@@ -111,22 +123,10 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
               value={filters.recordNumber || ''}
               onChange={handleRecordNumberChange}
               placeholder="Search by record number..."
-              className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="input"
             />
           </div>
         </div>
-
-        {/* Clear Filters Button */}
-        {hasFilters && (
-          <div className="flex justify-end">
-            <button
-              onClick={handleClear}
-              className="px-4 py-2 text-sm bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
-            >
-              Clear Filters
-            </button>
-          </div>
-        )}
       </div>
     </div>
   );

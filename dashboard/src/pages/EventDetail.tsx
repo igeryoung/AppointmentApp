@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
+import { ArrowLeft } from 'lucide-react';
 import { HandwritingCanvas, PageNavigation } from '../components';
 import type { Event, Note, NotePages } from '../types';
 import { dashboardAPI } from '../services/api';
@@ -46,7 +47,6 @@ export const EventDetail: React.FC = () => {
           setCurrentPageIndex(0);
         } catch (noteErr) {
           console.error('Failed to load note:', noteErr);
-          // Note might not exist even though hasNote is true
           setNote(null);
           setNotePages([]);
         }
@@ -61,17 +61,13 @@ export const EventDetail: React.FC = () => {
 
   const parseNotePages = (noteData: Note): NotePages => {
     try {
-      // Try pages_data first (multi-page format)
       if (noteData.pagesData) {
         return JSON.parse(noteData.pagesData);
       }
-
-      // Fallback to strokes_data (legacy single-page format)
       if (noteData.strokesData) {
         const strokes = JSON.parse(noteData.strokesData);
-        return [strokes]; // Wrap in array to make it a single-page note
+        return [strokes];
       }
-
       return [];
     } catch (err) {
       console.error('Failed to parse note data:', err);
@@ -112,172 +108,194 @@ export const EventDetail: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="flex justify-center items-center h-screen">
-        <div className="text-gray-500 text-xl">Loading event details...</div>
+      <div className="card">
+        <div className="card-body" style={{ textAlign: 'center', padding: '3rem' }}>
+          <p style={{ color: '#6b7280', fontSize: '1.125rem' }}>Loading event details...</p>
+        </div>
       </div>
     );
   }
 
   if (error || !event) {
     return (
-      <div className="p-6 max-w-7xl mx-auto">
-        <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded">
-          {error || 'Event not found'}
+      <div>
+        <div className="card" style={{ marginBottom: '1.5rem', backgroundColor: '#fef2f2', borderLeft: '4px solid #ef4444' }}>
+          <div className="card-body" style={{ color: '#dc2626' }}>
+            {error || 'Event not found'}
+          </div>
         </div>
-        <button
-          onClick={() => navigate('/events')}
-          className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
-        >
-          ← Back to Events List
+        <button onClick={() => navigate('/events')} className="btn btn-secondary">
+          <ArrowLeft size={16} />
+          Back to Events List
         </button>
       </div>
     );
   }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
+    <div>
       {/* Header */}
-      <div className="mb-6">
+      <div className="page-header">
         <button
           onClick={() => navigate('/events')}
-          className="mb-4 text-blue-600 hover:text-blue-800 font-medium"
+          className="btn btn-secondary btn-sm"
+          style={{ marginBottom: '1rem' }}
         >
-          ← Back to Events List
+          <ArrowLeft size={16} />
+          Back to Events List
         </button>
-        <h1 className="text-3xl font-bold text-gray-900">Event Details</h1>
+        <h1 className="page-title">Event Details</h1>
+        <p className="page-subtitle">Event ID: {event.id}</p>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Event Information */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Event Information</h2>
-
-          <div className="space-y-3">
-            <div>
-              <label className="text-sm font-medium text-gray-500">ID</label>
-              <p className="text-gray-900">{event.id}</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">Book</label>
-              <p className="text-gray-900">{event.bookName || `Book ${event.bookId}`}</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">Patient Name</label>
-              <p className="text-gray-900 font-medium">{event.name}</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">Record Number</label>
-              <p className="text-gray-900">{event.recordNumber || '-'}</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">Event Types</label>
-              <div className="flex flex-wrap gap-2 mt-1">
-                {parseEventTypes(event.eventTypes).map((type, index) => (
-                  <span
-                    key={index}
-                    className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded"
-                  >
-                    {type}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">Start Time</label>
-              <p className="text-gray-900">{formatDateTime(event.startTime)}</p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">End Time</label>
-              <p className="text-gray-900">
-                {event.endTime ? formatDateTime(event.endTime) : 'Open-ended'}
-              </p>
-            </div>
-
-            <div>
-              <label className="text-sm font-medium text-gray-500">Status</label>
-              <div className="flex gap-2 mt-1">
-                {event.isRemoved && (
-                  <span className="px-2 py-1 text-xs font-medium bg-red-100 text-red-800 rounded">
-                    Removed
-                  </span>
-                )}
-                {event.isChecked && (
-                  <span className="px-2 py-1 text-xs font-medium bg-blue-100 text-blue-800 rounded">
-                    Checked
-                  </span>
-                )}
-                {!event.isRemoved && !event.isChecked && (
-                  <span className="px-2 py-1 text-xs font-medium bg-green-100 text-green-800 rounded">
-                    Active
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {event.removalReason && (
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+        {/* Event Information Card */}
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">Event Information</h2>
+          </div>
+          <div className="card-body">
+            <div style={{ display: 'grid', gap: '1rem' }}>
               <div>
-                <label className="text-sm font-medium text-gray-500">Removal Reason</label>
-                <p className="text-gray-900">{event.removalReason}</p>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Book
+                </label>
+                <p style={{ marginTop: '0.25rem' }}>{event.bookName || `Book ${event.bookId}`}</p>
               </div>
-            )}
 
-            <div className="border-t pt-3 mt-3">
-              <label className="text-sm font-medium text-gray-500">Created At</label>
-              <p className="text-gray-900 text-sm">{formatDateTime(event.createdAt)}</p>
-            </div>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Patient Name
+                </label>
+                <p style={{ marginTop: '0.25rem', fontWeight: '500', fontSize: '1.125rem' }}>{event.name}</p>
+              </div>
 
-            <div>
-              <label className="text-sm font-medium text-gray-500">Updated At</label>
-              <p className="text-gray-900 text-sm">{formatDateTime(event.updatedAt)}</p>
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Record Number
+                </label>
+                <p style={{ marginTop: '0.25rem', fontFamily: 'monospace' }}>{event.recordNumber || '-'}</p>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Event Types
+                </label>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {parseEventTypes(event.eventTypes).map((type, index) => (
+                    <span key={index} className="badge badge-info">
+                      {type}
+                    </span>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Start Time
+                </label>
+                <p style={{ marginTop: '0.25rem' }}>{formatDateTime(event.startTime)}</p>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  End Time
+                </label>
+                <p style={{ marginTop: '0.25rem' }}>
+                  {event.endTime ? formatDateTime(event.endTime) : 'Open-ended'}
+                </p>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Status
+                </label>
+                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+                  {event.isRemoved && <span className="badge badge-danger">Removed</span>}
+                  {event.isChecked && <span className="badge badge-info">Checked</span>}
+                  {!event.isRemoved && !event.isChecked && <span className="badge badge-success">Active</span>}
+                </div>
+              </div>
+
+              {event.removalReason && (
+                <div>
+                  <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                    Removal Reason
+                  </label>
+                  <p style={{ marginTop: '0.25rem' }}>{event.removalReason}</p>
+                </div>
+              )}
+
+              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem' }}>
+                <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.813rem', color: '#6b7280' }}>
+                  <div>
+                    <span style={{ fontWeight: '500' }}>Created:</span> {formatDateTime(event.createdAt)}
+                  </div>
+                  <div>
+                    <span style={{ fontWeight: '500' }}>Updated:</span> {formatDateTime(event.updatedAt)}
+                  </div>
+                  <div>
+                    <span style={{ fontWeight: '500' }}>Version:</span> {event.version}
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* Handwriting Notes */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Handwriting Notes</h2>
-
-          {!event.hasNote || notePages.length === 0 ? (
-            <div className="flex items-center justify-center h-64 bg-gray-50 rounded border border-gray-200">
-              <p className="text-gray-500">No handwritten notes available</p>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              {/* Canvas */}
-              <div className="flex justify-center">
-                <HandwritingCanvas
-                  page={notePages[currentPageIndex]}
-                  width={600}
-                  height={800}
-                />
+        {/* Handwriting Notes Card */}
+        <div className="card">
+          <div className="card-header">
+            <h2 className="card-title">Handwriting Notes</h2>
+          </div>
+          <div className="card-body">
+            {!event.hasNote || notePages.length === 0 ? (
+              <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}>
+                <p style={{ color: '#6b7280' }}>No handwritten notes available</p>
               </div>
-
-              {/* Page Navigation */}
-              {notePages.length > 1 && (
-                <PageNavigation
-                  currentPage={currentPageIndex}
-                  totalPages={notePages.length}
-                  onPrevious={handlePreviousPage}
-                  onNext={handleNextPage}
-                />
-              )}
-
-              {/* Note Metadata */}
-              {note && (
-                <div className="border-t pt-3 mt-3 text-sm text-gray-500">
-                  <p>Note ID: {note.id}</p>
-                  <p>Last Updated: {formatDateTime(note.updatedAt)}</p>
-                  <p>Version: {note.version}</p>
+            ) : (
+              <div>
+                {/* Canvas */}
+                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                  <HandwritingCanvas
+                    page={notePages[currentPageIndex]}
+                    width={600}
+                    height={800}
+                  />
                 </div>
-              )}
-            </div>
-          )}
+
+                {/* Page Navigation */}
+                {notePages.length > 1 && (
+                  <PageNavigation
+                    currentPage={currentPageIndex}
+                    totalPages={notePages.length}
+                    onPrevious={handlePreviousPage}
+                    onNext={handleNextPage}
+                  />
+                )}
+
+                {/* Note Metadata */}
+                {note && (
+                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem', fontSize: '0.813rem', color: '#6b7280' }}>
+                    <div style={{ display: 'grid', gap: '0.5rem' }}>
+                      <div>
+                        <span style={{ fontWeight: '500' }}>Note ID:</span> {note.id}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: '500' }}>Last Updated:</span> {formatDateTime(note.updatedAt)}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: '500' }}>Version:</span> {note.version}
+                      </div>
+                      <div>
+                        <span style={{ fontWeight: '500' }}>Total Pages:</span> {notePages.length}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </div>

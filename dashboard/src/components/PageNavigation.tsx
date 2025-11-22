@@ -20,23 +20,23 @@ export const PageNavigation: React.FC<PageNavigationProps> = ({
   if (totalPages === 0) return null;
 
   return (
-    <div className="flex items-center justify-center gap-4 py-4">
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '1rem', padding: '1rem 0' }}>
       <button
         onClick={onPrevious}
         disabled={currentPage === 0}
-        className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600"
+        className="btn btn-secondary btn-sm"
       >
         ← Previous
       </button>
 
-      <span className="text-sm font-medium">
+      <span style={{ fontSize: '0.875rem', fontWeight: '500' }}>
         Page {currentPage + 1} of {totalPages}
       </span>
 
       <button
         onClick={onNext}
         disabled={currentPage === totalPages - 1}
-        className="px-4 py-2 bg-blue-500 text-white rounded disabled:bg-gray-300 disabled:cursor-not-allowed hover:bg-blue-600"
+        className="btn btn-secondary btn-sm"
       >
         Next →
       </button>
