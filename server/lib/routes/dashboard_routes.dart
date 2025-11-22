@@ -136,7 +136,7 @@ class DashboardRoutes {
     final total = totalRow?['count'] as int? ?? 0;
     final active = activeRow?['count'] as int? ?? 0;
 
-    final deviceRows = await db.query(
+    final deviceRows = await db.queryRows(
       'SELECT id, device_name, platform, registered_at, last_sync_at, is_active '
       'FROM devices ORDER BY registered_at DESC LIMIT 100',
     );
@@ -160,7 +160,7 @@ class DashboardRoutes {
       'SELECT COUNT(*) as count FROM books WHERE is_deleted = false AND archived_at IS NOT NULL',
     );
 
-    final bookRows = await db.query(
+    final bookRows = await db.queryRows(
       '''
       SELECT
         b.id, b.device_id, b.name, b.created_at, b.updated_at, b.archived_at,
@@ -197,7 +197,7 @@ class DashboardRoutes {
       'SELECT COUNT(*) as count FROM events WHERE is_deleted = false AND is_removed = true',
     );
 
-    final eventTypeRows = await db.query(
+    final eventTypeRows = await db.queryRows(
       'SELECT event_type, COUNT(*) as count FROM events WHERE is_deleted = false GROUP BY event_type',
     );
 
@@ -210,7 +210,7 @@ class DashboardRoutes {
       byType[eventType] = count;
     }
 
-    final recentEvents = await db.query(
+    final recentEvents = await db.queryRows(
       '''
       SELECT e.*, EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
       FROM events e
@@ -251,7 +251,7 @@ class DashboardRoutes {
     final withNotes = eventsWithNotesRow?['count'] as int? ?? 0;
     final totalEvents = totalEventsRow?['count'] as int? ?? 0;
 
-    final recentNotes = await db.query(
+    final recentNotes = await db.queryRows(
       'SELECT * FROM notes WHERE is_deleted = false ORDER BY updated_at DESC LIMIT 50',
     );
 
@@ -278,7 +278,7 @@ class DashboardRoutes {
       'SELECT COUNT(*) as count FROM schedule_drawings WHERE is_deleted = false AND view_mode = 2',
     );
 
-    final recent = await db.query(
+    final recent = await db.queryRows(
       'SELECT * FROM schedule_drawings WHERE is_deleted = false ORDER BY updated_at DESC LIMIT 50',
     );
 
@@ -305,7 +305,7 @@ class DashboardRoutes {
     final totalSize = sizeRow?['total_size'] as int? ?? 0;
     final totalSizeMB = (totalSize / (1024 * 1024)).toStringAsFixed(2);
 
-    final recent = await db.query(
+    final recent = await db.queryRows(
       '''
       SELECT bb.*, b.name as book_name
       FROM book_backups bb
@@ -344,7 +344,7 @@ class DashboardRoutes {
     final total = totalRow?['count'] as int? ?? 0;
     final successful = successRow?['count'] as int? ?? 0;
 
-    final recent = await db.query(
+    final recent = await db.queryRows(
       '''
       SELECT sl.*, d.device_name
       FROM sync_log sl
