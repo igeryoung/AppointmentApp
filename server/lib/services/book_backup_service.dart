@@ -233,12 +233,12 @@ class BookBackupService {
         await txn.execute(
           Sql.named('''
           INSERT INTO events (
-            id, book_id, device_id, name, record_number, event_type,
+            id, book_id, book_uuid, device_id, name, record_number, event_type,
             start_time, end_time, created_at, updated_at,
             is_removed, removal_reason, original_event_id, new_event_id,
             synced_at, version, is_deleted
           ) VALUES (
-            @id, @bookId, @deviceId, @name, @recordNumber, @eventType,
+            @id, @bookId, @bookUuid, @deviceId, @name, @recordNumber, @eventType,
             @startTime, @endTime, @createdAt, @updatedAt,
             @isRemoved, @removalReason, @originalEventId, @newEventId,
             CURRENT_TIMESTAMP, @version, @isDeleted
@@ -247,6 +247,7 @@ class BookBackupService {
           parameters: {
             'id': event['id'],
             'bookId': event['book_id'],
+            'bookUuid': bookUuid,  // Use book's UUID for foreign key
             'deviceId': deviceId,
             'name': event['name'],
             'recordNumber': event['record_number'],
@@ -297,16 +298,17 @@ class BookBackupService {
         await txn.execute(
           Sql.named('''
           INSERT INTO schedule_drawings (
-            id, book_id, device_id, date, view_mode, strokes_data,
+            id, book_id, book_uuid, device_id, date, view_mode, strokes_data,
             created_at, updated_at, synced_at, version, is_deleted
           ) VALUES (
-            @id, @bookId, @deviceId, @date, @viewMode, @strokesData,
+            @id, @bookId, @bookUuid, @deviceId, @date, @viewMode, @strokesData,
             @createdAt, @updatedAt, CURRENT_TIMESTAMP, @version, @isDeleted
           )
           '''),
           parameters: {
             'id': drawing['id'],
             'bookId': drawing['book_id'],
+            'bookUuid': bookUuid,  // Use book's UUID for foreign key
             'deviceId': deviceId,
             'date': _convertTimestamp(drawing['date']),
             'viewMode': drawing['view_mode'],
@@ -740,10 +742,12 @@ class BookBackupService {
     final events = data['events'] as List<Map<String, dynamic>>;
     if (events.isNotEmpty) {
       buffer.writeln('-- Events (${events.length})');
+      final bookUuid = data['book']['book_uuid'];
       for (final event in events) {
-        buffer.write('INSERT INTO events (id, book_id, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, synced_at, version, is_deleted) VALUES (');
+        buffer.write('INSERT INTO events (id, book_id, book_uuid, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, synced_at, version, is_deleted) VALUES (');
         buffer.write('${event['id']}, ');
         buffer.write('${event['book_id']}, ');
+        buffer.write('${escape(bookUuid)}, ');
         buffer.write('${escape(event['device_id'])}, ');
         buffer.write('${escape(event['name'])}, ');
         buffer.write('${escape(event['record_number'])}, ');
@@ -788,10 +792,12 @@ class BookBackupService {
     final drawings = data['drawings'] as List<Map<String, dynamic>>;
     if (drawings.isNotEmpty) {
       buffer.writeln('-- Schedule Drawings (${drawings.length})');
+      final bookUuid = data['book']['book_uuid'];
       for (final drawing in drawings) {
-        buffer.write('INSERT INTO schedule_drawings (id, book_id, device_id, date, view_mode, strokes_data, created_at, updated_at, synced_at, version, is_deleted) VALUES (');
+        buffer.write('INSERT INTO schedule_drawings (id, book_id, book_uuid, device_id, date, view_mode, strokes_data, created_at, updated_at, synced_at, version, is_deleted) VALUES (');
         buffer.write('${drawing['id']}, ');
         buffer.write('${drawing['book_id']}, ');
+        buffer.write('${escape(bookUuid)}, ');
         buffer.write('${escape(drawing['device_id'])}, ');
         buffer.write('${escape(drawing['date'])}, ');
         buffer.write('${drawing['view_mode']}, ');
