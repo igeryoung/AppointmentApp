@@ -4,12 +4,13 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 import '../database/connection.dart';
 import '../services/book_backup_service.dart';
+import '../utils/logger.dart';
 
 /// Router for book backup/restore endpoints
 ///
 /// New API (file-based):
-///   POST   /api/books/{bookId}/backup
-///   GET    /api/books/{bookId}/backups
+///   POST   /api/books/{bookUuid}/backup
+///   GET    /api/books/{bookUuid}/backups
 ///   GET    /api/backups/{backupId}/download
 ///   POST   /api/backups/{backupId}/restore
 ///   DELETE /api/backups/{backupId}
@@ -20,6 +21,7 @@ import '../services/book_backup_service.dart';
 class BookBackupRoutes {
   final DatabaseConnection db;
   late final BookBackupService backupService;
+  final _logger = Logger('BookBackupRoutes');
 
   BookBackupRoutes(this.db, {String? backupDir}) {
     backupService = BookBackupService(db, backupDir: backupDir);
@@ -29,12 +31,12 @@ class BookBackupRoutes {
   // NEW API (File-based backups)
   // ============================================================================
 
-  /// Router for /api/books/{bookId}/... endpoints
+  /// Router for /api/books/{bookUuid}/... endpoints
   Router get bookScopedRouter {
     final router = Router();
 
-    router.post('/<bookId>/backup', _createBackup);
-    router.get('/<bookId>/backups', _listBookBackups);
+    router.post('/<bookUuid>/backup', _createBackup);
+    router.get('/<bookUuid>/backups', _listBookBackups);
 
     return router;
   }
@@ -51,19 +53,29 @@ class BookBackupRoutes {
   }
 
   /// Create a file-based backup for a book
-  /// POST /api/books/{bookId}/backup
-  Future<Response> _createBackup(Request request, String bookId) async {
+  /// POST /api/books/{bookUuid}/backup
+  Future<Response> _createBackup(Request request, String bookUuid) async {
+    final reqLog = _logger.request('POST', '/api/books/$bookUuid/backup');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('Backup creation attempt without credentials', data: {
+          'bookUuid': bookUuid,
+          'hasDeviceId': deviceId != null,
+          'hasDeviceToken': deviceToken != null,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -76,20 +88,35 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('Backup creation attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+          'bookUuid': bookUuid,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
       // Create file-based backup
       final backupId = await backupService.createFileBackup(
-        bookId: int.parse(bookId),
+        bookUuid: bookUuid,
         deviceId: deviceId,
         backupName: backupName,
       );
 
-      print('✅ Book backup created: ID $backupId, Book #$bookId');
+      _logger.success('Book backup created', data: {
+        'backupId': backupId,
+        'bookUuid': bookUuid,
+        'deviceId': deviceId,
+      });
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -100,11 +127,15 @@ class BookBackupRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      print('❌ Book backup creation failed: $e');
-      print('   Stack trace: $stackTrace');
+      _logger.error('Book backup creation failed', error: e, stackTrace: stackTrace, data: {
+        'bookUuid': bookUuid,
+      });
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to create backup: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -113,19 +144,27 @@ class BookBackupRoutes {
   }
 
   /// List all backups for a specific book
-  /// GET /api/books/{bookId}/backups
-  Future<Response> _listBookBackups(Request request, String bookId) async {
+  /// GET /api/books/{bookUuid}/backups
+  Future<Response> _listBookBackups(Request request, String bookUuid) async {
+    final reqLog = _logger.request('GET', '/api/books/$bookUuid/backups');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('List backups attempt without credentials', data: {
+          'bookUuid': bookUuid,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -133,14 +172,25 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('List backups attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+          'bookUuid': bookUuid,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
       // Get backups for this book
-      final backups = await backupService.listBookBackups(int.parse(bookId), deviceId);
+      final backups = await backupService.listBookBackups(bookUuid, deviceId);
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -149,11 +199,16 @@ class BookBackupRoutes {
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      print('❌ List book backups failed: $e');
+    } catch (e, stackTrace) {
+      _logger.error('List book backups failed', error: e, stackTrace: stackTrace, data: {
+        'bookUuid': bookUuid,
+      });
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to list backups: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -164,17 +219,25 @@ class BookBackupRoutes {
   /// Download a backup file (streaming)
   /// GET /api/backups/{backupId}/download
   Future<Response> _downloadBackup(Request request, String backupId) async {
+    final reqLog = _logger.request('GET', '/api/backups/$backupId/download');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('Download backup attempt without credentials', data: {
+          'backupId': backupId,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -182,8 +245,17 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('Download backup attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+          'backupId': backupId,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -192,8 +264,17 @@ class BookBackupRoutes {
       final filePath = await backupService.getBackupFilePath(int.parse(backupId), deviceId);
 
       if (filePath == null) {
+        _logger.warning('Backup file not found', data: {
+          'backupId': backupId,
+          'deviceId': deviceId,
+        });
+
         return Response.notFound(
-          jsonEncode({'success': false, 'message': 'Backup file not found'}),
+          jsonEncode({
+            'success': false,
+            'error': 'NOT_FOUND',
+            'message': 'Backup file not found',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -202,7 +283,13 @@ class BookBackupRoutes {
       final file = File(filePath);
       final fileName = file.path.split('/').last;
 
-      print('📥 Streaming backup file: $fileName (${file.lengthSync()} bytes)');
+      _logger.info('Streaming backup file', data: {
+        'fileName': fileName,
+        'size': file.lengthSync(),
+        'backupId': backupId,
+      });
+
+      reqLog.complete(200);
 
       return Response.ok(
         file.openRead(),
@@ -212,11 +299,16 @@ class BookBackupRoutes {
           'Content-Length': file.lengthSync().toString(),
         },
       );
-    } catch (e) {
-      print('❌ Download backup failed: $e');
+    } catch (e, stackTrace) {
+      _logger.error('Download backup failed', error: e, stackTrace: stackTrace, data: {
+        'backupId': backupId,
+      });
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to download backup: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -227,17 +319,25 @@ class BookBackupRoutes {
   /// Restore a book from a backup
   /// POST /api/backups/{backupId}/restore
   Future<Response> _restoreBackup(Request request, String backupId) async {
+    final reqLog = _logger.request('POST', '/api/backups/$backupId/restore');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('Restore backup attempt without credentials', data: {
+          'backupId': backupId,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -245,8 +345,17 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('Restore backup attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+          'backupId': backupId,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -257,20 +366,30 @@ class BookBackupRoutes {
           backupId: int.parse(backupId),
           deviceId: deviceId,
         );
-        print('✅ Book restored from file-based backup: ID $backupId');
+        _logger.success('Book restored from file-based backup', data: {
+          'backupId': backupId,
+          'deviceId': deviceId,
+        });
       } catch (e) {
         // Fall back to JSON-based restore for backward compatibility
         if (e.toString().contains('not a file-based backup')) {
-          print('ℹ️  Falling back to JSON-based restore...');
+          _logger.info('Falling back to JSON-based restore', data: {
+            'backupId': backupId,
+          });
           await backupService.restoreBookBackup(
             backupId: int.parse(backupId),
             deviceId: deviceId,
           );
-          print('✅ Book restored from JSON backup: ID $backupId');
+          _logger.success('Book restored from JSON backup', data: {
+            'backupId': backupId,
+            'deviceId': deviceId,
+          });
         } else {
           rethrow;
         }
       }
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -280,11 +399,15 @@ class BookBackupRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      print('❌ Book restore failed: $e');
-      print('   Stack trace: $stackTrace');
+      _logger.error('Book restore failed', error: e, stackTrace: stackTrace, data: {
+        'backupId': backupId,
+      });
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to restore backup: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -295,17 +418,25 @@ class BookBackupRoutes {
   /// Delete a backup
   /// DELETE /api/backups/{backupId}
   Future<Response> _deleteBackup(Request request, String backupId) async {
+    final reqLog = _logger.request('DELETE', '/api/backups/$backupId');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('Delete backup attempt without credentials', data: {
+          'backupId': backupId,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -313,8 +444,17 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('Delete backup attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+          'backupId': backupId,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -322,7 +462,12 @@ class BookBackupRoutes {
       // Delete backup
       await backupService.deleteBackup(int.parse(backupId), deviceId);
 
-      print('✅ Backup deleted: ID $backupId');
+      _logger.success('Backup deleted', data: {
+        'backupId': backupId,
+        'deviceId': deviceId,
+      });
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -331,11 +476,16 @@ class BookBackupRoutes {
         }),
         headers: {'Content-Type': 'application/json'},
       );
-    } catch (e) {
-      print('❌ Delete backup failed: $e');
+    } catch (e, stackTrace) {
+      _logger.error('Delete backup failed', error: e, stackTrace: stackTrace, data: {
+        'backupId': backupId,
+      });
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to delete backup: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -363,17 +513,26 @@ class BookBackupRoutes {
   /// Upload a complete book backup (JSON format - DEPRECATED)
   /// POST /api/books/upload
   Future<Response> _uploadBackupLegacy(Request request) async {
+    final reqLog = _logger.request('POST', '/api/books/upload');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('Upload attempt without credentials', data: {
+          'hasDeviceId': deviceId != null,
+          'hasDeviceToken': deviceToken != null,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -389,8 +548,16 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('Upload attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -403,7 +570,14 @@ class BookBackupRoutes {
         backupData: backupData,
       );
 
-      print('✅ Book backup uploaded (JSON): ID $backupId, Book #$bookId, "$backupName"');
+      _logger.success('Book backup uploaded (legacy JSON)', data: {
+        'backupId': backupId,
+        'bookId': bookId,
+        'backupName': backupName,
+        'deviceId': deviceId,
+      });
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -416,11 +590,14 @@ class BookBackupRoutes {
           'X-Deprecated': 'Use POST /api/books/{bookId}/backup instead',
         },
       );
-    } catch (e) {
-      print('❌ Book backup upload failed: $e');
+    } catch (e, stackTrace) {
+      _logger.error('Book backup upload failed', error: e, stackTrace: stackTrace);
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to upload backup: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -431,17 +608,23 @@ class BookBackupRoutes {
   /// List all backups for a device (DEPRECATED)
   /// GET /api/books/list
   Future<Response> _listBackupsLegacy(Request request) async {
+    final reqLog = _logger.request('GET', '/api/books/list');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('List backups (legacy) attempt without credentials');
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -449,14 +632,24 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('List backups (legacy) attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
       // Get backups (legacy list - returns newest backup per book_uuid)
       final backups = await backupService.listBackups(deviceId);
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -468,11 +661,14 @@ class BookBackupRoutes {
           'X-Deprecated': 'Use GET /api/books/{bookId}/backups instead',
         },
       );
-    } catch (e) {
-      print('❌ List backups failed: $e');
+    } catch (e, stackTrace) {
+      _logger.error('List backups (legacy) failed', error: e, stackTrace: stackTrace);
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to list backups: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -483,17 +679,25 @@ class BookBackupRoutes {
   /// Download backup data directly (for client-side restore) - DEPRECATED
   /// GET /api/books/download/{backupId}
   Future<Response> _downloadBackupLegacy(Request request, String backupId) async {
+    final reqLog = _logger.request('GET', '/api/books/download/$backupId');
+    reqLog.start();
+
     try {
       // Extract auth headers
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
 
       if (deviceId == null || deviceToken == null) {
+        _logger.warning('Download backup (legacy) attempt without credentials', data: {
+          'backupId': backupId,
+        });
+
         return Response(
           401,
           body: jsonEncode({
             'success': false,
-            'message': 'Missing device credentials',
+            'error': 'MISSING_CREDENTIALS',
+            'message': 'Authentication required. Please provide device credentials via X-Device-ID and X-Device-Token headers.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -501,8 +705,17 @@ class BookBackupRoutes {
 
       // Verify device
       if (!await _verifyDevice(deviceId, deviceToken)) {
+        _logger.warning('Download backup (legacy) attempt with invalid credentials', data: {
+          'deviceId': deviceId,
+          'backupId': backupId,
+        });
+
         return Response.forbidden(
-          jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+          jsonEncode({
+            'success': false,
+            'error': 'INVALID_CREDENTIALS',
+            'message': 'Invalid device credentials. Please check your X-Device-ID and X-Device-Token headers.',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -511,13 +724,27 @@ class BookBackupRoutes {
       final backupData = await backupService.getBackup(int.parse(backupId), deviceId);
 
       if (backupData == null) {
+        _logger.warning('Backup (legacy) not found', data: {
+          'backupId': backupId,
+          'deviceId': deviceId,
+        });
+
         return Response.notFound(
-          jsonEncode({'success': false, 'message': 'Backup not found'}),
+          jsonEncode({
+            'success': false,
+            'error': 'NOT_FOUND',
+            'message': 'Backup not found',
+          }),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
-      print('✅ Backup data downloaded (JSON): ID $backupId');
+      _logger.success('Backup data downloaded (legacy JSON)', data: {
+        'backupId': backupId,
+        'deviceId': deviceId,
+      });
+
+      reqLog.complete(200);
 
       return Response.ok(
         jsonEncode({
@@ -530,11 +757,16 @@ class BookBackupRoutes {
           'X-Deprecated': 'Use GET /api/backups/{backupId}/download instead',
         },
       );
-    } catch (e) {
-      print('❌ Download backup failed: $e');
+    } catch (e, stackTrace) {
+      _logger.error('Download backup (legacy) failed', error: e, stackTrace: stackTrace, data: {
+        'backupId': backupId,
+      });
+      reqLog.fail(e, stackTrace: stackTrace);
+
       return Response.internalServerError(
         body: jsonEncode({
           'success': false,
+          'error': 'INTERNAL_ERROR',
           'message': 'Failed to download backup: $e',
         }),
         headers: {'Content-Type': 'application/json'},
@@ -562,7 +794,9 @@ class BookBackupRoutes {
       );
       return row != null;
     } catch (e) {
-      print('❌ Device verification failed: $e');
+      _logger.error('Device verification failed', error: e, data: {
+        'deviceId': deviceId,
+      });
       return false;
     }
   }
