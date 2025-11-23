@@ -404,9 +404,8 @@ paths:
 
   /api/books/upload:
     post:
-      summary: Upload book backup (DEPRECATED)
-      description: '[DEPRECATED] Upload a complete book backup including all events, notes, and drawings. Use POST /api/books/{bookId}/backup instead.'
-      deprecated: true
+      summary: Upload book backup (JSON format)
+      description: 'Upload a complete book backup including all events, notes, and drawings in JSON format.'
       requestBody:
         required: true
         content:
@@ -434,9 +433,8 @@ paths:
 
   /api/books/list:
     get:
-      summary: List book backups (DEPRECATED)
-      description: '[DEPRECATED] Get all book backups for the authenticated device. Use GET /api/books/{bookId}/backups instead.'
-      deprecated: true
+      summary: List book backups (JSON format)
+      description: 'Get all book backups for the authenticated device (JSON-based backups).'
       parameters:
         - name: deviceId
           in: query

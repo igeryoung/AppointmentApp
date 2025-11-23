@@ -92,12 +92,12 @@ void main(List<String> args) async {
   final backupDir = Platform.environment['BACKUP_DIR'] ?? 'server/backups';
   final bookBackupRoutes = BookBackupRoutes(db, backupDir: backupDir);
 
-  // New API (file-based backups)
+  // File-based backup API
   app.mount('/api/books/', bookBackupRoutes.bookScopedRouter);
   app.mount('/api/backups/', bookBackupRoutes.backupScopedRouter);
 
-  // Legacy API (JSON backups - deprecated)
-  app.mount('/api/books/', bookBackupRoutes.legacyRouter);
+  // JSON-based backup API
+  app.mount('/api/books/', bookBackupRoutes.jsonBasedRouter);
 
   // Note routes (Server-Store API)
   final noteRoutes = NoteRoutes(db);

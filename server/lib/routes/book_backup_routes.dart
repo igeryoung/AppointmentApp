@@ -8,14 +8,14 @@ import '../utils/logger.dart';
 
 /// Router for book backup/restore endpoints
 ///
-/// New API (file-based):
+/// File-based backup API:
 ///   POST   /api/books/{bookUuid}/backup
 ///   GET    /api/books/{bookUuid}/backups
 ///   GET    /api/backups/{backupId}/download
 ///   POST   /api/backups/{backupId}/restore
 ///   DELETE /api/backups/{backupId}
 ///
-/// Legacy API (JSON-based, deprecated):
+/// JSON-based backup API:
 ///   POST   /api/books/upload
 ///   GET    /api/books/list
 class BookBackupRoutes {
@@ -494,25 +494,25 @@ class BookBackupRoutes {
   }
 
   // ============================================================================
-  // LEGACY API (JSON-based backups - deprecated but kept for compatibility)
+  // JSON-BASED BACKUP API
   // ============================================================================
 
-  /// Router for legacy /api/books/... endpoints
-  Router get legacyRouter {
+  /// Router for JSON-based /api/books/... endpoints
+  Router get jsonBasedRouter {
     final router = Router();
 
-    router.post('/upload', _uploadBackupLegacy);
-    router.get('/list', _listBackupsLegacy);
-    router.get('/download/<backupId>', _downloadBackupLegacy);
-    router.post('/restore/<backupId>', _restoreBackupLegacy);
+    router.post('/upload', _uploadBackup);
+    router.get('/list', _listBackups);
+    router.get('/download/<backupId>', _downloadBackupJson);
+    router.post('/restore/<backupId>', _restoreBackupJson);
     router.delete('/<backupId>', _deleteBackup);
 
     return router;
   }
 
-  /// Upload a complete book backup (JSON format - DEPRECATED)
+  /// Upload a complete book backup (JSON format)
   /// POST /api/books/upload
-  Future<Response> _uploadBackupLegacy(Request request) async {
+  Future<Response> _uploadBackup(Request request) async {
     final reqLog = _logger.request('POST', '/api/books/upload');
     reqLog.start();
 
@@ -582,12 +582,11 @@ class BookBackupRoutes {
       return Response.ok(
         jsonEncode({
           'success': true,
-          'message': 'Backup uploaded successfully (legacy format)',
+          'message': 'Backup uploaded successfully',
           'backupId': backupId,
         }),
         headers: {
           'Content-Type': 'application/json',
-          'X-Deprecated': 'Use POST /api/books/{bookId}/backup instead',
         },
       );
     } catch (e, stackTrace) {
@@ -605,9 +604,9 @@ class BookBackupRoutes {
     }
   }
 
-  /// List all backups for a device (DEPRECATED)
+  /// List all backups for a device (JSON format)
   /// GET /api/books/list
-  Future<Response> _listBackupsLegacy(Request request) async {
+  Future<Response> _listBackups(Request request) async {
     final reqLog = _logger.request('GET', '/api/books/list');
     reqLog.start();
 
@@ -658,7 +657,6 @@ class BookBackupRoutes {
         }),
         headers: {
           'Content-Type': 'application/json',
-          'X-Deprecated': 'Use GET /api/books/{bookId}/backups instead',
         },
       );
     } catch (e, stackTrace) {
@@ -676,9 +674,9 @@ class BookBackupRoutes {
     }
   }
 
-  /// Download backup data directly (for client-side restore) - DEPRECATED
+  /// Download backup data directly (for client-side restore) - JSON format
   /// GET /api/books/download/{backupId}
-  Future<Response> _downloadBackupLegacy(Request request, String backupId) async {
+  Future<Response> _downloadBackupJson(Request request, String backupId) async {
     final reqLog = _logger.request('GET', '/api/books/download/$backupId');
     reqLog.start();
 
@@ -754,7 +752,6 @@ class BookBackupRoutes {
         }),
         headers: {
           'Content-Type': 'application/json',
-          'X-Deprecated': 'Use GET /api/backups/{backupId}/download instead',
         },
       );
     } catch (e, stackTrace) {
@@ -774,10 +771,10 @@ class BookBackupRoutes {
     }
   }
 
-  /// Restore a book from backup (DEPRECATED - use new endpoint)
+  /// Restore a book from backup (JSON format)
   /// POST /api/books/restore/{backupId}
-  Future<Response> _restoreBackupLegacy(Request request, String backupId) async {
-    // Just redirect to new restore endpoint
+  Future<Response> _restoreBackupJson(Request request, String backupId) async {
+    // Redirect to file-based restore endpoint which handles both formats
     return _restoreBackup(request, backupId);
   }
 
