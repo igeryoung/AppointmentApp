@@ -371,6 +371,61 @@ class ApiClient {
   }
 
   // ===================
+  // Book Creation API
+  // ===================
+
+  /// Create a new book on the server and get UUID
+  /// This must be called before creating a book locally
+  Future<Map<String, dynamic>> createBook({
+    required String name,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final now = DateTime.now();
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/create-books'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode({
+          'name': name,
+          'created_at': now.toUtc().toIso8601String(),
+        }),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 400) {
+        throw ApiException(
+          'Bad request: ${jsonDecode(response.body)['message']}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Book creation failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Book creation failed: $e');
+      rethrow;
+    }
+  }
+
+  // ===================
   // Device Registration API
   // ===================
 

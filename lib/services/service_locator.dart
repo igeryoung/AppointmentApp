@@ -47,9 +47,14 @@ Future<void> setupServices() async {
   // Repositories - Lazy singletons
   final db = getIt<IDatabaseService>();
   if (db is PRDDatabaseService) {
-    // Register repositories with database access
+    // Note: BookRepository will be re-registered with ApiClient after server config loads
+    // For now, register without ApiClient (book creation will fail until API is configured)
     getIt.registerLazySingleton<IBookRepository>(
-      () => BookRepositoryImpl(() => db.database),
+      () => BookRepositoryImpl(
+        () => db.database,
+        apiClient: null, // Will be updated after server config loads
+        dbService: db,
+      ),
     );
 
     getIt.registerLazySingleton<IEventRepository>(
@@ -111,6 +116,21 @@ Future<void> setupServices() async {
 /// Call this after server configuration is loaded
 Future<void> registerContentServices(ApiClient apiClient) async {
   if (!kIsWeb) {
+    // Re-register BookRepository with ApiClient
+    final db = getIt<IDatabaseService>();
+    if (db is PRDDatabaseService) {
+      if (getIt.isRegistered<IBookRepository>()) {
+        getIt.unregister<IBookRepository>();
+      }
+      getIt.registerLazySingleton<IBookRepository>(
+        () => BookRepositoryImpl(
+          () => db.database,
+          apiClient: apiClient,
+          dbService: db,
+        ),
+      );
+    }
+
     // Register Phase 3 content services
     getIt.registerLazySingleton<NoteContentService>(
       () => NoteContentService(

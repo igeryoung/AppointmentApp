@@ -68,7 +68,7 @@ class BookListCubit extends Cubit<BookListState> {
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Created book "${newBook.name}" (id: ${newBook.id})');
+      debugPrint('✅ BookListCubit: Created book "${newBook.name}" (uuid: ${newBook.uuid})');
       return newBook;
     } catch (e) {
       debugPrint('❌ BookListCubit: Failed to create book: $e');
@@ -83,10 +83,6 @@ class BookListCubit extends Cubit<BookListState> {
 
   /// Update book details (rename)
   Future<void> updateBook(Book book, {String? newName}) async {
-    if (book.id == null) {
-      emit(const BookListError('Cannot update book without ID'));
-      return;
-    }
 
     if (newName != null && newName.trim().isEmpty) {
       emit(const BookListError('Book name cannot be empty'));
@@ -115,14 +111,14 @@ class BookListCubit extends Cubit<BookListState> {
   // ===================
 
   /// Archive a book
-  Future<void> archiveBook(int bookId) async {
+  Future<void> archiveBook(String bookUuid) async {
     try {
-      await _bookRepository.archive(bookId);
+      await _bookRepository.archive(bookUuid);
 
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Archived book (id: $bookId)');
+      debugPrint('✅ BookListCubit: Archived book (uuid: $bookUuid)');
     } catch (e) {
       debugPrint('❌ BookListCubit: Failed to archive book: $e');
       emit(BookListError('Failed to archive book: $e'));
@@ -134,9 +130,9 @@ class BookListCubit extends Cubit<BookListState> {
   // ===================
 
   /// Delete a book permanently
-  Future<void> deleteBook(int bookId) async {
+  Future<void> deleteBook(String bookUuid) async {
     try {
-      await _bookRepository.delete(bookId);
+      await _bookRepository.delete(bookUuid);
 
       // Reload books to update UI
       await loadBooks();
