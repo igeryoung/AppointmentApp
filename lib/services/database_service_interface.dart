@@ -16,8 +16,8 @@ abstract class IDatabaseService {
   /// Get all books, optionally including archived ones
   Future<List<Book>> getAllBooks({bool includeArchived = false});
 
-  /// Get a book by its ID
-  Future<Book?> getBookById(int id);
+  /// Get a book by its UUID
+  Future<Book?> getBookByUuid(String uuid);
 
   /// Create a new book
   Future<Book> createBook(String name);
@@ -26,26 +26,26 @@ abstract class IDatabaseService {
   Future<Book> updateBook(Book book);
 
   /// Archive a book (soft delete)
-  Future<void> archiveBook(int id);
+  Future<void> archiveBook(String uuid);
 
   /// Delete a book permanently
-  Future<void> deleteBook(int id);
+  Future<void> deleteBook(String uuid);
 
   // ===================
   // Event Operations
   // ===================
 
   /// Get events for a single day
-  Future<List<Event>> getEventsByDay(int bookId, DateTime date);
+  Future<List<Event>> getEventsByDay(String bookUuid, DateTime date);
 
   /// Get events for a 3-day period starting from date
-  Future<List<Event>> getEventsBy3Days(int bookId, DateTime startDate);
+  Future<List<Event>> getEventsBy3Days(String bookUuid, DateTime startDate);
 
   /// Get events for a week
-  Future<List<Event>> getEventsByWeek(int bookId, DateTime weekStart);
+  Future<List<Event>> getEventsByWeek(String bookUuid, DateTime weekStart);
 
   /// Get all events for a book (regardless of date)
-  Future<List<Event>> getAllEventsByBook(int bookId);
+  Future<List<Event>> getAllEventsByBook(String bookUuid);
 
   /// Get an event by its ID
   Future<Event?> getEventById(int id);
@@ -95,7 +95,7 @@ abstract class IDatabaseService {
 
   /// Get cached drawing for a specific view
   Future<ScheduleDrawing?> getCachedDrawing(
-    int bookId,
+    String bookUuid,
     DateTime date,
     int viewMode,
   );
@@ -104,11 +104,11 @@ abstract class IDatabaseService {
   Future<ScheduleDrawing> saveCachedDrawing(ScheduleDrawing drawing);
 
   /// Delete cached drawing
-  Future<void> deleteCachedDrawing(int bookId, DateTime date, int viewMode);
+  Future<void> deleteCachedDrawing(String bookUuid, DateTime date, int viewMode);
 
   /// Batch get cached drawings for a date range
   Future<List<ScheduleDrawing>> batchGetCachedDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
     int? viewMode,
@@ -122,17 +122,17 @@ abstract class IDatabaseService {
   // ===================
 
   /// Get the count of events in a book
-  Future<int> getEventCountByBook(int bookId);
+  Future<int> getEventCountByBook(String bookUuid);
 
   /// Get all unique record numbers for a book
-  Future<List<String>> getAllRecordNumbers(int bookId);
+  Future<List<String>> getAllRecordNumbers(String bookUuid);
 
   /// Get unique record numbers filtered by exact name match (case-insensitive)
-  Future<List<String>> getRecordNumbersByName(int bookId, String name);
+  Future<List<String>> getRecordNumbersByName(String bookUuid, String name);
 
   /// Search events by name and record number
   Future<List<Event>> searchByNameAndRecordNumber(
-    int bookId,
+    String bookUuid,
     String name,
     String recordNumber,
   );
