@@ -80,10 +80,12 @@ class BookBackupService {
     final url = Uri.parse('$serverUrl/api/books/upload');
     final response = await _client.post(
       url,
-      headers: {'Content-Type': 'application/json'},
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Device-ID': deviceId,
+        'X-Device-Token': deviceToken,
+      },
       body: jsonEncode({
-        'deviceId': deviceId,
-        'deviceToken': deviceToken,
         'bookId': bookId,
         'backupName': bookName,
         'backupData': backupData,
