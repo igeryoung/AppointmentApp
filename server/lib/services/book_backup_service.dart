@@ -627,7 +627,7 @@ class BookBackupService {
 
     // Delete old backups (beyond keepCount)
     final toDelete = backups.skip(keepCount).toList();
-    print('🧹 Cleaning up ${toDelete.length} old backup(s) for Book #$bookId...');
+    print('🧹 Cleaning up ${toDelete.length} old backup(s) for Book UUID: $bookUuid...');
 
     for (final backup in toDelete) {
       final backupId = backup['id'] as int;
