@@ -37,7 +37,7 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
     const value = e.target.value;
     onFiltersChange({
       ...filters,
-      bookId: value ? parseInt(value) : undefined,
+      bookUuid: value || undefined,
     });
   };
 
@@ -59,7 +59,7 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
     onFiltersChange({});
   };
 
-  const hasFilters = filters.bookId || filters.name || filters.recordNumber;
+  const hasFilters = filters.bookUuid || filters.name || filters.recordNumber;
 
   return (
     <div className="card" style={{ marginBottom: '1.5rem' }}>
@@ -79,7 +79,7 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
               Book
             </label>
             <select
-              value={filters.bookId || ''}
+              value={filters.bookUuid || ''}
               onChange={handleBookChange}
               disabled={loading}
               style={{
@@ -92,7 +92,7 @@ export const EventFilterBar: React.FC<EventFilterBarProps> = ({
             >
               <option value="">All Books</option>
               {books.map((book) => (
-                <option key={book.id} value={book.id}>
+                <option key={book.bookUuid} value={book.bookUuid}>
                   {book.name}
                 </option>
               ))}

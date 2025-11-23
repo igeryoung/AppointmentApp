@@ -99,6 +99,9 @@ void main(List<String> args) async {
   // JSON-based backup API
   app.mount('/api/books/', bookBackupRoutes.jsonBasedRouter);
 
+  // Book creation API
+  app.mount('/api/create-books', bookBackupRoutes.createBookRouter);
+
   // Note routes (Server-Store API)
   final noteRoutes = NoteRoutes(db);
   app.mount('/api/notes/', noteRoutes.router);
@@ -232,6 +235,9 @@ void main(List<String> args) async {
   print('   POST /api/sync/push - Push local changes');
   print('   POST /api/sync/full - Full bidirectional sync');
   print('   POST /api/sync/resolve-conflict - Resolve conflict');
+  print('');
+  print('   === Book Creation API ===');
+  print('   POST /api/create-books - Create new book and get UUID');
   print('');
   print('   === Book Backup API (File-based) ===');
   print('   POST /api/books/<bookId>/backup - Create backup');

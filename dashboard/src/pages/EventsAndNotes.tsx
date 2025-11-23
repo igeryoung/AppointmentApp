@@ -36,7 +36,7 @@ export const EventsAndNotes: React.FC = () => {
       setError(null);
 
       // If no filters, fetch all events
-      const response = await dashboardAPI.getFilteredEvents(filters.bookId || filters.name || filters.recordNumber ? filters : {});
+      const response = await dashboardAPI.getFilteredEvents(filters.bookUuid || filters.name || filters.recordNumber ? filters : {});
       setEvents(response.events || []);
     } catch (err) {
       console.error('Failed to load events:', err);

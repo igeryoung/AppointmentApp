@@ -262,16 +262,16 @@ class DashboardRoutes {
       final bookRows = await db.queryRows(
         '''
         SELECT
-          b.id, b.device_id, b.name, b.created_at, b.updated_at, b.archived_at,
+          b.book_uuid, b.device_id, b.name, b.created_at, b.updated_at, b.archived_at,
           COUNT(DISTINCT e.id) as event_count,
           COUNT(DISTINCT n.id) as note_count,
           COUNT(DISTINCT sd.id) as drawing_count
         FROM books b
-        LEFT JOIN events e ON b.id = e.book_id AND e.is_deleted = false
+        LEFT JOIN events e ON b.book_uuid = e.book_uuid AND e.is_deleted = false
         LEFT JOIN notes n ON e.id = n.event_id AND n.is_deleted = false
-        LEFT JOIN schedule_drawings sd ON b.id = sd.book_id AND sd.is_deleted = false
+        LEFT JOIN schedule_drawings sd ON b.book_uuid = sd.book_uuid AND sd.is_deleted = false
         WHERE b.is_deleted = false
-        GROUP BY b.id
+        GROUP BY b.book_uuid
         ORDER BY b.created_at DESC
         LIMIT 100
         ''',
@@ -426,7 +426,7 @@ class DashboardRoutes {
         '''
         SELECT bb.*, b.name as book_name
         FROM book_backups bb
-        LEFT JOIN books b ON bb.book_id = b.id
+        LEFT JOIN books b ON bb.book_uuid = b.book_uuid
         WHERE bb.is_deleted = false
         ORDER BY bb.created_at DESC
         LIMIT 50
@@ -493,7 +493,7 @@ class DashboardRoutes {
   /// Get filtered list of events with optional book, name, and record number filters
   /// Returns all events sorted by created_at DESC (newest first)
   Future<List<Map<String, dynamic>>> _getFilteredEvents(
-    int? bookId,
+    String? bookUuid,
     String? name,
     String? recordNumber,
   ) async {
@@ -501,9 +501,9 @@ class DashboardRoutes {
       final conditions = <String>['e.is_deleted = false'];
       final params = <String, dynamic>{};
 
-      if (bookId != null) {
-        conditions.add('e.book_id = @bookId');
-        params['bookId'] = bookId;
+      if (bookUuid != null) {
+        conditions.add('e.book_uuid = @bookUuid::uuid');
+        params['bookUuid'] = bookUuid;
       }
 
       if (name != null && name.isNotEmpty) {
@@ -524,7 +524,7 @@ class DashboardRoutes {
           b.name as book_name,
           EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
         FROM events e
-        LEFT JOIN books b ON e.book_id = b.id
+        LEFT JOIN books b ON e.book_uuid = b.book_uuid
         WHERE $whereClause
         ORDER BY e.created_at DESC
       ''';
@@ -555,7 +555,7 @@ class DashboardRoutes {
           b.name as book_name,
           EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
         FROM events e
-        LEFT JOIN books b ON e.book_id = b.id
+        LEFT JOIN books b ON e.book_uuid = b.book_uuid
         WHERE e.id = @id AND e.is_deleted = false
         ''',
         parameters: {'id': id},
@@ -657,19 +657,19 @@ class DashboardRoutes {
     try {
       // Get query parameters for filtering
       final params = request.url.queryParameters;
-      final bookId = params['bookId'] != null ? int.tryParse(params['bookId']!) : null;
+      final bookUuid = params['bookUuid'];
       final name = params['name'];
       final recordNumber = params['recordNumber'];
 
       // Check if this is a request for the events list (not stats)
-      final wantsList = params.containsKey('bookId') ||
+      final wantsList = params.containsKey('bookUuid') ||
                         params.containsKey('name') ||
                         params.containsKey('recordNumber') ||
                         params.containsKey('list');
 
       // If requesting list or any filters are provided, return filtered list
       if (wantsList) {
-        final events = await _getFilteredEvents(bookId, name, recordNumber);
+        final events = await _getFilteredEvents(bookUuid, name, recordNumber);
         return Response.ok(
           jsonEncode({'events': events}),
           headers: {'Content-Type': 'application/json'},
