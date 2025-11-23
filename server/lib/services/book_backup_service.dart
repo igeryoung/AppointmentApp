@@ -72,27 +72,20 @@ class BookBackupService {
 
     // **CRITICAL FIX**: Also create/update book in books table for Server-Store
     // This enables note/drawing endpoints to verify book ownership
+    // Use book_uuid as the unique identifier, not book_id (which can conflict across devices)
     try {
-      print('📝 Creating/updating book in books table (ID: $bookId, Device: $deviceId)');
+      print('📝 Creating/updating book in books table (UUID: $bookUuid, Device: $deviceId)');
 
       final bookCreatedAt = _convertTimestamp(bookData['created_at']) ?? DateTime.now();
       final bookUpdatedAt = _convertTimestamp(bookData['updated_at']) ?? bookCreatedAt;
 
-      // Check if book already exists with different device_id
-      final existingBook = await db.querySingle(
-        'SELECT device_id FROM books WHERE id = @id',
-        parameters: {'id': bookId},
-      );
-
-      if (existingBook != null && existingBook['device_id'] != deviceId) {
-        print('⚠️  Book ownership transfer: $bookId (${existingBook['device_id']} -> $deviceId)');
-      }
-
+      // Insert or update based on (device_id, book_uuid) - the true unique identifier
+      // Let the server assign a new auto-increment ID if this is a new book
       await db.querySingle(
         '''
-        INSERT INTO books (id, device_id, book_uuid, name, created_at, updated_at, synced_at, version, is_deleted)
-        VALUES (@id, @deviceId, @bookUuid, @name, @createdAt, @updatedAt, CURRENT_TIMESTAMP, @version, false)
-        ON CONFLICT (id)
+        INSERT INTO books (device_id, book_uuid, name, created_at, updated_at, synced_at, version, is_deleted)
+        VALUES (@deviceId, @bookUuid, @name, @createdAt, @updatedAt, CURRENT_TIMESTAMP, @version, false)
+        ON CONFLICT (book_uuid)
         DO UPDATE SET
           device_id = EXCLUDED.device_id,
           name = EXCLUDED.name,
@@ -103,7 +96,6 @@ class BookBackupService {
         RETURNING id
         ''',
         parameters: {
-          'id': bookId,
           'deviceId': deviceId,
           'bookUuid': bookUuid,
           'name': bookData['name'],
@@ -113,7 +105,7 @@ class BookBackupService {
         },
       );
 
-      print('✅ Book created/updated in books table (ID: $bookId, Device: $deviceId)');
+      print('✅ Book created/updated in books table (UUID: $bookUuid, Device: $deviceId)');
     } catch (e) {
       print('❌ Failed to create book in books table: $e');
       // Don't fail the entire upload if this fails - backup is still stored
@@ -382,7 +374,7 @@ class BookBackupService {
   /// This is the new recommended way to backup books.
   /// Returns the backup ID.
   Future<int> createFileBackup({
-    required int bookId,
+    required String bookUuid,
     required String deviceId,
     String? backupName,
   }) async {
@@ -391,14 +383,14 @@ class BookBackupService {
     final timestampStr = dateFormat.format(timestamp);
 
     // Generate backup file path
-    final fileName = 'book_${bookId}_$timestampStr.sql.gz';
+    final fileName = 'book_${bookUuid.substring(0, 8)}_$timestampStr.sql.gz';
     final filePath = path.join(backupDir, fileName);
 
-    print('📦 Creating file-based backup for Book #$bookId...');
+    print('📦 Creating file-based backup for Book UUID: $bookUuid...');
 
     try {
       // Step 1: Query all book data
-      final bookData = await _queryBookData(bookId, deviceId);
+      final bookData = await _queryBookData(bookUuid, deviceId);
 
       // Step 2: Generate SQL
       final sql = _generateBackupSQL(bookData);
@@ -433,15 +425,14 @@ class BookBackupService {
           created_at
         )
         VALUES (
-          @bookId, @bookUuid, @backupName, @deviceId,
+          NULL, @bookUuid, @backupName, @deviceId,
           @backupPath, @backupSize, 'full', 'completed',
           @createdAt
         )
         RETURNING id
         ''',
         parameters: {
-          'bookId': bookId,
-          'bookUuid': bookData['book']['book_uuid'],
+          'bookUuid': bookUuid,
           'backupName': backupNameFinal,
           'deviceId': deviceId,
           'backupPath': fileName,
@@ -454,7 +445,7 @@ class BookBackupService {
       print('✅ File-based backup created: ID $backupId ($fileName)');
 
       // Step 5: Cleanup old backups
-      await cleanupOldBackups(bookId, deviceId);
+      await cleanupOldBackups(bookUuid, deviceId);
 
       return backupId;
     } catch (e, stackTrace) {
@@ -544,7 +535,7 @@ class BookBackupService {
   }
 
   /// List backups for a specific book
-  Future<List<Map<String, dynamic>>> listBookBackups(int bookId, String deviceId) async {
+  Future<List<Map<String, dynamic>>> listBookBackups(String bookUuid, String deviceId) async {
     final rows = await db.queryRows(
       '''
       SELECT
@@ -552,11 +543,11 @@ class BookBackupService {
         backup_path, backup_size, backup_size_bytes,
         backup_type, status, created_at, restored_at
       FROM book_backups
-      WHERE book_id = @bookId AND device_id = @deviceId AND is_deleted = false
+      WHERE book_uuid = @bookUuid AND device_id = @deviceId AND is_deleted = false
       ORDER BY created_at DESC
       ''',
       parameters: {
-        'bookId': bookId,
+        'bookUuid': bookUuid,
         'deviceId': deviceId,
       },
     );
@@ -613,17 +604,17 @@ class BookBackupService {
   }
 
   /// Clean up old backups, keeping only the last N backups per book
-  Future<void> cleanupOldBackups(int bookId, String deviceId, {int keepCount = 10}) async {
+  Future<void> cleanupOldBackups(String bookUuid, String deviceId, {int keepCount = 10}) async {
     // Get all backups for this book, ordered by creation date
     final backups = await db.queryRows(
       '''
       SELECT id, backup_path
       FROM book_backups
-      WHERE book_id = @bookId AND device_id = @deviceId AND is_deleted = false
+      WHERE book_uuid = @bookUuid AND device_id = @deviceId AND is_deleted = false
       ORDER BY created_at DESC
       ''',
       parameters: {
-        'bookId': bookId,
+        'bookUuid': bookUuid,
         'deviceId': deviceId,
       },
     );
@@ -665,16 +656,18 @@ class BookBackupService {
   // ============================================================================
 
   /// Query all data for a book
-  Future<Map<String, dynamic>> _queryBookData(int bookId, String deviceId) async {
+  Future<Map<String, dynamic>> _queryBookData(String bookUuid, String deviceId) async {
     // Verify book belongs to device
     final book = await db.querySingle(
-      'SELECT * FROM books WHERE id = @bookId AND device_id = @deviceId',
-      parameters: {'bookId': bookId, 'deviceId': deviceId},
+      'SELECT * FROM books WHERE book_uuid = @bookUuid AND device_id = @deviceId',
+      parameters: {'bookUuid': bookUuid, 'deviceId': deviceId},
     );
 
     if (book == null) {
       throw Exception('Book not found or access denied');
     }
+
+    final bookId = book['id'] as int;
 
     // Query related data
     final events = await db.queryRows(

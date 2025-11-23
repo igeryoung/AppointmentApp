@@ -9,8 +9,8 @@ import '../utils/logger.dart';
 /// Router for book backup/restore endpoints
 ///
 /// New API (file-based):
-///   POST   /api/books/{bookId}/backup
-///   GET    /api/books/{bookId}/backups
+///   POST   /api/books/{bookUuid}/backup
+///   GET    /api/books/{bookUuid}/backups
 ///   GET    /api/backups/{backupId}/download
 ///   POST   /api/backups/{backupId}/restore
 ///   DELETE /api/backups/{backupId}
@@ -31,12 +31,12 @@ class BookBackupRoutes {
   // NEW API (File-based backups)
   // ============================================================================
 
-  /// Router for /api/books/{bookId}/... endpoints
+  /// Router for /api/books/{bookUuid}/... endpoints
   Router get bookScopedRouter {
     final router = Router();
 
-    router.post('/<bookId>/backup', _createBackup);
-    router.get('/<bookId>/backups', _listBookBackups);
+    router.post('/<bookUuid>/backup', _createBackup);
+    router.get('/<bookUuid>/backups', _listBookBackups);
 
     return router;
   }
@@ -53,9 +53,9 @@ class BookBackupRoutes {
   }
 
   /// Create a file-based backup for a book
-  /// POST /api/books/{bookId}/backup
-  Future<Response> _createBackup(Request request, String bookId) async {
-    final reqLog = _logger.request('POST', '/api/books/$bookId/backup');
+  /// POST /api/books/{bookUuid}/backup
+  Future<Response> _createBackup(Request request, String bookUuid) async {
+    final reqLog = _logger.request('POST', '/api/books/$bookUuid/backup');
     reqLog.start();
 
     try {
@@ -65,7 +65,7 @@ class BookBackupRoutes {
 
       if (deviceId == null || deviceToken == null) {
         _logger.warning('Backup creation attempt without credentials', data: {
-          'bookId': bookId,
+          'bookUuid': bookUuid,
           'hasDeviceId': deviceId != null,
           'hasDeviceToken': deviceToken != null,
         });
@@ -90,7 +90,7 @@ class BookBackupRoutes {
       if (!await _verifyDevice(deviceId, deviceToken)) {
         _logger.warning('Backup creation attempt with invalid credentials', data: {
           'deviceId': deviceId,
-          'bookId': bookId,
+          'bookUuid': bookUuid,
         });
 
         return Response.forbidden(
@@ -105,14 +105,14 @@ class BookBackupRoutes {
 
       // Create file-based backup
       final backupId = await backupService.createFileBackup(
-        bookId: int.parse(bookId),
+        bookUuid: bookUuid,
         deviceId: deviceId,
         backupName: backupName,
       );
 
       _logger.success('Book backup created', data: {
         'backupId': backupId,
-        'bookId': bookId,
+        'bookUuid': bookUuid,
         'deviceId': deviceId,
       });
 
@@ -128,7 +128,7 @@ class BookBackupRoutes {
       );
     } catch (e, stackTrace) {
       _logger.error('Book backup creation failed', error: e, stackTrace: stackTrace, data: {
-        'bookId': bookId,
+        'bookUuid': bookUuid,
       });
       reqLog.fail(e, stackTrace: stackTrace);
 
@@ -144,9 +144,9 @@ class BookBackupRoutes {
   }
 
   /// List all backups for a specific book
-  /// GET /api/books/{bookId}/backups
-  Future<Response> _listBookBackups(Request request, String bookId) async {
-    final reqLog = _logger.request('GET', '/api/books/$bookId/backups');
+  /// GET /api/books/{bookUuid}/backups
+  Future<Response> _listBookBackups(Request request, String bookUuid) async {
+    final reqLog = _logger.request('GET', '/api/books/$bookUuid/backups');
     reqLog.start();
 
     try {
@@ -156,7 +156,7 @@ class BookBackupRoutes {
 
       if (deviceId == null || deviceToken == null) {
         _logger.warning('List backups attempt without credentials', data: {
-          'bookId': bookId,
+          'bookUuid': bookUuid,
         });
 
         return Response(
@@ -174,7 +174,7 @@ class BookBackupRoutes {
       if (!await _verifyDevice(deviceId, deviceToken)) {
         _logger.warning('List backups attempt with invalid credentials', data: {
           'deviceId': deviceId,
-          'bookId': bookId,
+          'bookUuid': bookUuid,
         });
 
         return Response.forbidden(
@@ -188,7 +188,7 @@ class BookBackupRoutes {
       }
 
       // Get backups for this book
-      final backups = await backupService.listBookBackups(int.parse(bookId), deviceId);
+      final backups = await backupService.listBookBackups(bookUuid, deviceId);
 
       reqLog.complete(200);
 
@@ -201,7 +201,7 @@ class BookBackupRoutes {
       );
     } catch (e, stackTrace) {
       _logger.error('List book backups failed', error: e, stackTrace: stackTrace, data: {
-        'bookId': bookId,
+        'bookUuid': bookUuid,
       });
       reqLog.fail(e, stackTrace: stackTrace);
 
