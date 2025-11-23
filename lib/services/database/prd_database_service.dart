@@ -151,21 +151,21 @@ class PRDDatabaseService
   }
 
   Future<void> _createTables(Database db, int version) async {
-    // Version 20 schema - includes all features
-    // - Books with UUID and sync columns
-    // - Events with multi-type support, phone, has_charge_items flag, completion status, and sync columns
+    // Version 21 schema - includes all features
+    // - Books with UUID as PRIMARY KEY (no auto-increment id)
+    // - Events with book_uuid foreign key, multi-type support, phone, has_charge_items flag, completion status, and sync columns
     // - Notes with multi-page support, person sharing, locks, cache, and sync columns
     // - Person charge items with shared sync across events (v18)
     // - Person info with synced phone numbers (v19)
     // - has_charge_items flag for efficient charge item presence check (v20)
-    // - Schedule drawings with cache and sync columns
+    // - book_uuid as PRIMARY KEY (v21)
+    // - Schedule drawings with book_uuid foreign key, cache and sync columns
     // - Device info, sync metadata, and cache policy tables
 
-    // Books table - Top-level containers
+    // Books table - Top-level containers with UUID as PRIMARY KEY
     await db.execute('''
       CREATE TABLE books (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        book_uuid TEXT,
+        book_uuid TEXT PRIMARY KEY,
         name TEXT NOT NULL,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         archived_at INTEGER,
@@ -174,14 +174,11 @@ class PRDDatabaseService
       )
     ''');
 
-    // Create unique index on book_uuid
-    await db.execute('CREATE UNIQUE INDEX IF NOT EXISTS idx_books_uuid_unique ON books(book_uuid)');
-
     // Events table - Individual appointment entries with PRD metadata
     await db.execute('''
       CREATE TABLE events (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        book_id INTEGER NOT NULL,
+        book_uuid TEXT NOT NULL,
         name TEXT NOT NULL,
         record_number TEXT,
         phone TEXT,
@@ -200,7 +197,7 @@ class PRDDatabaseService
         has_note INTEGER DEFAULT 0,
         version INTEGER DEFAULT 1,
         is_dirty INTEGER DEFAULT 0,
-        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+        FOREIGN KEY (book_uuid) REFERENCES books (book_uuid) ON DELETE CASCADE
       )
     ''');
 
@@ -227,11 +224,11 @@ class PRDDatabaseService
 
     // Indexes optimized for Schedule views
     await db.execute('''
-      CREATE INDEX idx_events_book_time ON events(book_id, start_time)
+      CREATE INDEX idx_events_book_uuid_time ON events(book_uuid, start_time)
     ''');
 
     await db.execute('''
-      CREATE INDEX idx_events_book_date ON events(book_id, date(start_time, 'unixepoch'))
+      CREATE INDEX idx_events_book_uuid_date ON events(book_uuid, date(start_time, 'unixepoch'))
     ''');
 
     await db.execute('''
@@ -298,7 +295,7 @@ class PRDDatabaseService
     await db.execute('''
       CREATE TABLE schedule_drawings (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        book_id INTEGER NOT NULL,
+        book_uuid TEXT NOT NULL,
         date INTEGER NOT NULL,
         view_mode INTEGER NOT NULL,
         strokes_data TEXT,
@@ -308,13 +305,14 @@ class PRDDatabaseService
         cache_hit_count INTEGER DEFAULT 0,
         version INTEGER DEFAULT 1,
         is_dirty INTEGER DEFAULT 0,
-        FOREIGN KEY (book_id) REFERENCES books (id) ON DELETE CASCADE
+        FOREIGN KEY (book_uuid) REFERENCES books (book_uuid) ON DELETE CASCADE,
+        UNIQUE(book_uuid, date, view_mode)
       )
     ''');
 
     await db.execute('''
-      CREATE INDEX idx_schedule_drawings_book_date_view
-      ON schedule_drawings(book_id, date, view_mode)
+      CREATE INDEX idx_schedule_drawings_book_uuid_date_view
+      ON schedule_drawings(book_uuid, date, view_mode)
     ''');
 
     // Device Info table - Stores local device registration info (single row)
