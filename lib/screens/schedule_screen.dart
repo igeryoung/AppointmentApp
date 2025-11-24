@@ -41,8 +41,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   DateTime _selectedDate = TimeService.instance.now();
   DateTime? _previousSelectedDate;
 
-  // Book ID must be non-null for ScheduleScreen (book must exist in database)
-  late final int _bookId;
+  // Book UUID must be non-null for ScheduleScreen (book must exist in database)
+  late final String _bookUuid;
 
   // Optional: ContentService for server sync (now managed by ScheduleConnectivityService)
   // Nullable because: may fail to initialize on web platform or without server access
@@ -88,9 +88,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   void initState() {
     super.initState();
 
-    // Ensure book has a valid ID (must be persisted in database before opening ScheduleScreen)
-    assert(widget.book.id != null, 'Book must have a valid ID to open ScheduleScreen');
-    _bookId = widget.book.id!;
+    // Ensure book has a valid UUID (must be persisted in database before opening ScheduleScreen)
+    assert(widget.book.uuid.isNotEmpty, 'Book must have a valid UUID to open ScheduleScreen');
+    _bookUuid = widget.book.uuid;
 
     _transformationController = TransformationController();
 
@@ -100,7 +100,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Initialize drawing service
     _drawingService = ScheduleDrawingService(
       dbService: _dbService,
-      bookId: _bookId,
+      bookUuid: _bookUuid,
       contentService: _contentService,
       onDrawingChanged: () {
         if (mounted) setState(() {});
@@ -177,7 +177,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Initialize connectivity service
     _connectivityService = ScheduleConnectivityService(
       dbService: _dbService,
-      bookId: _bookId,
+      bookUuid: _bookUuid,
       onStateChanged: (isOffline, isSyncing) {
         if (mounted) setState(() {});
       },
@@ -220,7 +220,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     // Initialize event management service
     _eventService = EventManagementService(
       dbService: _dbService,
-      bookId: _bookId,
+      bookUuid: _bookUuid,
       onMenuStateChanged: (selectedEvent, position) {
         if (mounted) setState(() {});
       },
@@ -739,7 +739,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         toggleDrawingMode: _toggleDrawingMode,
         createEvent: () => _eventService?.createEvent(),
         dbService: _dbService,
-        bookId: _bookId,
+        bookUuid: _bookUuid,
         get3DayWindowStart: (date) => ScheduleLayoutUtils.get3DayWindowStart(date),
         cacheManager: _cacheManager,
         getEffectiveDate: () => ScheduleLayoutUtils.getEffectiveDate(_selectedDate),

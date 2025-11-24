@@ -37,7 +37,7 @@ class ScheduleTestMenuHelper {
   static Future<void> showGenerateEventsDialog({
     required BuildContext context,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required DateTime selectedDate,
     required DateTime Function(DateTime) get3DayWindowStart,
   }) async {
@@ -117,7 +117,7 @@ class ScheduleTestMenuHelper {
       await _generateRandomEvents(
         context: context,
         dbService: dbService,
-        bookId: bookId,
+        bookUuid: bookUuid,
         selectedDate: selectedDate,
         get3DayWindowStart: get3DayWindowStart,
         count: result['count'] as int,
@@ -131,7 +131,7 @@ class ScheduleTestMenuHelper {
   static Future<void> _generateRandomEvents({
     required BuildContext context,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required DateTime selectedDate,
     required DateTime Function(DateTime) get3DayWindowStart,
     required int count,
@@ -140,7 +140,7 @@ class ScheduleTestMenuHelper {
   }) async {
     // Clear existing events if requested
     if (clearAll) {
-      await ScheduleTestUtils.clearAllEventsInBook(dbService, bookId);
+      await ScheduleTestUtils.clearAllEventsInBook(dbService, bookUuid);
     }
 
     final l10n = AppLocalizations.of(context)!;
@@ -216,7 +216,7 @@ class ScheduleTestMenuHelper {
       final recordNumber = 'REC-${random.nextInt(90000) + 10000}';
 
       final event = Event(
-        bookId: bookId,
+        bookUuid: bookUuid,
         name: name,
         recordNumber: recordNumber,
         eventTypes: [eventType],
@@ -295,12 +295,12 @@ class ScheduleTestMenuHelper {
   static Future<void> showHeavyLoadTestDialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showHeavyLoadTestDialog(
       context,
       dbService,
-      bookId,
+      bookUuid,
       _progressController,
     );
   }
@@ -309,12 +309,12 @@ class ScheduleTestMenuHelper {
   static Future<void> showHeavyLoadStage1Dialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showHeavyLoadStage1Dialog(
       context,
       dbService,
-      bookId,
+      bookUuid,
       _progressController,
     );
   }
@@ -323,12 +323,12 @@ class ScheduleTestMenuHelper {
   static Future<void> showHeavyLoadStage2Dialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showHeavyLoadStage2Dialog(
       context,
       dbService,
-      bookId,
+      bookUuid,
       _progressController,
     );
   }
@@ -337,12 +337,12 @@ class ScheduleTestMenuHelper {
   static Future<void> showClearAllEventsDialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showClearAllEventsDialog(
       context,
       dbService,
-      bookId,
+      bookUuid,
     );
   }
 
@@ -352,7 +352,7 @@ class ScheduleTestMenuHelper {
     required CacheManager? cacheManager,
     required List<Event> events,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required DateTime effectiveDate,
     required VoidCallback onReloadDrawing,
     required VoidCallback onPreloadNotes,
@@ -362,7 +362,7 @@ class ScheduleTestMenuHelper {
       cacheManager: cacheManager,
       events: events,
       dbService: dbService,
-      bookId: bookId,
+      bookUuid: bookUuid,
       effectiveDate: effectiveDate,
       onReloadDrawing: onReloadDrawing,
       onPreloadNotes: onPreloadNotes,

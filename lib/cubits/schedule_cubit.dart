@@ -295,7 +295,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Delete current drawing (always 3-day view)
   Future<void> deleteDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY}) async {
-    if (_currentBookId == null) {
+    if (_currentBookUuid == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot delete drawing - no book selected');
       return;
     }
@@ -308,7 +308,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
     try {
       await _drawingContentService.deleteDrawing(
-        bookId: _currentBookId!,
+        bookUuid: _currentBookUuid!,
         date: currentState.selectedDate,
         viewMode: viewMode,
       );

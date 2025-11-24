@@ -109,7 +109,7 @@ class ContentService {
       }
 
       final serverNote = await _apiClient.fetchNote(
-        bookId: event.bookId,
+        bookUuid: event.bookUuid,
         eventId: eventId,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
@@ -191,7 +191,7 @@ class ContentService {
       final eventData = event.toMap();
 
       await _apiClient.saveNote(
-        bookId: event.bookId,
+        bookUuid: event.bookUuid,
         eventId: eventId,
         noteData: noteData,
         deviceId: credentials.deviceId,
@@ -221,7 +221,7 @@ class ContentService {
         if (event != null) {
           // Delete from server
           await _apiClient.deleteNote(
-            bookId: event.bookId,
+            bookUuid: event.bookUuid,
             eventId: eventId,
             deviceId: credentials.deviceId,
             deviceToken: credentials.deviceToken,
@@ -426,7 +426,7 @@ class ContentService {
             try {
               final event = await _db.getEventById(note.eventId);
               if (event != null) {
-                final book = await _db.getBookById(event.bookId);
+                final book = await _db.getBookByUuid(event.bookUuid);
                 if (book != null) {
                   debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book "${book.name}" (UUID: ${book.uuid}) not found on server.');
                   debugPrint('   → SOLUTION: Backup the book "${book.name}" to sync it to the server, then notes will sync automatically.');
@@ -461,19 +461,19 @@ class ContentService {
 
   /// Sync dirty notes for a specific book
   /// Returns result object with sync statistics
-  Future<BulkSyncResult> syncDirtyNotesForBook(int bookId) async {
+  Future<BulkSyncResult> syncDirtyNotesForBook(String bookUuid) async {
     try {
-      debugPrint('🔄 ContentService: Starting bulk sync for book $bookId...');
+      debugPrint('🔄 ContentService: Starting bulk sync for book $bookUuid...');
 
       // Get dirty notes for this book
-      final dirtyNotes = await _db.getDirtyNotesByBookId(bookId);
+      final dirtyNotes = await _db.getDirtyNotesByBookId(bookUuid);
 
       if (dirtyNotes.isEmpty) {
-        debugPrint('✅ ContentService: No dirty notes to sync for book $bookId');
+        debugPrint('✅ ContentService: No dirty notes to sync for book $bookUuid');
         return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
       }
 
-      debugPrint('🔄 ContentService: Found ${dirtyNotes.length} dirty notes to sync for book $bookId');
+      debugPrint('🔄 ContentService: Found ${dirtyNotes.length} dirty notes to sync for book $bookUuid');
 
       // Get credentials once
       final credentials = await _db.getDeviceCredentials();
@@ -503,7 +503,7 @@ class ContentService {
             try {
               final event = await _db.getEventById(note.eventId);
               if (event != null) {
-                final book = await _db.getBookById(event.bookId);
+                final book = await _db.getBookByUuid(event.bookUuid);
                 if (book != null) {
                   debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book "${book.name}" (UUID: ${book.uuid}) not found on server.');
                   debugPrint('   → SOLUTION: Backup the book "${book.name}" to sync it to the server, then notes will sync automatically.');
@@ -528,10 +528,10 @@ class ContentService {
         failedEventIds: failedEventIds,
       );
 
-      debugPrint('✅ ContentService: Bulk sync complete for book $bookId - ${result.success}/${result.total} succeeded, ${result.failed} failed');
+      debugPrint('✅ ContentService: Bulk sync complete for book $bookUuid - ${result.success}/${result.total} succeeded, ${result.failed} failed');
       return result;
     } catch (e) {
-      debugPrint('❌ ContentService: Bulk sync for book $bookId failed: $e');
+      debugPrint('❌ ContentService: Bulk sync for book $bookUuid failed: $e');
       rethrow;
     }
   }
@@ -542,7 +542,7 @@ class ContentService {
 
   /// Get drawing with cache-first strategy
   Future<ScheduleDrawing?> getDrawing({
-    required int bookId,
+    required String bookUuid,
     required DateTime date,
     required int viewMode,
     bool forceRefresh = false,
@@ -550,9 +550,9 @@ class ContentService {
     try {
       // Step 1: Check cache (unless forceRefresh)
       if (!forceRefresh) {
-        final cachedDrawing = await _cacheManager.getDrawing(bookId, date, viewMode);
+        final cachedDrawing = await _cacheManager.getDrawing(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
-          debugPrint('✅ ContentService: Drawing cache hit (bookId: $bookId, date: $date, viewMode: $viewMode)');
+          debugPrint('✅ ContentService: Drawing cache hit (bookUuid: $bookUuid, date: $date, viewMode: $viewMode)');
           return cachedDrawing;
         }
         debugPrint('ℹ️ ContentService: Drawing cache miss');
@@ -562,11 +562,11 @@ class ContentService {
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
         debugPrint('⚠️ ContentService: Device not registered, cannot fetch drawing');
-        return await _cacheManager.getDrawing(bookId, date, viewMode);
+        return await _cacheManager.getDrawing(bookUuid, date, viewMode);
       }
 
       final serverDrawing = await _apiClient.fetchDrawing(
-        bookId: bookId,
+        bookUuid: bookUuid,
         date: date,
         viewMode: viewMode,
         deviceId: credentials.deviceId,
@@ -588,7 +588,7 @@ class ContentService {
 
       // Fallback to cache
       try {
-        final cachedDrawing = await _cacheManager.getDrawing(bookId, date, viewMode);
+        final cachedDrawing = await _cacheManager.getDrawing(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
           debugPrint('⚠️ ContentService: Returning cached drawing after server error');
           return cachedDrawing;
@@ -672,10 +672,10 @@ class ContentService {
         if (drawing.id != null) 'version': drawing.version, // Include current version for updates (optimistic locking)
       };
 
-      debugPrint('📤 ContentService: Saving drawing (bookId: ${drawing.bookId}, version: ${drawing.version}, retry: $retryCount)');
+      debugPrint('📤 ContentService: Saving drawing (bookUuid: ${drawing.bookUuid}, version: ${drawing.version}, retry: $retryCount)');
 
       final serverResponse = await _apiClient.saveDrawing(
-        bookId: drawing.bookId,
+        bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
@@ -703,7 +703,7 @@ class ContentService {
 
             // Fetch drawing from cache to preserve metadata (id, createdAt)
             final latestDrawing = await _db.getCachedDrawing(
-              drawing.bookId,
+              drawing.bookUuid,
               drawing.date,
               drawing.viewMode,
             );
@@ -742,7 +742,7 @@ class ContentService {
 
   /// Delete drawing (from server and cache)
   Future<void> deleteDrawing({
-    required int bookId,
+    required String bookUuid,
     required DateTime date,
     required int viewMode,
   }) async {
@@ -752,7 +752,7 @@ class ContentService {
       if (credentials != null) {
         // Delete from server
         await _apiClient.deleteDrawing(
-          bookId: bookId,
+          bookUuid: bookUuid,
           date: date,
           viewMode: viewMode,
           deviceId: credentials.deviceId,
@@ -761,7 +761,7 @@ class ContentService {
       }
 
       // Delete from cache
-      await _cacheManager.deleteDrawing(bookId, date, viewMode);
+      await _cacheManager.deleteDrawing(bookUuid, date, viewMode);
 
       debugPrint('✅ ContentService: Drawing deleted');
     } catch (e) {
@@ -774,7 +774,7 @@ class ContentService {
   ///
   /// Does not block, returns immediately
   Future<void> preloadDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
   }) async {
@@ -787,7 +787,7 @@ class ContentService {
         if (credentials == null) return;
 
         final serverDrawings = await _apiClient.batchFetchDrawings(
-          bookId: bookId,
+          bookUuid: bookUuid,
           startDate: startDate,
           endDate: endDate,
           deviceId: credentials.deviceId,

@@ -137,7 +137,7 @@ class BookListCubit extends Cubit<BookListState> {
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Deleted book (id: $bookId)');
+      debugPrint('✅ BookListCubit: Deleted book (uuid: $bookUuid)');
     } catch (e) {
       debugPrint('❌ BookListCubit: Failed to delete book: $e');
       emit(BookListError('Failed to delete book: $e'));

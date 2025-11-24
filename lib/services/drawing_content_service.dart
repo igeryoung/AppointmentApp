@@ -42,7 +42,7 @@ class DrawingContentService {
   ///
   /// [forceRefresh] skips cache and forces server fetch
   Future<ScheduleDrawing?> getDrawing({
-    required int bookId,
+    required String bookUuid,
     required DateTime date,
     required int viewMode,
     bool forceRefresh = false,
@@ -51,9 +51,9 @@ class DrawingContentService {
       // Step 1: Check cache (unless forceRefresh)
       if (!forceRefresh) {
         final cachedDrawing = await (_drawingRepository as DrawingRepositoryImpl)
-            .getCachedWithViewMode(bookId, date, viewMode);
+            .getCachedWithViewMode(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
-          debugPrint('✅ DrawingContentService: Drawing cache hit (bookId: $bookId, date: $date, viewMode: $viewMode)');
+          debugPrint('✅ DrawingContentService: Drawing cache hit (bookUuid: $bookUuid, date: $date, viewMode: $viewMode)');
           return cachedDrawing;
         }
         debugPrint('ℹ️ DrawingContentService: Drawing cache miss');
@@ -64,11 +64,11 @@ class DrawingContentService {
       if (credentials == null) {
         debugPrint('⚠️ DrawingContentService: Device not registered, cannot fetch drawing');
         return await (_drawingRepository as DrawingRepositoryImpl)
-            .getCachedWithViewMode(bookId, date, viewMode);
+            .getCachedWithViewMode(bookUuid, date, viewMode);
       }
 
       final serverDrawing = await _apiClient.fetchDrawing(
-        bookId: bookId,
+        bookUuid: bookUuid,
         date: date,
         viewMode: viewMode,
         deviceId: credentials.deviceId,
@@ -91,7 +91,7 @@ class DrawingContentService {
       // Fallback to cache
       try {
         final cachedDrawing = await (_drawingRepository as DrawingRepositoryImpl)
-            .getCachedWithViewMode(bookId, date, viewMode);
+            .getCachedWithViewMode(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
           debugPrint('⚠️ DrawingContentService: Returning cached drawing after server error');
           return cachedDrawing;
@@ -172,10 +172,10 @@ class DrawingContentService {
         if (drawing.id != null) 'version': drawing.version,
       };
 
-      debugPrint('📤 DrawingContentService: Saving drawing (bookId: ${drawing.bookId}, version: ${drawing.version}, retry: $retryCount)');
+      debugPrint('📤 DrawingContentService: Saving drawing (bookUuid: ${drawing.bookUuid}, version: ${drawing.version}, retry: $retryCount)');
 
       final serverResponse = await _apiClient.saveDrawing(
-        bookId: drawing.bookId,
+        bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
@@ -204,7 +204,7 @@ class DrawingContentService {
 
           // Fetch current server version
           final serverDrawingMap = await _apiClient.fetchDrawing(
-            bookId: drawing.bookId,
+            bookUuid: drawing.bookUuid,
             date: drawing.date,
             viewMode: drawing.viewMode,
             deviceId: retryCredentials.deviceId,
@@ -218,7 +218,7 @@ class DrawingContentService {
             // Merge: combine server strokes with new strokes
             final mergedDrawing = ScheduleDrawing(
               id: serverDrawing.id,
-              bookId: drawing.bookId,
+              bookUuid: drawing.bookUuid,
               date: drawing.date,
               viewMode: drawing.viewMode,
               strokes: [...serverDrawing.strokes, ...drawing.strokes],
@@ -258,7 +258,7 @@ class DrawingContentService {
 
   /// Delete drawing (from server and cache)
   Future<void> deleteDrawing({
-    required int bookId,
+    required String bookUuid,
     required DateTime date,
     required int viewMode,
   }) async {
@@ -268,7 +268,7 @@ class DrawingContentService {
       if (credentials != null) {
         // Delete from server
         await _apiClient.deleteDrawing(
-          bookId: bookId,
+          bookUuid: bookUuid,
           date: date,
           viewMode: viewMode,
           deviceId: credentials.deviceId,
@@ -278,7 +278,7 @@ class DrawingContentService {
 
       // Delete from cache
       await (_drawingRepository as DrawingRepositoryImpl)
-          .deleteCacheWithViewMode(bookId, date, viewMode);
+          .deleteCacheWithViewMode(bookUuid, date, viewMode);
 
       debugPrint('✅ DrawingContentService: Drawing deleted');
     } catch (e) {
@@ -295,7 +295,7 @@ class DrawingContentService {
   ///
   /// Does not block, returns immediately
   Future<void> preloadDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
   }) async {
@@ -309,7 +309,7 @@ class DrawingContentService {
       }
 
       final serverDrawings = await _apiClient.batchFetchDrawings(
-        bookId: bookId,
+        bookUuid: bookUuid,
         startDate: startDate,
         endDate: endDate,
         deviceId: credentials.deviceId,

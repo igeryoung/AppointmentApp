@@ -95,11 +95,11 @@ class CacheManager {
 
   /// 从缓存获取ScheduleDrawing（并增加命中计数）
   Future<ScheduleDrawing?> getDrawing(
-      int bookId, DateTime date, int viewMode) async {
-    final drawing = await _db.getCachedDrawing(bookId, date, viewMode);
+      String bookUuid, DateTime date, int viewMode) async {
+    final drawing = await _db.getCachedDrawing(bookUuid, date, viewMode);
     if (drawing != null) {
       // 增加cache命中计数
-      await _db.incrementDrawingCacheHit(bookId, date, viewMode);
+      await _db.incrementDrawingCacheHit(bookUuid, date, viewMode);
     }
     return drawing;
   }
@@ -118,8 +118,8 @@ class CacheManager {
   }
 
   /// 从缓存删除ScheduleDrawing
-  Future<void> deleteDrawing(int bookId, DateTime date, int viewMode) async {
-    await _db.deleteCachedDrawing(bookId, date, viewMode);
+  Future<void> deleteDrawing(String bookUuid, DateTime date, int viewMode) async {
+    await _db.deleteCachedDrawing(bookUuid, date, viewMode);
   }
 
   // ===================

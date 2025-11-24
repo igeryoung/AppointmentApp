@@ -51,14 +51,14 @@ class ApiClient {
 
   /// Fetch a single note from server
   Future<Map<String, dynamic>?> fetchNote({
-    required int bookId,
+    required String bookUuid,
     required int eventId,
     required String deviceId,
     required String deviceToken,
   }) async {
     try {
       final response = await _client.get(
-        Uri.parse('$baseUrl/api/books/$bookId/events/$eventId/note'),
+        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
         headers: {
           'Content-Type': 'application/json',
           'X-Device-ID': deviceId,
@@ -88,7 +88,7 @@ class ApiClient {
   /// If eventData is provided and the event doesn't exist on the server,
   /// the server will auto-create the event before saving the note
   Future<Map<String, dynamic>> saveNote({
-    required int bookId,
+    required String bookUuid,
     required int eventId,
     required Map<String, dynamic> noteData,
     required String deviceId,
@@ -103,7 +103,7 @@ class ApiClient {
       }
 
       final response = await _client.post(
-        Uri.parse('$baseUrl/api/books/$bookId/events/$eventId/note'),
+        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
         headers: {
           'Content-Type': 'application/json',
           'X-Device-ID': deviceId,
@@ -137,14 +137,14 @@ class ApiClient {
 
   /// Delete a note from server
   Future<void> deleteNote({
-    required int bookId,
+    required String bookUuid,
     required int eventId,
     required String deviceId,
     required String deviceToken,
   }) async {
     try {
       final response = await _client.delete(
-        Uri.parse('$baseUrl/api/books/$bookId/events/$eventId/note'),
+        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
         headers: {
           'Content-Type': 'application/json',
           'X-Device-ID': deviceId,
@@ -205,7 +205,7 @@ class ApiClient {
 
   /// Fetch a single drawing from server
   Future<Map<String, dynamic>?> fetchDrawing({
-    required int bookId,
+    required String bookUuid,
     required DateTime date,
     required int viewMode,
     required String deviceId,
@@ -214,7 +214,7 @@ class ApiClient {
     try {
       // Format date as YYYY-MM-DD
       final dateStr = date.toIso8601String().split('T')[0];
-      final uri = Uri.parse('$baseUrl/api/books/$bookId/drawings')
+      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/drawings')
           .replace(queryParameters: {
         'date': dateStr,
         'viewMode': viewMode.toString(),
@@ -248,14 +248,14 @@ class ApiClient {
 
   /// Save (create or update) a drawing to server
   Future<Map<String, dynamic>> saveDrawing({
-    required int bookId,
+    required String bookUuid,
     required Map<String, dynamic> drawingData,
     required String deviceId,
     required String deviceToken,
   }) async {
     try {
       final response = await _client.post(
-        Uri.parse('$baseUrl/api/books/$bookId/drawings'),
+        Uri.parse('$baseUrl/api/books/$bookUuid/drawings'),
         headers: {
           'Content-Type': 'application/json',
           'X-Device-ID': deviceId,
@@ -289,7 +289,7 @@ class ApiClient {
 
   /// Delete a drawing from server
   Future<void> deleteDrawing({
-    required int bookId,
+    required String bookUuid,
     required DateTime date,
     required int viewMode,
     required String deviceId,
@@ -298,7 +298,7 @@ class ApiClient {
     try {
       // Format date as YYYY-MM-DD
       final dateStr = date.toIso8601String().split('T')[0];
-      final uri = Uri.parse('$baseUrl/api/books/$bookId/drawings')
+      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/drawings')
           .replace(queryParameters: {
         'date': dateStr,
         'viewMode': viewMode.toString(),
@@ -328,7 +328,7 @@ class ApiClient {
 
   /// Batch fetch drawings from server
   Future<List<Map<String, dynamic>>> batchFetchDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
     required String deviceId,
@@ -347,7 +347,7 @@ class ApiClient {
           'X-Device-Token': deviceToken,
         },
         body: jsonEncode({
-          'bookId': bookId,
+          'bookUuid': bookUuid,
           'startDate': startDateStr,
           'endDate': endDateStr,
         }),

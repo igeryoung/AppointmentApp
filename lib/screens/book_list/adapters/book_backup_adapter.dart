@@ -30,11 +30,11 @@ class BookBackupAdapter {
 
   /// Upload a book to server
   /// Returns the backup ID
-  Future<int> upload(int bookId) async {
+  Future<int> upload(String bookUuid) async {
     if (_backupService == null) {
       throw Exception('Book backup is not available on this platform');
     }
-    return await _backupService!.uploadBook(bookId);
+    return await _backupService!.uploadBook(bookUuid);
   }
 
   /// List all backups from server
