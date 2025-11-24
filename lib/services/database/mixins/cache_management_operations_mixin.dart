@@ -20,15 +20,15 @@ mixin CacheManagementOperationsMixin {
   }
 
   /// Increment cache hit count for a drawing (called on every read)
-  Future<void> incrementDrawingCacheHit(int bookId, DateTime date, int viewMode) async {
+  Future<void> incrementDrawingCacheHit(String bookUuid, DateTime date, int viewMode) async {
     final db = await database;
     final normalizedDate = DateTime(date.year, date.month, date.day);
     await db.rawUpdate('''
       UPDATE schedule_drawings
       SET cache_hit_count = cache_hit_count + 1
-      WHERE book_id = ? AND date = ? AND view_mode = ?
+      WHERE book_uuid = ? AND date = ? AND view_mode = ?
     ''', [
-      bookId,
+      bookUuid,
       normalizedDate.millisecondsSinceEpoch ~/ 1000,
       viewMode,
     ]);
