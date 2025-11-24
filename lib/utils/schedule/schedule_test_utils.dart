@@ -13,10 +13,10 @@ class ScheduleTestUtils {
   /// Clear all events in the specified book
   static Future<void> clearAllEventsInBook(
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
   ) async {
     // Get all events in the book
-    final allEvents = await dbService.getAllEventsByBook(bookId);
+    final allEvents = await dbService.getAllEventsByBook(bookUuid);
 
     if (allEvents.isEmpty) return;
 
@@ -36,12 +36,12 @@ class ScheduleTestUtils {
   static Future<void> showClearAllEventsDialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
   ) async {
     final l10n = AppLocalizations.of(context)!;
 
     // Get event count for confirmation
-    final allEvents = await dbService.getAllEventsByBook(bookId);
+    final allEvents = await dbService.getAllEventsByBook(bookUuid);
     final eventCount = allEvents.length;
 
     if (eventCount == 0) {
@@ -104,7 +104,7 @@ class ScheduleTestUtils {
     );
 
     if (result == true) {
-      await clearAllEventsInBook(dbService, bookId);
+      await clearAllEventsInBook(dbService, bookUuid);
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -120,7 +120,7 @@ class ScheduleTestUtils {
   static Future<void> showHeavyLoadTestDialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
     StreamController<Map<String, dynamic>> progressController,
   ) async {
     final l10n = AppLocalizations.of(context)!;
@@ -166,7 +166,7 @@ class ScheduleTestUtils {
       await generateHeavyLoadTest(
         context: context,
         dbService: dbService,
-        bookId: bookId,
+        bookUuid: bookUuid,
         progressController: progressController,
         clearAll: clearAll,
       );
@@ -177,7 +177,7 @@ class ScheduleTestUtils {
   static Future<void> showHeavyLoadStage1Dialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
     StreamController<Map<String, dynamic>> progressController,
   ) async {
     final l10n = AppLocalizations.of(context)!;
@@ -223,7 +223,7 @@ class ScheduleTestUtils {
       await generateHeavyLoadStage1(
         context: context,
         dbService: dbService,
-        bookId: bookId,
+        bookUuid: bookUuid,
         progressController: progressController,
         clearAll: clearAll,
       );
@@ -234,7 +234,7 @@ class ScheduleTestUtils {
   static Future<void> showHeavyLoadStage2Dialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookId,
+    String bookUuid,
     StreamController<Map<String, dynamic>> progressController,
   ) async {
     final l10n = AppLocalizations.of(context)!;
@@ -306,7 +306,7 @@ class ScheduleTestUtils {
       await generateHeavyLoadStage2(
         context: context,
         dbService: dbService,
-        bookId: bookId,
+        bookUuid: bookUuid,
         progressController: progressController,
         maxEvents: maxEvents,
       );
@@ -317,7 +317,7 @@ class ScheduleTestUtils {
   static Future<void> generateHeavyLoadTest({
     required BuildContext context,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required StreamController<Map<String, dynamic>> progressController,
     bool clearAll = false,
   }) async {
@@ -326,7 +326,7 @@ class ScheduleTestUtils {
 
     // Clear existing events if requested
     if (clearAll) {
-      await clearAllEventsInBook(dbService, bookId);
+      await clearAllEventsInBook(dbService, bookUuid);
     }
 
     // Constants
@@ -420,7 +420,7 @@ class ScheduleTestUtils {
           final eventType = eventTypes[random.nextInt(eventTypes.length)];
 
           final event = Event(
-            bookId: bookId,
+            bookUuid: bookUuid,
             name: name,
             recordNumber: recordNumber,
             eventTypes: [eventType],
@@ -523,7 +523,7 @@ class ScheduleTestUtils {
   static Future<void> generateHeavyLoadStage1({
     required BuildContext context,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required StreamController<Map<String, dynamic>> progressController,
     bool clearAll = false,
   }) async {
@@ -612,7 +612,7 @@ class ScheduleTestUtils {
             final eventType = eventTypes[random.nextInt(eventTypes.length)];
 
             final event = Event(
-              bookId: bookId,
+              bookUuid: bookUuid,
               name: name,
               recordNumber: recordNumber,
               eventTypes: [eventType],
@@ -670,7 +670,7 @@ class ScheduleTestUtils {
   static Future<void> generateHeavyLoadStage2({
     required BuildContext context,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required StreamController<Map<String, dynamic>> progressController,
     int? maxEvents,
   }) async {

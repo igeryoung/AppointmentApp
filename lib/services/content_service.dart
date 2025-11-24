@@ -672,10 +672,10 @@ class ContentService {
         if (drawing.id != null) 'version': drawing.version, // Include current version for updates (optimistic locking)
       };
 
-      debugPrint('📤 ContentService: Saving drawing (bookId: ${drawing.bookId}, version: ${drawing.version}, retry: $retryCount)');
+      debugPrint('📤 ContentService: Saving drawing (bookUuid: ${drawing.bookUuid}, version: ${drawing.version}, retry: $retryCount)');
 
       final serverResponse = await _apiClient.saveDrawing(
-        bookId: drawing.bookId,
+        bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
@@ -703,7 +703,7 @@ class ContentService {
 
             // Fetch drawing from cache to preserve metadata (id, createdAt)
             final latestDrawing = await _db.getCachedDrawing(
-              drawing.bookId,
+              drawing.bookUuid,
               drawing.date,
               drawing.viewMode,
             );

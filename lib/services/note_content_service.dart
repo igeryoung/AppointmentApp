@@ -86,7 +86,7 @@ class NoteContentService {
       }
 
       final serverNote = await _apiClient.fetchNote(
-        bookId: event.bookId,
+        bookUuid: event.bookUuid,
         eventId: eventId,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
@@ -167,7 +167,7 @@ class NoteContentService {
       final eventData = event.toMap();
 
       await _apiClient.saveNote(
-        bookId: event.bookId,
+        bookUuid: event.bookUuid,
         eventId: eventId,
         noteData: noteData,
         deviceId: credentials.deviceId,
@@ -201,7 +201,7 @@ class NoteContentService {
         if (event != null) {
           // Delete from server
           await _apiClient.deleteNote(
-            bookId: event.bookId,
+            bookUuid: event.bookUuid,
             eventId: eventId,
             deviceId: credentials.deviceId,
             deviceToken: credentials.deviceToken,
@@ -271,11 +271,11 @@ class NoteContentService {
       debugPrint('ℹ️ NoteContentService: Fetching ${uncachedEventIds.length} uncached notes');
 
       // Get book IDs for events (need to group by book)
-      final eventsByBook = <int, List<int>>{};
+      final eventsByBook = <String, List<int>>{};
       for (final eventId in uncachedEventIds) {
         final event = await _eventRepository.getById(eventId);
         if (event != null) {
-          eventsByBook.putIfAbsent(event.bookId, () => []).add(eventId);
+          eventsByBook.putIfAbsent(event.bookUuid, () => []).add(eventId);
         }
       }
 
@@ -284,7 +284,7 @@ class NoteContentService {
 
       // Batch fetch by book (max 50 per request)
       for (final entry in eventsByBook.entries) {
-        final bookId = entry.key;
+        final bookUuid = entry.key;
         final bookEventIds = entry.value;
 
         // Split into batches of 50

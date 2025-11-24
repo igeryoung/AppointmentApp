@@ -206,11 +206,11 @@ class BookListController extends ChangeNotifier {
       return;
     }
 
-    if (book.id == null) return;
+    if (book.uuid.isEmpty) return;
 
     _setState(_state.copyWith(isLoading: true));
     try {
-      final backupId = await backup.upload(book.id!);
+      final backupId = await backup.upload(book.uuid);
       _setState(_state.copyWith(isLoading: false));
 
       if (context.mounted) {
@@ -230,13 +230,13 @@ class BookListController extends ChangeNotifier {
   /// Auto-register newly created book on server (runs in background)
   Future<void> _autoRegister(BuildContext context, Book book) async {
     // Skip if backup not available
-    if (!backup.available || book.id == null) {
+    if (!backup.available || book.uuid.isEmpty) {
       return;
     }
 
     // Run upload in background without blocking UI
     try {
-      await backup.upload(book.id!);
+      await backup.upload(book.uuid);
       debugPrint('✅ Book "${book.name}" auto-registered on server');
     } catch (e) {
       debugPrint('⚠️  Failed to auto-register book on server: $e');

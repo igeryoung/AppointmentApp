@@ -11,24 +11,24 @@ import '../../screens/event_detail/utils/event_type_localizations.dart';
 /// Show dialog to query appointments by name and record number
 Future<void> showQueryAppointmentsDialog(
   BuildContext context,
-  int bookId,
+  String bookUuid,
   IEventRepository eventRepository,
 ) async {
   await showDialog(
     context: context,
     builder: (context) => _QueryAppointmentsDialog(
-      bookId: bookId,
+      bookUuid: bookUuid,
       eventRepository: eventRepository,
     ),
   );
 }
 
 class _QueryAppointmentsDialog extends StatefulWidget {
-  final int bookId;
+  final String bookUuid;
   final IEventRepository eventRepository;
 
   const _QueryAppointmentsDialog({
-    required this.bookId,
+    required this.bookUuid,
     required this.eventRepository,
   });
 
@@ -71,7 +71,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   /// Load all available names for autocomplete
   Future<void> _loadAllNames() async {
     try {
-      final names = await widget.eventRepository.getAllNames(widget.bookId);
+      final names = await widget.eventRepository.getAllNames(widget.bookUuid);
       setState(() {
         allNames = names;
       });
@@ -89,7 +89,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   /// Load all available name-record pairs for dropdown
   Future<void> _loadAllNameRecordPairs() async {
     try {
-      final pairs = await widget.eventRepository.getAllNameRecordPairs(widget.bookId);
+      final pairs = await widget.eventRepository.getAllNameRecordPairs(widget.bookUuid);
       setState(() {
         allNameRecordPairs = pairs;
         filteredNameRecordPairs = pairs; // Initially show all pairs
@@ -166,7 +166,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
 
     try {
       final results = await widget.eventRepository.searchByNameAndRecordNumber(
-        widget.bookId,
+        widget.bookUuid,
         name,
         selectedRecordNumber!,
       );

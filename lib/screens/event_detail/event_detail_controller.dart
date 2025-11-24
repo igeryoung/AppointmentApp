@@ -849,7 +849,7 @@ class EventDetailController {
 
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.getRecordNumbersByName(event.bookId, name);
+      return await prdDb.getRecordNumbersByName(event.bookUuid, name);
     }
 
     return [];
@@ -860,7 +860,7 @@ class EventDetailController {
   Future<List<String>> getAllNamesForAutocomplete() async {
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.getAllNamesInBook(event.bookId);
+      return await prdDb.getAllNamesInBook(event.bookUuid);
     }
     return [];
   }
@@ -870,7 +870,7 @@ class EventDetailController {
   Future<List<RecordNumberOption>> getAllRecordNumbersForAutocomplete() async {
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
-      final results = await prdDb.getAllRecordNumbersWithNames(event.bookId);
+      final results = await prdDb.getAllRecordNumbersWithNames(event.bookUuid);
       return results
           .map((item) => RecordNumberOption(
                 recordNumber: item['recordNumber']!,
@@ -910,7 +910,7 @@ class EventDetailController {
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    final name = await prdDb.getNameByRecordNumber(event.bookId, recordNumber);
+    final name = await prdDb.getNameByRecordNumber(event.bookUuid, recordNumber);
 
     if (name != null && name.isNotEmpty) {
       _updateState(_state.copyWith(

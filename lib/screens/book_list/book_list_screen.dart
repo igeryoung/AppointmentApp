@@ -110,7 +110,7 @@ class _BookListScreenState extends State<BookListScreen> {
       context,
       MaterialPageRoute(
         builder: (context) => BlocProvider(
-          create: (context) => getIt<ScheduleCubit>()..initialize(book.id!),
+          create: (context) => getIt<ScheduleCubit>()..initialize(book.uuid),
           child: ScheduleScreen(book: book),
         ),
       ),
