@@ -21,7 +21,7 @@ abstract class INoteRepository {
   Future<void> markClean(int eventId);
 
   /// Retrieve all cached notes for a specific book
-  Future<List<Note>> getAllCachedForBook(int bookId);
+  Future<List<Note>> getAllCachedForBook(String bookUuid);
 
   /// Get all cached notes
   Future<List<Note>> getAllCached();
