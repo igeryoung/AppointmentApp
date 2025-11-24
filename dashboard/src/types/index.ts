@@ -35,7 +35,7 @@ export interface BookStats {
 }
 
 export interface Book {
-  id: number;
+  bookUuid: string;
   deviceId: string;
   name: string;
   createdAt: string;
@@ -196,12 +196,12 @@ export interface DateRangeFilter {
 export interface DashboardFilters {
   dateRange?: DateRangeFilter;
   deviceId?: string;
-  bookId?: number;
+  bookUuid?: string;
   searchQuery?: string;
 }
 
 export interface EventFilters {
-  bookId?: number;
+  bookUuid?: string;
   name?: string;
   recordNumber?: string;
 }

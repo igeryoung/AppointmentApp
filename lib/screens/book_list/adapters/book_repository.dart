@@ -30,23 +30,18 @@ class BookRepository {
   }
 
   /// Archive a book
-  Future<void> archive(int bookId) async {
-    return await _dbService.archiveBook(bookId);
+  Future<void> archive(String bookUuid) async {
+    return await _dbService.archiveBook(bookUuid);
   }
 
   /// Delete a book
-  Future<void> delete(int bookId) async {
-    return await _dbService.deleteBook(bookId);
+  Future<void> delete(String bookUuid) async {
+    return await _dbService.deleteBook(bookUuid);
   }
 
-  /// Get a single book by ID
-  Future<Book?> getById(int bookId) async {
-    final books = await getAll();
-    try {
-      return books.firstWhere((book) => book.id == bookId);
-    } catch (e) {
-      return null;
-    }
+  /// Get a single book by UUID
+  Future<Book?> getByUuid(String bookUuid) async {
+    return await _dbService.getBookByUuid(bookUuid);
   }
 
   /// Get a book by name

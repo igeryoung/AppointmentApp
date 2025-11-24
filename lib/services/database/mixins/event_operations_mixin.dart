@@ -24,16 +24,16 @@ mixin EventOperationsMixin {
   /// Get events for Day view
   ///
   /// [date] should be normalized to midnight (start of day)
-  Future<List<Event>> getEventsByDay(int bookId, DateTime date) async {
+  Future<List<Event>> getEventsByDay(String bookUuid, DateTime date) async {
     final db = await database;
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
 
     final maps = await db.query(
       'events',
-      where: 'book_id = ? AND start_time >= ? AND start_time < ?',
+      where: 'book_uuid = ? AND start_time >= ? AND start_time < ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         startOfDay.millisecondsSinceEpoch ~/ 1000,
         endOfDay.millisecondsSinceEpoch ~/ 1000,
       ],
@@ -47,16 +47,16 @@ mixin EventOperationsMixin {
   ///
   /// [startDate] MUST be the 3-day window start date (calculated by _get3DayWindowStart)
   /// to ensure events are loaded for the correct window being displayed
-  Future<List<Event>> getEventsBy3Days(int bookId, DateTime startDate) async {
+  Future<List<Event>> getEventsBy3Days(String bookUuid, DateTime startDate) async {
     final db = await database;
     final startOfDay = DateTime(startDate.year, startDate.month, startDate.day);
     final endOfPeriod = startOfDay.add(const Duration(days: 3));
 
     final maps = await db.query(
       'events',
-      where: 'book_id = ? AND start_time >= ? AND start_time < ?',
+      where: 'book_uuid = ? AND start_time >= ? AND start_time < ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         startOfDay.millisecondsSinceEpoch ~/ 1000,
         endOfPeriod.millisecondsSinceEpoch ~/ 1000,
       ],
@@ -70,15 +70,15 @@ mixin EventOperationsMixin {
   ///
   /// [weekStart] MUST be the week start date (Monday, calculated by _getWeekStart)
   /// to ensure events are loaded for the correct week being displayed
-  Future<List<Event>> getEventsByWeek(int bookId, DateTime weekStart) async {
+  Future<List<Event>> getEventsByWeek(String bookUuid, DateTime weekStart) async {
     final db = await database;
     final weekEnd = weekStart.add(const Duration(days: 7));
 
     final maps = await db.query(
       'events',
-      where: 'book_id = ? AND start_time >= ? AND start_time < ?',
+      where: 'book_uuid = ? AND start_time >= ? AND start_time < ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         weekStart.millisecondsSinceEpoch ~/ 1000,
         weekEnd.millisecondsSinceEpoch ~/ 1000,
       ],
@@ -89,13 +89,13 @@ mixin EventOperationsMixin {
   }
 
   /// Get all events for a book (regardless of date)
-  Future<List<Event>> getAllEventsByBook(int bookId) async {
+  Future<List<Event>> getAllEventsByBook(String bookUuid) async {
     final db = await database;
 
     final maps = await db.query(
       'events',
-      where: 'book_id = ?',
-      whereArgs: [bookId],
+      where: 'book_uuid = ?',
+      whereArgs: [bookUuid],
       orderBy: 'start_time ASC',
     );
 
@@ -275,15 +275,15 @@ mixin EventOperationsMixin {
   }
 
   Future<List<Event>> searchByNameAndRecordNumber(
-    int bookId,
+    String bookUuid,
     String name,
     String recordNumber,
   ) async {
     final db = await database;
     final maps = await db.query(
       'events',
-      where: 'book_id = ? AND name = ? AND record_number = ?',
-      whereArgs: [bookId, name, recordNumber],
+      where: 'book_uuid = ? AND name = ? AND record_number = ?',
+      whereArgs: [bookUuid, name, recordNumber],
       orderBy: 'start_time ASC',
     );
     return maps.map((map) => Event.fromMap(map)).toList();

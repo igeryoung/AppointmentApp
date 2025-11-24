@@ -118,8 +118,10 @@ export function Books() {
                 </thead>
                 <tbody>
                   {filteredBooks.map((book) => (
-                    <tr key={book.id}>
-                      <td>{book.id}</td>
+                    <tr key={book.bookUuid}>
+                      <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                        {book.bookUuid.substring(0, 5)}
+                      </td>
                       <td style={{ fontWeight: '500' }}>{book.name}</td>
                       <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                         {book.deviceId.substring(0, 8)}...

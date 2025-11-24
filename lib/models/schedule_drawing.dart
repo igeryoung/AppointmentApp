@@ -9,7 +9,7 @@ class ScheduleDrawing {
   static const int VIEW_MODE_3DAY = 1;
 
   final int? id;
-  final int bookId;
+  final String bookUuid;
   final DateTime date; // Reference date for the drawing
   /// ViewMode field (always 1 for 3-day view; kept for database compatibility)
   final int viewMode;
@@ -20,7 +20,7 @@ class ScheduleDrawing {
 
   const ScheduleDrawing({
     this.id,
-    required this.bookId,
+    required this.bookUuid,
     required this.date,
     required this.viewMode,
     required this.strokes,
@@ -31,7 +31,7 @@ class ScheduleDrawing {
 
   ScheduleDrawing copyWith({
     int? id,
-    int? bookId,
+    String? bookUuid,
     DateTime? date,
     int? viewMode,
     List<Stroke>? strokes,
@@ -41,7 +41,7 @@ class ScheduleDrawing {
   }) {
     return ScheduleDrawing(
       id: id ?? this.id,
-      bookId: bookId ?? this.bookId,
+      bookUuid: bookUuid ?? this.bookUuid,
       date: date ?? this.date,
       viewMode: viewMode ?? this.viewMode,
       strokes: strokes ?? this.strokes,
@@ -54,7 +54,7 @@ class ScheduleDrawing {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'book_id': bookId,
+      'book_uuid': bookUuid,
       'date': date.millisecondsSinceEpoch ~/ 1000,
       'view_mode': viewMode,
       'strokes_data': jsonEncode(strokes.map((s) => s.toMap()).toList()),
@@ -93,7 +93,7 @@ class ScheduleDrawing {
 
     return ScheduleDrawing(
       id: map['id']?.toInt(),
-      bookId: (map['bookId'] ?? map['book_id'])?.toInt() ?? 0,
+      bookUuid: (map['bookUuid'] ?? map['book_uuid']) as String? ?? '',
       date: parseTimestamp(
         map['date'],
         fallback: DateTime.now(),
@@ -117,7 +117,7 @@ class ScheduleDrawing {
 
   @override
   String toString() {
-    return 'ScheduleDrawing(id: $id, bookId: $bookId, date: $date, viewMode: $viewMode, strokeCount: ${strokes.length})';
+    return 'ScheduleDrawing(id: $id, bookUuid: $bookUuid, date: $date, viewMode: $viewMode, strokeCount: ${strokes.length})';
   }
 
   @override
@@ -125,13 +125,13 @@ class ScheduleDrawing {
     if (identical(this, other)) return true;
     return other is ScheduleDrawing &&
         other.id == id &&
-        other.bookId == bookId &&
+        other.bookUuid == bookUuid &&
         other.date == date &&
         other.viewMode == viewMode;
   }
 
   @override
   int get hashCode {
-    return Object.hash(id, bookId, date, viewMode);
+    return Object.hash(id, bookUuid, date, viewMode);
   }
 }

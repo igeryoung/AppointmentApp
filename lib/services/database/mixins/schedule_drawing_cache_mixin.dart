@@ -18,15 +18,15 @@ mixin ScheduleDrawingCacheMixin {
   /// - Day view: the selected date
   /// - 3-Day view: the window start date (calculated by _get3DayWindowStart)
   /// - Week view: the week start date (calculated by _getWeekStart)
-  Future<ScheduleDrawing?> getCachedDrawing(int bookId, DateTime date, int viewMode) async {
+  Future<ScheduleDrawing?> getCachedDrawing(String bookUuid, DateTime date, int viewMode) async {
     final db = await database;
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     final maps = await db.query(
       'schedule_drawings',
-      where: 'book_id = ? AND date = ? AND view_mode = ?',
+      where: 'book_uuid = ? AND date = ? AND view_mode = ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         viewMode,
       ],
@@ -68,9 +68,9 @@ mixin ScheduleDrawingCacheMixin {
       final updatedRows = await db.update(
         'schedule_drawings',
         updateMap,
-        where: 'book_id = ? AND date = ? AND view_mode = ?',
+        where: 'book_uuid = ? AND date = ? AND view_mode = ?',
         whereArgs: [
-          drawing.bookId,
+          drawing.bookUuid,
           normalizedDate.millisecondsSinceEpoch ~/ 1000,
           drawing.viewMode,
         ],
@@ -94,15 +94,15 @@ mixin ScheduleDrawingCacheMixin {
   }
 
   /// Delete cached drawing
-  Future<void> deleteCachedDrawing(int bookId, DateTime date, int viewMode) async {
+  Future<void> deleteCachedDrawing(String bookUuid, DateTime date, int viewMode) async {
     final db = await database;
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     await db.delete(
       'schedule_drawings',
-      where: 'book_id = ? AND date = ? AND view_mode = ?',
+      where: 'book_uuid = ? AND date = ? AND view_mode = ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         viewMode,
       ],
@@ -112,7 +112,7 @@ mixin ScheduleDrawingCacheMixin {
   /// Batch get cached drawings for a date range
   /// Returns list of drawings found in cache
   Future<List<ScheduleDrawing>> batchGetCachedDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
     int? viewMode,
@@ -121,9 +121,9 @@ mixin ScheduleDrawingCacheMixin {
     final normalizedStart = DateTime(startDate.year, startDate.month, startDate.day);
     final normalizedEnd = DateTime(endDate.year, endDate.month, endDate.day);
 
-    String whereClause = 'book_id = ? AND date >= ? AND date <= ?';
+    String whereClause = 'book_uuid = ? AND date >= ? AND date <= ?';
     List<dynamic> whereArgs = [
-      bookId,
+      bookUuid,
       normalizedStart.millisecondsSinceEpoch ~/ 1000,
       normalizedEnd.millisecondsSinceEpoch ~/ 1000,
     ];
@@ -163,12 +163,12 @@ mixin ScheduleDrawingCacheMixin {
       batch.rawUpdate('''
         UPDATE schedule_drawings
         SET strokes_data = ?, updated_at = ?, cached_at = ?
-        WHERE book_id = ? AND date = ? AND view_mode = ?
+        WHERE book_uuid = ? AND date = ? AND view_mode = ?
       ''', [
         drawingMap['strokes_data'],
         drawingMap['updated_at'],
         cachedAt,
-        drawing.bookId,
+        drawing.bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         drawing.viewMode,
       ]);
@@ -176,10 +176,10 @@ mixin ScheduleDrawingCacheMixin {
       // If no rows updated, insert
       batch.rawInsert('''
         INSERT OR IGNORE INTO schedule_drawings
-        (book_id, date, view_mode, strokes_data, created_at, updated_at, cached_at, cache_hit_count)
+        (book_uuid, date, view_mode, strokes_data, created_at, updated_at, cached_at, cache_hit_count)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0)
       ''', [
-        drawing.bookId,
+        drawing.bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         drawing.viewMode,
         drawingMap['strokes_data'],

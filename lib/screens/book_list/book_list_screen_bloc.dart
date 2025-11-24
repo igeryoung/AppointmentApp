@@ -203,7 +203,7 @@ class _BookListView extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      context.read<BookListCubit>().archiveBook(book.id!);
+      context.read<BookListCubit>().archiveBook(book.uuid);
     }
   }
 
@@ -228,7 +228,7 @@ class _BookListView extends StatelessWidget {
     );
 
     if (confirmed == true && context.mounted) {
-      context.read<BookListCubit>().deleteBook(book.id!);
+      context.read<BookListCubit>().deleteBook(book.uuid);
     }
   }
 

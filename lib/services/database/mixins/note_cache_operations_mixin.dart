@@ -540,18 +540,18 @@ mixin NoteCacheOperationsMixin {
 
   /// Get dirty notes for a specific book
   /// Returns list of notes with is_dirty = 1 that belong to events in the specified book
-  Future<List<Note>> getDirtyNotesByBookId(int bookId) async {
+  Future<List<Note>> getDirtyNotesByBookId(String bookUuid) async {
     final db = await database;
 
-    // Join notes with events to filter by book_id
+    // Join notes with events to filter by book_uuid
     final maps = await db.rawQuery('''
       SELECT notes.* FROM notes
       INNER JOIN events ON notes.event_id = events.id
-      WHERE notes.is_dirty = ? AND events.book_id = ?
-    ''', [1, bookId]);
+      WHERE notes.is_dirty = ? AND events.book_uuid = ?
+    ''', [1, bookUuid]);
 
     final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    debugPrint('✅ getDirtyNotesByBookId: Found ${dirtyNotes.length} dirty notes for book $bookId');
+    debugPrint('✅ getDirtyNotesByBookId: Found ${dirtyNotes.length} dirty notes for book $bookUuid');
     return dirtyNotes;
   }
 }

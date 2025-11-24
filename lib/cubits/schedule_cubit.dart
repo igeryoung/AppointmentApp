@@ -23,8 +23,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   final DrawingContentService _drawingContentService;
   final TimeService _timeService;
 
-  // Current book ID being viewed
-  int? _currentBookId;
+  // Current book UUID being viewed
+  String? _currentBookUuid;
 
   // RACE CONDITION FIX: Generation counter to ignore stale event queries
   int _currentRequestGeneration = 0;
@@ -40,8 +40,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // ===================
 
   /// Initialize schedule with a book and load today's events
-  Future<void> initialize(int bookId) async {
-    _currentBookId = bookId;
+  Future<void> initialize(String bookUuid) async {
+    _currentBookUuid = bookUuid;
     final today = _timeService.now();
     await selectDate(today);
   }
@@ -50,7 +50,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   ///
   /// [generation] - Request generation number for race condition prevention
   Future<void> loadEvents({DateTime? date, bool? showOldEvents, int? generation}) async {
-    if (_currentBookId == null) {
+    if (_currentBookUuid == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot load events - no book selected');
       emit(const ScheduleError('No book selected'));
       return;
@@ -90,7 +90,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       debugPrint('🔄 ScheduleCubit: Fetching events for $windowSize-day window $windowStart (generation=$generation)');
 
       final events = await _eventRepository.getByDateRange(
-        _currentBookId!,
+        _currentBookUuid!,
         windowStart,
         windowEnd,
       );
@@ -138,15 +138,15 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Create a new event
   Future<Event?> createEvent(Event event) async {
-    if (_currentBookId == null) {
+    if (_currentBookUuid == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot create event - no book selected');
       emit(const ScheduleError('No book selected'));
       return null;
     }
 
-    if (event.bookId != _currentBookId) {
-      debugPrint('⚠️ ScheduleCubit: Event bookId mismatch');
-      emit(const ScheduleError('Event book ID does not match selected book'));
+    if (event.bookUuid != _currentBookUuid) {
+      debugPrint('⚠️ ScheduleCubit: Event bookUuid mismatch');
+      emit(const ScheduleError('Event book UUID does not match selected book'));
       return null;
     }
 
@@ -243,7 +243,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Load drawing for the current date and view mode (always 3-day view)
   Future<void> loadDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY, bool forceRefresh = false}) async {
-    if (_currentBookId == null) {
+    if (_currentBookUuid == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot load drawing - no book selected');
       return;
     }
@@ -256,7 +256,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
     try {
       final drawing = await _drawingContentService.getDrawing(
-        bookId: _currentBookId!,
+        bookUuid: _currentBookUuid!,
         date: currentState.selectedDate,
         viewMode: viewMode,
         forceRefresh: forceRefresh,
@@ -272,7 +272,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Save drawing
   Future<void> saveDrawing(ScheduleDrawing drawing) async {
-    if (_currentBookId == null) {
+    if (_currentBookUuid == null) {
       debugPrint('⚠️ ScheduleCubit: Cannot save drawing - no book selected');
       return;
     }

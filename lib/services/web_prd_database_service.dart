@@ -15,7 +15,6 @@ class WebPRDDatabaseService implements IDatabaseService {
   final List<Event> _events = [];
   final List<Note> _notes = [];
   final List<ScheduleDrawing> _scheduleDrawings = [];
-  int _nextBookId = 1;
   int _nextEventId = 1;
   int _nextNoteId = 1;
   int _nextScheduleDrawingId = 1;
@@ -40,10 +39,10 @@ class WebPRDDatabaseService implements IDatabaseService {
     return _books.where((book) => includeArchived || !book.isArchived).toList();
   }
 
-  Future<Book?> getBookById(int id) async {
+  Future<Book?> getBookByUuid(String uuid) async {
     await Future.delayed(const Duration(milliseconds: 5));
     try {
-      return _books.firstWhere((book) => book.id == id);
+      return _books.firstWhere((book) => book.uuid == uuid);
     } catch (e) {
       return null;
     }
@@ -57,7 +56,6 @@ class WebPRDDatabaseService implements IDatabaseService {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final book = Book(
-      id: _nextBookId++,
       uuid: const Uuid().v4(),
       name: name.trim(),
       createdAt: DateTime.now(),
@@ -68,12 +66,11 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   Future<Book> updateBook(Book book) async {
-    if (book.id == null) throw ArgumentError('Book ID cannot be null');
     if (book.name.trim().isEmpty) throw ArgumentError('Book name cannot be empty');
 
     await Future.delayed(const Duration(milliseconds: 10));
 
-    final index = _books.indexWhere((b) => b.id == book.id);
+    final index = _books.indexWhere((b) => b.uuid == book.uuid);
     if (index == -1) throw Exception('Book not found');
 
     final updatedBook = book.copyWith(name: book.name.trim());
@@ -81,25 +78,25 @@ class WebPRDDatabaseService implements IDatabaseService {
     return updatedBook;
   }
 
-  Future<void> archiveBook(int id) async {
+  Future<void> archiveBook(String uuid) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
-    final index = _books.indexWhere((b) => b.id == id && !b.isArchived);
+    final index = _books.indexWhere((b) => b.uuid == uuid && !b.isArchived);
     if (index == -1) throw Exception('Book not found or already archived');
 
     final book = _books[index];
     _books[index] = book.copyWith(archivedAt: DateTime.now());
   }
 
-  Future<void> deleteBook(int id) async {
+  Future<void> deleteBook(String uuid) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
-    final bookIndex = _books.indexWhere((b) => b.id == id);
+    final bookIndex = _books.indexWhere((b) => b.uuid == uuid);
     if (bookIndex == -1) throw Exception('Book not found');
 
     _books.removeAt(bookIndex);
     // Cascade delete events and notes
-    _events.removeWhere((e) => e.bookId == id);
+    _events.removeWhere((e) => e.bookUuid == uuid);
     _notes.removeWhere((n) => _events.every((e) => e.id != n.eventId));
   }
 
@@ -110,7 +107,7 @@ class WebPRDDatabaseService implements IDatabaseService {
   /// Get events for Day view
   ///
   /// [date] should be normalized to midnight (start of day)
-  Future<List<Event>> getEventsByDay(int bookId, DateTime date) async {
+  Future<List<Event>> getEventsByDay(String bookUuid, DateTime date) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final startOfDay = DateTime(date.year, date.month, date.day);
@@ -118,7 +115,7 @@ class WebPRDDatabaseService implements IDatabaseService {
 
     return _events
         .where((e) =>
-            e.bookId == bookId &&
+            e.bookUuid == bookUuid &&
             e.startTime.isAfter(startOfDay.subtract(const Duration(milliseconds: 1))) &&
             e.startTime.isBefore(endOfDay))
         .toList()
@@ -129,14 +126,14 @@ class WebPRDDatabaseService implements IDatabaseService {
   ///
   /// [startDate] MUST be the 3-day window start date (calculated by _get3DayWindowStart)
   /// to ensure events are loaded for the correct window being displayed
-  Future<List<Event>> getEventsBy3Days(int bookId, DateTime startDate) async {
+  Future<List<Event>> getEventsBy3Days(String bookUuid, DateTime startDate) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final startOfDay = DateTime(startDate.year, startDate.month, startDate.day);
     final endOfPeriod = startOfDay.add(const Duration(days: 3));
     return _events
         .where((e) =>
-            e.bookId == bookId &&
+            e.bookUuid == bookUuid &&
             e.startTime.isAfter(startOfDay.subtract(const Duration(milliseconds: 1))) &&
             e.startTime.isBefore(endOfPeriod))
         .toList()
@@ -147,13 +144,13 @@ class WebPRDDatabaseService implements IDatabaseService {
   ///
   /// [weekStart] MUST be the week start date (Monday, calculated by _getWeekStart)
   /// to ensure events are loaded for the correct week being displayed
-  Future<List<Event>> getEventsByWeek(int bookId, DateTime weekStart) async {
+  Future<List<Event>> getEventsByWeek(String bookUuid, DateTime weekStart) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final weekEnd = weekStart.add(const Duration(days: 7));
     return _events
         .where((e) =>
-            e.bookId == bookId &&
+            e.bookUuid == bookUuid &&
             e.startTime.isAfter(weekStart.subtract(const Duration(milliseconds: 1))) &&
             e.startTime.isBefore(weekEnd))
         .toList()
@@ -162,11 +159,11 @@ class WebPRDDatabaseService implements IDatabaseService {
 
   /// Get all events for a book (regardless of date)
   @override
-  Future<List<Event>> getAllEventsByBook(int bookId) async {
+  Future<List<Event>> getAllEventsByBook(String bookUuid) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
     return _events
-        .where((e) => e.bookId == bookId)
+        .where((e) => e.bookUuid == bookUuid)
         .toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
@@ -374,16 +371,16 @@ class WebPRDDatabaseService implements IDatabaseService {
   // Utility Operations
   // ===================
 
-  Future<int> getEventCountByBook(int bookId) async {
+  Future<int> getEventCountByBook(String bookUuid) async {
     await Future.delayed(const Duration(milliseconds: 5));
-    return _events.where((e) => e.bookId == bookId).length;
+    return _events.where((e) => e.bookUuid == bookUuid).length;
   }
 
   @override
-  Future<List<String>> getAllRecordNumbers(int bookId) async {
+  Future<List<String>> getAllRecordNumbers(String bookUuid) async {
     await Future.delayed(const Duration(milliseconds: 5));
     final recordNumbers = _events
-        .where((e) => e.bookId == bookId && e.recordNumber != null && e.recordNumber!.isNotEmpty)
+        .where((e) => e.bookUuid == bookUuid && e.recordNumber != null && e.recordNumber!.isNotEmpty)
         .map((e) => e.recordNumber!)
         .toSet()
         .toList();
@@ -392,11 +389,11 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   @override
-  Future<List<String>> getRecordNumbersByName(int bookId, String name) async {
+  Future<List<String>> getRecordNumbersByName(String bookUuid, String name) async {
     await Future.delayed(const Duration(milliseconds: 5));
     final recordNumbers = _events
         .where((e) =>
-          e.bookId == bookId &&
+          e.bookUuid == bookUuid &&
           e.name.toLowerCase() == name.toLowerCase() &&
           e.recordNumber != null &&
           e.recordNumber!.isNotEmpty)
@@ -409,13 +406,13 @@ class WebPRDDatabaseService implements IDatabaseService {
 
   @override
   Future<List<Event>> searchByNameAndRecordNumber(
-    int bookId,
+    String bookUuid,
     String name,
     String recordNumber,
   ) async {
     await Future.delayed(const Duration(milliseconds: 5));
     return _events
-        .where((e) => e.bookId == bookId && e.name == name && e.recordNumber == recordNumber)
+        .where((e) => e.bookUuid == bookUuid && e.name == name && e.recordNumber == recordNumber)
         .toList()
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
@@ -430,14 +427,14 @@ class WebPRDDatabaseService implements IDatabaseService {
   /// - Day view: the selected date
   /// - 3-Day view: the window start date (calculated by _get3DayWindowStart)
   /// - Week view: the week start date (calculated by _getWeekStart)
-  Future<ScheduleDrawing?> getCachedDrawing(int bookId, DateTime date, int viewMode) async {
+  Future<ScheduleDrawing?> getCachedDrawing(String bookUuid, DateTime date, int viewMode) async {
     await Future.delayed(const Duration(milliseconds: 5));
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     try {
       return _scheduleDrawings.firstWhere(
         (d) =>
-            d.bookId == bookId &&
+            d.bookUuid == bookUuid &&
             d.date.year == normalizedDate.year &&
             d.date.month == normalizedDate.month &&
             d.date.day == normalizedDate.day &&
@@ -464,7 +461,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     // Find existing drawing
     final index = _scheduleDrawings.indexWhere(
       (d) =>
-          d.bookId == drawing.bookId &&
+          d.bookUuid == drawing.bookUuid &&
           d.date.year == normalizedDate.year &&
           d.date.month == normalizedDate.month &&
           d.date.day == normalizedDate.day &&
@@ -493,13 +490,13 @@ class WebPRDDatabaseService implements IDatabaseService {
     }
   }
 
-  Future<void> deleteCachedDrawing(int bookId, DateTime date, int viewMode) async {
+  Future<void> deleteCachedDrawing(String bookUuid, DateTime date, int viewMode) async {
     await Future.delayed(const Duration(milliseconds: 5));
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     _scheduleDrawings.removeWhere(
       (d) =>
-          d.bookId == bookId &&
+          d.bookUuid == bookUuid &&
           d.date.year == normalizedDate.year &&
           d.date.month == normalizedDate.month &&
           d.date.day == normalizedDate.day &&
@@ -532,7 +529,7 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   Future<List<ScheduleDrawing>> batchGetCachedDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
     int? viewMode,
@@ -542,7 +539,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     final normalizedEnd = DateTime(endDate.year, endDate.month, endDate.day);
 
     return _scheduleDrawings.where((d) {
-      if (d.bookId != bookId) return false;
+      if (d.bookUuid != bookUuid) return false;
       if (viewMode != null && d.viewMode != viewMode) return false;
       final normalized = DateTime(d.date.year, d.date.month, d.date.day);
       return !normalized.isBefore(normalizedStart) && !normalized.isAfter(normalizedEnd);
@@ -562,7 +559,6 @@ class WebPRDDatabaseService implements IDatabaseService {
     _notes.clear();
     _events.clear();
     _books.clear();
-    _nextBookId = 1;
     _nextEventId = 1;
     _nextNoteId = 1;
     _nextScheduleDrawingId = 1;

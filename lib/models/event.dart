@@ -6,7 +6,7 @@ import 'charge_item.dart';
 class Event {
   /// Nullable: new events don't have ID until saved to database
   final int? id;
-  final int bookId;
+  final String bookUuid;
   final String name;
   /// Nullable: optional field per PRD
   final String? recordNumber;
@@ -36,7 +36,7 @@ class Event {
 
   Event({
     this.id,
-    required this.bookId,
+    required this.bookUuid,
     required this.name,
     this.recordNumber,
     this.phone,
@@ -62,7 +62,7 @@ class Event {
 
   Event copyWith({
     int? id,
-    int? bookId,
+    String? bookUuid,
     String? name,
     String? recordNumber,
     String? phone,
@@ -85,7 +85,7 @@ class Event {
   }) {
     return Event(
       id: id ?? this.id,
-      bookId: bookId ?? this.bookId,
+      bookUuid: bookUuid ?? this.bookUuid,
       name: name ?? this.name,
       recordNumber: recordNumber ?? this.recordNumber,
       phone: phone ?? this.phone,
@@ -110,7 +110,7 @@ class Event {
   Map<String, dynamic> toMap() {
     return {
       'id': id,
-      'book_id': bookId,
+      'book_uuid': bookUuid,
       'name': name,
       'record_number': recordNumber,
       'phone': phone,
@@ -152,7 +152,7 @@ class Event {
 
     return Event(
       id: map['id']?.toInt(),
-      bookId: map['book_id']?.toInt() ?? 0,
+      bookUuid: map['book_uuid'] as String? ?? '',
       name: map['name'] ?? '',
       recordNumber: map['record_number'],
       phone: map['phone'],
@@ -203,7 +203,7 @@ class Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, bookId: $bookId, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, hasChargeItems: $hasChargeItems, startTime: $startTime, endTime: $endTime, version: $version, isDirty: $isDirty)';
+    return 'Event(id: $id, bookUuid: $bookUuid, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, hasChargeItems: $hasChargeItems, startTime: $startTime, endTime: $endTime, version: $version, isDirty: $isDirty)';
   }
 
   @override
@@ -211,7 +211,7 @@ class Event {
     if (identical(this, other)) return true;
     return other is Event &&
         other.id == id &&
-        other.bookId == bookId &&
+        other.bookUuid == bookUuid &&
         other.name == name &&
         other.recordNumber == recordNumber &&
         other.phone == phone &&
@@ -231,6 +231,6 @@ class Event {
 
   @override
   int get hashCode {
-    return Object.hash(id, bookId, name, recordNumber, phone, Object.hashAll(eventTypes), hasChargeItems, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked, hasNote, version);
+    return Object.hash(id, bookUuid, name, recordNumber, phone, Object.hashAll(eventTypes), hasChargeItems, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked, hasNote, version);
   }
 }

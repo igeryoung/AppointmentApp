@@ -59,7 +59,7 @@ mixin PersonInfoUtilitiesMixin {
 
   /// Get all distinct record numbers for a given person name
   /// Queries both events and notes tables, excludes empty record numbers
-  Future<List<String>> getRecordNumbersByName(int bookId, String name) async {
+  Future<List<String>> getRecordNumbersByName(String bookUuid, String name) async {
     if (name.trim().isEmpty) {
       return [];
     }
@@ -71,25 +71,25 @@ mixin PersonInfoUtilitiesMixin {
     final eventsResult = await db.rawQuery('''
       SELECT DISTINCT record_number
       FROM events
-      WHERE book_id = ?
+      WHERE book_uuid = ?
         AND LOWER(TRIM(name)) = ?
         AND record_number IS NOT NULL
         AND TRIM(record_number) != ''
         AND is_removed = 0
       ORDER BY record_number
-    ''', [bookId, nameNorm]);
+    ''', [bookUuid, nameNorm]);
 
-    // Query notes table (joined with events to filter by book_id)
+    // Query notes table (joined with events to filter by book_uuid)
     final notesResult = await db.rawQuery('''
       SELECT DISTINCT n.record_number_normalized
       FROM notes n
       INNER JOIN events e ON n.event_id = e.id
-      WHERE e.book_id = ?
+      WHERE e.book_uuid = ?
         AND n.person_name_normalized = ?
         AND n.record_number_normalized IS NOT NULL
         AND TRIM(n.record_number_normalized) != ''
       ORDER BY n.record_number_normalized
-    ''', [bookId, nameNorm]);
+    ''', [bookUuid, nameNorm]);
 
     // Combine and deduplicate
     final recordNumbers = <String>{};
@@ -115,18 +115,18 @@ mixin PersonInfoUtilitiesMixin {
 
   /// Get all unique names in a book
   /// Returns a sorted list of distinct names from events (excluding removed events)
-  Future<List<String>> getAllNamesInBook(int bookId) async {
+  Future<List<String>> getAllNamesInBook(String bookUuid) async {
     final db = await database;
 
     final result = await db.rawQuery('''
       SELECT DISTINCT name
       FROM events
-      WHERE book_id = ?
+      WHERE book_uuid = ?
         AND name IS NOT NULL
         AND TRIM(name) != ''
         AND is_removed = 0
       ORDER BY name
-    ''', [bookId]);
+    ''', [bookUuid]);
 
     return result
         .map((row) => row['name'] as String)
@@ -138,7 +138,7 @@ mixin PersonInfoUtilitiesMixin {
   /// Returns a list of maps with 'recordNumber' and 'name' keys
   /// Record number is unique, so each record number maps to exactly one name
   Future<List<Map<String, String>>> getAllRecordNumbersWithNames(
-      int bookId) async {
+      String bookUuid) async {
     final db = await database;
 
     // Get record numbers with their most recent associated name
@@ -148,7 +148,7 @@ mixin PersonInfoUtilitiesMixin {
       FROM (
         SELECT record_number, name, MAX(updated_at) as latest_update
         FROM events
-        WHERE book_id = ?
+        WHERE book_uuid = ?
           AND record_number IS NOT NULL
           AND TRIM(record_number) != ''
           AND name IS NOT NULL
@@ -157,7 +157,7 @@ mixin PersonInfoUtilitiesMixin {
         GROUP BY record_number
       )
       ORDER BY record_number
-    ''', [bookId]);
+    ''', [bookUuid]);
 
     return result
         .map((row) => {
@@ -171,7 +171,7 @@ mixin PersonInfoUtilitiesMixin {
   /// Returns null if record number is not found
   /// Since record number is unique, returns the single associated name
   Future<String?> getNameByRecordNumber(
-      int bookId, String recordNumber) async {
+      String bookUuid, String recordNumber) async {
     if (recordNumber.trim().isEmpty) {
       return null;
     }
@@ -181,12 +181,12 @@ mixin PersonInfoUtilitiesMixin {
     final result = await db.rawQuery('''
       SELECT name
       FROM events
-      WHERE book_id = ?
+      WHERE book_uuid = ?
         AND record_number = ?
         AND is_removed = 0
       ORDER BY updated_at DESC
       LIMIT 1
-    ''', [bookId, recordNumber.trim()]);
+    ''', [bookUuid, recordNumber.trim()]);
 
     if (result.isEmpty) {
       return null;

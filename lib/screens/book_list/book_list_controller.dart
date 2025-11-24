@@ -137,11 +137,9 @@ class BookListController extends ChangeNotifier {
     required BuildContext context,
     required Book book,
   }) async {
-    if (book.id == null) return;
-
     _setState(_state.copyWith(isLoading: true));
     try {
-      await repo.archive(book.id!);
+      await repo.archive(book.uuid);
       await _loadBooks();
     } catch (e) {
       _setState(_state.copyWith(isLoading: false));
@@ -166,11 +164,9 @@ class BookListController extends ChangeNotifier {
     required BuildContext context,
     required Book book,
   }) async {
-    if (book.id == null) return;
-
     _setState(_state.copyWith(isLoading: true));
     try {
-      await repo.delete(book.id!);
+      await repo.delete(book.uuid);
       await _loadBooks();
     } catch (e) {
       _setState(_state.copyWith(isLoading: false));
