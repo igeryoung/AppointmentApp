@@ -18,7 +18,7 @@ import '../../../widgets/handwriting_canvas.dart';
 class ScheduleDrawingService {
   final IDatabaseService _dbService;
   ContentService? _contentService;
-  final int bookId;
+  final String bookUuid;
   final VoidCallback onDrawingChanged;
 
   // Canvas key management - one key per 3-day window
@@ -37,7 +37,7 @@ class ScheduleDrawingService {
 
   ScheduleDrawingService({
     required IDatabaseService dbService,
-    required this.bookId,
+    required this.bookUuid,
     required this.onDrawingChanged,
     ContentService? contentService,
   })  : _dbService = dbService,
@@ -86,7 +86,7 @@ class ScheduleDrawingService {
       if (_contentService != null) {
         debugPrint('📖 Loading drawing via ContentService (cache-first with server fallback, generation=$loadGeneration)...');
         drawing = await _contentService!.getDrawing(
-          bookId: bookId,
+          bookUuid: bookUuid,
           date: effectiveDate,
           viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
           forceRefresh: false,
@@ -95,7 +95,7 @@ class ScheduleDrawingService {
         // Fallback to direct database access
         debugPrint('⚠️ ContentService not available, loading drawing from cache only (generation=$loadGeneration)');
         drawing = await _dbService.getCachedDrawing(
-          bookId,
+          bookUuid,
           effectiveDate,
           ScheduleDrawing.VIEW_MODE_3DAY,
         );
@@ -198,7 +198,7 @@ class ScheduleDrawingService {
       DateTime? createdAt;
       int version = 1;
       if (_currentDrawing != null &&
-          _currentDrawing!.bookId == bookId &&
+          _currentDrawing!.bookUuid == bookUuid &&
           _currentDrawing!.viewMode == ScheduleDrawing.VIEW_MODE_3DAY &&
           _currentDrawing!.date.year == effectiveDate.year &&
           _currentDrawing!.date.month == effectiveDate.month &&
@@ -210,7 +210,7 @@ class ScheduleDrawingService {
 
       final drawing = ScheduleDrawing(
         id: drawingId,
-        bookId: bookId,
+        bookUuid: bookUuid,
         date: effectiveDate,
         viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
         strokes: strokes,
@@ -243,7 +243,7 @@ class ScheduleDrawingService {
 
         // Update current drawing state
         final savedDrawing = await _dbService.getCachedDrawing(
-          bookId,
+          bookUuid,
           effectiveDate,
           ScheduleDrawing.VIEW_MODE_3DAY,
         );

@@ -19,8 +19,8 @@ class EventManagementService {
   /// Database service for event operations
   final IDatabaseService _dbService;
 
-  /// Book ID for creating new events
-  final int _bookId;
+  /// Book UUID for creating new events
+  final String _bookUuid;
 
   /// Currently selected event for context menu
   Event? _selectedEventForMenu;
@@ -69,7 +69,7 @@ class EventManagementService {
 
   EventManagementService({
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required this.onMenuStateChanged,
     required this.onNavigate,
     required this.onReloadEvents,
@@ -84,7 +84,7 @@ class EventManagementService {
     required this.onSetPendingNextAppointment,
     required this.dateService,
   })  : _dbService = dbService,
-        _bookId = bookId;
+        _bookUuid = bookUuid;
 
   /// Get currently selected event for menu
   Event? get selectedEventForMenu => _selectedEventForMenu;
@@ -105,7 +105,7 @@ class EventManagementService {
         DateTime(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
 
     final newEvent = Event(
-      bookId: _bookId,
+      bookUuid: _bookUuid,
       name: name ?? '',
       recordNumber: recordNumber ?? '',
       phone: phone,

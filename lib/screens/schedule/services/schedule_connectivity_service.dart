@@ -22,8 +22,8 @@ class ScheduleConnectivityService {
   /// Database service reference
   final IDatabaseService _dbService;
 
-  /// Book ID for filtering sync operations
-  final int _bookId;
+  /// Book UUID for filtering sync operations
+  final String _bookUuid;
 
   /// Whether currently offline (no server connection)
   bool _isOffline = false;
@@ -57,7 +57,7 @@ class ScheduleConnectivityService {
 
   ScheduleConnectivityService({
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required this.onStateChanged,
     required this.onUpdateCubitOfflineStatus,
     required this.onShowSnackbar,
@@ -65,7 +65,7 @@ class ScheduleConnectivityService {
     required this.isMounted,
     required this.onUpdateDrawingServiceContentService,
   })  : _dbService = dbService,
-        _bookId = bookId;
+        _bookUuid = bookUuid;
 
   /// Get current offline status
   bool get isOffline => _isOffline;
@@ -197,9 +197,9 @@ class ScheduleConnectivityService {
     onStateChanged(_isOffline, _isSyncing);
 
     try {
-      debugPrint('🔄 ScheduleConnectivityService: Auto-syncing dirty notes for book $_bookId...');
+      debugPrint('🔄 ScheduleConnectivityService: Auto-syncing dirty notes for book $_bookUuid...');
 
-      final result = await _contentService!.syncDirtyNotesForBook(_bookId);
+      final result = await _contentService!.syncDirtyNotesForBook(_bookUuid);
 
       if (isMounted()) {
         _isSyncing = false;
