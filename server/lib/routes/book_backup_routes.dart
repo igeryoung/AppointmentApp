@@ -514,7 +514,7 @@ class BookBackupRoutes {
   Router get createBookRouter {
     final router = Router();
 
-    router.post('', _createBook);
+    router.post('/', _createBook);
 
     return router;
   }
