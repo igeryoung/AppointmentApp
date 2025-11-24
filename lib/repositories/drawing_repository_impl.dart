@@ -11,21 +11,21 @@ class DrawingRepositoryImpl implements IDrawingRepository {
   DrawingRepositoryImpl(this._getDatabaseFn);
 
   @override
-  Future<ScheduleDrawing?> getCached(int bookId, DateTime date) async {
+  Future<ScheduleDrawing?> getCached(String bookUuid, DateTime date) async {
     // Default to 3-day view (only supported mode)
-    return getCachedWithViewMode(bookId, date, ScheduleDrawing.VIEW_MODE_3DAY);
+    return getCachedWithViewMode(bookUuid, date, ScheduleDrawing.VIEW_MODE_3DAY);
   }
 
   /// Get cached drawing with specific view mode
-  Future<ScheduleDrawing?> getCachedWithViewMode(int bookId, DateTime date, int viewMode) async {
+  Future<ScheduleDrawing?> getCachedWithViewMode(String bookUuid, DateTime date, int viewMode) async {
     final db = await _getDatabaseFn();
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     final maps = await db.query(
       'schedule_drawings',
-      where: 'book_id = ? AND date = ? AND view_mode = ?',
+      where: 'book_uuid = ? AND date = ? AND view_mode = ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         viewMode,
       ],
@@ -62,9 +62,9 @@ class DrawingRepositoryImpl implements IDrawingRepository {
       final updatedRows = await db.update(
         'schedule_drawings',
         updateMap,
-        where: 'book_id = ? AND date = ? AND view_mode = ?',
+        where: 'book_uuid = ? AND date = ? AND view_mode = ?',
         whereArgs: [
-          drawing.bookId,
+          drawing.bookUuid,
           normalizedDate.millisecondsSinceEpoch ~/ 1000,
           drawing.viewMode,
         ],
@@ -85,21 +85,21 @@ class DrawingRepositoryImpl implements IDrawingRepository {
   }
 
   @override
-  Future<void> deleteCache(int bookId, DateTime date) async {
+  Future<void> deleteCache(String bookUuid, DateTime date) async {
     // Default to 3-day view (only supported mode)
-    return deleteCacheWithViewMode(bookId, date, ScheduleDrawing.VIEW_MODE_3DAY);
+    return deleteCacheWithViewMode(bookUuid, date, ScheduleDrawing.VIEW_MODE_3DAY);
   }
 
   /// Delete cached drawing with specific view mode
-  Future<void> deleteCacheWithViewMode(int bookId, DateTime date, int viewMode) async {
+  Future<void> deleteCacheWithViewMode(String bookUuid, DateTime date, int viewMode) async {
     final db = await _getDatabaseFn();
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     await db.delete(
       'schedule_drawings',
-      where: 'book_id = ? AND date = ? AND view_mode = ?',
+      where: 'book_uuid = ? AND date = ? AND view_mode = ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         viewMode,
       ],
@@ -121,22 +121,22 @@ class DrawingRepositoryImpl implements IDrawingRepository {
   }
 
   @override
-  Future<void> markClean(int bookId, DateTime date) async {
+  Future<void> markClean(String bookUuid, DateTime date) async {
     // Default to 3-day view (only supported mode)
-    return markCleanWithViewMode(bookId, date, ScheduleDrawing.VIEW_MODE_3DAY);
+    return markCleanWithViewMode(bookUuid, date, ScheduleDrawing.VIEW_MODE_3DAY);
   }
 
   /// Mark drawing as clean with specific view mode
-  Future<void> markCleanWithViewMode(int bookId, DateTime date, int viewMode) async {
+  Future<void> markCleanWithViewMode(String bookUuid, DateTime date, int viewMode) async {
     final db = await _getDatabaseFn();
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
     await db.update(
       'schedule_drawings',
       {'is_dirty': 0},
-      where: 'book_id = ? AND date = ? AND view_mode = ?',
+      where: 'book_uuid = ? AND date = ? AND view_mode = ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         viewMode,
       ],
@@ -144,12 +144,12 @@ class DrawingRepositoryImpl implements IDrawingRepository {
   }
 
   @override
-  Future<List<ScheduleDrawing>> getAllCachedForBook(int bookId) async {
+  Future<List<ScheduleDrawing>> getAllCachedForBook(String bookUuid) async {
     final db = await _getDatabaseFn();
     final maps = await db.query(
       'schedule_drawings',
-      where: 'book_id = ?',
-      whereArgs: [bookId],
+      where: 'book_uuid = ?',
+      whereArgs: [bookUuid],
       orderBy: 'date ASC',
     );
 
@@ -165,7 +165,7 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
   /// Batch get cached drawings for a date range
   Future<List<ScheduleDrawing>> batchGetCachedDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
     int? viewMode,
@@ -174,9 +174,9 @@ class DrawingRepositoryImpl implements IDrawingRepository {
     final normalizedStart = DateTime(startDate.year, startDate.month, startDate.day);
     final normalizedEnd = DateTime(endDate.year, endDate.month, endDate.day);
 
-    String whereClause = 'book_id = ? AND date >= ? AND date <= ?';
+    String whereClause = 'book_uuid = ? AND date >= ? AND date <= ?';
     List<dynamic> whereArgs = [
-      bookId,
+      bookUuid,
       normalizedStart.millisecondsSinceEpoch ~/ 1000,
       normalizedEnd.millisecondsSinceEpoch ~/ 1000,
     ];
@@ -214,13 +214,13 @@ class DrawingRepositoryImpl implements IDrawingRepository {
       batch.rawUpdate('''
         UPDATE schedule_drawings
         SET strokes_data = ?, updated_at = ?, cached_at = ?, is_dirty = ?
-        WHERE book_id = ? AND date = ? AND view_mode = ?
+        WHERE book_uuid = ? AND date = ? AND view_mode = ?
       ''', [
         drawingMap['strokes_data'],
         drawingMap['updated_at'],
         cachedAt,
         drawingMap['is_dirty'] ?? 0,
-        drawing.bookId,
+        drawing.bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         drawing.viewMode,
       ]);
@@ -228,10 +228,10 @@ class DrawingRepositoryImpl implements IDrawingRepository {
       // Also attempt insert in case drawing doesn't exist
       batch.rawInsert('''
         INSERT OR IGNORE INTO schedule_drawings
-        (book_id, date, view_mode, strokes_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty)
+        (book_uuid, date, view_mode, strokes_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty)
         VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
       ''', [
-        drawing.bookId,
+        drawing.bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         drawing.viewMode,
         drawingMap['strokes_data'],

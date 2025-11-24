@@ -36,12 +36,12 @@ abstract class IEventRepository {
   Future<Event?> getById(int id);
 
   /// Retrieve all events for a specific book
-  Future<List<Event>> getByBookId(int bookId);
+  Future<List<Event>> getByBookId(String bookUuid);
 
   /// Retrieve events for a specific book within a date range
   /// Includes events that overlap with the date range
   Future<List<Event>> getByDateRange(
-    int bookId,
+    String bookUuid,
     DateTime startDate,
     DateTime endDate,
   );
@@ -72,20 +72,20 @@ abstract class IEventRepository {
   );
 
   /// Get all unique names for a specific book
-  Future<List<String>> getAllNames(int bookId);
+  Future<List<String>> getAllNames(String bookUuid);
 
   /// Get all unique record numbers for a specific book
-  Future<List<String>> getAllRecordNumbers(int bookId);
+  Future<List<String>> getAllRecordNumbers(String bookUuid);
 
   /// Get all unique name-record number pairs for a specific book
-  Future<List<NameRecordPair>> getAllNameRecordPairs(int bookId);
+  Future<List<NameRecordPair>> getAllNameRecordPairs(String bookUuid);
 
   /// Get unique record numbers filtered by exact name match (case-insensitive)
-  Future<List<String>> getRecordNumbersByName(int bookId, String name);
+  Future<List<String>> getRecordNumbersByName(String bookUuid, String name);
 
   /// Search events by name and record number for a specific book
   Future<List<Event>> searchByNameAndRecordNumber(
-    int bookId,
+    String bookUuid,
     String name,
     String recordNumber,
   );

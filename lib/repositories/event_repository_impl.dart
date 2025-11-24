@@ -27,24 +27,24 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   Future<Event?> getById(int id) => super.getById(id);
 
   @override
-  Future<List<Event>> getByBookId(int bookId) {
+  Future<List<Event>> getByBookId(String bookUuid) {
     return query(
-      where: 'book_id = ?',
-      whereArgs: [bookId],
+      where: 'book_uuid = ?',
+      whereArgs: [bookUuid],
       orderBy: 'start_time ASC',
     );
   }
 
   @override
   Future<List<Event>> getByDateRange(
-    int bookId,
+    String bookUuid,
     DateTime startDate,
     DateTime endDate,
   ) {
     return query(
-      where: 'book_id = ? AND start_time >= ? AND start_time < ?',
+      where: 'book_uuid = ? AND start_time >= ? AND start_time < ?',
       whereArgs: [
-        bookId,
+        bookUuid,
         startDate.millisecondsSinceEpoch ~/ 1000,
         endDate.millisecondsSinceEpoch ~/ 1000,
       ],
@@ -53,23 +53,23 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   /// Get events for Day view
-  Future<List<Event>> getEventsByDay(int bookId, DateTime date) async {
+  Future<List<Event>> getEventsByDay(String bookUuid, DateTime date) async {
     final startOfDay = DateTime(date.year, date.month, date.day);
     final endOfDay = startOfDay.add(const Duration(days: 1));
-    return getByDateRange(bookId, startOfDay, endOfDay);
+    return getByDateRange(bookUuid, startOfDay, endOfDay);
   }
 
   /// Get events for 3-Day view
-  Future<List<Event>> getEventsBy3Days(int bookId, DateTime startDate) async {
+  Future<List<Event>> getEventsBy3Days(String bookUuid, DateTime startDate) async {
     final startOfDay = DateTime(startDate.year, startDate.month, startDate.day);
     final endOfPeriod = startOfDay.add(const Duration(days: 3));
-    return getByDateRange(bookId, startOfDay, endOfPeriod);
+    return getByDateRange(bookUuid, startOfDay, endOfPeriod);
   }
 
   /// Get events for Week view
-  Future<List<Event>> getEventsByWeek(int bookId, DateTime weekStart) async {
+  Future<List<Event>> getEventsByWeek(String bookUuid, DateTime weekStart) async {
     final weekEnd = weekStart.add(const Duration(days: 7));
-    return getByDateRange(bookId, weekStart, weekEnd);
+    return getByDateRange(bookUuid, weekStart, weekEnd);
   }
 
   @override
@@ -216,23 +216,23 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   /// Get event count by book
-  Future<int> getEventCountByBook(int bookId) async {
+  Future<int> getEventCountByBook(String bookUuid) async {
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
-      'SELECT COUNT(*) as count FROM events WHERE book_id = ?',
-      [bookId],
+      'SELECT COUNT(*) as count FROM events WHERE book_uuid = ?',
+      [bookUuid],
     );
     return result.first['count'] as int;
   }
 
   @override
-  Future<List<String>> getAllNames(int bookId) async {
+  Future<List<String>> getAllNames(String bookUuid) async {
     final db = await getDatabaseFn();
     final result = await db.query(
       'events',
       columns: ['DISTINCT name'],
-      where: 'book_id = ? AND name IS NOT NULL AND name != ""',
-      whereArgs: [bookId],
+      where: 'book_uuid = ? AND name IS NOT NULL AND name != ""',
+      whereArgs: [bookUuid],
       orderBy: 'name ASC',
     );
     return result
@@ -241,13 +241,13 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<List<String>> getAllRecordNumbers(int bookId) async {
+  Future<List<String>> getAllRecordNumbers(String bookUuid) async {
     final db = await getDatabaseFn();
     final result = await db.query(
       'events',
       columns: ['DISTINCT record_number'],
-      where: 'book_id = ? AND record_number IS NOT NULL AND record_number != ""',
-      whereArgs: [bookId],
+      where: 'book_uuid = ? AND record_number IS NOT NULL AND record_number != ""',
+      whereArgs: [bookUuid],
       orderBy: 'record_number ASC',
     );
     return result
@@ -256,14 +256,14 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<List<NameRecordPair>> getAllNameRecordPairs(int bookId) async {
+  Future<List<NameRecordPair>> getAllNameRecordPairs(String bookUuid) async {
     final db = await getDatabaseFn();
     final result = await db.query(
       'events',
       distinct: true,
       columns: ['name', 'record_number'],
-      where: 'book_id = ? AND name IS NOT NULL AND name != "" AND record_number IS NOT NULL AND record_number != ""',
-      whereArgs: [bookId],
+      where: 'book_uuid = ? AND name IS NOT NULL AND name != "" AND record_number IS NOT NULL AND record_number != ""',
+      whereArgs: [bookUuid],
       orderBy: 'name ASC, record_number ASC',
     );
     return result
@@ -275,13 +275,13 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<List<String>> getRecordNumbersByName(int bookId, String name) async {
+  Future<List<String>> getRecordNumbersByName(String bookUuid, String name) async {
     final db = await getDatabaseFn();
     final result = await db.query(
       'events',
       columns: ['DISTINCT record_number'],
-      where: 'book_id = ? AND LOWER(name) = LOWER(?) AND record_number IS NOT NULL AND record_number != ""',
-      whereArgs: [bookId, name],
+      where: 'book_uuid = ? AND LOWER(name) = LOWER(?) AND record_number IS NOT NULL AND record_number != ""',
+      whereArgs: [bookUuid, name],
       orderBy: 'record_number ASC',
     );
     return result
@@ -291,13 +291,13 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
 
   @override
   Future<List<Event>> searchByNameAndRecordNumber(
-    int bookId,
+    String bookUuid,
     String name,
     String recordNumber,
   ) async {
     return query(
-      where: 'book_id = ? AND name = ? AND record_number = ?',
-      whereArgs: [bookId, name, recordNumber],
+      where: 'book_uuid = ? AND name = ? AND record_number = ?',
+      whereArgs: [bookUuid, name, recordNumber],
       orderBy: 'start_time DESC',
     );
   }
