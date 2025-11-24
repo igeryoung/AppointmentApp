@@ -29,7 +29,7 @@ class ScheduleFabMenuHelper {
     required VoidCallback toggleDrawingMode,
     required VoidCallback createEvent,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required DateTime Function(DateTime) get3DayWindowStart,
     required CacheManager? cacheManager,
     required DateTime Function() getEffectiveDate,
@@ -94,7 +94,7 @@ class ScheduleFabMenuHelper {
               ? null
               : () => showQueryAppointmentsDialog(
                     context,
-                    bookId,
+                    bookUuid,
                     getIt<IEventRepository>(),
                   ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.teal,
@@ -110,7 +110,7 @@ class ScheduleFabMenuHelper {
               : () => ScheduleTestMenuHelper.showGenerateEventsDialog(
                     context: context,
                     dbService: dbService,
-                    bookId: bookId,
+                    bookUuid: bookUuid,
                     selectedDate: selectedDate,
                     get3DayWindowStart: get3DayWindowStart,
                   ),
@@ -127,7 +127,7 @@ class ScheduleFabMenuHelper {
               : () => ScheduleTestMenuHelper.showClearAllEventsDialog(
                     context,
                     dbService,
-                    bookId,
+                    bookUuid,
                   ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.red.shade700,
           child: const Icon(Icons.delete_sweep),
@@ -142,7 +142,7 @@ class ScheduleFabMenuHelper {
               : () => ScheduleTestMenuHelper.showHeavyLoadStage1Dialog(
                     context,
                     dbService,
-                    bookId,
+                    bookUuid,
                   ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.blue,
           child: const Icon(Icons.create),
@@ -157,7 +157,7 @@ class ScheduleFabMenuHelper {
               : () => ScheduleTestMenuHelper.showHeavyLoadStage2Dialog(
                     context,
                     dbService,
-                    bookId,
+                    bookUuid,
                   ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.indigo,
           child: const Icon(Icons.draw),
@@ -172,7 +172,7 @@ class ScheduleFabMenuHelper {
               : () => ScheduleTestMenuHelper.showHeavyLoadTestDialog(
                     context,
                     dbService,
-                    bookId,
+                    bookUuid,
                   ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.deepOrange,
           child: const Icon(Icons.warning_amber),
@@ -192,7 +192,7 @@ class ScheduleFabMenuHelper {
                     cacheManager: cacheManager,
                     events: events,
                     dbService: dbService,
-                    bookId: bookId,
+                    bookUuid: bookUuid,
                     effectiveDate: getEffectiveDate(),
                     onReloadDrawing: loadDrawing,
                     onPreloadNotes: () {

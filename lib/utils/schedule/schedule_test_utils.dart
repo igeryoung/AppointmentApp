@@ -532,7 +532,7 @@ class ScheduleTestUtils {
 
     // Clear existing events if requested
     if (clearAll) {
-      await clearAllEventsInBook(dbService, bookId);
+      await clearAllEventsInBook(dbService, bookUuid);
     }
 
     // Constants
@@ -686,7 +686,7 @@ class ScheduleTestUtils {
     debugPrint('🔍 Stage 2: Querying existing HEAVY- events...');
 
     // Query all events in the book
-    final allEvents = await dbService.getAllEventsByBook(bookId);
+    final allEvents = await dbService.getAllEventsByBook(bookUuid);
 
     var heavyEvents = allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).toList();
 

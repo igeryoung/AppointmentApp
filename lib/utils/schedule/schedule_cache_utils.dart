@@ -12,7 +12,7 @@ class ScheduleCacheUtils {
     required CacheManager? cacheManager,
     required List<Event> events,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required DateTime effectiveDate,
     required VoidCallback onReloadDrawing,
     required VoidCallback onPreloadNotes,
@@ -121,7 +121,7 @@ class ScheduleCacheUtils {
         context: context,
         cacheManager: cacheManager,
         dbService: dbService,
-        bookId: bookId,
+        bookId: bookUuid,
         effectiveDate: effectiveDate,
         onReloadDrawing: onReloadDrawing,
       );
@@ -189,7 +189,7 @@ class ScheduleCacheUtils {
     required BuildContext context,
     required CacheManager? cacheManager,
     required IDatabaseService dbService,
-    required int bookId,
+    required String bookUuid,
     required DateTime effectiveDate,
     required VoidCallback onReloadDrawing,
   }) async {
@@ -203,7 +203,7 @@ class ScheduleCacheUtils {
       // Clear drawings cache only
       debugPrint('🗑️ ScheduleScreen: Clearing drawings cache...');
       await cacheManager.deleteDrawing(
-        bookId,
+        bookUuid,
         effectiveDate,
         1, // viewMode for 3-day view
       );
