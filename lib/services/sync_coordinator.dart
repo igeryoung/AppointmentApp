@@ -59,7 +59,7 @@ class SyncCoordinator {
           if (e.toString().contains('404') || e.toString().contains('not found')) {
             try {
               final event = await _eventRepository.getById(note.eventId);
-              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Event book ${event?.bookId} not found on server. Please backup the book first.');
+              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Event book ${event?.bookUuid} not found on server. Please backup the book first.');
             } catch (infoError) {
               debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
             }
@@ -87,20 +87,20 @@ class SyncCoordinator {
 
   /// Sync dirty notes for a specific book
   /// Returns result object with sync statistics
-  Future<BulkSyncResult> syncDirtyNotesForBook(int bookId) async {
+  Future<BulkSyncResult> syncDirtyNotesForBook(String bookUuid) async {
     try {
-      debugPrint('🔄 SyncCoordinator: Starting bulk sync for book $bookId...');
+      debugPrint('🔄 SyncCoordinator: Starting bulk sync for book $bookUuid...');
 
       // Get dirty notes for this book
       final dirtyNotes = await (_noteRepository as NoteRepositoryImpl)
-          .getDirtyNotesByBookId(bookId);
+          .getDirtyNotesByBookId(bookUuid);
 
       if (dirtyNotes.isEmpty) {
-        debugPrint('✅ SyncCoordinator: No dirty notes to sync for book $bookId');
+        debugPrint('✅ SyncCoordinator: No dirty notes to sync for book $bookUuid');
         return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
       }
 
-      debugPrint('🔄 SyncCoordinator: Found ${dirtyNotes.length} dirty notes to sync for book $bookId');
+      debugPrint('🔄 SyncCoordinator: Found ${dirtyNotes.length} dirty notes to sync for book $bookUuid');
 
       int successCount = 0;
       int failedCount = 0;
@@ -119,7 +119,7 @@ class SyncCoordinator {
           if (e.toString().contains('404') || e.toString().contains('not found')) {
             try {
               final event = await _eventRepository.getById(note.eventId);
-              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Event book ${event?.bookId} not found on server. Please backup the book first.');
+              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Event book ${event?.bookUuid} not found on server. Please backup the book first.');
             } catch (infoError) {
               debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
             }
@@ -137,10 +137,10 @@ class SyncCoordinator {
         failedEventIds: failedEventIds,
       );
 
-      debugPrint('✅ SyncCoordinator: Bulk sync complete for book $bookId - ${result.success}/${result.total} succeeded, ${result.failed} failed');
+      debugPrint('✅ SyncCoordinator: Bulk sync complete for book $bookUuid - ${result.success}/${result.total} succeeded, ${result.failed} failed');
       return result;
     } catch (e) {
-      debugPrint('❌ SyncCoordinator: Bulk sync for book $bookId failed: $e');
+      debugPrint('❌ SyncCoordinator: Bulk sync for book $bookUuid failed: $e');
       rethrow;
     }
   }

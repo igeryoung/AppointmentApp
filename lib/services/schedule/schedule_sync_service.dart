@@ -151,14 +151,14 @@ class ScheduleSyncService {
 
   /// Auto-sync dirty notes for this book in background
   Future<void> autoSyncDirtyNotes() async {
-    if (_contentService == null || _isSyncing || book.id == null) return;
+    if (_contentService == null || _isSyncing) return;
 
     _setSyncingState(true);
 
     try {
-      debugPrint('🔄 ScheduleSyncService: Auto-syncing dirty notes for book ${book.id}...');
+      debugPrint('🔄 ScheduleSyncService: Auto-syncing dirty notes for book ${book.uuid}...');
 
-      final result = await _contentService!.syncDirtyNotesForBook(book.id!);
+      final result = await _contentService!.syncDirtyNotesForBook(book.uuid);
 
       _setSyncingState(false);
 

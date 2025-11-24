@@ -295,7 +295,7 @@ class ScheduleTestMenuHelper {
   static Future<void> showHeavyLoadTestDialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookUuid,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showHeavyLoadTestDialog(
       context,
@@ -309,7 +309,7 @@ class ScheduleTestMenuHelper {
   static Future<void> showHeavyLoadStage1Dialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookUuid,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showHeavyLoadStage1Dialog(
       context,
@@ -323,7 +323,7 @@ class ScheduleTestMenuHelper {
   static Future<void> showHeavyLoadStage2Dialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookUuid,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showHeavyLoadStage2Dialog(
       context,
@@ -337,7 +337,7 @@ class ScheduleTestMenuHelper {
   static Future<void> showClearAllEventsDialog(
     BuildContext context,
     IDatabaseService dbService,
-    int bookUuid,
+    String bookUuid,
   ) async {
     await ScheduleTestUtils.showClearAllEventsDialog(
       context,

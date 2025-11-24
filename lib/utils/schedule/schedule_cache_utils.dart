@@ -121,7 +121,7 @@ class ScheduleCacheUtils {
         context: context,
         cacheManager: cacheManager,
         dbService: dbService,
-        bookId: bookUuid,
+        bookUuid: bookUuid,
         effectiveDate: effectiveDate,
         onReloadDrawing: onReloadDrawing,
       );

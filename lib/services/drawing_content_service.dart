@@ -295,7 +295,7 @@ class DrawingContentService {
   ///
   /// Does not block, returns immediately
   Future<void> preloadDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
   }) async {
@@ -309,7 +309,7 @@ class DrawingContentService {
       }
 
       final serverDrawings = await _apiClient.batchFetchDrawings(
-        bookId: bookId,
+        bookUuid: bookUuid,
         startDate: startDate,
         endDate: endDate,
         deviceId: credentials.deviceId,

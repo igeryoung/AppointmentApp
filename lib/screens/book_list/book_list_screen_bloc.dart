@@ -237,9 +237,8 @@ class _BookListView extends StatelessWidget {
       context,
       MaterialPageRoute(
         builder: (context) => BlocProvider(
-          // Phase 2: Initialize cubit with bookId (parallel run, old code still active)
-          // This is infrastructure-only, zero behavior change
-          create: (context) => getIt<ScheduleCubit>()..initialize(book.id!),
+          // Initialize cubit with book UUID
+          create: (context) => getIt<ScheduleCubit>()..initialize(book.uuid),
           child: ScheduleScreen(book: book),
         ),
       ),

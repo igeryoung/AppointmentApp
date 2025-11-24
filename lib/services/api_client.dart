@@ -328,7 +328,7 @@ class ApiClient {
 
   /// Batch fetch drawings from server
   Future<List<Map<String, dynamic>>> batchFetchDrawings({
-    required int bookId,
+    required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
     required String deviceId,
@@ -347,7 +347,7 @@ class ApiClient {
           'X-Device-Token': deviceToken,
         },
         body: jsonEncode({
-          'bookId': bookId,
+          'bookUuid': bookUuid,
           'startDate': startDateStr,
           'endDate': endDateStr,
         }),
