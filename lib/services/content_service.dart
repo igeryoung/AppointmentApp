@@ -461,19 +461,19 @@ class ContentService {
 
   /// Sync dirty notes for a specific book
   /// Returns result object with sync statistics
-  Future<BulkSyncResult> syncDirtyNotesForBook(int bookId) async {
+  Future<BulkSyncResult> syncDirtyNotesForBook(String bookUuid) async {
     try {
-      debugPrint('🔄 ContentService: Starting bulk sync for book $bookId...');
+      debugPrint('🔄 ContentService: Starting bulk sync for book $bookUuid...');
 
       // Get dirty notes for this book
-      final dirtyNotes = await _db.getDirtyNotesByBookId(bookId);
+      final dirtyNotes = await _db.getDirtyNotesByBookId(bookUuid);
 
       if (dirtyNotes.isEmpty) {
-        debugPrint('✅ ContentService: No dirty notes to sync for book $bookId');
+        debugPrint('✅ ContentService: No dirty notes to sync for book $bookUuid');
         return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
       }
 
-      debugPrint('🔄 ContentService: Found ${dirtyNotes.length} dirty notes to sync for book $bookId');
+      debugPrint('🔄 ContentService: Found ${dirtyNotes.length} dirty notes to sync for book $bookUuid');
 
       // Get credentials once
       final credentials = await _db.getDeviceCredentials();

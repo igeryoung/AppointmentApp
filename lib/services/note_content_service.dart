@@ -306,7 +306,7 @@ class NoteContentService {
               onProgress?.call(loaded, total);
             }
           } catch (e) {
-            debugPrint('❌ NoteContentService: Batch fetch failed for book $bookId: $e');
+            debugPrint('❌ NoteContentService: Batch fetch failed for book $bookUuid: $e');
           }
         }
       }

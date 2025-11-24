@@ -24,18 +24,18 @@ class BookBackupService {
   }
 
   /// Gather complete book data (book + events + notes + drawings)
-  Future<Map<String, dynamic>> _gatherBookData(int bookId) async {
+  Future<Map<String, dynamic>> _gatherBookData(String bookUuid) async {
     final db = await dbService.database;
 
     // Get book
-    final bookMaps = await db.query('books', where: 'id = ?', whereArgs: [bookId]);
+    final bookMaps = await db.query('books', where: 'book_uuid = ?', whereArgs: [bookUuid]);
     if (bookMaps.isEmpty) {
       throw Exception('Book not found');
     }
     final book = bookMaps.first;
 
     // Get all events for this book
-    final events = await db.query('events', where: 'book_id = ?', whereArgs: [bookId]);
+    final events = await db.query('events', where: 'book_uuid = ?', whereArgs: [bookUuid]);
 
     // Get all notes for these events
     final eventIds = events.map((e) => e['id']).toList();
@@ -44,7 +44,7 @@ class BookBackupService {
         : <Map<String, dynamic>>[];
 
     // Get all schedule drawings for this book
-    final drawings = await db.query('schedule_drawings', where: 'book_id = ?', whereArgs: [bookId]);
+    final drawings = await db.query('schedule_drawings', where: 'book_uuid = ?', whereArgs: [bookUuid]);
 
     return {
       'book': book,
@@ -55,8 +55,8 @@ class BookBackupService {
   }
 
   /// Upload a book to server
-  Future<int> uploadBook(int bookId, {String? customName}) async {
-    debugPrint('📤 Uploading book #$bookId...');
+  Future<int> uploadBook(String bookUuid, {String? customName}) async {
+    debugPrint('📤 Uploading book #$bookUuid...');
 
     // Get server URL
     final serverUrl = await _serverConfigService.getServerUrlOrDefault();
@@ -73,7 +73,7 @@ class BookBackupService {
     final deviceToken = deviceRow['device_token'] as String;
 
     // Gather book data
-    final backupData = await _gatherBookData(bookId);
+    final backupData = await _gatherBookData(bookUuid);
     final bookName = customName ?? backupData['book']['name'] as String;
 
     // Prepare request
@@ -86,7 +86,7 @@ class BookBackupService {
         'X-Device-Token': deviceToken,
       },
       body: jsonEncode({
-        'bookId': bookId,
+        'bookUuid': bookUuid,
         'backupName': bookName,
         'backupData': backupData,
       }),
