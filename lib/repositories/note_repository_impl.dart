@@ -33,30 +33,30 @@ class NoteRepositoryImpl implements INoteRepository {
 
     try {
       final updateMap = Map<String, dynamic>.from(noteMap);
-      final originalStrokesData = updateMap['strokes_data'];
+      final originalPagesData = updateMap['pages_data'];
 
       // Force string conversion to prevent SQLite parameter binding corruption
-      if (originalStrokesData is String) {
-        debugPrint('🔍 SQLite: strokes_data is String, ensuring it stays as String');
-        updateMap['strokes_data'] = originalStrokesData.toString();
+      if (originalPagesData is String) {
+        debugPrint('🔍 SQLite: pages_data is String, ensuring it stays as String');
+        updateMap['pages_data'] = originalPagesData.toString();
       } else {
-        debugPrint('⚠️ SQLite: strokes_data is NOT a String: ${originalStrokesData.runtimeType}');
-        updateMap['strokes_data'] = originalStrokesData.toString();
+        debugPrint('⚠️ SQLite: pages_data is NOT a String: ${originalPagesData.runtimeType}');
+        updateMap['pages_data'] = originalPagesData.toString();
       }
 
-      debugPrint('🔍 SQLite: Final strokes_data type: ${updateMap['strokes_data'].runtimeType}');
-      debugPrint('🔍 SQLite: Final strokes_data length: ${updateMap['strokes_data'].toString().length} chars');
+      debugPrint('🔍 SQLite: Final pages_data type: ${updateMap['pages_data'].runtimeType}');
+      debugPrint('🔍 SQLite: Final pages_data length: ${updateMap['pages_data'].toString().length} chars');
 
-      final strokesDataString = updateMap['strokes_data'] as String;
+      final pagesDataString = updateMap['pages_data'] as String;
       final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
       final isDirtyFlag = updateMap['is_dirty'] ?? 0;
 
       debugPrint('🔍 SQLite: Using raw SQL with explicit string parameter');
       final updatedRows = await db.rawUpdate(
-        'UPDATE notes SET event_id = ?, strokes_data = ?, created_at = ?, updated_at = ?, cached_at = ?, is_dirty = ? WHERE event_id = ?',
+        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, is_dirty = ? WHERE event_id = ?',
         [
           updateMap['event_id'],
-          strokesDataString,
+          pagesDataString,
           updateMap['created_at'],
           updateMap['updated_at'],
           cachedAt,
@@ -70,10 +70,10 @@ class NoteRepositoryImpl implements INoteRepository {
       if (updatedRows == 0) {
         debugPrint('🔍 SQLite: Inserting new note using raw SQL');
         await db.rawInsert(
-          'INSERT INTO notes (event_id, strokes_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?)',
+          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?)',
           [
             updateMap['event_id'],
-            strokesDataString,
+            pagesDataString,
             updateMap['created_at'],
             updateMap['updated_at'],
             cachedAt,
@@ -193,16 +193,16 @@ class NoteRepositoryImpl implements INoteRepository {
       final noteMap = note.toMap();
 
       batch.rawInsert('''
-        INSERT INTO notes (event_id, strokes_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty)
+        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty)
         VALUES (?, ?, ?, ?, ?, 0, ?)
         ON CONFLICT(event_id) DO UPDATE SET
-          strokes_data = excluded.strokes_data,
+          pages_data = excluded.pages_data,
           updated_at = excluded.updated_at,
           cached_at = excluded.cached_at,
           is_dirty = excluded.is_dirty
       ''', [
         eventId,
-        noteMap['strokes_data'],
+        noteMap['pages_data'],
         noteMap['created_at'],
         noteMap['updated_at'],
         cachedAt,
