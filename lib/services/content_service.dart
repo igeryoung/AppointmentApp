@@ -184,7 +184,7 @@ class ContentService {
       // Save to server - use toMap() to serialize properly
       final noteMap = note.toMap();
       final noteData = {
-        'strokesData': noteMap['strokes_data'],
+        'pagesData': noteMap['pages_data'],
       };
 
       // Include event data for auto-creation on server if event doesn't exist
