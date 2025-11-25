@@ -77,8 +77,7 @@ class BookBackupService {
       final bookCreatedAt = _convertTimestamp(bookData['created_at']) ?? DateTime.now();
       final bookUpdatedAt = _convertTimestamp(bookData['updated_at']) ?? bookCreatedAt;
 
-      // Insert or update based on (device_id, book_uuid) - the true unique identifier
-      // Let the server assign a new auto-increment ID if this is a new book
+      // Insert or update based on book_uuid - the primary key
       await db.querySingle(
         '''
         INSERT INTO books (device_id, book_uuid, name, created_at, updated_at, synced_at, version, is_deleted)
@@ -91,7 +90,7 @@ class BookBackupService {
           synced_at = CURRENT_TIMESTAMP,
           version = EXCLUDED.version,
           is_deleted = false
-        RETURNING id
+        RETURNING book_uuid
         ''',
         parameters: {
           'deviceId': deviceId,
