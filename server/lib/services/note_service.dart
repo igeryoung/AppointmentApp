@@ -387,12 +387,12 @@ class NoteService {
       await db.query(
         '''
         INSERT INTO events (
-          id, book_id, device_id, name, record_number, event_type,
+          id, book_uuid, device_id, name, record_number, event_type,
           start_time, end_time, created_at, updated_at,
           is_removed, removal_reason, original_event_id, new_event_id,
           synced_at, version, is_deleted
         ) VALUES (
-          @id, @bookId, @deviceId, @name, @recordNumber, @eventType,
+          @id, @bookUuid, @deviceId, @name, @recordNumber, @eventType,
           @startTime, @endTime, @createdAt, @updatedAt,
           @isRemoved, @removalReason, @originalEventId, @newEventId,
           CURRENT_TIMESTAMP, 1, false
@@ -400,7 +400,7 @@ class NoteService {
         ''',
         parameters: {
           'id': eventId,
-          'bookId': eventData['book_id'],
+          'bookUuid': eventData['book_uuid'],
           'deviceId': deviceId,
           'name': eventData['name'] ?? '',
           'recordNumber': eventData['record_number'],
