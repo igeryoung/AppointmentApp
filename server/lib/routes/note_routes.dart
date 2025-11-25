@@ -218,17 +218,26 @@ class NoteRoutes {
 
       // Parse request body
       final body = await request.readAsString();
+      print('   Request body length: ${body.length} bytes');
       final json = jsonDecode(body) as Map<String, dynamic>;
+      print('   Request JSON keys: ${json.keys.join(", ")}');
+
       // Support both new pagesData and legacy strokesData
       final pagesData = json['pagesData'] as String?;
       final strokesData = json['strokesData'] as String?;
       final version = json['version'] as int?;
       final eventData = json['eventData'] as Map<String, dynamic>?;
 
+      print('   pagesData: ${pagesData != null ? "present (${pagesData.length} chars)" : "null"}');
+      print('   strokesData: ${strokesData != null ? "present (${strokesData.length} chars)" : "null"}');
+      print('   version: $version');
+      print('   eventData: ${eventData != null ? "present" : "null"}');
+
       // Prefer pagesData, fall back to strokesData for backward compatibility
       final notesDataString = pagesData ?? strokesData;
 
       if (notesDataString == null) {
+        print('❌ [400] Missing both pagesData and strokesData in request');
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
