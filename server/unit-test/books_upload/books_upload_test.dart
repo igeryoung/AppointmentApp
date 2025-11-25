@@ -23,7 +23,10 @@ void main() {
 
       expect(validRequest.containsKey('backupName'), isTrue);
       expect(validRequest.containsKey('backupData'), isTrue);
-      expect(validRequest['backupData']['book'].containsKey('book_uuid'), isTrue);
+
+      final backupData = validRequest['backupData'] as Map<String, dynamic>;
+      final book = backupData['book'] as Map<String, dynamic>;
+      expect(book.containsKey('book_uuid'), isTrue);
     });
 
     test('should validate backupData structure', () {
@@ -51,7 +54,9 @@ void main() {
       expect(bookUuid is String, isTrue);
       expect(backupName is String, isTrue);
       expect(backupData is Map, isTrue);
-      expect(backupData['book']['book_uuid'] is String, isTrue);
+
+      final book = backupData['book'] as Map<String, dynamic>;
+      expect(book['book_uuid'] is String, isTrue);
     });
   });
 
