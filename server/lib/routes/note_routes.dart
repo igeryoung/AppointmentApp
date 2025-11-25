@@ -222,6 +222,11 @@ class NoteRoutes {
       final json = jsonDecode(body) as Map<String, dynamic>;
       print('   Request JSON keys: ${json.keys.join(", ")}');
 
+      // Debug: Print raw values and types
+      print('   RAW strokesData type: ${json['strokesData']?.runtimeType}');
+      print('   RAW strokesData value: ${json['strokesData']}');
+      print('   RAW pagesData type: ${json['pagesData']?.runtimeType}');
+
       // Support both new pagesData and legacy strokesData
       final pagesData = json['pagesData'] as String?;
       final strokesData = json['strokesData'] as String?;
