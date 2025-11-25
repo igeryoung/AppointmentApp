@@ -240,7 +240,7 @@ class NoteRoutes {
 
       // Verify device credentials
       if (!await noteService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] POST /api/books/$bookId/events/$eventId/note - Invalid device credentials: deviceId=$deviceId');
+        print('❌ [403] POST /api/books/$bookUuid/events/$eventId/note - Invalid device credentials: deviceId=$deviceId');
         return Response.forbidden(
           jsonEncode({
             'success': false,
