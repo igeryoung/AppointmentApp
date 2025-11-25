@@ -551,7 +551,6 @@ class BookBackupRoutes {
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
 
-      final bookId = json['bookId'] as int;
       final backupName = json['backupName'] as String;
       final backupData = json['backupData'] as Map<String, dynamic>;
 
@@ -574,14 +573,12 @@ class BookBackupRoutes {
       // Upload backup (legacy JSON format)
       final backupId = await backupService.uploadBookBackup(
         deviceId: deviceId,
-        bookId: bookId,
         backupName: backupName,
         backupData: backupData,
       );
 
       _logger.success('Book backup uploaded (legacy JSON)', data: {
         'backupId': backupId,
-        'bookId': bookId,
         'backupName': backupName,
         'deviceId': deviceId,
       });

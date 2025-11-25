@@ -28,7 +28,6 @@ class BookBackupService {
   /// Upload a complete book backup to server (UPSERT based on book_uuid)
   Future<int> uploadBookBackup({
     required String deviceId,
-    required int bookId,
     required String backupName,
     required Map<String, dynamic> backupData,
   }) async {
@@ -47,8 +46,8 @@ class BookBackupService {
     // UPSERT: Insert or update based on (device_id, book_uuid)
     final result = await db.querySingle(
       '''
-      INSERT INTO book_backups (book_id, book_uuid, backup_name, device_id, backup_data, backup_size, created_at)
-      VALUES (@bookId, @bookUuid, @backupName, @deviceId, @backupData::jsonb, @backupSize, CURRENT_TIMESTAMP)
+      INSERT INTO book_backups (book_uuid, backup_name, device_id, backup_data, backup_size, created_at)
+      VALUES (@bookUuid, @backupName, @deviceId, @backupData::jsonb, @backupSize, CURRENT_TIMESTAMP)
       ON CONFLICT (device_id, book_uuid) WHERE is_deleted = false
       DO UPDATE SET
         backup_name = EXCLUDED.backup_name,
@@ -59,7 +58,6 @@ class BookBackupService {
       RETURNING id
       ''',
       parameters: {
-        'bookId': bookId,
         'bookUuid': bookUuid,
         'backupName': backupName,
         'deviceId': deviceId,
@@ -121,7 +119,6 @@ class BookBackupService {
       '''
       SELECT DISTINCT ON (book_uuid)
         id,
-        book_id,
         book_uuid,
         backup_name,
         backup_size,
@@ -136,7 +133,6 @@ class BookBackupService {
 
     return rows.map((row) => {
       'id': row['id'],
-      'bookId': row['book_id'],
       'bookUuid': row['book_uuid'],
       'backupName': row['backup_name'],
       'backupSize': row['backup_size'],
@@ -233,12 +229,12 @@ class BookBackupService {
         await txn.execute(
           Sql.named('''
           INSERT INTO events (
-            id, book_id, book_uuid, device_id, name, record_number, event_type,
+            id, book_uuid, device_id, name, record_number, event_type,
             start_time, end_time, created_at, updated_at,
             is_removed, removal_reason, original_event_id, new_event_id,
             synced_at, version, is_deleted
           ) VALUES (
-            @id, @bookId, @bookUuid, @deviceId, @name, @recordNumber, @eventType,
+            @id, @bookUuid, @deviceId, @name, @recordNumber, @eventType,
             @startTime, @endTime, @createdAt, @updatedAt,
             @isRemoved, @removalReason, @originalEventId, @newEventId,
             CURRENT_TIMESTAMP, @version, @isDeleted
@@ -246,7 +242,6 @@ class BookBackupService {
           '''),
           parameters: {
             'id': event['id'],
-            'bookId': event['book_id'],
             'bookUuid': bookUuid,  // Use book's UUID for foreign key
             'deviceId': deviceId,
             'name': event['name'],
@@ -298,16 +293,15 @@ class BookBackupService {
         await txn.execute(
           Sql.named('''
           INSERT INTO schedule_drawings (
-            id, book_id, book_uuid, device_id, date, view_mode, strokes_data,
+            id, book_uuid, device_id, date, view_mode, strokes_data,
             created_at, updated_at, synced_at, version, is_deleted
           ) VALUES (
-            @id, @bookId, @bookUuid, @deviceId, @date, @viewMode, @strokesData,
+            @id, @bookUuid, @deviceId, @date, @viewMode, @strokesData,
             @createdAt, @updatedAt, CURRENT_TIMESTAMP, @version, @isDeleted
           )
           '''),
           parameters: {
             'id': drawing['id'],
-            'bookId': drawing['book_id'],
             'bookUuid': bookUuid,  // Use book's UUID for foreign key
             'deviceId': deviceId,
             'date': _convertTimestamp(drawing['date']),
@@ -422,12 +416,12 @@ class BookBackupService {
       final result = await db.querySingle(
         '''
         INSERT INTO book_backups (
-          book_id, book_uuid, backup_name, device_id,
+          book_uuid, backup_name, device_id,
           backup_path, backup_size_bytes, backup_type, status,
           created_at
         )
         VALUES (
-          NULL, @bookUuid, @backupName, @deviceId,
+          @bookUuid, @backupName, @deviceId,
           @backupPath, @backupSize, 'full', 'completed',
           @createdAt
         )
@@ -474,7 +468,7 @@ class BookBackupService {
     // Get backup metadata
     final backupMeta = await db.querySingle(
       '''
-      SELECT backup_path, book_id, backup_type
+      SELECT backup_path, backup_type
       FROM book_backups
       WHERE id = @backupId AND device_id = @deviceId AND is_deleted = false
       ''',
@@ -541,7 +535,7 @@ class BookBackupService {
     final rows = await db.queryRows(
       '''
       SELECT
-        id, book_id, book_uuid, backup_name,
+        id, book_uuid, backup_name,
         backup_path, backup_size, backup_size_bytes,
         backup_type, status, created_at, restored_at
       FROM book_backups
@@ -560,7 +554,6 @@ class BookBackupService {
 
       return {
         'id': row['id'],
-        'bookId': row['book_id'],
         'bookUuid': row['book_uuid'],
         'backupName': row['backup_name'],
         'backupType': row['backup_type'] ?? (isFileBased ? 'full' : 'json'),
@@ -669,22 +662,20 @@ class BookBackupService {
       throw Exception('Book not found or access denied');
     }
 
-    final bookId = book['id'] as int;
-
     // Query related data
     final events = await db.queryRows(
-      'SELECT * FROM events WHERE book_id = @bookId ORDER BY id',
-      parameters: {'bookId': bookId},
+      'SELECT * FROM events WHERE book_uuid = @bookUuid ORDER BY id',
+      parameters: {'bookUuid': bookUuid},
     );
 
     final notes = await db.queryRows(
-      'SELECT * FROM notes WHERE event_id IN (SELECT id FROM events WHERE book_id = @bookId) ORDER BY id',
-      parameters: {'bookId': bookId},
+      'SELECT * FROM notes WHERE event_id IN (SELECT id FROM events WHERE book_uuid = @bookUuid) ORDER BY id',
+      parameters: {'bookUuid': bookUuid},
     );
 
     final drawings = await db.queryRows(
-      'SELECT * FROM schedule_drawings WHERE book_id = @bookId ORDER BY id',
-      parameters: {'bookId': bookId},
+      'SELECT * FROM schedule_drawings WHERE book_uuid = @bookUuid ORDER BY id',
+      parameters: {'bookUuid': bookUuid},
     );
 
     print('   Book data: ${events.length} events, ${notes.length} notes, ${drawings.length} drawings');
@@ -744,9 +735,8 @@ class BookBackupService {
       buffer.writeln('-- Events (${events.length})');
       final bookUuid = data['book']['book_uuid'];
       for (final event in events) {
-        buffer.write('INSERT INTO events (id, book_id, book_uuid, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, synced_at, version, is_deleted) VALUES (');
+        buffer.write('INSERT INTO events (id, book_uuid, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, synced_at, version, is_deleted) VALUES (');
         buffer.write('${event['id']}, ');
-        buffer.write('${event['book_id']}, ');
         buffer.write('${escape(bookUuid)}, ');
         buffer.write('${escape(event['device_id'])}, ');
         buffer.write('${escape(event['name'])}, ');
@@ -794,9 +784,8 @@ class BookBackupService {
       buffer.writeln('-- Schedule Drawings (${drawings.length})');
       final bookUuid = data['book']['book_uuid'];
       for (final drawing in drawings) {
-        buffer.write('INSERT INTO schedule_drawings (id, book_id, book_uuid, device_id, date, view_mode, strokes_data, created_at, updated_at, synced_at, version, is_deleted) VALUES (');
+        buffer.write('INSERT INTO schedule_drawings (id, book_uuid, device_id, date, view_mode, strokes_data, created_at, updated_at, synced_at, version, is_deleted) VALUES (');
         buffer.write('${drawing['id']}, ');
-        buffer.write('${drawing['book_id']}, ');
         buffer.write('${escape(bookUuid)}, ');
         buffer.write('${escape(drawing['device_id'])}, ');
         buffer.write('${escape(drawing['date'])}, ');

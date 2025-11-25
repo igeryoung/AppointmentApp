@@ -77,14 +77,27 @@ class BookListController extends ChangeNotifier {
     required String name,
   }) async {
     _setState(_state.copyWith(isLoading: true));
+    Book? createdBook;
+
     try {
+      // Step 1: Create book on server and get UUID
       await repo.create(name);
 
-      // Get the newly created book to auto-register it on server
-      final book = await repo.getByName(name);
-      if (book != null) {
-        // Auto-register book on server (non-blocking)
-        _autoRegister(context, book);
+      // Step 2: Get the newly created book
+      createdBook = await repo.getByName(name);
+
+      // Step 3: Upload book backup to server (REQUIRED - must succeed)
+      if (createdBook != null && backup.available && createdBook.uuid.isNotEmpty) {
+        try {
+          await backup.upload(createdBook.uuid);
+          debugPrint('✅ Book "${createdBook.name}" created and registered on server');
+        } catch (uploadError) {
+          debugPrint('❌ Failed to upload book backup: $uploadError');
+          // ROLLBACK: Delete the local book since server sync failed
+          await repo.delete(createdBook.uuid);
+          debugPrint('🔄 Rolled back local book creation due to server sync failure');
+          throw Exception('Server sync failed: $uploadError');
+        }
       }
 
       await _loadBooks();
