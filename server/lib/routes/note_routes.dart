@@ -54,15 +54,16 @@ class NoteRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _getNote(Request request) async {
     try {
-      // Extract path parameters
-      final bookId = int.tryParse(request.params['bookId'] ?? '');
-      final eventId = int.tryParse(request.params['eventId'] ?? '');
+      // Extract path parameters - bookId is now a UUID string, not an integer
+      final bookUuid = request.params['bookId'] ?? '';
+      final eventIdStr = request.params['eventId'] ?? '';
+      final eventId = int.tryParse(eventIdStr);
 
-      if (bookId == null || eventId == null) {
+      if (bookUuid.isEmpty || eventId == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Invalid bookId or eventId',
+            'message': 'Invalid bookId or eventId. bookId must be a UUID string, eventId must be an integer.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -85,7 +86,7 @@ class NoteRoutes {
 
       // Verify device credentials
       if (!await noteService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] GET /api/books/$bookId/events/$eventId/note - Invalid device credentials: deviceId=$deviceId');
+        print('❌ [403] GET /api/books/$bookUuid/events/$eventId/note - Invalid device credentials: deviceId=$deviceId');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -96,8 +97,8 @@ class NoteRoutes {
       }
 
       // Verify book ownership
-      if (!await noteService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] GET /api/books/$bookId/events/$eventId/note - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId');
+      if (!await noteService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] GET /api/books/$bookUuid/events/$eventId/note - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -108,7 +109,7 @@ class NoteRoutes {
       }
 
       // Verify event belongs to book
-      if (!await noteService.verifyEventInBook(eventId, bookId)) {
+      if (!await noteService.verifyEventInBook(eventId, bookUuid)) {
         return Response.notFound(
           jsonEncode({
             'success': false,
@@ -155,7 +156,7 @@ class NoteRoutes {
   ///     "version": 1,  // Optional: for updates, omit for creates
   ///     "eventData": {  // Optional: event data for auto-creation if event doesn't exist
   ///       "id": 123,
-  ///       "book_id": 7,
+  ///       "book_uuid": "ca44a444-...",
   ///       "name": "Event name",
   ///       "record_number": "REC001",
   ///       "event_type": "appointment",
@@ -176,15 +177,25 @@ class NoteRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _createOrUpdateNote(Request request) async {
     try {
-      // Extract path parameters
-      final bookId = int.tryParse(request.params['bookId'] ?? '');
-      final eventId = int.tryParse(request.params['eventId'] ?? '');
+      // Extract path parameters - bookId is now a UUID string, not an integer
+      final bookUuid = request.params['bookId'] ?? '';
+      final eventIdStr = request.params['eventId'] ?? '';
+      final eventId = int.tryParse(eventIdStr);
 
-      if (bookId == null || eventId == null) {
+      print('📝 POST /api/books/$bookUuid/events/$eventIdStr/note');
+      print('   bookUuid: $bookUuid (length: ${bookUuid.length})');
+      print('   eventId: $eventId (parsed from "$eventIdStr")');
+
+      if (bookUuid.isEmpty || eventId == null) {
+        print('❌ [400] Invalid parameters - bookUuid: "$bookUuid", eventId: $eventId');
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Invalid bookId or eventId',
+            'message': 'Invalid bookId or eventId. bookId must be a UUID string, eventId must be an integer.',
+            'received': {
+              'bookId': bookUuid,
+              'eventId': eventIdStr,
+            },
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -240,8 +251,8 @@ class NoteRoutes {
       }
 
       // Verify book ownership
-      if (!await noteService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] POST /api/books/$bookId/events/$eventId/note - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId');
+      if (!await noteService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] POST /api/books/$bookUuid/events/$eventId/note - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -252,18 +263,18 @@ class NoteRoutes {
       }
 
       // Verify event belongs to book, or create it if eventData is provided
-      if (!await noteService.verifyEventInBook(eventId, bookId)) {
+      if (!await noteService.verifyEventInBook(eventId, bookUuid)) {
         // Event doesn't exist - try to create it if eventData was provided
         if (eventData != null) {
           try {
-            print('📝 Event not found, attempting auto-creation: event=$eventId, book=$bookId');
+            print('📝 Event not found, attempting auto-creation: event=$eventId, bookUuid=$bookUuid');
             await noteService.createEventIfMissing(
               eventData: eventData,
               deviceId: deviceId,
             );
 
             // Verify again after creation
-            if (!await noteService.verifyEventInBook(eventId, bookId)) {
+            if (!await noteService.verifyEventInBook(eventId, bookUuid)) {
               return Response.notFound(
                 jsonEncode({
                   'success': false,
@@ -361,15 +372,16 @@ class NoteRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _deleteNote(Request request) async {
     try {
-      // Extract path parameters
-      final bookId = int.tryParse(request.params['bookId'] ?? '');
-      final eventId = int.tryParse(request.params['eventId'] ?? '');
+      // Extract path parameters - bookId is now a UUID string, not an integer
+      final bookUuid = request.params['bookId'] ?? '';
+      final eventIdStr = request.params['eventId'] ?? '';
+      final eventId = int.tryParse(eventIdStr);
 
-      if (bookId == null || eventId == null) {
+      if (bookUuid.isEmpty || eventId == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Invalid bookId or eventId',
+            'message': 'Invalid bookId or eventId. bookId must be a UUID string, eventId must be an integer.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -392,7 +404,7 @@ class NoteRoutes {
 
       // Verify device credentials
       if (!await noteService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] DELETE /api/books/$bookId/events/$eventId/note - Invalid device credentials: deviceId=$deviceId');
+        print('❌ [403] DELETE /api/books/$bookUuid/events/$eventId/note - Invalid device credentials: deviceId=$deviceId');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -403,8 +415,8 @@ class NoteRoutes {
       }
 
       // Verify book ownership
-      if (!await noteService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] DELETE /api/books/$bookId/events/$eventId/note - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId');
+      if (!await noteService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] DELETE /api/books/$bookUuid/events/$eventId/note - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -415,7 +427,7 @@ class NoteRoutes {
       }
 
       // Verify event belongs to book
-      if (!await noteService.verifyEventInBook(eventId, bookId)) {
+      if (!await noteService.verifyEventInBook(eventId, bookUuid)) {
         return Response.notFound(
           jsonEncode({
             'success': false,
