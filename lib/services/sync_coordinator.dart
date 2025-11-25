@@ -1,163 +1,218 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
-import 'note_content_service.dart';
-import '../repositories/note_repository.dart';
-import '../repositories/note_repository_impl.dart';
-import '../repositories/event_repository.dart';
+import 'sync_service.dart';
+import 'network_service.dart';
+import '../models/sync_models.dart';
 
-/// SyncCoordinator - Coordinates bulk sync operations for notes and drawings
+/// SyncCoordinator - Coordinates automatic background sync for all entities
 ///
 /// Responsibilities:
-/// - Sync all dirty notes to server
-/// - Sync dirty notes for specific book
-/// - Handle sync errors and retries
+/// - Automatic background sync (every 30 seconds)
+/// - Manual sync on demand
+/// - Network connectivity checks
+/// - Sync error handling and retry logic
 /// - Report sync progress and results
 class SyncCoordinator {
-  final NoteContentService _noteContentService;
-  final INoteRepository _noteRepository;
-  final IEventRepository _eventRepository;
+  final SyncService _syncService;
+  final NetworkService _networkService;
 
-  SyncCoordinator(
-    this._noteContentService,
-    this._noteRepository,
-    this._eventRepository,
-  );
+  Timer? _syncTimer;
+  bool _isSyncing = false;
+  DateTime? _lastSyncTime;
+  SyncResult? _lastSyncResult;
+
+  /// Sync interval (default: 30 seconds)
+  final Duration syncInterval;
+
+  SyncCoordinator({
+    required SyncService syncService,
+    required NetworkService networkService,
+    this.syncInterval = const Duration(seconds: 30),
+  })  : _syncService = syncService,
+        _networkService = networkService;
 
   // ===================
-  // Sync Operations
+  // Automatic Sync Control
   // ===================
 
-  /// Sync all dirty notes to server
-  /// Returns result object with sync statistics
-  Future<BulkSyncResult> syncAllDirtyNotes() async {
-    try {
-      debugPrint('🔄 SyncCoordinator: Starting bulk sync of all dirty notes...');
+  /// Start automatic background sync
+  /// Triggers sync at regular intervals
+  void startAutoSync() {
+    if (_syncTimer != null && _syncTimer!.isActive) {
+      debugPrint('⚠️  Auto-sync already running');
+      return;
+    }
 
-      // Get all dirty notes from repository
-      final dirtyNotes = await _noteRepository.getDirtyNotes();
+    debugPrint('🔄 Starting auto-sync (interval: ${syncInterval.inSeconds}s)');
 
-      if (dirtyNotes.isEmpty) {
-        debugPrint('✅ SyncCoordinator: No dirty notes to sync');
-        return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
-      }
+    // Perform initial sync immediately
+    syncNow();
 
-      debugPrint('🔄 SyncCoordinator: Found ${dirtyNotes.length} dirty notes to sync');
+    // Schedule periodic sync
+    _syncTimer = Timer.periodic(syncInterval, (_) async {
+      await syncNow();
+    });
+  }
 
-      int successCount = 0;
-      int failedCount = 0;
-      final List<int> failedEventIds = [];
-
-      // Sync each note
-      for (final note in dirtyNotes) {
-        try {
-          await _noteContentService.syncNote(note.eventId);
-          successCount++;
-        } catch (e) {
-          failedCount++;
-          failedEventIds.add(note.eventId);
-
-          // Log specific error information
-          if (e.toString().contains('404') || e.toString().contains('not found')) {
-            try {
-              final event = await _eventRepository.getById(note.eventId);
-              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Event book ${event?.bookUuid} not found on server. Please backup the book first.');
-            } catch (infoError) {
-              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
-            }
-          } else {
-            debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: $e');
-          }
-          // Continue syncing other notes even if one fails
-        }
-      }
-
-      final result = BulkSyncResult(
-        total: dirtyNotes.length,
-        success: successCount,
-        failed: failedCount,
-        failedEventIds: failedEventIds,
-      );
-
-      debugPrint('✅ SyncCoordinator: Bulk sync complete - ${result.success}/${result.total} succeeded, ${result.failed} failed');
-      return result;
-    } catch (e) {
-      debugPrint('❌ SyncCoordinator: Bulk sync failed: $e');
-      rethrow;
+  /// Stop automatic background sync
+  void stopAutoSync() {
+    if (_syncTimer != null) {
+      _syncTimer!.cancel();
+      _syncTimer = null;
+      debugPrint('🛑 Auto-sync stopped');
     }
   }
 
-  /// Sync dirty notes for a specific book
-  /// Returns result object with sync statistics
-  Future<BulkSyncResult> syncDirtyNotesForBook(String bookUuid) async {
+  /// Check if auto-sync is currently running
+  bool get isAutoSyncActive => _syncTimer != null && _syncTimer!.isActive;
+
+  // ===================
+  // Manual Sync Operations
+  // ===================
+
+  /// Perform sync now (manual trigger)
+  /// Returns true if sync was successful
+  Future<bool> syncNow() async {
+    // Prevent concurrent syncs
+    if (_isSyncing) {
+      debugPrint('⚠️  Sync already in progress, skipping...');
+      return false;
+    }
+
+    _isSyncing = true;
+
     try {
-      debugPrint('🔄 SyncCoordinator: Starting bulk sync for book $bookUuid...');
-
-      // Get dirty notes for this book
-      final dirtyNotes = await (_noteRepository as NoteRepositoryImpl)
-          .getDirtyNotesByBookId(bookUuid);
-
-      if (dirtyNotes.isEmpty) {
-        debugPrint('✅ SyncCoordinator: No dirty notes to sync for book $bookUuid');
-        return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
+      // Check network connectivity
+      final hasConnection = await _networkService.hasConnectivity();
+      if (!hasConnection) {
+        debugPrint('📡 No network connection, skipping sync');
+        _lastSyncResult = SyncResult(
+          success: false,
+          message: 'No network connection',
+          errors: ['Network unavailable'],
+        );
+        return false;
       }
 
-      debugPrint('🔄 SyncCoordinator: Found ${dirtyNotes.length} dirty notes to sync for book $bookUuid');
+      // Perform full sync
+      debugPrint('🔄 Performing full sync...');
+      final result = await _syncService.performFullSync();
 
-      int successCount = 0;
-      int failedCount = 0;
-      final List<int> failedEventIds = [];
+      _lastSyncTime = DateTime.now();
+      _lastSyncResult = result;
 
-      // Sync each note
-      for (final note in dirtyNotes) {
-        try {
-          await _noteContentService.syncNote(note.eventId);
-          successCount++;
-        } catch (e) {
-          failedCount++;
-          failedEventIds.add(note.eventId);
-
-          // Log specific error information
-          if (e.toString().contains('404') || e.toString().contains('not found')) {
-            try {
-              final event = await _eventRepository.getById(note.eventId);
-              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Event book ${event?.bookUuid} not found on server. Please backup the book first.');
-            } catch (infoError) {
-              debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
-            }
-          } else {
-            debugPrint('❌ SyncCoordinator: Failed to sync note ${note.eventId}: $e');
+      if (result.success) {
+        debugPrint('✅ Sync completed successfully');
+        debugPrint('   - Pushed: ${result.pushedChanges}');
+        debugPrint('   - Pulled: ${result.pulledChanges}');
+        debugPrint('   - Conflicts: ${result.conflictsResolved}');
+        return true;
+      } else {
+        debugPrint('❌ Sync failed: ${result.message}');
+        if (result.errors.isNotEmpty) {
+          for (final error in result.errors) {
+            debugPrint('   - $error');
           }
-          // Continue syncing other notes even if one fails
         }
+        return false;
       }
-
-      final result = BulkSyncResult(
-        total: dirtyNotes.length,
-        success: successCount,
-        failed: failedCount,
-        failedEventIds: failedEventIds,
-      );
-
-      debugPrint('✅ SyncCoordinator: Bulk sync complete for book $bookUuid - ${result.success}/${result.total} succeeded, ${result.failed} failed');
-      return result;
     } catch (e) {
-      debugPrint('❌ SyncCoordinator: Bulk sync for book $bookUuid failed: $e');
-      rethrow;
+      debugPrint('❌ Sync error: $e');
+      _lastSyncResult = SyncResult(
+        success: false,
+        message: 'Sync error',
+        errors: [e.toString()],
+      );
+      return false;
+    } finally {
+      _isSyncing = false;
     }
   }
 
-  /// Check if there are any pending changes to sync
-  Future<bool> hasPendingChanges() async {
-    final dirtyNotes = await _noteRepository.getDirtyNotes();
-    return dirtyNotes.isNotEmpty;
+  /// Force sync (ignores sync-in-progress check)
+  /// Use with caution - may cause conflicts
+  Future<bool> forceSyncNow() async {
+    _isSyncing = false; // Reset flag
+    return await syncNow();
   }
 
-  /// Get count of pending changes
-  Future<int> getPendingChangesCount() async {
-    final dirtyNotes = await _noteRepository.getDirtyNotes();
-    return dirtyNotes.length;
+  // ===================
+  // Sync Status & Info
+  // ===================
+
+  /// Check if sync is currently in progress
+  bool get isSyncing => _isSyncing;
+
+  /// Get last sync time
+  DateTime? get lastSyncTime => _lastSyncTime;
+
+  /// Get last sync result
+  SyncResult? get lastSyncResult => _lastSyncResult;
+
+  /// Get time since last sync
+  Duration? get timeSinceLastSync {
+    if (_lastSyncTime == null) return null;
+    return DateTime.now().difference(_lastSyncTime!);
+  }
+
+  /// Check if sync is overdue (hasn't synced in 2x interval)
+  bool get isSyncOverdue {
+    if (_lastSyncTime == null) return true;
+    final timeSince = timeSinceLastSync!;
+    return timeSince > syncInterval * 2;
+  }
+
+  /// Get sync status summary
+  String get syncStatusSummary {
+    if (_isSyncing) {
+      return 'Syncing...';
+    }
+
+    if (_lastSyncTime == null) {
+      return 'Never synced';
+    }
+
+    final timeSince = timeSinceLastSync!;
+    final lastResult = _lastSyncResult;
+
+    if (lastResult == null) {
+      return 'Last sync: ${_formatDuration(timeSince)} ago';
+    }
+
+    if (lastResult.success) {
+      return 'Last sync: ${_formatDuration(timeSince)} ago (${lastResult.pushedChanges} pushed, ${lastResult.pulledChanges} pulled)';
+    } else {
+      return 'Last sync failed: ${_formatDuration(timeSince)} ago';
+    }
+  }
+
+  // ===================
+  // Cleanup
+  // ===================
+
+  /// Dispose resources
+  void dispose() {
+    stopAutoSync();
+  }
+
+  // ===================
+  // Helpers
+  // ===================
+
+  String _formatDuration(Duration duration) {
+    if (duration.inSeconds < 60) {
+      return '${duration.inSeconds}s';
+    } else if (duration.inMinutes < 60) {
+      return '${duration.inMinutes}m';
+    } else if (duration.inHours < 24) {
+      return '${duration.inHours}h';
+    } else {
+      return '${duration.inDays}d';
+    }
   }
 }
 
+/// Legacy support - keep for backwards compatibility
 /// Result object for bulk sync operations
 class BulkSyncResult {
   final int total;

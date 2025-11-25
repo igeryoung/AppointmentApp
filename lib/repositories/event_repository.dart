@@ -89,4 +89,19 @@ abstract class IEventRepository {
     String name,
     String recordNumber,
   );
+
+  // Sync-related methods
+
+  /// Get all events marked as dirty (need sync)
+  Future<List<Event>> getDirtyEvents();
+
+  /// Mark an event as synced (clear dirty flag)
+  Future<void> markEventSynced(int id, DateTime syncedAt);
+
+  /// Apply server change to local database
+  /// Used when pulling changes from server
+  Future<void> applyServerChange(Map<String, dynamic> changeData);
+
+  /// Get event by server ID (used for sync)
+  Future<Event?> getByServerId(int serverId);
 }

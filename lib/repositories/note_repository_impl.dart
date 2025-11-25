@@ -219,4 +219,45 @@ class NoteRepositoryImpl implements INoteRepository {
     final db = await _getDatabaseFn();
     await db.delete('notes');
   }
+
+  @override
+  Future<void> markNoteSynced(int eventId, DateTime syncedAt) async {
+    final db = await _getDatabaseFn();
+    await db.update(
+      'notes',
+      {
+        'is_dirty': 0,
+        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
+      },
+      where: 'event_id = ?',
+      whereArgs: [eventId],
+    );
+  }
+
+  @override
+  Future<void> applyServerChange(Map<String, dynamic> changeData) async {
+    final db = await _getDatabaseFn();
+    final eventId = changeData['event_id'] as int;
+
+    // Check if note exists locally
+    final existing = await getCached(eventId);
+
+    final syncChangeData = Map<String, dynamic>.from(changeData);
+    syncChangeData['is_dirty'] = 0; // Server data is not dirty
+
+    if (existing == null) {
+      // Insert new note from server
+      await db.insert('notes', syncChangeData);
+    } else {
+      // Update existing note with server data
+      final updateData = Map<String, dynamic>.from(syncChangeData);
+      updateData.remove('id');
+      await db.update(
+        'notes',
+        updateData,
+        where: 'event_id = ?',
+        whereArgs: [eventId],
+      );
+    }
+  }
 }

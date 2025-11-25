@@ -77,7 +77,13 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     final db = await getDatabaseFn();
     final now = DateTime.now();
 
-    final eventToCreate = event.copyWith(createdAt: now, updatedAt: now);
+    // Mark as dirty and set version to 1 for new events
+    final eventToCreate = event.copyWith(
+      createdAt: now,
+      updatedAt: now,
+      version: 1,
+      isDirty: true,
+    );
     final id = await insert(eventToCreate.toMap());
 
     // Create associated empty note
@@ -96,7 +102,12 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     if (event.id == null) throw ArgumentError('Event ID cannot be null');
 
     final now = DateTime.now();
-    final updatedEvent = event.copyWith(updatedAt: now);
+    // Increment version and mark as dirty for updates
+    final updatedEvent = event.copyWith(
+      updatedAt: now,
+      version: event.version + 1,
+      isDirty: true,
+    );
     final updateData = toMap(updatedEvent);
     updateData.remove('id');
 
@@ -107,7 +118,24 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<void> delete(int id) => deleteById(id);
+  Future<void> delete(int id) async {
+    // Perform soft delete: mark as deleted and dirty for sync
+    final db = await getDatabaseFn();
+    final event = await getById(id);
+    if (event == null) throw Exception('Event not found');
+
+    await db.update(
+      'events',
+      {
+        'is_deleted': 1,
+        'is_dirty': 1,
+        'version': event.version + 1,
+        'updated_at': (DateTime.now().millisecondsSinceEpoch ~/ 1000),
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
 
   /// Soft remove an event with a reason
   @override
@@ -300,5 +328,60 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
       whereArgs: [bookUuid, name, recordNumber],
       orderBy: 'start_time DESC',
     );
+  }
+
+  // Sync-related methods
+
+  @override
+  Future<List<Event>> getDirtyEvents() async {
+    return query(
+      where: 'is_dirty = ?',
+      whereArgs: [1],
+      orderBy: 'updated_at ASC',
+    );
+  }
+
+  @override
+  Future<void> markEventSynced(int id, DateTime syncedAt) async {
+    final db = await getDatabaseFn();
+    await db.update(
+      'events',
+      {
+        'is_dirty': 0,
+        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  @override
+  Future<void> applyServerChange(Map<String, dynamic> changeData) async {
+    final db = await getDatabaseFn();
+    final id = changeData['id'] as int;
+
+    // Check if event exists locally
+    final existing = await getById(id);
+
+    if (existing == null) {
+      // Insert new event from server
+      await db.insert('events', changeData);
+    } else {
+      // Update existing event with server data
+      final updateData = Map<String, dynamic>.from(changeData);
+      updateData.remove('id');
+      updateData['is_dirty'] = 0; // Server data is not dirty
+      await db.update(
+        'events',
+        updateData,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
+  }
+
+  @override
+  Future<Event?> getByServerId(int serverId) async {
+    return getById(serverId);
   }
 }
