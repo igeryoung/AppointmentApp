@@ -12,19 +12,18 @@ void main() {
 
     test('should validate required fields in request body', () {
       final validRequest = {
-        'bookId': 1,
         'backupName': 'Test Backup',
         'backupData': {
-          'book': {},
+          'book': {'book_uuid': '550e8400-e29b-41d4-a716-446655440000'},
           'events': [],
           'notes': [],
           'drawings': [],
         },
       };
 
-      expect(validRequest.containsKey('bookId'), isTrue);
       expect(validRequest.containsKey('backupName'), isTrue);
       expect(validRequest.containsKey('backupData'), isTrue);
+      expect(validRequest['backupData']['book'].containsKey('book_uuid'), isTrue);
     });
 
     test('should validate backupData structure', () {
@@ -42,13 +41,17 @@ void main() {
     });
 
     test('should validate data types', () {
-      final bookId = 123;
+      final bookUuid = '550e8400-e29b-41d4-a716-446655440000';
       final backupName = 'My Backup';
-      final backupData = {'book': {}, 'events': []};
+      final backupData = {
+        'book': {'book_uuid': bookUuid},
+        'events': []
+      };
 
-      expect(bookId is int, isTrue);
+      expect(bookUuid is String, isTrue);
       expect(backupName is String, isTrue);
       expect(backupData is Map, isTrue);
+      expect(backupData['book']['book_uuid'] is String, isTrue);
     });
   });
 
@@ -118,9 +121,12 @@ void main() {
 
     test('should serialize complex data', () {
       final complexData = {
-        'book': {'id': 1, 'name': 'Test'},
+        'book': {
+          'book_uuid': '550e8400-e29b-41d4-a716-446655440000',
+          'name': 'Test'
+        },
         'events': [
-          {'id': 1, 'name': 'Event 1'}
+          {'id': 1, 'name': 'Event 1', 'book_uuid': '550e8400-e29b-41d4-a716-446655440000'}
         ],
         'notes': [
           {'id': 1, 'strokes_data': '[{"x":1,"y":2}]'}
@@ -131,7 +137,8 @@ void main() {
       expect(jsonString, isNotEmpty);
 
       final decoded = jsonDecode(jsonString);
-      expect(decoded['book']['id'], equals(1));
+      expect(decoded['book']['book_uuid'], equals('550e8400-e29b-41d4-a716-446655440000'));
+      expect(decoded['book']['name'], equals('Test'));
     });
   });
 }

@@ -83,17 +83,17 @@ psql -p "$DB_PORT" -d "$DB_NAME" -c "
   );
 " > /dev/null
 
-BOOK_ID=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT id FROM books WHERE device_id = '$DEVICE_ID' ORDER BY id DESC LIMIT 1;
+BOOK_UUID=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
+  SELECT book_uuid FROM books WHERE device_id = '$DEVICE_ID' ORDER BY created_at DESC LIMIT 1;
 " | tr -d ' ')
 
-echo "Created Book #$BOOK_ID"
+echo "Created Book UUID: $BOOK_UUID"
 
 # Create 10 events
 psql -p "$DB_PORT" -d "$DB_NAME" -c "
-  INSERT INTO events (book_id, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, synced_at, version, is_deleted)
+  INSERT INTO events (book_uuid, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, synced_at, version, is_deleted)
   SELECT
-    $BOOK_ID,
+    '$BOOK_UUID',
     '$DEVICE_ID',
     'Test Event ' || i,
     'REC' || LPAD(i::text, 3, '0'),
@@ -109,14 +109,14 @@ psql -p "$DB_PORT" -d "$DB_NAME" -c "
 " > /dev/null
 
 EVENT_IDS=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT array_agg(id ORDER BY id) FROM events WHERE book_id = $BOOK_ID;
+  SELECT array_agg(id ORDER BY id) FROM events WHERE book_uuid = '$BOOK_UUID';
 " | tr -d ' ')
 
 echo "Created 10 events"
 
 # Create 5 notes for the first 5 events
 FIRST_EVENT_ID=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT id FROM events WHERE book_id = $BOOK_ID ORDER BY id LIMIT 1;
+  SELECT id FROM events WHERE book_uuid = '$BOOK_UUID' ORDER BY id LIMIT 1;
 " | tr -d ' ')
 
 psql -p "$DB_PORT" -d "$DB_NAME" -c "
@@ -130,21 +130,21 @@ psql -p "$DB_PORT" -d "$DB_NAME" -c "
     CURRENT_TIMESTAMP,
     1,
     false
-  FROM events WHERE book_id = $BOOK_ID ORDER BY id LIMIT 5;
+  FROM events WHERE book_uuid = '$BOOK_UUID' ORDER BY id LIMIT 5;
 " > /dev/null
 
 echo "Created 5 notes"
 
 # Create 2 drawings
 psql -p "$DB_PORT" -d "$DB_NAME" -c "
-  INSERT INTO schedule_drawings (book_id, device_id, date, view_mode, strokes_data, created_at, updated_at, synced_at, version, is_deleted)
+  INSERT INTO schedule_drawings (book_uuid, device_id, date, view_mode, strokes_data, created_at, updated_at, synced_at, version, is_deleted)
   VALUES
-    ($BOOK_ID, '$DEVICE_ID', '2025-11-15', 1, '{\"strokes\": []}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, false),
-    ($BOOK_ID, '$DEVICE_ID', '2025-11-16', 1, '{\"strokes\": []}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, false);
+    ('$BOOK_UUID', '$DEVICE_ID', '2025-11-15', 1, '{\"strokes\": []}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, false),
+    ('$BOOK_UUID', '$DEVICE_ID', '2025-11-16', 1, '{\"strokes\": []}', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, false);
 " > /dev/null
 
 echo "Created 2 drawings"
-print_test "Test data created" "$BOOK_ID" "$BOOK_ID"
+print_test "Test data created" "$BOOK_UUID" "$BOOK_UUID"
 echo ""
 
 echo -e "${BLUE}📋 Step 4: Create File-Based Backup${NC}"
@@ -290,14 +290,14 @@ echo -e "${BLUE}📋 Step 9: Restore Book from Backup${NC}"
 echo "-------------------------------------"
 # First, delete the original book to test full restore
 psql -p "$DB_PORT" -d "$DB_NAME" -c "
-  DELETE FROM books WHERE id = $BOOK_ID;
+  DELETE FROM books WHERE book_uuid = '$BOOK_UUID';
 " > /dev/null
 
-echo "Original book deleted (Book #$BOOK_ID)"
+echo "Original book deleted (Book UUID: $BOOK_UUID)"
 
 # Verify book is gone
 BOOK_COUNT=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT COUNT(*) FROM books WHERE id = $BOOK_ID;
+  SELECT COUNT(*) FROM books WHERE book_uuid = '$BOOK_UUID';
 " | tr -d ' ')
 
 print_test "Book deleted successfully" "0" "$BOOK_COUNT"
@@ -330,36 +330,36 @@ echo -e "${BLUE}📋 Step 10: Verify Restored Data${NC}"
 echo "----------------------------------"
 # Check book exists
 RESTORED_BOOK=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT id, name FROM books WHERE id = $BOOK_ID;
+  SELECT book_uuid, name FROM books WHERE book_uuid = '$BOOK_UUID';
 ")
 
-print_test "Book restored" "$BOOK_ID" "$RESTORED_BOOK"
+print_test "Book restored" "$BOOK_UUID" "$RESTORED_BOOK"
 print_test "Book name correct" "Test Book for Backup" "$RESTORED_BOOK"
 
 # Check event count
 EVENT_COUNT=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT COUNT(*) FROM events WHERE book_id = $BOOK_ID;
+  SELECT COUNT(*) FROM events WHERE book_uuid = '$BOOK_UUID';
 " | tr -d ' ')
 
 print_test "Event count" "10" "$EVENT_COUNT"
 
 # Check note count
 NOTE_COUNT=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT COUNT(*) FROM notes WHERE event_id IN (SELECT id FROM events WHERE book_id = $BOOK_ID);
+  SELECT COUNT(*) FROM notes WHERE event_id IN (SELECT id FROM events WHERE book_uuid = '$BOOK_UUID');
 " | tr -d ' ')
 
 print_test "Note count" "5" "$NOTE_COUNT"
 
 # Check drawing count
 DRAWING_COUNT=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT COUNT(*) FROM schedule_drawings WHERE book_id = $BOOK_ID;
+  SELECT COUNT(*) FROM schedule_drawings WHERE book_uuid = '$BOOK_UUID';
 " | tr -d ' ')
 
 print_test "Drawing count" "2" "$DRAWING_COUNT"
 
 # Check specific event data
 FIRST_EVENT=$(psql -p "$DB_PORT" -d "$DB_NAME" -t -c "
-  SELECT name FROM events WHERE book_id = $BOOK_ID ORDER BY id LIMIT 1;
+  SELECT name FROM events WHERE book_uuid = '$BOOK_UUID' ORDER BY id LIMIT 1;
 " | tr -d ' ')
 
 print_test "Event data integrity" "TestEvent1" "$FIRST_EVENT"
