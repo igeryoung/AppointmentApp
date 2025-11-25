@@ -25,4 +25,10 @@ abstract class INoteRepository {
 
   /// Get all cached notes
   Future<List<Note>> getAllCached();
+
+  /// Mark a note as synced with timestamp (similar to markClean but with syncedAt)
+  Future<void> markNoteSynced(int eventId, DateTime syncedAt);
+
+  /// Apply server change to local database
+  Future<void> applyServerChange(Map<String, dynamic> changeData);
 }

@@ -48,9 +48,11 @@ mixin ScheduleDrawingCacheMixin {
     final db = await database;
     final now = DateTime.now();
     final normalizedDate = DateTime(drawing.date.year, drawing.date.month, drawing.date.day);
+    // Mark as dirty for sync
     final updatedDrawing = drawing.copyWith(
       date: normalizedDate,
       updatedAt: now,
+      isDirty: true,
     );
 
     final drawingMap = updatedDrawing.toMap();
@@ -191,5 +193,68 @@ mixin ScheduleDrawingCacheMixin {
 
     await batch.commit(noResult: true);
     debugPrint('✅ batchSaveCachedDrawings: Saved ${drawings.length} drawings');
+  }
+
+  // Sync-related methods
+
+  /// Get all drawings marked as dirty (need sync)
+  Future<List<ScheduleDrawing>> getDirtyDrawings() async {
+    final db = await database;
+    final maps = await db.query(
+      'schedule_drawings',
+      where: 'is_dirty = ?',
+      whereArgs: [1],
+      orderBy: 'updated_at ASC',
+    );
+
+    final dirtyDrawings = maps.map((map) => ScheduleDrawing.fromMap(map)).toList();
+    debugPrint('✅ getDirtyDrawings: Found ${dirtyDrawings.length} dirty drawings');
+    return dirtyDrawings;
+  }
+
+  /// Mark a drawing as synced (clear dirty flag)
+  Future<void> markDrawingSynced(int id, DateTime syncedAt) async {
+    final db = await database;
+    await db.update(
+      'schedule_drawings',
+      {
+        'is_dirty': 0,
+        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
+      },
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  /// Apply server change to local database
+  Future<void> applyServerDrawingChange(Map<String, dynamic> changeData) async {
+    final db = await database;
+    final id = changeData['id'] as int;
+
+    // Check if drawing exists locally by id
+    final existing = await db.query(
+      'schedule_drawings',
+      where: 'id = ?',
+      whereArgs: [id],
+      limit: 1,
+    );
+
+    final syncChangeData = Map<String, dynamic>.from(changeData);
+    syncChangeData['is_dirty'] = 0; // Server data is not dirty
+
+    if (existing.isEmpty) {
+      // Insert new drawing from server
+      await db.insert('schedule_drawings', syncChangeData);
+    } else {
+      // Update existing drawing with server data
+      final updateData = Map<String, dynamic>.from(syncChangeData);
+      updateData.remove('id');
+      await db.update(
+        'schedule_drawings',
+        updateData,
+        where: 'id = ?',
+        whereArgs: [id],
+      );
+    }
   }
 }

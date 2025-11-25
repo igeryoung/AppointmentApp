@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'http_client_factory.dart';
+import '../models/sync_models.dart';
 
 /// HTTP API client for communicating with sync server
 class ApiClient {
@@ -482,6 +483,148 @@ class ApiClient {
       }
     } catch (e) {
       debugPrint('❌ Device registration failed: $e');
+      rethrow;
+    }
+  }
+
+  // ===================
+  // Generic Sync API
+  // ===================
+
+  /// Push local changes to server
+  /// Sends local changes and returns server acknowledgment
+  Future<SyncResponse> pushChanges(SyncRequest request) async {
+    try {
+      debugPrint('🔄 Pushing ${request.localChanges?.length ?? 0} changes to server');
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/sync/push'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': request.deviceId,
+          'X-Device-Token': request.deviceToken,
+        },
+        body: jsonEncode(request.toJson()),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final syncResponse = SyncResponse.fromJson(json);
+        debugPrint('✅ Push successful: ${syncResponse.changesApplied} changes applied');
+        if (syncResponse.conflicts != null && syncResponse.conflicts!.isNotEmpty) {
+          debugPrint('⚠️  ${syncResponse.conflicts!.length} conflicts detected');
+        }
+        return syncResponse;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 409) {
+        // Conflicts detected
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return SyncResponse.fromJson(json);
+      } else {
+        throw ApiException(
+          'Push changes failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Push changes failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Pull server changes
+  /// Retrieves changes from server since last sync
+  Future<SyncResponse> pullChanges(SyncRequest request) async {
+    try {
+      debugPrint('🔄 Pulling changes from server (lastSync: ${request.lastSyncAt})');
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/sync/pull'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': request.deviceId,
+          'X-Device-Token': request.deviceToken,
+        },
+        body: jsonEncode(request.toJson()),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final syncResponse = SyncResponse.fromJson(json);
+        debugPrint('✅ Pull successful: ${syncResponse.serverChanges?.length ?? 0} changes received');
+        return syncResponse;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Pull changes failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Pull changes failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Perform full bidirectional sync
+  /// Pushes local changes and pulls server changes in a single transaction
+  Future<SyncResponse> fullSync(SyncRequest request) async {
+    try {
+      debugPrint('🔄 Starting full sync (${request.localChanges?.length ?? 0} local changes)');
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/sync/full'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': request.deviceId,
+          'X-Device-Token': request.deviceToken,
+        },
+        body: jsonEncode(request.toJson()),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final syncResponse = SyncResponse.fromJson(json);
+        debugPrint('✅ Full sync successful:');
+        debugPrint('   - Applied: ${syncResponse.changesApplied} local changes');
+        debugPrint('   - Received: ${syncResponse.serverChanges?.length ?? 0} server changes');
+        if (syncResponse.conflicts != null && syncResponse.conflicts!.isNotEmpty) {
+          debugPrint('   - Conflicts: ${syncResponse.conflicts!.length}');
+        }
+        return syncResponse;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 409) {
+        // Conflicts detected
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final syncResponse = SyncResponse.fromJson(json);
+        debugPrint('⚠️  Full sync completed with conflicts: ${syncResponse.conflicts!.length}');
+        return syncResponse;
+      } else {
+        throw ApiException(
+          'Full sync failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Full sync failed: $e');
       rethrow;
     }
   }

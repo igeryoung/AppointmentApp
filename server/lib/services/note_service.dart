@@ -63,24 +63,25 @@ class NoteService {
 
   /// Verify that a book belongs to the specified device
   /// Returns true if book exists and is owned by the device
-  Future<bool> verifyBookOwnership(String deviceId, int bookId) async {
+  /// bookUuid: UUID string of the book
+  Future<bool> verifyBookOwnership(String deviceId, String bookUuid) async {
     try {
       final row = await db.querySingle(
-        'SELECT id FROM books WHERE id = @bookId AND device_id = @deviceId AND is_deleted = false',
-        parameters: {'bookId': bookId, 'deviceId': deviceId},
+        'SELECT book_uuid FROM books WHERE book_uuid = @bookUuid AND device_id = @deviceId AND is_deleted = false',
+        parameters: {'bookUuid': bookUuid, 'deviceId': deviceId},
       );
 
       if (row == null) {
         // Check if book exists but with different device_id
         final anyBook = await db.querySingle(
-          'SELECT device_id, is_deleted FROM books WHERE id = @bookId',
-          parameters: {'bookId': bookId},
+          'SELECT device_id, is_deleted FROM books WHERE book_uuid = @bookUuid',
+          parameters: {'bookUuid': bookUuid},
         );
 
         if (anyBook != null) {
-          print('⚠️  Book ownership mismatch: bookId=$bookId, expected deviceId=$deviceId, actual deviceId=${anyBook['device_id']}, is_deleted=${anyBook['is_deleted']}');
+          print('⚠️  Book ownership mismatch: bookUuid=$bookUuid, expected deviceId=$deviceId, actual deviceId=${anyBook['device_id']}, is_deleted=${anyBook['is_deleted']}');
         } else {
-          print('⚠️  Book not found: bookId=$bookId');
+          print('⚠️  Book not found: bookUuid=$bookUuid');
         }
       }
 
@@ -93,12 +94,18 @@ class NoteService {
 
   /// Verify that an event belongs to the specified book
   /// Returns true if event exists and belongs to the book
-  Future<bool> verifyEventInBook(int eventId, int bookId) async {
+  /// bookUuid: UUID string of the book
+  Future<bool> verifyEventInBook(int eventId, String bookUuid) async {
     try {
       final row = await db.querySingle(
-        'SELECT id FROM events WHERE id = @eventId AND book_id = @bookId AND is_deleted = false',
-        parameters: {'eventId': eventId, 'bookId': bookId},
+        'SELECT id FROM events WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false',
+        parameters: {'eventId': eventId, 'bookUuid': bookUuid},
       );
+
+      if (row == null) {
+        print('⚠️  Event not found in book: eventId=$eventId, bookUuid=$bookUuid');
+      }
+
       return row != null;
     } catch (e) {
       print('❌ Event-book relationship verification failed: $e');

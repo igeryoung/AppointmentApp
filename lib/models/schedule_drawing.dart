@@ -17,6 +17,8 @@ class ScheduleDrawing {
   final int version; // Optimistic locking version
   final DateTime createdAt;
   final DateTime updatedAt;
+  final DateTime? syncedAt; // Last sync timestamp
+  final bool isDirty; // Marks drawing as needing sync to server
 
   const ScheduleDrawing({
     this.id,
@@ -27,6 +29,8 @@ class ScheduleDrawing {
     this.version = 1,
     required this.createdAt,
     required this.updatedAt,
+    this.syncedAt,
+    this.isDirty = true,
   });
 
   ScheduleDrawing copyWith({
@@ -38,6 +42,8 @@ class ScheduleDrawing {
     int? version,
     DateTime? createdAt,
     DateTime? updatedAt,
+    DateTime? syncedAt,
+    bool? isDirty,
   }) {
     return ScheduleDrawing(
       id: id ?? this.id,
@@ -48,6 +54,8 @@ class ScheduleDrawing {
       version: version ?? this.version,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      syncedAt: syncedAt ?? this.syncedAt,
+      isDirty: isDirty ?? this.isDirty,
     );
   }
 
@@ -61,6 +69,8 @@ class ScheduleDrawing {
       'version': version,
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
+      'synced_at': syncedAt != null ? syncedAt!.millisecondsSinceEpoch ~/ 1000 : null,
+      'is_dirty': isDirty ? 1 : 0,
     };
   }
 
@@ -91,6 +101,9 @@ class ScheduleDrawing {
       return fallback;
     }
 
+    final syncedAtValue = map['syncedAt'] ?? map['synced_at'];
+    final isDirtyValue = map['isDirty'] ?? map['is_dirty'];
+
     return ScheduleDrawing(
       id: map['id']?.toInt(),
       bookUuid: (map['bookUuid'] ?? map['book_uuid']) as String? ?? '',
@@ -109,6 +122,12 @@ class ScheduleDrawing {
         map['updatedAt'] ?? map['updated_at'],
         fallback: DateTime.now(),
       ),
+      syncedAt: syncedAtValue != null
+          ? parseTimestamp(syncedAtValue, fallback: DateTime.now())
+          : null,
+      isDirty: isDirtyValue != null
+          ? (isDirtyValue is int ? isDirtyValue == 1 : isDirtyValue as bool)
+          : true,
     );
   }
 
