@@ -10,7 +10,6 @@ import {
 } from './types';
 
 interface BookColumnProps {
-  bookName: string;
   events: Event[];
   slotHeight: number;
   columnWidth: number;
@@ -135,7 +134,8 @@ const calculateEventPositions = (
 
   // Step 6: Convert to PositionedEvent with pixel positions
   return eventsWithMeta.map((event, index) => {
-    const eventWidth = columnWidth / event.maxConcurrent;
+    // Default event width is 1/4 of column width
+    const eventWidth = columnWidth / 4;
 
     return {
       event,
@@ -149,7 +149,6 @@ const calculateEventPositions = (
 };
 
 export const BookColumn: React.FC<BookColumnProps> = ({
-  bookName,
   events,
   slotHeight,
   columnWidth,
@@ -167,24 +166,6 @@ export const BookColumn: React.FC<BookColumnProps> = ({
         position: 'relative',
       }}
     >
-      {/* Book name header */}
-      <div
-        style={{
-          position: 'sticky',
-          top: 0,
-          zIndex: 100,
-          backgroundColor: '#f8fafc',
-          borderBottom: '2px solid #3b82f6',
-          padding: '12px 8px',
-          textAlign: 'center',
-          fontWeight: 600,
-          fontSize: '14px',
-          color: '#1e293b',
-        }}
-      >
-        {bookName}
-      </div>
-
       {/* Grid background with slots */}
       <div style={{ position: 'relative', height: `${totalHeight}px` }}>
         {/* Grid lines */}

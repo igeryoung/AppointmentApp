@@ -167,7 +167,7 @@ export const TodayOverview: React.FC = () => {
   return (
     <div style={{ padding: '24px', height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Header */}
-      <div style={{ marginBottom: '24px' }}>
+      <div style={{ marginBottom: '24px', flexShrink: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '8px' }}>
           <Calendar size={28} color="#3b82f6" />
           <h1 style={{ fontSize: '24px', fontWeight: 700, color: '#1e293b', margin: 0 }}>
@@ -180,7 +180,7 @@ export const TodayOverview: React.FC = () => {
       </div>
 
       {/* Book Selector */}
-      <div style={{ marginBottom: '20px' }}>
+      <div style={{ marginBottom: '20px', flexShrink: 0 }}>
         <BookSelector
           books={books}
           selectedBookUuids={selectedBookUuids}
@@ -188,8 +188,19 @@ export const TodayOverview: React.FC = () => {
         />
       </div>
 
-      {/* Schedule Grid */}
-      <div ref={gridContainerRef} style={{ flex: 1, minHeight: 0 }}>
+      {/* Schedule Grid - Fixed height container with overflow */}
+      <div
+        ref={gridContainerRef}
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflow: 'auto',
+          border: '1px solid #e5e7eb',
+          borderRadius: '8px',
+          backgroundColor: 'white',
+          boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06)',
+        }}
+      >
         {loading ? (
           <div
             style={{
