@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useEffect } from 'react';
 import { TimeColumn } from './TimeColumn';
 import { BookColumn } from './BookColumn';
 import { BookWithEvents } from './types';
@@ -17,6 +17,38 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
   // Book header height matches BookColumn header
   const bookHeaderHeight = 44; // 12px padding top + 12px padding bottom + ~20px text height
 
+  // Refs for scroll sync
+  const headerScrollRef = useRef<HTMLDivElement>(null);
+  const bodyScrollRef = useRef<HTMLDivElement>(null);
+
+  // Sync scroll between header and body
+  useEffect(() => {
+    const headerScroll = headerScrollRef.current;
+    const bodyScroll = bodyScrollRef.current;
+
+    if (!headerScroll || !bodyScroll) return;
+
+    const syncHeaderScroll = () => {
+      if (bodyScroll && headerScroll.scrollLeft !== bodyScroll.scrollLeft) {
+        bodyScroll.scrollLeft = headerScroll.scrollLeft;
+      }
+    };
+
+    const syncBodyScroll = () => {
+      if (headerScroll && bodyScroll.scrollLeft !== headerScroll.scrollLeft) {
+        headerScroll.scrollLeft = bodyScroll.scrollLeft;
+      }
+    };
+
+    headerScroll.addEventListener('scroll', syncHeaderScroll);
+    bodyScroll.addEventListener('scroll', syncBodyScroll);
+
+    return () => {
+      headerScroll.removeEventListener('scroll', syncHeaderScroll);
+      bodyScroll.removeEventListener('scroll', syncBodyScroll);
+    };
+  }, []);
+
   return (
     <div
       className="schedule-grid-container"
@@ -28,7 +60,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
     >
       {/* Header row - aligns time column placeholder with book headers */}
       <div style={{ display: 'flex', flexShrink: 0 }}>
-        {/* Placeholder header for time column - maintains alignment */}
+        {/* Placeholder header for time column - sticky */}
         <div
           style={{
             width: '60px',
@@ -37,16 +69,22 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
             borderBottom: '2px solid #e5e7eb',
             backgroundColor: '#f8fafc',
             flexShrink: 0,
+            position: 'sticky',
+            left: 0,
+            zIndex: 20,
           }}
         />
 
-        {/* Book headers container */}
+        {/* Book headers container - scrollable */}
         <div
+          ref={headerScrollRef}
           style={{
             display: 'flex',
             flex: 1,
             overflowX: 'auto',
             overflowY: 'hidden',
+            scrollbarWidth: 'none', // Hide scrollbar on header
+            msOverflowStyle: 'none', // Hide scrollbar on IE
           }}
         >
           {booksWithEvents.length === 0 ? (
@@ -90,12 +128,23 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
       </div>
 
       {/* Schedule body - time column + book columns */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0 }}>
-        {/* Time column (fixed on left) */}
-        <TimeColumn slotHeight={slotHeight} />
-
-        {/* Book columns (horizontal scrollable) */}
+      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
+        {/* Time column - sticky on left */}
         <div
+          style={{
+            position: 'sticky',
+            left: 0,
+            zIndex: 10,
+            backgroundColor: 'white',
+            flexShrink: 0,
+          }}
+        >
+          <TimeColumn slotHeight={slotHeight} />
+        </div>
+
+        {/* Book columns - horizontal scrollable */}
+        <div
+          ref={bodyScrollRef}
           className="book-columns-scroll"
           style={{
             display: 'flex',

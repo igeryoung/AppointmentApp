@@ -188,13 +188,15 @@ export const TodayOverview: React.FC = () => {
         />
       </div>
 
-      {/* Schedule Grid - Fixed height container with overflow */}
+      {/* Schedule Grid - Fixed width container with constrained overflow */}
       <div
         ref={gridContainerRef}
         style={{
           flex: 1,
           minHeight: 0,
-          overflow: 'auto',
+          width: '100%',
+          maxWidth: 'calc(100vw - 280px - 48px)', // viewport - sidebar - padding
+          overflow: 'hidden', // Prevent container from expanding horizontally
           border: '1px solid #e5e7eb',
           borderRadius: '8px',
           backgroundColor: 'white',
