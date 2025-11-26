@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Sidebar } from './components/Sidebar';
 import { Login } from './pages/Login';
 import { Overview } from './pages/Overview';
+import { TodayOverview } from './pages/TodayOverview';
 import { Books } from './pages/Books';
 import { EventsAndNotes } from './pages/EventsAndNotes';
 import { EventDetail } from './pages/EventDetail';
@@ -62,6 +63,16 @@ function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <PlaceholderPage title="Devices" />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/today"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <TodayOverview />
               </DashboardLayout>
             </ProtectedRoute>
           }
