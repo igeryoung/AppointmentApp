@@ -99,15 +99,19 @@ class ScheduleLayoutUtils {
 
   /// Get slot index (0-47) for a given time
   static int getSlotIndexForTime(DateTime time) {
-    final hour = time.hour;
-    final minute = time.minute;
+    // Convert to local time for display
+    final localTime = time.toLocal();
+    final hour = localTime.hour;
+    final minute = localTime.minute;
     return (hour - startHour) * 4 + (minute ~/ 15);
   }
 
   /// Calculate the Y position offset for an event based on its start time
   static double calculateEventTopPosition(DateTime startTime, double slotHeight) {
-    final hour = startTime.hour;
-    final minute = startTime.minute;
+    // Convert to local time for display positioning
+    final localTime = startTime.toLocal();
+    final hour = localTime.hour;
+    final minute = localTime.minute;
     final slotIndex = (hour - startHour) * 4 + (minute ~/ 15);
     return slotIndex * slotHeight;
   }
@@ -116,12 +120,15 @@ class ScheduleLayoutUtils {
   static String getNewTimeDisplay(Event? newEvent) {
     if (newEvent == null) return '';
 
-    final startHour = newEvent.startTime.hour.toString().padLeft(2, '0');
-    final startMinute = newEvent.startTime.minute.toString().padLeft(2, '0');
+    // Convert to local time for display
+    final localStartTime = newEvent.startTime.toLocal();
+    final startHour = localStartTime.hour.toString().padLeft(2, '0');
+    final startMinute = localStartTime.minute.toString().padLeft(2, '0');
 
     if (newEvent.endTime != null) {
-      final endHour = newEvent.endTime!.hour.toString().padLeft(2, '0');
-      final endMinute = newEvent.endTime!.minute.toString().padLeft(2, '0');
+      final localEndTime = newEvent.endTime!.toLocal();
+      final endHour = localEndTime.hour.toString().padLeft(2, '0');
+      final endMinute = localEndTime.minute.toString().padLeft(2, '0');
       return '$startHour:$startMinute-$endHour:$endMinute';
     } else {
       return '$startHour:$startMinute';
@@ -165,9 +172,11 @@ class ScheduleLayoutUtils {
   ) {
     return allEvents.where((event) {
       // Always show all events regardless of removed/time-changed status
-      return event.startTime.year == date.year &&
-          event.startTime.month == date.month &&
-          event.startTime.day == date.day;
+      // Convert UTC event time to local time for comparison
+      final localStartTime = event.startTime.toLocal();
+      return localStartTime.year == date.year &&
+          localStartTime.month == date.month &&
+          localStartTime.day == date.day;
     }).toList();
   }
 

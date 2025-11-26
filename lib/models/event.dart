@@ -116,10 +116,11 @@ class Event {
       'phone': phone,
       'event_types': EventType.toJsonList(eventTypes), // Convert list to JSON array string
       'has_charge_items': hasChargeItems ? 1 : 0,
-      'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
-      'end_time': endTime != null ? endTime!.millisecondsSinceEpoch ~/ 1000 : null,
-      'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
-      'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
+      // Store timestamps as UTC Unix seconds
+      'start_time': startTime.toUtc().millisecondsSinceEpoch ~/ 1000,
+      'end_time': endTime != null ? endTime!.toUtc().millisecondsSinceEpoch ~/ 1000 : null,
+      'created_at': createdAt.toUtc().millisecondsSinceEpoch ~/ 1000,
+      'updated_at': updatedAt.toUtc().millisecondsSinceEpoch ~/ 1000,
       'is_removed': isRemoved ? 1 : 0,
       'removal_reason': removalReason,
       'original_event_id': originalEventId,
@@ -159,12 +160,13 @@ class Event {
       eventTypes: eventTypes,
       chargeItems: chargeItems,
       hasChargeItems: (map['has_charge_items'] ?? 0) == 1,
-      startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
+      // Parse timestamps as UTC
+      startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000, isUtc: true),
       endTime: map['end_time'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000)
+          ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000, isUtc: true)
           : null,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
+      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000, isUtc: true),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000, isUtc: true),
       isRemoved: (map['is_removed'] ?? 0) == 1,
       removalReason: map['removal_reason'],
       originalEventId: map['original_event_id']?.toInt(),
@@ -191,13 +193,15 @@ class Event {
     return endTime!.difference(startTime).inMinutes;
   }
 
-  /// Returns a display string for the time range
+  /// Returns a display string for the time range in local timezone
   String get timeRangeDisplay {
-    final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
+    final localStart = startTime.toLocal();
+    final startStr = '${localStart.hour.toString().padLeft(2, '0')}:${localStart.minute.toString().padLeft(2, '0')}';
     if (endTime == null) {
       return startStr;
     }
-    final endStr = '${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}';
+    final localEnd = endTime!.toLocal();
+    final endStr = '${localEnd.hour.toString().padLeft(2, '0')}:${localEnd.minute.toString().padLeft(2, '0')}';
     return '$startStr - $endStr';
   }
 

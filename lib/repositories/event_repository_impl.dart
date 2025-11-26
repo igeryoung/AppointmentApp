@@ -41,12 +41,16 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     DateTime startDate,
     DateTime endDate,
   ) {
+    // Convert date boundaries to UTC for querying
+    final startUtc = startDate.toUtc();
+    final endUtc = endDate.toUtc();
+
     return query(
       where: 'book_uuid = ? AND start_time >= ? AND start_time < ?',
       whereArgs: [
         bookUuid,
-        startDate.millisecondsSinceEpoch ~/ 1000,
-        endDate.millisecondsSinceEpoch ~/ 1000,
+        startUtc.millisecondsSinceEpoch ~/ 1000,
+        endUtc.millisecondsSinceEpoch ~/ 1000,
       ],
       orderBy: 'start_time ASC',
     );
@@ -75,7 +79,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   @override
   Future<Event> create(Event event) async {
     final db = await getDatabaseFn();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
 
     // Mark as dirty and set version to 1 for new events
     final eventToCreate = event.copyWith(
@@ -101,7 +105,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   Future<Event> update(Event event) async {
     if (event.id == null) throw ArgumentError('Event ID cannot be null');
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     // Increment version and mark as dirty for updates
     final updatedEvent = event.copyWith(
       updatedAt: now,
@@ -130,7 +134,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
         'is_deleted': 1,
         'is_dirty': 1,
         'version': event.version + 1,
-        'updated_at': (DateTime.now().millisecondsSinceEpoch ~/ 1000),
+        'updated_at': (DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000),
       },
       where: 'id = ?',
       whereArgs: [id],
@@ -155,7 +159,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     final updatedEvent = event.copyWith(
       isRemoved: true,
       removalReason: reason.trim(),
-      updatedAt: DateTime.now(),
+      updatedAt: DateTime.now().toUtc(),
     );
 
     final updateData = toMap(updatedEvent);
@@ -187,7 +191,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
     }
 
     final db = await getDatabaseFn();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
 
     // First, soft remove the original event
     await removeEvent(originalEvent.id!, reason.trim());
@@ -348,7 +352,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
       'events',
       {
         'is_dirty': 0,
-        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
+        'synced_at': syncedAt.toUtc().millisecondsSinceEpoch ~/ 1000,
       },
       where: 'id = ?',
       whereArgs: [id],

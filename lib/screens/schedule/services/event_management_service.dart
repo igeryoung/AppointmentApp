@@ -102,7 +102,7 @@ class EventManagementService {
   }) async {
     final now = TimeService.instance.now();
     final defaultStartTime = startTime ??
-        DateTime(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
+        DateTime.utc(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
 
     final newEvent = Event(
       bookUuid: _bookUuid,

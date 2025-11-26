@@ -11,9 +11,16 @@ class TimeService extends ChangeNotifier {
 
   DateTime? _overrideTime;
 
-  /// Get the current time (real or overridden for testing)
+  /// Get the current time in UTC (real or overridden for testing)
+  /// Use this for storing timestamps
   DateTime now() {
-    return _overrideTime ?? DateTime.now();
+    return (_overrideTime ?? DateTime.now()).toUtc();
+  }
+
+  /// Get the current time in local timezone
+  /// Use this for displaying times to users
+  DateTime nowLocal() {
+    return (_overrideTime ?? DateTime.now()).toLocal();
   }
 
   /// Check if a test time is currently set

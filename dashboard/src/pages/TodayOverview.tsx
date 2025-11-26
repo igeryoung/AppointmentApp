@@ -79,10 +79,10 @@ export const TodayOverview: React.FC = () => {
       setError(null);
 
       try {
-        // Get today's date range (00:00 to 23:59 in local time)
+        // Get today's date range in local timezone (midnight to 23:59:59)
         const today = new Date();
         const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59, 999);
 
         // Get selected book names for matching
         const selectedBookNames = books
@@ -95,9 +95,11 @@ export const TodayOverview: React.FC = () => {
 
         // Filter for today and selected books
         const todayEvents = allEvents.filter((event) => {
+          // Parse UTC timestamp from server - Date object will handle timezone conversion
           const eventStart = new Date(event.startTime);
 
-          // Check if event starts today
+          // Check if event starts today (in local timezone)
+          // JavaScript Date comparison works correctly even though server sends UTC timestamps
           const isToday =
             eventStart >= startOfDay &&
             eventStart <= endOfDay;

@@ -96,12 +96,13 @@ class SyncService {
 
     return rows.map((row) {
       final operation = row['is_deleted'] == true ? 'delete' : 'update';
+      final syncedAt = row['synced_at'] as DateTime;
       return SyncChange(
         tableName: validTable,
         recordId: row['id'] as int,
         operation: operation,
         data: _cleanRowData(row),
-        timestamp: row['synced_at'] as DateTime,
+        timestamp: syncedAt.toUtc(),
         version: row['version'] as int,
       );
     }).toList();
@@ -174,6 +175,7 @@ class SyncService {
       // Soft delete
       if (existing != null && existing['version'] != change.version) {
         // Conflict: server version differs
+        final serverUpdatedAt = existing['updated_at'] as DateTime;
         return SyncConflict(
           tableName: tableName,
           recordId: recordId,
@@ -182,7 +184,7 @@ class SyncService {
           localVersion: change.version,
           serverVersion: existing['version'] as int,
           localTimestamp: change.timestamp,
-          serverTimestamp: existing['updated_at'] as DateTime,
+          serverTimestamp: serverUpdatedAt.toUtc(),
         );
       }
 
@@ -200,6 +202,7 @@ class SyncService {
     final serverVersion = existing['version'] as int;
     if (serverVersion > change.version) {
       // Conflict: server has newer version
+      final serverUpdatedAt = existing['updated_at'] as DateTime;
       return SyncConflict(
         tableName: tableName,
         recordId: recordId,
@@ -208,7 +211,7 @@ class SyncService {
         localVersion: change.version,
         serverVersion: serverVersion,
         localTimestamp: change.timestamp,
-        serverTimestamp: existing['updated_at'] as DateTime,
+        serverTimestamp: serverUpdatedAt.toUtc(),
       );
     }
 
@@ -295,7 +298,7 @@ class SyncService {
   ) async {
     final validTable = _validateTableName(tableName);
     data['device_id'] = deviceId;
-    data['synced_at'] = DateTime.now();
+    data['synced_at'] = DateTime.now().toUtc();
     data['version'] = 1;
     data['is_deleted'] = false;
 
@@ -318,7 +321,7 @@ class SyncService {
   ) async {
     final validTable = _validateTableName(tableName);
     data['device_id'] = deviceId;
-    data['synced_at'] = DateTime.now();
+    data['synced_at'] = DateTime.now().toUtc();
 
     final setClauses = data.keys.map((k) => '$k = @$k').join(', ');
 

@@ -164,9 +164,13 @@ class DashboardRoutes {
   }
 
   /// Convert a value to JSON-serializable format
+  /// Ensures all DateTime values are converted to UTC before serialization
   dynamic _serializeValue(dynamic value) {
     if (value == null) return null;
-    if (value is DateTime) return value.toIso8601String();
+    if (value is DateTime) {
+      // Explicitly convert to UTC to ensure consistent timezone handling
+      return value.toUtc().toIso8601String();
+    }
     if (value is Map) {
       return value.map((k, v) => MapEntry(k.toString(), _serializeValue(v)));
     }
