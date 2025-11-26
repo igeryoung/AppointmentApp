@@ -1,6 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
   LayoutDashboard,
+  CalendarDays,
   BookOpen,
   Calendar,
   Palette,
@@ -13,6 +14,7 @@ import { dashboardAPI } from '../services/api';
 
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
+  { path: '/today', label: 'Today', icon: CalendarDays },
   { path: '/devices', label: 'Devices', icon: Users },
   { path: '/books', label: 'Books', icon: BookOpen },
   { path: '/events', label: 'Events & Notes', icon: Calendar },
