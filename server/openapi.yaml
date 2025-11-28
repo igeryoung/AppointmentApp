@@ -12,18 +12,40 @@ tags:
     description: Health check endpoints
   - name: Authentication
     description: Device registration and authentication
-  - name: Sync API
-    description: Bidirectional sync operations
-  - name: Book Operations
-    description: Book creation and management
-  - name: Book Pull API
-    description: Server → Local book sync (list and pull server books)
-  - name: Book Backup API
-    description: File-based backup/restore operations (Local → Server backup)
-  - name: Server-Store API
-    description: Server storage for notes and drawings
-  - name: Batch Operations
-    description: Atomic batch save operations
+  - name: Books
+    description: |
+      Book management operations:
+      - Create new book on server (gets UUID)
+      - List all books on server
+      - Pull book from server to local device
+      - Get book metadata
+  - name: Backups
+    description: |
+      File-based backup operations:
+      - Create compressed backup of a book
+      - List backups for a book
+      - Download/restore/delete backups
+  - name: Sync
+    description: |
+      Bidirectional sync operations:
+      - Push local changes to server
+      - Pull server changes to local
+      - Full bidirectional sync
+      - Conflict resolution
+  - name: Notes
+    description: |
+      Server-stored handwriting notes:
+      - Get/save/delete notes for events
+      - Batch operations for notes
+      - Optimistic locking support
+  - name: Drawings
+    description: |
+      Server-stored schedule drawings:
+      - Get/save/delete drawings
+      - Batch operations for drawings
+      - Optimistic locking support
+  - name: Batch
+    description: Atomic batch save for notes and drawings
   - name: Dashboard
     description: Admin monitoring and statistics
 
@@ -126,6 +148,8 @@ paths:
 
   /api/sync/pull:
     post:
+      tags:
+        - Sync
       summary: Pull server changes
       description: Retrieve changes from the server since last sync
       requestBody:
@@ -146,6 +170,8 @@ paths:
 
   /api/sync/push:
     post:
+      tags:
+        - Sync
       summary: Push local changes
       description: Send local changes to the server
       requestBody:
@@ -166,6 +192,8 @@ paths:
 
   /api/sync/full:
     post:
+      tags:
+        - Sync
       summary: Full bidirectional sync
       description: Perform a complete sync operation (push and pull)
       requestBody:
@@ -186,6 +214,8 @@ paths:
 
   /api/sync/resolve-conflict:
     post:
+      tags:
+        - Sync
       summary: Resolve a sync conflict
       description: Submit resolution for a detected conflict
       requestBody:
@@ -202,8 +232,10 @@ paths:
 
   /api/books/{bookId}/backup:
     post:
-      summary: Create file-based backup (NEW)
-      description: Create a compressed SQL backup of a book (recommended method)
+      tags:
+        - Backups
+      summary: Create file-based backup
+      description: Create a compressed SQL backup of a book
       parameters:
         - name: bookId
           in: path
@@ -249,7 +281,9 @@ paths:
 
   /api/books/{bookId}/backups:
     get:
-      summary: List backups for a book (NEW)
+      tags:
+        - Backups
+      summary: List backups for a book
       description: Get all backups for a specific book
       parameters:
         - name: bookId
@@ -314,7 +348,9 @@ paths:
 
   /api/backups/{backupId}/download:
     get:
-      summary: Download backup file (NEW)
+      tags:
+        - Backups
+      summary: Download backup file
       description: Download a backup file (streaming, gzip compressed SQL)
       parameters:
         - name: backupId
@@ -348,7 +384,9 @@ paths:
 
   /api/backups/{backupId}/restore:
     post:
-      summary: Restore from backup (NEW)
+      tags:
+        - Backups
+      summary: Restore from backup
       description: Restore a book from backup (supports both file-based and JSON backups)
       parameters:
         - name: backupId
@@ -392,7 +430,9 @@ paths:
 
   /api/backups/{backupId}:
     delete:
-      summary: Delete backup (NEW)
+      tags:
+        - Backups
+      summary: Delete backup
       description: Delete a backup (marks as deleted and removes file)
       parameters:
         - name: backupId
@@ -433,7 +473,7 @@ paths:
   /api/books/list:
     get:
       tags:
-        - Book Pull API
+        - Books
       summary: List all books on server
       description: 'Get all books available on the server for the authenticated device. Optionally filter by search query.'
       parameters:
@@ -499,6 +539,8 @@ paths:
   # Server-Store API: Notes
   /api/books/{bookId}/events/{eventId}/note:
     get:
+      tags:
+        - Notes
       summary: Get note for an event
       description: Retrieve a handwriting note for a specific event
       parameters:
@@ -532,6 +574,8 @@ paths:
           description: Unauthorized access
 
     post:
+      tags:
+        - Notes
       summary: Create or update note
       description: Create a new note or update existing with optimistic locking
       parameters:
@@ -595,6 +639,8 @@ paths:
           description: Unauthorized access
 
     delete:
+      tags:
+        - Notes
       summary: Delete note
       description: Soft delete a note for an event
       parameters:
@@ -620,6 +666,8 @@ paths:
 
   /api/notes/batch:
     post:
+      tags:
+        - Notes
       summary: Batch get notes
       description: Retrieve notes for multiple events
       security:
@@ -659,6 +707,8 @@ paths:
   # Server-Store API: Drawings
   /api/books/{bookId}/drawings:
     get:
+      tags:
+        - Drawings
       summary: Get drawing for date and view mode
       description: Retrieve a schedule drawing using composite key (book_id, date, view_mode)
       parameters:
@@ -700,6 +750,8 @@ paths:
           description: Unauthorized access
 
     post:
+      tags:
+        - Drawings
       summary: Create or update drawing
       description: Create a new drawing or update existing with optimistic locking
       parameters:
@@ -767,6 +819,8 @@ paths:
           description: Unauthorized access
 
     delete:
+      tags:
+        - Drawings
       summary: Delete drawing
       description: Soft delete a schedule drawing
       parameters:
@@ -798,6 +852,8 @@ paths:
 
   /api/drawings/batch:
     post:
+      tags:
+        - Drawings
       summary: Batch get drawings
       description: Retrieve drawings for a date range and view mode
       security:
@@ -860,7 +916,7 @@ paths:
 
         Maximum 1000 items per batch.
       tags:
-        - Batch Operations
+        - Batch
       security:
         - DeviceAuth: []
       requestBody:
