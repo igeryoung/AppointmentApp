@@ -40,7 +40,7 @@ class BookPullService {
 
     query += ' ORDER BY created_at DESC';
 
-    final results = await db.query(query, parameters: parameters);
+    final results = await db.queryRows(query, parameters: parameters);
 
     return results.map((row) {
       return {
@@ -92,7 +92,7 @@ class BookPullService {
     }
 
     // 2. Get all events for the book
-    final eventsResults = await db.query(
+    final eventsResults = await db.queryRows(
       '''
       SELECT
         id,
@@ -140,7 +140,7 @@ class BookPullService {
     }).toList();
 
     // 3. Get all notes for events in this book
-    final notesResults = await db.query(
+    final notesResults = await db.queryRows(
       '''
       SELECT
         n.id,
@@ -173,7 +173,7 @@ class BookPullService {
     }).toList();
 
     // 4. Get all schedule drawings for the book
-    final drawingsResults = await db.query(
+    final drawingsResults = await db.queryRows(
       '''
       SELECT
         id,
