@@ -432,6 +432,7 @@ class ApiClient {
 
   /// List all books available on server for the device
   /// Optional [searchQuery] filters books by name (case-insensitive)
+  /// Returns books in the format expected by the restore dialog
   Future<List<Map<String, dynamic>>> listServerBooks({
     required String deviceId,
     required String deviceToken,
@@ -453,7 +454,20 @@ class ApiClient {
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        return (json['books'] as List).cast<Map<String, dynamic>>();
+        final books = (json['books'] as List).cast<Map<String, dynamic>>();
+
+        // Transform to backup list format for compatibility
+        // NOTE: Using bookUuid as 'id' for backward compatibility with restore dialog
+        return books.map((book) {
+          return {
+            'id': book['id'],
+            'bookUuid': book['bookUuid'],
+            'backupName': book['name'],
+            'backupSize': book['size'] ?? 0,
+            'createdAt': book['createdAt'],
+            'restoredAt': null,
+          };
+        }).toList();
       } else if (response.statusCode == 401) {
         throw ApiException(
           'Unauthorized: Invalid device credentials',
@@ -559,6 +573,58 @@ class ApiClient {
       }
     } catch (e) {
       debugPrint('❌ Get server book info failed: $e');
+      rethrow;
+    }
+  }
+
+  // ===================
+  // Book Backup API (Local → Server Upload)
+  // ===================
+
+  /// Upload book backup to server
+  /// Used to backup a complete book (book + events + notes + drawings)
+  Future<int> uploadBookBackup({
+    required String bookUuid,
+    required String backupName,
+    required Map<String, dynamic> backupData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      debugPrint('📤 Uploading book backup: $backupName');
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/books/$bookUuid/backup'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode({
+          'backupName': backupName,
+        }),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final backupId = json['backupId'] as int;
+        debugPrint('✅ Book backup uploaded successfully: Backup ID $backupId');
+        return backupId;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Upload book backup failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Upload book backup failed: $e');
       rethrow;
     }
   }

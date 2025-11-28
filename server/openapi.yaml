@@ -7,9 +7,31 @@ servers:
   - url: http://localhost:8080
     description: Development server
 
+tags:
+  - name: Health
+    description: Health check endpoints
+  - name: Authentication
+    description: Device registration and authentication
+  - name: Sync API
+    description: Bidirectional sync operations
+  - name: Book Operations
+    description: Book creation and management
+  - name: Book Pull API
+    description: Server → Local book sync (list and pull server books)
+  - name: Book Backup API
+    description: File-based backup/restore operations (Local → Server backup)
+  - name: Server-Store API
+    description: Server storage for notes and drawings
+  - name: Batch Operations
+    description: Atomic batch save operations
+  - name: Dashboard
+    description: Admin monitoring and statistics
+
 paths:
   /health:
     get:
+      tags:
+        - Health
       summary: Health check
       description: Check if the server and database are healthy
       responses:
@@ -29,6 +51,8 @@ paths:
 
   /api/devices/register:
     post:
+      tags:
+        - Authentication
       summary: Register a new device
       description: Register a device and receive credentials for sync operations
       requestBody:
@@ -402,89 +426,39 @@ paths:
         '403':
           description: Invalid device credentials
 
-  /api/books/upload:
-    post:
-      summary: Upload book backup (JSON format)
-      description: 'Upload a complete book backup including all events, notes, and drawings in JSON format.'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/BookBackupUploadRequest'
-      responses:
-        '200':
-          description: Book backup uploaded successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  backupId:
-                    type: integer
-        '403':
-          description: Invalid device credentials
-        '500':
-          description: Upload failed
+  # LEGACY ENDPOINT REMOVED: /api/books/upload
+  # This legacy JSON-based upload endpoint has been replaced by the Book Pull API
+  # Use POST /api/books/{bookUuid}/backup for file-based backups instead
 
   /api/books/list:
     get:
-      summary: List book backups (JSON format)
-      description: 'Get all book backups for the authenticated device (JSON-based backups).'
+      tags:
+        - Book Pull API
+      summary: List all books on server
+      description: 'Get all books available on the server for the authenticated device. Optionally filter by search query.'
       parameters:
-        - name: deviceId
+        - name: search
           in: query
+          required: false
+          schema:
+            type: string
+          description: Optional search query to filter books by name
+        - name: X-Device-ID
+          in: header
           required: true
           schema:
             type: string
             format: uuid
-        - name: deviceToken
-          in: query
+          description: Device ID for authentication
+        - name: X-Device-Token
+          in: header
           required: true
           schema:
             type: string
+          description: Device token for authentication
       responses:
         '200':
-          description: List of backups
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/BookBackupListResponse'
-        '403':
-          description: Invalid device credentials
-
-  /api/books/restore/{backupId}:
-    post:
-      summary: Restore book from backup
-      description: Restore a book from a backup (replaces existing if same ID)
-      parameters:
-        - name: backupId
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - deviceId
-                - deviceToken
-              properties:
-                deviceId:
-                  type: string
-                  format: uuid
-                deviceToken:
-                  type: string
-      responses:
-        '200':
-          description: Book restored successfully
+          description: List of books on server
           content:
             application/json:
               schema:
@@ -492,48 +466,35 @@ paths:
                 properties:
                   success:
                     type: boolean
-                  message:
-                    type: string
+                    example: true
+                  books:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: integer
+                        bookUuid:
+                          type: string
+                          format: uuid
+                        name:
+                          type: string
+                        createdAt:
+                          type: string
+                          format: date-time
+                        size:
+                          type: integer
+                  count:
+                    type: integer
+        '401':
+          description: Missing or invalid credentials
         '403':
           description: Invalid device credentials
-        '404':
-          description: Backup not found
 
-  /api/books/{backupId}:
-    delete:
-      summary: Delete book backup
-      description: Delete a book backup (soft delete)
-      parameters:
-        - name: backupId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: deviceId
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: deviceToken
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Backup deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-        '403':
-          description: Invalid device credentials
+  # LEGACY ENDPOINTS REMOVED:
+  # - /api/books/restore/{backupId} - Use POST /api/books/pull/{bookUuid} instead
+  # - /api/books/{backupId} DELETE - Use DELETE /api/backups/{backupId} instead
+  # These legacy JSON-based endpoints have been replaced by the Book Pull API and Book Backup API
 
   # Server-Store API: Notes
   /api/books/{bookId}/events/{eventId}/note:
