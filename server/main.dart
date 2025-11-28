@@ -97,9 +97,6 @@ void main(List<String> args) async {
   app.mount('/api/books/', bookBackupRoutes.bookScopedRouter);
   app.mount('/api/backups/', bookBackupRoutes.backupScopedRouter);
 
-  // JSON-based backup API
-  app.mount('/api/books/', bookBackupRoutes.jsonBasedRouter);
-
   // Book creation API
   app.mount('/api/create-books', bookBackupRoutes.createBookRouter);
 
@@ -255,12 +252,6 @@ void main(List<String> args) async {
   print('   GET  /api/backups/<backupId>/download - Download backup file');
   print('   POST /api/backups/<backupId>/restore - Restore from backup');
   print('   DELETE /api/backups/<backupId> - Delete backup');
-  print('');
-  print('   === Book Backup API (Legacy JSON - deprecated) ===');
-  print('   POST /api/books/upload - Upload book backup (JSON)');
-  print('   GET  /api/books/list - List book backups');
-  print('   GET  /api/books/download/<id> - Download backup data');
-  print('   POST /api/books/restore/<id> - Restore book from backup');
   print('');
   print('   === Server-Store API (Notes & Drawings) ===');
   print('   GET  /api/books/<bookId>/events/<eventId>/note - Get note');
