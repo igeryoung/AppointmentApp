@@ -427,6 +427,143 @@ class ApiClient {
   }
 
   // ===================
+  // Book Pull API (Server → Local)
+  // ===================
+
+  /// List all books available on server for the device
+  /// Optional [searchQuery] filters books by name (case-insensitive)
+  Future<List<Map<String, dynamic>>> listServerBooks({
+    required String deviceId,
+    required String deviceToken,
+    String? searchQuery,
+  }) async {
+    try {
+      final uri = searchQuery != null && searchQuery.isNotEmpty
+          ? Uri.parse('$baseUrl/api/books/list?search=$searchQuery')
+          : Uri.parse('$baseUrl/api/books/list');
+
+      final response = await _client.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return (json['books'] as List).cast<Map<String, dynamic>>();
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'List server books failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ List server books failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Pull complete book data from server (book + events + notes + drawings)
+  /// This is used to add a server book to local device
+  Future<Map<String, dynamic>> pullBook({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/books/pull/$bookUuid'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['data'] as Map<String, dynamic>;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 404) {
+        throw ApiException(
+          'Book not found or does not belong to this device',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Pull book failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Pull book failed: $e');
+      rethrow;
+    }
+  }
+
+  /// Get book metadata only (without events/notes/drawings)
+  /// Useful for checking if a book exists on server or getting version info
+  Future<Map<String, dynamic>> getServerBookInfo({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/books/$bookUuid/info'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['book'] as Map<String, dynamic>;
+      } else if (response.statusCode == 401) {
+        throw ApiException(
+          'Unauthorized: Invalid device credentials',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 404) {
+        throw ApiException(
+          'Book not found or does not belong to this device',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Get server book info failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      debugPrint('❌ Get server book info failed: $e');
+      rethrow;
+    }
+  }
+
+  // ===================
   // Device Registration API
   // ===================
 
