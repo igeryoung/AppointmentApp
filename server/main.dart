@@ -9,6 +9,7 @@ import 'lib/database/connection.dart';
 import 'lib/routes/device_routes.dart';
 import 'lib/routes/sync_routes.dart';
 import 'lib/routes/book_backup_routes.dart';
+import 'lib/routes/book_pull_routes.dart';
 import 'lib/routes/note_routes.dart';
 import 'lib/routes/drawing_routes.dart';
 import 'lib/routes/batch_routes.dart';
@@ -101,6 +102,10 @@ void main(List<String> args) async {
 
   // Book creation API
   app.mount('/api/create-books', bookBackupRoutes.createBookRouter);
+
+  // Book pull routes
+  final bookPullRoutes = BookPullRoutes(db);
+  app.mount('/api/books/', bookPullRoutes.router);
 
   // Note routes (Server-Store API)
   final noteRoutes = NoteRoutes(db);
@@ -238,6 +243,11 @@ void main(List<String> args) async {
   print('');
   print('   === Book Creation API ===');
   print('   POST /api/create-books - Create new book and get UUID');
+  print('');
+  print('   === Book Pull API (Server → Local) ===');
+  print('   GET  /api/books/list?search=query - List all books with optional search');
+  print('   POST /api/books/pull/<bookUuid> - Pull complete book data');
+  print('   GET  /api/books/<bookUuid>/info - Get book metadata only');
   print('');
   print('   === Book Backup API (File-based) ===');
   print('   POST /api/books/<bookId>/backup - Create backup');

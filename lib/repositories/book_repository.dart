@@ -30,4 +30,20 @@ abstract class IBookRepository {
 
   /// Reorder books by updating their order field
   Future<void> reorder(List<Book> books);
+
+  /// List all books available on server with optional search
+  /// Returns metadata about books stored on the server
+  /// [searchQuery] - optional filter by book name (case-insensitive)
+  Future<List<Map<String, dynamic>>> listServerBooks({String? searchQuery});
+
+  /// Pull complete book data from server to local device
+  /// Includes book + events + notes + drawings
+  /// Throws if book already exists locally or doesn't exist on server
+  /// [bookUuid] - UUID of the book to pull from server
+  Future<void> pullBookFromServer(String bookUuid);
+
+  /// Get book metadata from server without pulling the full data
+  /// Useful for checking if a book exists on server or getting version info
+  /// [bookUuid] - UUID of the book to check
+  Future<Map<String, dynamic>?> getServerBookInfo(String bookUuid);
 }
