@@ -214,7 +214,7 @@ class NoteService {
                           finalPagesData != '[]' &&
                           finalPagesData.trim().isNotEmpty;
 
-        await db.execute(
+        await db.query(
           'UPDATE events SET has_note = @hasNote WHERE id = @eventId',
           parameters: {
             'hasNote': hasContent,
@@ -283,7 +283,7 @@ class NoteService {
       final deleted = result != null;
       if (deleted) {
         // Update hasNote field on events table
-        await db.execute(
+        await db.query(
           'UPDATE events SET has_note = false WHERE id = @eventId',
           parameters: {'eventId': eventId},
         );
