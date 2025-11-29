@@ -228,7 +228,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'phone': event['phone'],
             'event_type': event['event_type'],
             'event_types': event['event_types'] ?? '[]',
-            'has_charge_items': event['has_charge_items'] ?? 0,
+            'has_charge_items': event['has_charge_items'] == true ? 1 : 0,
             'start_time': DateTime.parse(event['start_time'] as String).millisecondsSinceEpoch ~/ 1000,
             'end_time': event['end_time'] != null
                 ? DateTime.parse(event['end_time'] as String).millisecondsSinceEpoch ~/ 1000
@@ -241,8 +241,8 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'removal_reason': event['removal_reason'],
             'original_event_id': event['original_event_id'],
             'new_event_id': event['new_event_id'],
-            'is_checked': event['is_checked'] ?? 0,
-            'has_note': event['has_note'] ?? 0,
+            'is_checked': event['is_checked'] == true ? 1 : 0,
+            'has_note': event['has_note'] == true ? 1 : 0,
             'version': event['version'],
             'is_dirty': 0,
           });

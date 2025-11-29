@@ -166,7 +166,7 @@ class BookBackupService {
         'created_at': book['created_at'],
         'archived_at': null,  // Clear archived status when restoring
         'version': book['version'] ?? 1,
-        'is_dirty': book['is_dirty'] ?? 0,
+        'is_dirty': book['is_dirty'] == true ? 1 : 0,
       });
       count++;
 
@@ -180,19 +180,19 @@ class BookBackupService {
           'phone': event['phone'],
           'event_type': event['event_type'],
           'event_types': event['event_types'] ?? '[]',
-          'has_charge_items': event['has_charge_items'] ?? 0,
+          'has_charge_items': event['has_charge_items'] == true ? 1 : 0,
           'start_time': event['start_time'],
           'end_time': event['end_time'],
           'created_at': event['created_at'],
           'updated_at': event['updated_at'],
-          'is_removed': event['is_removed'] ?? 0,
+          'is_removed': event['is_removed'] == true ? 1 : 0,
           'removal_reason': event['removal_reason'],
           'original_event_id': event['original_event_id'],
           'new_event_id': event['new_event_id'],
-          'is_checked': event['is_checked'] ?? 0,
-          'has_note': event['has_note'] ?? 0,
+          'is_checked': event['is_checked'] == true ? 1 : 0,
+          'has_note': event['has_note'] == true ? 1 : 0,
           'version': event['version'] ?? 1,
-          'is_dirty': event['is_dirty'] ?? 0,
+          'is_dirty': event['is_dirty'] == true ? 1 : 0,
         });
         count++;
       }
@@ -207,7 +207,7 @@ class BookBackupService {
           'created_at': note['created_at'],
           'updated_at': note['updated_at'],
           'version': note['version'] ?? 1,
-          'is_dirty': note['is_dirty'] ?? 0,
+          'is_dirty': note['is_dirty'] == true ? 1 : 0,
         });
         count++;
       }
@@ -223,7 +223,7 @@ class BookBackupService {
           'created_at': drawing['created_at'],
           'updated_at': drawing['updated_at'],
           'version': drawing['version'] ?? 1,
-          'is_dirty': drawing['is_dirty'] ?? 0,
+          'is_dirty': drawing['is_dirty'] == true ? 1 : 0,
         });
         count++;
       }
