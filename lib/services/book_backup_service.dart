@@ -165,6 +165,8 @@ class BookBackupService {
         'name': book['name'],
         'created_at': book['created_at'],
         'archived_at': book['archived_at'],
+        'version': book['version'] ?? 1,
+        'is_dirty': book['is_dirty'] ?? 0,
       });
       count++;
 
@@ -175,7 +177,10 @@ class BookBackupService {
           'book_uuid': event['book_uuid'],
           'name': event['name'],
           'record_number': event['record_number'],
+          'phone': event['phone'],
           'event_type': event['event_type'],
+          'event_types': event['event_types'] ?? '[]',
+          'has_charge_items': event['has_charge_items'] ?? 0,
           'start_time': event['start_time'],
           'end_time': event['end_time'],
           'created_at': event['created_at'],
@@ -184,6 +189,10 @@ class BookBackupService {
           'removal_reason': event['removal_reason'],
           'original_event_id': event['original_event_id'],
           'new_event_id': event['new_event_id'],
+          'is_checked': event['is_checked'] ?? 0,
+          'has_note': event['has_note'] ?? 0,
+          'version': event['version'] ?? 1,
+          'is_dirty': event['is_dirty'] ?? 0,
         });
         count++;
       }
@@ -194,8 +203,11 @@ class BookBackupService {
           'id': note['id'],
           'event_id': note['event_id'],
           'strokes_data': note['strokes_data'],
+          'pages_data': note['pages_data'],
           'created_at': note['created_at'],
           'updated_at': note['updated_at'],
+          'version': note['version'] ?? 1,
+          'is_dirty': note['is_dirty'] ?? 0,
         });
         count++;
       }
@@ -210,6 +222,8 @@ class BookBackupService {
           'strokes_data': drawing['strokes_data'],
           'created_at': drawing['created_at'],
           'updated_at': drawing['updated_at'],
+          'version': drawing['version'] ?? 1,
+          'is_dirty': drawing['is_dirty'] ?? 0,
         });
         count++;
       }
