@@ -1,47 +1,47 @@
 import '../../../models/book.dart';
-import '../../../services/database_service_interface.dart';
+import '../../../repositories/book_repository.dart';
 import '../../../services/service_locator.dart';
 
-/// Repository for book CRUD operations
-/// Wraps IDatabaseService for easier testing and mocking
+/// Adapter for book CRUD operations
+/// Wraps IBookRepository from service locator
 class BookRepository {
-  final IDatabaseService _dbService;
+  final IBookRepository _repo;
 
-  BookRepository(this._dbService);
+  BookRepository(this._repo);
 
   /// Create from service locator
   factory BookRepository.fromGetIt() {
-    return BookRepository(getIt<IDatabaseService>());
+    return BookRepository(getIt<IBookRepository>());
   }
 
   /// Get all books
   Future<List<Book>> getAll() async {
-    return await _dbService.getAllBooks();
+    return await _repo.getAll();
   }
 
   /// Create a new book
   Future<void> create(String name) async {
-    await _dbService.createBook(name);
+    await _repo.create(name);
   }
 
   /// Update an existing book
   Future<void> update(Book book) async {
-    await _dbService.updateBook(book);
+    await _repo.update(book);
   }
 
   /// Archive a book
   Future<void> archive(String bookUuid) async {
-    return await _dbService.archiveBook(bookUuid);
+    return await _repo.archive(bookUuid);
   }
 
   /// Delete a book
   Future<void> delete(String bookUuid) async {
-    return await _dbService.deleteBook(bookUuid);
+    return await _repo.delete(bookUuid);
   }
 
   /// Get a single book by UUID
   Future<Book?> getByUuid(String bookUuid) async {
-    return await _dbService.getBookByUuid(bookUuid);
+    return await _repo.getByUuid(bookUuid);
   }
 
   /// Get a book by name
