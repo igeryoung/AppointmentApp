@@ -9,9 +9,10 @@ class BookPullService {
 
   BookPullService(this.db);
 
-  /// List all books for a device with optional search by name
+  /// List all books with optional search by name
   ///
-  /// Returns all books (including archived) for the authenticated device
+  /// Returns all books (including archived) from the entire server store
+  /// No longer filtered by device_id - shows all books
   /// Optional [searchQuery] filters books by name (case-insensitive)
   Future<List<Map<String, dynamic>>> listBooksForDevice(
     String deviceId, {
@@ -25,12 +26,13 @@ class BookPullService {
         updated_at,
         archived_at,
         version,
-        is_deleted
+        is_deleted,
+        device_id
       FROM books
-      WHERE device_id = @deviceId
+      WHERE 1=1
     ''';
 
-    Map<String, dynamic> parameters = {'deviceId': deviceId};
+    Map<String, dynamic> parameters = {};
 
     // Add search filter if provided
     if (searchQuery != null && searchQuery.isNotEmpty) {
@@ -53,6 +55,7 @@ class BookPullService {
             : null,
         'version': row['version'] as int,
         'is_deleted': row['is_deleted'] as bool,
+        'device_id': row['device_id'] as String,
       };
     }).toList();
   }
@@ -60,12 +63,13 @@ class BookPullService {
   /// Get complete book data (book + events + notes + drawings)
   ///
   /// Returns all data needed to recreate the book locally
-  /// Throws if book doesn't exist or doesn't belong to the device
+  /// No longer filtered by device_id - any authenticated device can pull any book
+  /// Throws if book doesn't exist
   Future<Map<String, dynamic>> getCompleteBookData(
     String bookUuid,
     String deviceId,
   ) async {
-    // 1. Verify book exists and belongs to device
+    // 1. Verify book exists (no longer checking device ownership)
     final bookResult = await db.querySingle(
       '''
       SELECT
@@ -77,18 +81,15 @@ class BookPullService {
         version,
         is_deleted
       FROM books
-      WHERE book_uuid = @bookUuid AND device_id = @deviceId
+      WHERE book_uuid = @bookUuid
       ''',
       parameters: {
         'bookUuid': bookUuid,
-        'deviceId': deviceId,
       },
     );
 
     if (bookResult == null) {
-      throw Exception(
-        'Book not found or does not belong to this device: $bookUuid',
-      );
+      throw Exception('Book not found: $bookUuid');
     }
 
     // 2. Get all events for the book
@@ -206,7 +207,10 @@ class BookPullService {
       };
     }).toList();
 
-    // 5. Assemble complete book data
+    // 5. Add device access tracking
+    await addDeviceAccess(bookUuid, deviceId, 'pulled');
+
+    // 6. Assemble complete book data
     return {
       'book': {
         'book_uuid': bookResult['book_uuid'] as String,
@@ -228,7 +232,8 @@ class BookPullService {
   /// Get book metadata only (without events/notes/drawings)
   ///
   /// Useful for checking if a book exists or getting version info
-  /// Throws if book doesn't exist or doesn't belong to the device
+  /// No longer filtered by device_id - any authenticated device can access
+  /// Throws if book doesn't exist
   Future<Map<String, dynamic>> getBookMetadata(
     String bookUuid,
     String deviceId,
@@ -244,18 +249,15 @@ class BookPullService {
         version,
         is_deleted
       FROM books
-      WHERE book_uuid = @bookUuid AND device_id = @deviceId
+      WHERE book_uuid = @bookUuid
       ''',
       parameters: {
         'bookUuid': bookUuid,
-        'deviceId': deviceId,
       },
     );
 
     if (bookResult == null) {
-      throw Exception(
-        'Book not found or does not belong to this device: $bookUuid',
-      );
+      throw Exception('Book not found: $bookUuid');
     }
 
     return {
@@ -269,5 +271,27 @@ class BookPullService {
       'version': bookResult['version'] as int,
       'is_deleted': bookResult['is_deleted'] as bool,
     };
+  }
+
+  /// Add a device to the access list for a book
+  Future<void> addDeviceAccess(String bookUuid, String deviceId, String accessType) async {
+    try {
+      await db.query(
+        '''
+        INSERT INTO book_device_access (book_uuid, device_id, access_type, created_at)
+        VALUES (@bookUuid, @deviceId, @accessType, CURRENT_TIMESTAMP)
+        ON CONFLICT (book_uuid, device_id) DO NOTHING
+        ''',
+        parameters: {
+          'bookUuid': bookUuid,
+          'deviceId': deviceId,
+          'accessType': accessType,
+        },
+      );
+      print('📝 Added device access: Book $bookUuid, Device $deviceId, Type: $accessType');
+    } catch (e) {
+      print('⚠️  Failed to add device access: $e');
+      // Don't fail the operation if access tracking fails
+    }
   }
 }

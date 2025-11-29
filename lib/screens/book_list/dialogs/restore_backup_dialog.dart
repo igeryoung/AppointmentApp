@@ -58,6 +58,7 @@ class RestoreBackupDialog extends StatelessWidget {
     final createdAt = DateTime.parse(backup['createdAt'] as String);
     final backupSize = backup['backupSize'] as int;
     final restoredAt = backup['restoredAt'] as String?;
+    final deviceId = backup['deviceId'] as String?;
 
     return Card(
       child: ListTile(
@@ -76,7 +77,12 @@ class RestoreBackupDialog extends StatelessWidget {
             const SizedBox(height: 4),
             if (bookUuid != null)
               Text(
-                'UUID: ${bookUuid.substring(0, 8)}...',
+                'Book UUID: ${bookUuid.substring(0, 8)}...',
+                style: TextStyle(color: Colors.grey[600], fontSize: 12),
+              ),
+            if (deviceId != null)
+              Text(
+                'Device: ${deviceId.substring(0, 8)}...',
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
             Text('Backup date: ${DateFormatUtils.formatDateTimeWithTime(createdAt, context)}'),

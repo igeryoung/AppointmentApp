@@ -103,6 +103,9 @@ class BookBackupService {
       );
 
       print('✅ Book created/updated in books table (UUID: $bookUuid, Device: $deviceId)');
+
+      // Add device access tracking
+      await addDeviceAccess(bookUuid, deviceId, 'created');
     } catch (e) {
       print('❌ Failed to create book in books table: $e');
       // Don't fail the entire upload if this fails - backup is still stored
@@ -112,7 +115,8 @@ class BookBackupService {
     return backupId;
   }
 
-  /// List all backups for a device (returns only the newest backup per book_uuid)
+  /// List all backups (returns only the newest backup per book_uuid)
+  /// No longer filtered by device_id - shows all books in the store
   Future<List<Map<String, dynamic>>> listBackups(String deviceId) async {
     final rows = await db.queryRows(
       '''
@@ -122,12 +126,12 @@ class BookBackupService {
         backup_name,
         backup_size,
         created_at,
-        restored_at
+        restored_at,
+        device_id
       FROM book_backups
-      WHERE device_id = @deviceId AND is_deleted = false
+      WHERE is_deleted = false
       ORDER BY book_uuid, created_at DESC
       ''',
-      parameters: {'deviceId': deviceId},
     );
 
     return rows.map((row) => {
@@ -139,6 +143,7 @@ class BookBackupService {
       'restoredAt': row['restored_at'] != null
           ? (row['restored_at'] as DateTime).toIso8601String()
           : null,
+      'deviceId': row['device_id'],
     }).toList();
   }
 
@@ -439,7 +444,10 @@ class BookBackupService {
       final backupId = result!['id'] as int;
       print('✅ File-based backup created: ID $backupId ($fileName)');
 
-      // Step 5: Cleanup old backups
+      // Step 5: Add device access tracking
+      await addDeviceAccess(bookUuid, deviceId, 'created');
+
+      // Step 6: Cleanup old backups
       await cleanupOldBackups(bookUuid, deviceId);
 
       return backupId;
@@ -464,16 +472,15 @@ class BookBackupService {
   }) async {
     print('🔄 Restoring from file-based backup #$backupId...');
 
-    // Get backup metadata
+    // Get backup metadata (no longer filtering by device_id)
     final backupMeta = await db.querySingle(
       '''
-      SELECT backup_path, backup_type
+      SELECT backup_path, backup_type, book_uuid
       FROM book_backups
-      WHERE id = @backupId AND device_id = @deviceId AND is_deleted = false
+      WHERE id = @backupId AND is_deleted = false
       ''',
       parameters: {
         'backupId': backupId,
-        'deviceId': deviceId,
       },
     );
 
@@ -482,6 +489,7 @@ class BookBackupService {
     }
 
     final backupPath = backupMeta['backup_path'] as String?;
+    final bookUuid = backupMeta['book_uuid'] as String?;
 
     // Check if this is a file-based backup
     if (backupPath == null) {
@@ -527,23 +535,27 @@ class BookBackupService {
 
       print('✅ Restore completed successfully');
     });
+
+    // Add device access tracking (outside transaction)
+    if (bookUuid != null) {
+      await addDeviceAccess(bookUuid, deviceId, 'restored');
+    }
   }
 
-  /// List backups for a specific book
+  /// List backups for a specific book (no longer filtered by device_id)
   Future<List<Map<String, dynamic>>> listBookBackups(String bookUuid, String deviceId) async {
     final rows = await db.queryRows(
       '''
       SELECT
         id, book_uuid, backup_name,
         backup_path, backup_size, backup_size_bytes,
-        backup_type, status, created_at, restored_at
+        backup_type, status, created_at, restored_at, device_id
       FROM book_backups
-      WHERE book_uuid = @bookUuid AND device_id = @deviceId AND is_deleted = false
+      WHERE book_uuid = @bookUuid AND is_deleted = false
       ORDER BY created_at DESC
       ''',
       parameters: {
         'bookUuid': bookUuid,
-        'deviceId': deviceId,
       },
     );
 
@@ -564,6 +576,7 @@ class BookBackupService {
         'restoredAt': row['restored_at'] != null
             ? (row['restored_at'] as DateTime).toIso8601String()
             : null,
+        'deviceId': row['device_id'],
       };
     }).toList();
   }
@@ -802,5 +815,50 @@ class BookBackupService {
 
     buffer.writeln('-- End of backup');
     return buffer.toString();
+  }
+
+  // ============================================================================
+  // DEVICE ACCESS TRACKING METHODS
+  // ============================================================================
+
+  /// Add a device to the access list for a book
+  Future<void> addDeviceAccess(String bookUuid, String deviceId, String accessType) async {
+    try {
+      await db.query(
+        '''
+        INSERT INTO book_device_access (book_uuid, device_id, access_type, created_at)
+        VALUES (@bookUuid, @deviceId, @accessType, CURRENT_TIMESTAMP)
+        ON CONFLICT (book_uuid, device_id) DO NOTHING
+        ''',
+        parameters: {
+          'bookUuid': bookUuid,
+          'deviceId': deviceId,
+          'accessType': accessType,
+        },
+      );
+      print('📝 Added device access: Book $bookUuid, Device $deviceId, Type: $accessType');
+    } catch (e) {
+      print('⚠️  Failed to add device access: $e');
+      // Don't fail the operation if access tracking fails
+    }
+  }
+
+  /// Get list of devices that have access to a book
+  Future<List<Map<String, dynamic>>> getBookDevices(String bookUuid) async {
+    final rows = await db.queryRows(
+      '''
+      SELECT device_id, access_type, created_at
+      FROM book_device_access
+      WHERE book_uuid = @bookUuid
+      ORDER BY created_at ASC
+      ''',
+      parameters: {'bookUuid': bookUuid},
+    );
+
+    return rows.map((row) => {
+      'deviceId': row['device_id'],
+      'accessType': row['access_type'],
+      'createdAt': (row['created_at'] as DateTime).toIso8601String(),
+    }).toList();
   }
 }
