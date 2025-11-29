@@ -157,60 +157,116 @@ class BookBackupService {
       final drawings = (backupData['drawings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
       // Delete existing book if exists (CASCADE will delete events, notes, drawings)
-      await txn.delete('books', where: 'id = ?', whereArgs: [book['id']]);
+      await txn.delete('books', where: 'book_uuid = ?', whereArgs: [book['book_uuid']]);
 
       // Insert book
       await txn.insert('books', {
-        'id': book['id'],
         'book_uuid': book['book_uuid'],
         'name': book['name'],
-        'created_at': book['created_at'],
-        'archived_at': book['archived_at'],
+        'created_at': book['created_at'] is int
+            ? book['created_at']
+            : DateTime.parse(book['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+        'archived_at': null,  // Clear archived status when restoring
+        'version': book['version'] ?? 1,
+        'is_dirty': book['is_dirty'] == true ? 1 : 0,
       });
       count++;
 
       // Insert events
       for (final event in events) {
+        // Parse timestamps (handle both int and string formats)
+        final startTime = event['start_time'] is int
+            ? event['start_time']
+            : DateTime.parse(event['start_time'] as String).millisecondsSinceEpoch ~/ 1000;
+        final endTime = event['end_time'] != null
+            ? (event['end_time'] is int
+                ? event['end_time']
+                : DateTime.parse(event['end_time'] as String).millisecondsSinceEpoch ~/ 1000)
+            : null;
+        final createdAt = event['created_at'] is int
+            ? event['created_at']
+            : DateTime.parse(event['created_at'] as String).millisecondsSinceEpoch ~/ 1000;
+        final updatedAt = event['updated_at'] != null
+            ? (event['updated_at'] is int
+                ? event['updated_at']
+                : DateTime.parse(event['updated_at'] as String).millisecondsSinceEpoch ~/ 1000)
+            : createdAt;
+
         await txn.insert('events', {
           'id': event['id'],
-          'book_id': event['book_id'],
+          'book_uuid': event['book_uuid'],
           'name': event['name'],
           'record_number': event['record_number'],
+          'phone': event['phone'],
           'event_type': event['event_type'],
-          'start_time': event['start_time'],
-          'end_time': event['end_time'],
-          'created_at': event['created_at'],
-          'updated_at': event['updated_at'],
-          'is_removed': event['is_removed'] ?? 0,
+          'event_types': event['event_types'] ?? '[]',
+          'has_charge_items': event['has_charge_items'] == true ? 1 : 0,
+          'start_time': startTime,
+          'end_time': endTime,
+          'created_at': createdAt,
+          'updated_at': updatedAt,
+          'is_removed': event['is_removed'] == true ? 1 : 0,
           'removal_reason': event['removal_reason'],
           'original_event_id': event['original_event_id'],
           'new_event_id': event['new_event_id'],
+          'is_checked': event['is_checked'] == true ? 1 : 0,
+          'has_note': event['has_note'] == true ? 1 : 0,
+          'version': event['version'] ?? 1,
+          'is_dirty': event['is_dirty'] == true ? 1 : 0,
         });
         count++;
       }
 
       // Insert notes
       for (final note in notes) {
+        // Parse timestamps (handle both int and string formats)
+        final createdAt = note['created_at'] is int
+            ? note['created_at']
+            : DateTime.parse(note['created_at'] as String).millisecondsSinceEpoch ~/ 1000;
+        final updatedAt = note['updated_at'] != null
+            ? (note['updated_at'] is int
+                ? note['updated_at']
+                : DateTime.parse(note['updated_at'] as String).millisecondsSinceEpoch ~/ 1000)
+            : createdAt;
+
         await txn.insert('notes', {
           'id': note['id'],
           'event_id': note['event_id'],
           'strokes_data': note['strokes_data'],
-          'created_at': note['created_at'],
-          'updated_at': note['updated_at'],
+          'pages_data': note['pages_data'],
+          'created_at': createdAt,
+          'updated_at': updatedAt,
+          'version': note['version'] ?? 1,
+          'is_dirty': note['is_dirty'] == true ? 1 : 0,
         });
         count++;
       }
 
       // Insert schedule drawings
       for (final drawing in drawings) {
+        // Parse timestamps (handle both int and string formats)
+        final date = drawing['date'] is int
+            ? drawing['date']
+            : DateTime.parse(drawing['date'] as String).millisecondsSinceEpoch ~/ 1000;
+        final createdAt = drawing['created_at'] is int
+            ? drawing['created_at']
+            : DateTime.parse(drawing['created_at'] as String).millisecondsSinceEpoch ~/ 1000;
+        final updatedAt = drawing['updated_at'] != null
+            ? (drawing['updated_at'] is int
+                ? drawing['updated_at']
+                : DateTime.parse(drawing['updated_at'] as String).millisecondsSinceEpoch ~/ 1000)
+            : createdAt;
+
         await txn.insert('schedule_drawings', {
           'id': drawing['id'],
-          'book_id': drawing['book_id'],
-          'date': drawing['date'],
+          'book_uuid': drawing['book_uuid'],
+          'date': date,
           'view_mode': drawing['view_mode'],
           'strokes_data': drawing['strokes_data'],
-          'created_at': drawing['created_at'],
-          'updated_at': drawing['updated_at'],
+          'created_at': createdAt,
+          'updated_at': updatedAt,
+          'version': drawing['version'] ?? 1,
+          'is_dirty': drawing['is_dirty'] == true ? 1 : 0,
         });
         count++;
       }

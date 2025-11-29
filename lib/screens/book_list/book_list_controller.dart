@@ -11,6 +11,8 @@ import 'dialogs/delete_book_confirm_dialog.dart';
 import 'dialogs/restore_backup_dialog.dart';
 import 'dialogs/server_settings_dialog.dart';
 import '../../l10n/app_localizations.dart';
+import '../../services/api_client.dart';
+import '../../services/service_locator.dart';
 
 /// Controller for BookListScreen
 /// Handles all business logic and state management
@@ -341,6 +343,11 @@ class BookListController extends ChangeNotifier {
     if (newUrl != null && newUrl.isNotEmpty) {
       try {
         await serverConfig.setUrl(newUrl);
+
+        // Recreate ApiClient with new URL and re-register services
+        final apiClient = ApiClient(baseUrl: newUrl);
+        await registerContentServices(apiClient);
+
         if (context.mounted) {
           SnackBarUtils.showSuccess(
               context, 'Server URL updated to: $newUrl');
