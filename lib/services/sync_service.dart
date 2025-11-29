@@ -103,8 +103,10 @@ class SyncService {
   }
 
   /// Collect dirty records from all repositories
+  /// Groups events with their related notes for atomic sync
   Future<List<SyncChange>> _collectDirtyRecords() async {
     final changes = <SyncChange>[];
+    final syncedEventIds = <int>{};
 
     // Collect dirty events
     try {
@@ -121,16 +123,43 @@ class SyncService {
           timestamp: event.updatedAt,
           version: event.version,
         ));
+
+        syncedEventIds.add(event.id!);
+
+        // Atomically sync event's note along with the event (user choice QD.6)
+        // This ensures event updates and their related note content stay in sync
+        try {
+          final relatedNote = await noteRepository.getCached(event.id!);
+          if (relatedNote != null) {
+            changes.add(SyncChange(
+              tableName: 'notes',
+              recordId: relatedNote.eventId,
+              operation: 'update',
+              data: relatedNote.toMap(),
+              timestamp: relatedNote.updatedAt,
+              version: relatedNote.version,
+            ));
+            syncedEventIds.add(relatedNote.eventId);
+            debugPrint('📋 Added related note for event ${event.id} (atomic sync)');
+          }
+        } catch (e) {
+          debugPrint('⚠️  Failed to get related note for event ${event.id}: $e');
+        }
       }
-      debugPrint('📋 Collected ${dirtyEvents.length} dirty events');
+      debugPrint('📋 Collected ${dirtyEvents.length} dirty events (with related notes)');
     } catch (e) {
       debugPrint('⚠️  Failed to collect dirty events: $e');
     }
 
-    // Collect dirty notes
+    // Collect remaining dirty notes (not already synced with their events)
     try {
       final dirtyNotes = await noteRepository.getDirtyNotes();
       for (final note in dirtyNotes) {
+        // Skip if already synced with event
+        if (syncedEventIds.contains(note.eventId)) {
+          continue;
+        }
+
         changes.add(SyncChange(
           tableName: 'notes',
           recordId: note.eventId,
@@ -140,7 +169,7 @@ class SyncService {
           version: note.version,
         ));
       }
-      debugPrint('📋 Collected ${dirtyNotes.length} dirty notes');
+      debugPrint('📋 Collected ${dirtyNotes.length} dirty notes (standalone)');
     } catch (e) {
       debugPrint('⚠️  Failed to collect dirty notes: $e');
     }
