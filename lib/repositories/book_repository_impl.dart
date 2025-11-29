@@ -212,9 +212,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
           'book_uuid': bookMap['book_uuid'],
           'name': bookMap['name'],
           'created_at': DateTime.parse(bookMap['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
-          'archived_at': bookMap['archived_at'] != null
-              ? DateTime.parse(bookMap['archived_at'] as String).millisecondsSinceEpoch ~/ 1000
-              : null,
+          'archived_at': null,  // Clear archived status when pulling from server
           'version': bookMap['version'],
           'is_dirty': 0,
         });
@@ -227,16 +225,24 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'book_uuid': event['book_uuid'],
             'name': event['name'],
             'record_number': event['record_number'],
+            'phone': event['phone'],
             'event_type': event['event_type'],
+            'event_types': event['event_types'] ?? '[]',
+            'has_charge_items': event['has_charge_items'] ?? 0,
             'start_time': DateTime.parse(event['start_time'] as String).millisecondsSinceEpoch ~/ 1000,
             'end_time': event['end_time'] != null
                 ? DateTime.parse(event['end_time'] as String).millisecondsSinceEpoch ~/ 1000
                 : null,
             'created_at': DateTime.parse(event['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            'updated_at': event['updated_at'] != null
+                ? DateTime.parse(event['updated_at'] as String).millisecondsSinceEpoch ~/ 1000
+                : DateTime.parse(event['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
             'is_removed': event['is_removed'] == true ? 1 : 0,
             'removal_reason': event['removal_reason'],
             'original_event_id': event['original_event_id'],
             'new_event_id': event['new_event_id'],
+            'is_checked': event['is_checked'] ?? 0,
+            'has_note': event['has_note'] ?? 0,
             'version': event['version'],
             'is_dirty': 0,
           });
@@ -251,6 +257,9 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'strokes_data': note['strokes_data'],
             'pages_data': note['pages_data'],
             'created_at': DateTime.parse(note['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            'updated_at': note['updated_at'] != null
+                ? DateTime.parse(note['updated_at'] as String).millisecondsSinceEpoch ~/ 1000
+                : DateTime.parse(note['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
             'version': note['version'],
             'is_dirty': 0,
           });
@@ -266,6 +275,9 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'view_mode': drawing['view_mode'],
             'strokes_data': drawing['strokes_data'],
             'created_at': DateTime.parse(drawing['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            'updated_at': drawing['updated_at'] != null
+                ? DateTime.parse(drawing['updated_at'] as String).millisecondsSinceEpoch ~/ 1000
+                : DateTime.parse(drawing['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
             'version': drawing['version'],
             'is_dirty': 0,
           });
