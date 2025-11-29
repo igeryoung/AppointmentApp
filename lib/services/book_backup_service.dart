@@ -157,11 +157,10 @@ class BookBackupService {
       final drawings = (backupData['drawings'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
       // Delete existing book if exists (CASCADE will delete events, notes, drawings)
-      await txn.delete('books', where: 'id = ?', whereArgs: [book['id']]);
+      await txn.delete('books', where: 'book_uuid = ?', whereArgs: [book['book_uuid']]);
 
       // Insert book
       await txn.insert('books', {
-        'id': book['id'],
         'book_uuid': book['book_uuid'],
         'name': book['name'],
         'created_at': book['created_at'],
@@ -173,7 +172,7 @@ class BookBackupService {
       for (final event in events) {
         await txn.insert('events', {
           'id': event['id'],
-          'book_id': event['book_id'],
+          'book_uuid': event['book_uuid'],
           'name': event['name'],
           'record_number': event['record_number'],
           'event_type': event['event_type'],
@@ -205,7 +204,7 @@ class BookBackupService {
       for (final drawing in drawings) {
         await txn.insert('schedule_drawings', {
           'id': drawing['id'],
-          'book_id': drawing['book_id'],
+          'book_uuid': drawing['book_uuid'],
           'date': drawing['date'],
           'view_mode': drawing['view_mode'],
           'strokes_data': drawing['strokes_data'],
