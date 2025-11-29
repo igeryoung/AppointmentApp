@@ -22,6 +22,7 @@ import 'schedule/services/schedule_drawing_service.dart';
 import 'schedule/services/schedule_date_service.dart';
 import 'schedule/services/schedule_connectivity_service.dart';
 import 'schedule/services/event_management_service.dart';
+import 'book_list/utils/snackbar_utils.dart';
 
 /// Schedule screen implementing 3-Day view only
 class ScheduleScreen extends StatefulWidget {
@@ -184,30 +185,49 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       onUpdateCubitOfflineStatus: (isOffline) {
         context.read<ScheduleCubit>().setOfflineStatus(isOffline);
       },
-      onShowSnackbar: (message, {backgroundColor, durationSeconds, action}) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(message),
-            backgroundColor: backgroundColor,
-            duration: Duration(seconds: durationSeconds ?? 2),
-            action: action,
-          ),
-        );
-      },
-      onShowDialog: (title, message) {
-        showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: Text(title),
-            content: Text(message),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('OK'),
-              ),
-            ],
-          ),
-        );
+      onShowSnackbar: (message, {backgroundColor, durationSeconds, action, detailTitle, detailMessage}) {
+        // If details are provided, use SnackBarUtils with details
+        if (detailTitle != null && detailMessage != null) {
+          if (backgroundColor == Colors.orange) {
+            SnackBarUtils.showWarningWithDetails(
+              context: context,
+              message: message,
+              detailTitle: detailTitle,
+              detailMessage: detailMessage,
+            );
+          } else if (backgroundColor == Colors.red) {
+            SnackBarUtils.showErrorWithDetails(
+              context: context,
+              message: message,
+              detailTitle: detailTitle,
+              detailMessage: detailMessage,
+            );
+          } else if (backgroundColor == Colors.green) {
+            SnackBarUtils.showSuccessWithDetails(
+              context: context,
+              message: message,
+              detailTitle: detailTitle,
+              detailMessage: detailMessage,
+            );
+          } else {
+            SnackBarUtils.showInfoWithDetails(
+              context: context,
+              message: message,
+              detailTitle: detailTitle,
+              detailMessage: detailMessage,
+            );
+          }
+        } else {
+          // Otherwise, show normal snackbar
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(message),
+              backgroundColor: backgroundColor,
+              duration: Duration(seconds: durationSeconds ?? 2),
+              action: action,
+            ),
+          );
+        }
       },
       isMounted: () => mounted,
       onUpdateDrawingServiceContentService: (contentService) {

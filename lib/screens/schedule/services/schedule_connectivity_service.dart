@@ -44,10 +44,7 @@ class ScheduleConnectivityService {
   final void Function(bool isOffline) onUpdateCubitOfflineStatus;
 
   /// Callback to show snackbar
-  final void Function(String message, {Color? backgroundColor, int? durationSeconds, SnackBarAction? action}) onShowSnackbar;
-
-  /// Callback to show dialog
-  final void Function(String title, String message) onShowDialog;
+  final void Function(String message, {Color? backgroundColor, int? durationSeconds, SnackBarAction? action, String? detailTitle, String? detailMessage}) onShowSnackbar;
 
   /// Callback to check if widget is mounted
   final bool Function() isMounted;
@@ -61,7 +58,6 @@ class ScheduleConnectivityService {
     required this.onStateChanged,
     required this.onUpdateCubitOfflineStatus,
     required this.onShowSnackbar,
-    required this.onShowDialog,
     required this.isMounted,
     required this.onUpdateDrawingServiceContentService,
   })  : _dbService = dbService,
@@ -221,17 +217,9 @@ class ScheduleConnectivityService {
             'Synced ${result.success}/${result.total} notes. ${result.failed} failed - check if book is backed up',
             backgroundColor: Colors.orange,
             durationSeconds: 5,
-            action: SnackBarAction(
-              label: 'Details',
-              textColor: Colors.white,
-              onPressed: () {
-                onShowDialog(
-                  'Sync Failed',
-                  'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
-                  'Solution: Use the book backup feature to sync the book to the server first.',
-                );
-              },
-            ),
+            detailTitle: 'Sync Failed',
+            detailMessage: 'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
+                'Solution: Use the book backup feature to sync the book to the server first.',
           );
         }
       }
