@@ -651,14 +651,14 @@ class BookBackupService {
 
   /// Query all data for a book
   Future<Map<String, dynamic>> _queryBookData(String bookUuid, String deviceId) async {
-    // Verify book belongs to device
+    // Query book by UUID (device authentication already verified at route level)
     final book = await db.querySingle(
-      'SELECT * FROM books WHERE book_uuid = @bookUuid AND device_id = @deviceId',
-      parameters: {'bookUuid': bookUuid, 'deviceId': deviceId},
+      'SELECT * FROM books WHERE book_uuid = @bookUuid',
+      parameters: {'bookUuid': bookUuid},
     );
 
     if (book == null) {
-      throw Exception('Book not found or access denied');
+      throw Exception('Book not found');
     }
 
     // Query related data
