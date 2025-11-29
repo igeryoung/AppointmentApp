@@ -14,6 +14,7 @@ class Note {
   final List<List<Stroke>> pages; // Multi-page support: array of pages, each page contains strokes
   final DateTime createdAt;
   final DateTime updatedAt;
+  final int version; // Version number for optimistic locking (incremented on each update)
   final bool isDirty; // Indicates unsaved changes not synced to server
   final String? personNameNormalized; // Normalized person name for shared notes
   final String? recordNumberNormalized; // Normalized record number for shared notes
@@ -26,6 +27,7 @@ class Note {
     required this.pages,
     required this.createdAt,
     required this.updatedAt,
+    this.version = 1,
     this.isDirty = false,
     this.personNameNormalized,
     this.recordNumberNormalized,
@@ -39,6 +41,7 @@ class Note {
     List<List<Stroke>>? pages,
     DateTime? createdAt,
     DateTime? updatedAt,
+    int? version,
     bool? isDirty,
     String? personNameNormalized,
     String? recordNumberNormalized,
@@ -51,6 +54,7 @@ class Note {
       pages: pages ?? this.pages,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      version: version ?? this.version,
       isDirty: isDirty ?? this.isDirty,
       personNameNormalized: personNameNormalized ?? this.personNameNormalized,
       recordNumberNormalized: recordNumberNormalized ?? this.recordNumberNormalized,
@@ -121,6 +125,7 @@ class Note {
       'pages_data': jsonEncode(pagesData),
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
+      'version': version,
       'is_dirty': isDirty ? 1 : 0,
       'person_name_normalized': personNameNormalized,
       'record_number_normalized': recordNumberNormalized,
@@ -189,6 +194,7 @@ class Note {
         map['updatedAt'] ?? map['updated_at'],
         fallback: DateTime.now(),
       ) ?? DateTime.now(),
+      version: (map['version'] ?? 1) is int ? (map['version'] ?? 1) : int.tryParse(map['version'].toString()) ?? 1,
       isDirty: (map['isDirty'] ?? map['is_dirty'] ?? 0) == 1,
       personNameNormalized: map['personNameNormalized'] ?? map['person_name_normalized'],
       recordNumberNormalized: map['recordNumberNormalized'] ?? map['record_number_normalized'],
@@ -206,7 +212,7 @@ class Note {
   @override
   String toString() {
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    return 'Note(id: $id, eventId: $eventId, pageCount: ${pages.length}, totalStrokes: $totalStrokes, isDirty: $isDirty, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
+    return 'Note(id: $id, eventId: $eventId, pageCount: ${pages.length}, totalStrokes: $totalStrokes, version: $version, isDirty: $isDirty, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
   }
 
   @override

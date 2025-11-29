@@ -161,7 +161,10 @@ class ContentService {
   /// Force sync a note to server (clears dirty flag on success)
   ///
   /// Throws exception on sync failure, keeps dirty flag intact
-  Future<void> syncNote(int eventId) async {
+  /// Handles version conflicts with auto-retry using server version
+  Future<void> syncNote(int eventId, {int retryCount = 0}) async {
+    const maxRetries = 3;
+
     try {
       final note = await _cacheManager.getNote(eventId);
       if (note == null) {
@@ -185,12 +188,15 @@ class ContentService {
       final noteMap = note.toMap();
       final noteData = {
         'pagesData': noteMap['pages_data'],
+        'version': noteMap['version'], // Include version for optimistic locking
       };
 
       // Include event data for auto-creation on server if event doesn't exist
       final eventData = event.toMap();
 
-      await _apiClient.saveNote(
+      debugPrint('📤 ContentService: Syncing note (eventId: $eventId, version: ${note.version}, retry: $retryCount)');
+
+      final serverNote = await _apiClient.saveNote(
         bookUuid: event.bookUuid,
         eventId: eventId,
         noteData: noteData,
@@ -199,11 +205,49 @@ class ContentService {
         eventData: eventData,
       );
 
-      // 同步成功，清除dirty标记
-      await _cacheManager.markNoteClean(eventId);
+      // Update local note with server version
+      final serverVersion = serverNote['version'] as int?;
+      if (serverVersion != null && serverVersion != note.version) {
+        debugPrint('🔄 ContentService: Updating local note version from ${note.version} to $serverVersion');
+        final updatedNote = note.copyWith(version: serverVersion, isDirty: false);
+        await _cacheManager.saveNote(eventId, updatedNote, dirty: false);
+      } else {
+        // 同步成功，清除dirty标记
+        await _cacheManager.markNoteClean(eventId);
+      }
 
-      debugPrint('✅ ContentService: Note synced to server (eventId: $eventId, dirty flag cleared)');
+      debugPrint('✅ ContentService: Note synced to server (eventId: $eventId, version: $serverVersion, dirty flag cleared)');
     } catch (e) {
+      // Handle version conflicts with auto-retry
+      if (e is ApiConflictException && retryCount < maxRetries) {
+        debugPrint('⚠️ ContentService: Version conflict detected (attempt ${retryCount + 1}/$maxRetries)');
+
+        final serverVersion = e.serverVersion;
+        final serverState = e.serverState;
+
+        if (serverVersion != null) {
+          debugPrint('   Server version: $serverVersion, retrying with server version...');
+
+          // Fetch current note from cache to get latest local data
+          final currentNote = await _cacheManager.getNote(eventId);
+          if (currentNote != null) {
+            // Last-write-wins: Use server version but keep local pages
+            // This implements auto-retry with server version (user choice QC.1)
+            final mergedNote = currentNote.copyWith(version: serverVersion);
+
+            // Save merged note to cache with new version
+            await _cacheManager.saveNote(eventId, mergedNote, dirty: true);
+
+            debugPrint('🔄 ContentService: Retrying sync with server version $serverVersion');
+
+            // Retry with updated version
+            return await syncNote(eventId, retryCount: retryCount + 1);
+          }
+        } else {
+          debugPrint('⚠️ ContentService: Server version not available in conflict response');
+        }
+      }
+
       debugPrint('❌ ContentService: Sync failed for note $eventId: $e');
       // 保留dirty标记，稍后重试
       rethrow;

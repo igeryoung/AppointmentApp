@@ -207,7 +207,22 @@ class NoteService {
           'updatedAt': (result['updated_at'] as DateTime).toIso8601String(),
           'version': result['version'],
         };
-        print('✅ Note ${expectedVersion == null ? 'created' : 'updated'}: event=$eventId, version=${result['version']}');
+
+        // Update hasNote field on events table
+        // Check if note has any content (not empty or just "[[]]")
+        final hasContent = finalPagesData != '[[]]' &&
+                          finalPagesData != '[]' &&
+                          finalPagesData.trim().isNotEmpty;
+
+        await db.execute(
+          'UPDATE events SET has_note = @hasNote WHERE id = @eventId',
+          parameters: {
+            'hasNote': hasContent,
+            'eventId': eventId,
+          },
+        );
+
+        print('✅ Note ${expectedVersion == null ? 'created' : 'updated'}: event=$eventId, version=${result['version']}, hasNote=$hasContent');
         return NoteOperationResult.success(note);
       }
 
@@ -267,7 +282,12 @@ class NoteService {
 
       final deleted = result != null;
       if (deleted) {
-        print('✅ Note deleted: event=$eventId');
+        // Update hasNote field on events table
+        await db.execute(
+          'UPDATE events SET has_note = false WHERE id = @eventId',
+          parameters: {'eventId': eventId},
+        );
+        print('✅ Note deleted: event=$eventId, hasNote set to false');
       } else {
         print('⚠️  Note not found or already deleted: event=$eventId');
       }

@@ -22,7 +22,9 @@ class NoteRepositoryImpl implements INoteRepository {
   Future<void> saveToCache(Note note, {required bool isDirty}) async {
     final db = await _getDatabaseFn();
     final now = DateTime.now();
-    final updatedNote = note.copyWith(updatedAt: now, isDirty: isDirty);
+    // Increment version when saving dirty note
+    final newVersion = isDirty ? note.version + 1 : note.version;
+    final updatedNote = note.copyWith(updatedAt: now, version: newVersion, isDirty: isDirty);
 
     final noteMap = updatedNote.toMap();
     debugPrint('🔍 SQLite: updateNote called with ${updatedNote.strokes.length} strokes');
@@ -53,13 +55,14 @@ class NoteRepositoryImpl implements INoteRepository {
 
       debugPrint('🔍 SQLite: Using raw SQL with explicit string parameter');
       final updatedRows = await db.rawUpdate(
-        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, is_dirty = ? WHERE event_id = ?',
+        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ?, is_dirty = ? WHERE event_id = ?',
         [
           updateMap['event_id'],
           pagesDataString,
           updateMap['created_at'],
           updateMap['updated_at'],
           cachedAt,
+          updateMap['version'],
           isDirtyFlag,
           note.eventId,
         ],
@@ -70,13 +73,14 @@ class NoteRepositoryImpl implements INoteRepository {
       if (updatedRows == 0) {
         debugPrint('🔍 SQLite: Inserting new note using raw SQL');
         await db.rawInsert(
-          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?)',
+          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
           [
             updateMap['event_id'],
             pagesDataString,
             updateMap['created_at'],
             updateMap['updated_at'],
             cachedAt,
+            updateMap['version'],
             isDirtyFlag,
           ],
         );
@@ -193,12 +197,13 @@ class NoteRepositoryImpl implements INoteRepository {
       final noteMap = note.toMap();
 
       batch.rawInsert('''
-        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty)
-        VALUES (?, ?, ?, ?, ?, 0, ?)
+        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty)
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
         ON CONFLICT(event_id) DO UPDATE SET
           pages_data = excluded.pages_data,
           updated_at = excluded.updated_at,
           cached_at = excluded.cached_at,
+          version = excluded.version,
           is_dirty = excluded.is_dirty
       ''', [
         eventId,
@@ -206,6 +211,7 @@ class NoteRepositoryImpl implements INoteRepository {
         noteMap['created_at'],
         noteMap['updated_at'],
         cachedAt,
+        noteMap['version'] ?? 1,
         noteMap['is_dirty'] ?? 0,
       ]);
     }

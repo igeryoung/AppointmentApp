@@ -139,7 +139,9 @@ mixin NoteCacheOperationsMixin {
     }
 
     final now = DateTime.now();
-    final updatedNote = note.copyWith(updatedAt: now);
+    // Increment version when saving dirty note
+    final newVersion = note.isDirty ? note.version + 1 : note.version;
+    final updatedNote = note.copyWith(updatedAt: now, version: newVersion);
 
     // Get person key if event has record number
     final personKey = PersonInfoUtilitiesMixin.getPersonKeyFromEvent(event);
@@ -173,7 +175,7 @@ mixin NoteCacheOperationsMixin {
       final updatedRows = await db.rawUpdate(
         '''UPDATE notes
            SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?,
-               cached_at = ?, is_dirty = ?, person_name_normalized = ?,
+               cached_at = ?, version = ?, is_dirty = ?, person_name_normalized = ?,
                record_number_normalized = ?, locked_by_device_id = ?, locked_at = ?
            WHERE event_id = ?''',
         [
@@ -182,6 +184,7 @@ mixin NoteCacheOperationsMixin {
           noteMap['created_at'],
           noteMap['updated_at'],
           cachedAt,
+          noteMap['version'],
           noteMap['is_dirty'] ?? 0,
           noteMap['person_name_normalized'],
           noteMap['record_number_normalized'],
@@ -196,15 +199,16 @@ mixin NoteCacheOperationsMixin {
         debugPrint('🔍 SQLite: Inserting new note');
         await db.rawInsert(
           '''INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at,
-             cache_hit_count, is_dirty, person_name_normalized, record_number_normalized,
+             cache_hit_count, version, is_dirty, person_name_normalized, record_number_normalized,
              locked_by_device_id, locked_at)
-             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?)''',
+             VALUES (?, ?, ?, ?, ?, 0, ?, ?, ?, ?, ?, ?)''',
           [
             noteMap['event_id'],
             pagesDataString,
             noteMap['created_at'],
             noteMap['updated_at'],
             cachedAt,
+            noteMap['version'],
             noteMap['is_dirty'] ?? 0,
             noteMap['person_name_normalized'],
             noteMap['record_number_normalized'],
@@ -382,7 +386,9 @@ mixin NoteCacheOperationsMixin {
   Future<Note> saveCachedNote(Note note) async {
     final db = await database;
     final now = DateTime.now();
-    final updatedNote = note.copyWith(updatedAt: now);
+    // Increment version when saving dirty note
+    final newVersion = note.isDirty ? note.version + 1 : note.version;
+    final updatedNote = note.copyWith(updatedAt: now, version: newVersion);
 
     // Debug the serialization
     final noteMap = updatedNote.toMap();
@@ -414,15 +420,17 @@ mixin NoteCacheOperationsMixin {
       final pagesDataString = updateMap['pages_data'] as String;
       final cachedAt = now.millisecondsSinceEpoch ~/ 1000; // Cache timestamp
       final isDirty = updateMap['is_dirty'] ?? 0; // Get dirty flag from note
+      final version = updateMap['version'] ?? 1; // Get version from note
       debugPrint('🔍 SQLite: Using raw SQL with explicit string parameter');
       final updatedRows = await db.rawUpdate(
-        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, is_dirty = ? WHERE event_id = ?',
+        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ?, is_dirty = ? WHERE event_id = ?',
         [
           updateMap['event_id'],
           pagesDataString, // Explicitly pass as string
           updateMap['created_at'],
           updateMap['updated_at'],
           cachedAt, // Update cache timestamp
+          version, // Update version
           isDirty, // Update dirty flag
           note.eventId,
         ],
@@ -434,13 +442,14 @@ mixin NoteCacheOperationsMixin {
       if (updatedRows == 0) {
         debugPrint('🔍 SQLite: Inserting new note using raw SQL');
         await db.rawInsert(
-          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?)',
+          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
           [
             updateMap['event_id'],
             pagesDataString, // Explicitly pass as string
             updateMap['created_at'],
             updateMap['updated_at'],
             cachedAt, // Set initial cache timestamp
+            version, // Set initial version
             isDirty, // Set dirty flag
           ],
         );
@@ -504,18 +513,22 @@ mixin NoteCacheOperationsMixin {
 
       // Use rawInsert with ON CONFLICT clause for upsert
       batch.rawInsert('''
-        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count)
-        VALUES (?, ?, ?, ?, ?, 0)
+        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty)
+        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
         ON CONFLICT(event_id) DO UPDATE SET
           pages_data = excluded.pages_data,
           updated_at = excluded.updated_at,
-          cached_at = excluded.cached_at
+          cached_at = excluded.cached_at,
+          version = excluded.version,
+          is_dirty = excluded.is_dirty
       ''', [
         eventId,
         noteMap['pages_data'],
         noteMap['created_at'],
         noteMap['updated_at'],
         cachedAt,
+        noteMap['version'] ?? 1,
+        noteMap['is_dirty'] ?? 0,
       ]);
     }
 
