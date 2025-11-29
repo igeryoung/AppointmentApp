@@ -84,9 +84,27 @@ class BookPullRoutes {
         searchQuery: searchQuery,
       );
 
+      // Transform to format expected by client (camelCase fields)
+      final transformedBooks = books.map((book) {
+        final bookUuid = book['book_uuid'] as String;
+        // Use bookUuid hash as unique ID for the client to identify books
+        final id = bookUuid.hashCode.abs();
+
+        return {
+          'id': id,
+          'bookUuid': bookUuid,
+          'name': book['name'],
+          'size': 0, // Unknown - could calculate from events/notes
+          'createdAt': book['created_at'],
+          'updatedAt': book['updated_at'],
+          'archivedAt': book['archived_at'],
+          'deviceId': book['device_id'],
+        };
+      }).toList();
+
       _logger.success('Books listed', data: {
         'deviceId': deviceId,
-        'bookCount': books.length,
+        'bookCount': transformedBooks.length,
         'hasSearch': searchQuery != null,
       });
 
@@ -95,8 +113,8 @@ class BookPullRoutes {
       return Response.ok(
         jsonEncode({
           'success': true,
-          'books': books,
-          'count': books.length,
+          'books': transformedBooks,
+          'count': transformedBooks.length,
         }),
         headers: {'Content-Type': 'application/json'},
       );

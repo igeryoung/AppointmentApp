@@ -79,10 +79,13 @@ class BookBackupService {
 
   /// List all backups for this device
   Future<List<Map<String, dynamic>>> listBackups() async {
-    debugPrint('📋 Fetching backup list...');
+    debugPrint('📋 [1/4] Starting listBackups...');
 
     // Get device info directly from database
+    debugPrint('📋 [2/4] Getting database handle...');
     final db = await dbService.database;
+
+    debugPrint('📋 [3/4] Querying device_info...');
     final deviceRows = await db.query('device_info', limit: 1);
     if (deviceRows.isEmpty) {
       throw Exception('Device not registered. Please register device first.');
@@ -91,11 +94,15 @@ class BookBackupService {
     final deviceId = deviceRow['device_id'] as String;
     final deviceToken = deviceRow['device_token'] as String;
 
+    debugPrint('📋 [4/4] Calling API to list server books (deviceId: ${deviceId.substring(0, 8)}...)');
     // Use ApiClient to list server books
-    return await apiClient.listServerBooks(
+    final result = await apiClient.listServerBooks(
       deviceId: deviceId,
       deviceToken: deviceToken,
     );
+
+    debugPrint('✅ Got ${result.length} books from server');
+    return result;
   }
 
   /// Restore a book from server backup and download directly to local device
