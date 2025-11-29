@@ -466,6 +466,7 @@ class ApiClient {
             'backupSize': book['size'] ?? 0,
             'createdAt': book['createdAt'],
             'restoredAt': null,
+            'deviceId': book['deviceId'],  // Pass through deviceId from server
           };
         }).toList();
       } else if (response.statusCode == 401) {
