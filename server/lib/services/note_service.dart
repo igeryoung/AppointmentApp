@@ -371,12 +371,28 @@ class NoteService {
 
       // Check if event already exists
       final existing = await db.querySingle(
-        'SELECT id FROM events WHERE id = @id',
+      'SELECT id, book_uuid FROM events WHERE id = @id',
         parameters: {'id': eventId},
       );
 
       if (existing != null) {
-        print('ℹ️  Event already exists: id=$eventId, skipping creation');
+        final existingBookUuid = existing['book_uuid'] as String;
+        final newBookUuid = eventData['book_uuid'] as String?;
+
+        // If book_uuid differs, update it (can happen during initial sync)
+        if (newBookUuid != null && existingBookUuid != newBookUuid) {
+          print('🔄 Event exists with different book_uuid, updating: id=$eventId, old=$existingBookUuid, new=$newBookUuid');
+          await db.query(
+            'UPDATE events SET book_uuid = @newBookUuid WHERE id = @id',
+            parameters: {
+              'id': eventId,
+              'newBookUuid': newBookUuid,
+            },
+          );
+          print('✅ Updated event book_uuid: id=$eventId');
+        } else {
+          print('ℹ️  Event already exists with correct book_uuid: id=$eventId');
+        }
         return;
       }
 
