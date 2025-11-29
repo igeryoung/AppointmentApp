@@ -5,7 +5,7 @@ import 'package:flutter/services.dart';
 class SnackBarUtils {
   SnackBarUtils._();
 
-  /// Show a success message
+  /// Show a success message with a "Details" button
   static void showSuccess(BuildContext context, String message) {
     if (!context.mounted) return;
 
@@ -14,11 +14,18 @@ class SnackBarUtils {
         content: Text(message),
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Details',
+          textColor: Colors.white,
+          onPressed: () {
+            _showDetailsDialog(context, 'Success', message);
+          },
+        ),
       ),
     );
   }
 
-  /// Show an error message
+  /// Show an error message with a "Details" button
   static void showError(BuildContext context, String message) {
     if (!context.mounted) return;
 
@@ -27,11 +34,18 @@ class SnackBarUtils {
         content: Text(message),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 4),
+        action: SnackBarAction(
+          label: 'Details',
+          textColor: Colors.white,
+          onPressed: () {
+            _showDetailsDialog(context, 'Error', message);
+          },
+        ),
       ),
     );
   }
 
-  /// Show a warning message
+  /// Show a warning message with a "Details" button
   static void showWarning(BuildContext context, String message) {
     if (!context.mounted) return;
 
@@ -40,11 +54,18 @@ class SnackBarUtils {
         content: Text(message),
         backgroundColor: Colors.orange,
         duration: const Duration(seconds: 5),
+        action: SnackBarAction(
+          label: 'Details',
+          textColor: Colors.white,
+          onPressed: () {
+            _showDetailsDialog(context, 'Warning', message);
+          },
+        ),
       ),
     );
   }
 
-  /// Show an info message
+  /// Show an info message with a "Details" button
   static void showInfo(BuildContext context, String message) {
     if (!context.mounted) return;
 
@@ -52,6 +73,13 @@ class SnackBarUtils {
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 3),
+        action: SnackBarAction(
+          label: 'Details',
+          textColor: Colors.white,
+          onPressed: () {
+            _showDetailsDialog(context, 'Info', message);
+          },
+        ),
       ),
     );
   }
