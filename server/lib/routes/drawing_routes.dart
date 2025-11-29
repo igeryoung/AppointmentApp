@@ -232,13 +232,16 @@ class DrawingRoutes {
       }
 
       // Create or update the drawing
+      // Client sends its current version (after increment), but we need the version it's based on
+      // So expectedVersion = client version - 1 (or null for first sync)
+      final expectedVersion = version != null ? version - 1 : null;
       final result = await drawingService.createOrUpdateDrawing(
         bookId: bookId,
         deviceId: deviceId,
         date: date,
         viewMode: viewMode,
         strokesData: strokesData,
-        expectedVersion: version,
+        expectedVersion: expectedVersion,
       );
 
       if (result.success) {
