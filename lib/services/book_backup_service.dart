@@ -1,26 +1,21 @@
 import 'dart:convert';
-import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'database/prd_database_service.dart';
 import 'server_config_service.dart';
-import 'http_client_factory.dart';
+import 'api_client.dart';
 
 /// Service for uploading and restoring complete books to/from server
+/// Now uses ApiClient for all HTTP operations (no direct HTTP calls)
 class BookBackupService {
   final PRDDatabaseService dbService;
+  final ApiClient apiClient;
   late final ServerConfigService _serverConfigService;
-  late final http.Client _client;
 
   BookBackupService({
     required this.dbService,
+    required this.apiClient,
   }) {
     _serverConfigService = ServerConfigService(dbService);
-    _client = HttpClientFactory.createClient();
-  }
-
-  /// Clean up resources
-  void dispose() {
-    _client.close();
   }
 
   /// Gather complete book data (book + events + notes + drawings)
@@ -58,10 +53,6 @@ class BookBackupService {
   Future<int> uploadBook(String bookUuid, {String? customName}) async {
     debugPrint('📤 Uploading book #$bookUuid...');
 
-    // Get server URL
-    final serverUrl = await _serverConfigService.getServerUrlOrDefault();
-    debugPrint('Using server URL: $serverUrl');
-
     // Get device info directly from database
     final db = await dbService.database;
     final deviceRows = await db.query('device_info', limit: 1);
@@ -76,43 +67,20 @@ class BookBackupService {
     final backupData = await _gatherBookData(bookUuid);
     final bookName = customName ?? backupData['book']['name'] as String;
 
-    // Prepare request
-    final url = Uri.parse('$serverUrl/api/books/upload');
-    final response = await _client.post(
-      url,
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Device-ID': deviceId,
-        'X-Device-Token': deviceToken,
-      },
-      body: jsonEncode({
-        'bookUuid': bookUuid,
-        'backupName': bookName,
-        'backupData': backupData,
-      }),
+    // Use ApiClient to upload
+    return await apiClient.uploadBookBackup(
+      bookUuid: bookUuid,
+      backupName: bookName,
+      backupData: backupData,
+      deviceId: deviceId,
+      deviceToken: deviceToken,
     );
-
-    if (response.statusCode == 200) {
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        final backupId = result['backupId'] as int;
-        debugPrint('✅ Book uploaded successfully: Backup ID $backupId');
-        return backupId;
-      } else {
-        throw Exception(result['message'] ?? 'Upload failed');
-      }
-    } else {
-      throw Exception('Server error: ${response.statusCode}');
-    }
   }
 
   /// List all backups for this device
   Future<List<Map<String, dynamic>>> listBackups() async {
     debugPrint('📋 Fetching backup list...');
 
-    // Get server URL
-    final serverUrl = await _serverConfigService.getServerUrlOrDefault();
-
     // Get device info directly from database
     final db = await dbService.database;
     final deviceRows = await db.query('device_info', limit: 1);
@@ -123,32 +91,17 @@ class BookBackupService {
     final deviceId = deviceRow['device_id'] as String;
     final deviceToken = deviceRow['device_token'] as String;
 
-    // Fetch backups
-    final url = Uri.parse('$serverUrl/api/books/list').replace(queryParameters: {
-      'deviceId': deviceId,
-      'deviceToken': deviceToken,
-    });
-
-    final response = await _client.get(url);
-
-    if (response.statusCode == 200) {
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        return (result['backups'] as List).cast<Map<String, dynamic>>();
-      } else {
-        throw Exception(result['message'] ?? 'Failed to list backups');
-      }
-    } else {
-      throw Exception('Server error: ${response.statusCode}');
-    }
+    // Use ApiClient to list server books
+    return await apiClient.listServerBooks(
+      deviceId: deviceId,
+      deviceToken: deviceToken,
+    );
   }
 
   /// Restore a book from server backup and download directly to local device
+  /// backupId is the server book ID (integer)
   Future<String> restoreBook(int backupId) async {
     debugPrint('📥 Restoring book from backup #$backupId...');
-
-    // Get server URL
-    final serverUrl = await _serverConfigService.getServerUrlOrDefault();
 
     // Get device info directly from database
     final db = await dbService.database;
@@ -160,30 +113,25 @@ class BookBackupService {
     final deviceId = deviceRow['device_id'] as String;
     final deviceToken = deviceRow['device_token'] as String;
 
-    // Download backup data directly from server
-    final downloadUrl = Uri.parse('$serverUrl/api/books/download/$backupId').replace(
-      queryParameters: {
-        'deviceId': deviceId,
-        'deviceToken': deviceToken,
-      },
+    // List backups to find the bookUuid for this backupId
+    final backups = await listBackups();
+    final backup = backups.firstWhere(
+      (b) => b['id'] == backupId,
+      orElse: () => throw Exception('Backup not found: $backupId'),
+    );
+    final bookUuid = backup['bookUuid'] as String;
+
+    // Pull complete book data from server using ApiClient
+    final bookData = await apiClient.pullBook(
+      bookUuid: bookUuid,
+      deviceId: deviceId,
+      deviceToken: deviceToken,
     );
 
-    final response = await _client.get(downloadUrl);
+    debugPrint('✅ Book data pulled from server');
 
-    if (response.statusCode != 200) {
-      throw Exception('Server error: ${response.statusCode}');
-    }
-
-    final result = jsonDecode(response.body);
-    if (result['success'] != true) {
-      throw Exception(result['message'] ?? 'Download failed');
-    }
-
-    debugPrint('✅ Backup data downloaded from server');
-
-    // Apply backup data directly to local database
-    final backupData = result['backupData'] as Map<String, dynamic>;
-    final count = await _applyBackupDataLocally(backupData);
+    // Apply book data directly to local database
+    final count = await _applyBackupDataLocally(bookData);
 
     debugPrint('✅ Book restored to local device: $count items');
     return 'Book restored successfully ($count items)';
@@ -264,40 +212,4 @@ class BookBackupService {
     return count;
   }
 
-  /// Delete a backup from server
-  Future<void> deleteBackup(int backupId) async {
-    debugPrint('🗑️ Deleting backup #$backupId...');
-
-    // Get server URL
-    final serverUrl = await _serverConfigService.getServerUrlOrDefault();
-
-    // Get device info directly from database
-    final db = await dbService.database;
-    final deviceRows = await db.query('device_info', limit: 1);
-    if (deviceRows.isEmpty) {
-      throw Exception('Device not registered. Please register device first.');
-    }
-    final deviceRow = deviceRows.first;
-    final deviceId = deviceRow['device_id'] as String;
-    final deviceToken = deviceRow['device_token'] as String;
-
-    // Delete backup
-    final url = Uri.parse('$serverUrl/api/books/$backupId').replace(queryParameters: {
-      'deviceId': deviceId,
-      'deviceToken': deviceToken,
-    });
-
-    final response = await _client.delete(url);
-
-    if (response.statusCode == 200) {
-      final result = jsonDecode(response.body);
-      if (result['success'] == true) {
-        debugPrint('✅ Backup deleted successfully');
-      } else {
-        throw Exception(result['message'] ?? 'Delete failed');
-      }
-    } else {
-      throw Exception('Server error: ${response.statusCode}');
-    }
-  }
 }
