@@ -164,7 +164,7 @@ class BookBackupService {
         'book_uuid': book['book_uuid'],
         'name': book['name'],
         'created_at': book['created_at'],
-        'archived_at': book['archived_at'],
+        'archived_at': null,  // Clear archived status when restoring
         'version': book['version'] ?? 1,
         'is_dirty': book['is_dirty'] ?? 0,
       });
