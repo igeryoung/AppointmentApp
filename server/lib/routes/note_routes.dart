@@ -320,12 +320,15 @@ class NoteRoutes {
       }
 
       // Create or update the note
+      // Client sends its current version (after increment), but we need the version it's based on
+      // So expectedVersion = client version - 1 (or null for first sync)
+      final expectedVersion = version != null ? version - 1 : null;
       final result = await noteService.createOrUpdateNote(
         eventId: eventId,
         deviceId: deviceId,
         pagesData: pagesData,
         strokesData: strokesData,
-        expectedVersion: version,
+        expectedVersion: expectedVersion,
       );
 
       if (result.success) {

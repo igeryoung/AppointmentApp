@@ -62,7 +62,18 @@ void main(List<String> args) async {
     final migrations = [
       'migrations/001_initial_schema.sql',
       'migrations/002_book_backups.sql',
+      'migrations/002_multi_event_types.sql',
       'migrations/003_add_book_uuid.sql',
+      'migrations/004_server_store_optimization.sql',
+      'migrations/005_cleanup_book_id.sql',
+      'migrations/005_optional_record_number.sql',
+      'migrations/006_book_uuid_foreign_keys.sql',
+      'migrations/006_shared_person_notes.sql',
+      'migrations/007_add_is_checked.sql',
+      'migrations/008_multi_page_notes.sql',
+      'migrations/009_book_uuid_as_primary_key.sql',
+      'migrations/010_book_multi_device_access.sql',
+      'migrations/011_add_has_note_to_events.sql',
     ];
 
     for (final migrationPath in migrations) {
