@@ -63,7 +63,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 21, // v21 makes book_uuid PRIMARY KEY, removes id column
+      version: 22, // v22 migrates event IDs from INTEGER to UUID (TEXT)
       onCreate: _createTables,
       onConfigure: _onConfigure,
       onUpgrade: _onUpgrade,
@@ -77,10 +77,11 @@ class PRDDatabaseService
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     debugPrint('Database upgrade from v$oldVersion to v$newVersion');
 
-    // Version 21 is the baseline - no migrations supported
-    if (oldVersion < 21) {
-      debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion is not supported.');
-      debugPrint('⚠️ Version 21 is the baseline. Deleting old database and recreating...');
+    // Version 22 introduces UUID event IDs (breaking change)
+    // For development ease, we recreate the database rather than migrate data
+    if (oldVersion < 22) {
+      debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion requires recreation.');
+      debugPrint('⚠️ Event IDs changed from INTEGER to UUID. Deleting old database and recreating...');
 
       // Close the database
       await db.close();
@@ -92,17 +93,22 @@ class PRDDatabaseService
       await deleteDatabase(path);
 
       throw Exception(
-        'Database has been reset. Please restart the app to use the new database.'
+        'Database has been reset due to UUID migration. Please restart the app to use the new database.'
       );
     }
   }
 
   Future<void> _createTables(Database db, int version) async {
-    // Version 21 schema - BASELINE VERSION (no migrations supported from older versions)
+    // Version 22 schema - UUID Event IDs
+    //
+    // Changes from v21:
+    // - Events use UUID (TEXT) PRIMARY KEY instead of INTEGER AUTOINCREMENT
+    // - original_event_id and new_event_id changed to TEXT (UUIDs)
+    // - Notes.event_id changed to TEXT (UUID) to match events.id
     //
     // Full Feature Set:
     // - Books with UUID as PRIMARY KEY (no auto-increment id)
-    // - Events with book_uuid foreign key, multi-type support, phone, has_charge_items flag, completion status, and sync columns
+    // - Events with UUID PRIMARY KEY, book_uuid foreign key, multi-type support, phone, has_charge_items flag, completion status, and sync columns
     // - Notes with multi-page support, person sharing, locks, cache, and sync columns
     // - Person charge items with shared sync across events
     // - Person info with synced phone numbers
@@ -124,7 +130,7 @@ class PRDDatabaseService
     // Events table - Individual appointment entries with PRD metadata
     await db.execute('''
       CREATE TABLE events (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        id TEXT PRIMARY KEY,
         book_uuid TEXT NOT NULL,
         name TEXT NOT NULL,
         record_number TEXT,
@@ -138,8 +144,8 @@ class PRDDatabaseService
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         is_removed INTEGER DEFAULT 0,
         removal_reason TEXT,
-        original_event_id INTEGER,
-        new_event_id INTEGER,
+        original_event_id TEXT,
+        new_event_id TEXT,
         is_checked INTEGER DEFAULT 0,
         has_note INTEGER DEFAULT 0,
         version INTEGER DEFAULT 1,
@@ -152,7 +158,7 @@ class PRDDatabaseService
     await db.execute('''
       CREATE TABLE notes (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        event_id INTEGER NOT NULL UNIQUE,
+        event_id TEXT NOT NULL UNIQUE,
         strokes_data TEXT,
         pages_data TEXT,
         created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),

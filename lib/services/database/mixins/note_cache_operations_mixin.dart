@@ -18,7 +18,7 @@ mixin NoteCacheOperationsMixin {
 
   /// Get cached note by event ID
   /// Automatically increments cache hit count
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     final db = await database;
     final maps = await db.query('notes', where: 'event_id = ?', whereArgs: [eventId], limit: 1);
     if (maps.isEmpty) return null;

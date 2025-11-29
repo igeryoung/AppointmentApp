@@ -54,16 +54,15 @@ class NoteRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _getNote(Request request) async {
     try {
-      // Extract path parameters - bookId is now a UUID string, not an integer
+      // Extract path parameters - both bookId and eventId are now UUID strings
       final bookUuid = request.params['bookId'] ?? '';
-      final eventIdStr = request.params['eventId'] ?? '';
-      final eventId = int.tryParse(eventIdStr);
+      final eventId = request.params['eventId'] ?? '';
 
-      if (bookUuid.isEmpty || eventId == null) {
+      if (bookUuid.isEmpty || eventId.isEmpty) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Invalid bookId or eventId. bookId must be a UUID string, eventId must be an integer.',
+            'message': 'Invalid bookId or eventId. Both must be UUID strings.',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -177,24 +176,23 @@ class NoteRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _createOrUpdateNote(Request request) async {
     try {
-      // Extract path parameters - bookId is now a UUID string, not an integer
+      // Extract path parameters - both bookId and eventId are now UUID strings
       final bookUuid = request.params['bookId'] ?? '';
-      final eventIdStr = request.params['eventId'] ?? '';
-      final eventId = int.tryParse(eventIdStr);
+      final eventId = request.params['eventId'] ?? '';
 
-      print('📝 POST /api/books/$bookUuid/events/$eventIdStr/note');
+      print('📝 POST /api/books/$bookUuid/events/$eventId/note');
       print('   bookUuid: $bookUuid (length: ${bookUuid.length})');
-      print('   eventId: $eventId (parsed from "$eventIdStr")');
+      print('   eventId: $eventId (length: ${eventId.length})');
 
-      if (bookUuid.isEmpty || eventId == null) {
-        print('❌ [400] Invalid parameters - bookUuid: "$bookUuid", eventId: $eventId');
+      if (bookUuid.isEmpty || eventId.isEmpty) {
+        print('❌ [400] Invalid parameters - bookUuid: "$bookUuid", eventId: "$eventId"');
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Invalid bookId or eventId. bookId must be a UUID string, eventId must be an integer.',
+            'message': 'Invalid bookId or eventId. Both must be UUID strings.',
             'received': {
               'bookId': bookUuid,
-              'eventId': eventIdStr,
+              'eventId': eventId,
             },
           }),
           headers: {'Content-Type': 'application/json'},
@@ -389,16 +387,15 @@ class NoteRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _deleteNote(Request request) async {
     try {
-      // Extract path parameters - bookId is now a UUID string, not an integer
+      // Extract path parameters - both bookId and eventId are now UUID strings
       final bookUuid = request.params['bookId'] ?? '';
-      final eventIdStr = request.params['eventId'] ?? '';
-      final eventId = int.tryParse(eventIdStr);
+      final eventId = request.params['eventId'] ?? '';
 
-      if (bookUuid.isEmpty || eventId == null) {
+      if (bookUuid.isEmpty || eventId.isEmpty) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Invalid bookId or eventId. bookId must be a UUID string, eventId must be an integer.',
+            'message': 'Invalid bookId or eventId. Both must be UUID strings.',
           }),
           headers: {'Content-Type': 'application/json'},
         );

@@ -75,13 +75,13 @@ abstract class IDatabaseService {
   // ===================
 
   /// Get cached note by event ID
-  Future<Note?> getCachedNote(int eventId);
+  Future<Note?> getCachedNote(String eventId);
 
   /// Save note to cache (insert or update)
   Future<Note> saveCachedNote(Note note);
 
   /// Delete cached note by event ID
-  Future<void> deleteCachedNote(int eventId);
+  Future<void> deleteCachedNote(String eventId);
 
   /// Batch get cached notes
   Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds);

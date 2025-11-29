@@ -9,7 +9,7 @@ class NoteSyncAdapter {
   NoteSyncAdapter(this._contentService);
 
   /// Get cached note from local storage
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     debugPrint('📖 NoteSyncAdapter: Getting cached note for event $eventId');
     return await _contentService.getCachedNote(eventId);
   }

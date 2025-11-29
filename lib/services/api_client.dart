@@ -53,7 +53,7 @@ class ApiClient {
   /// Fetch a single note from server
   Future<Map<String, dynamic>?> fetchNote({
     required String bookUuid,
-    required int eventId,
+    required String eventId,
     required String deviceId,
     required String deviceToken,
   }) async {
@@ -90,7 +90,7 @@ class ApiClient {
   /// the server will auto-create the event before saving the note
   Future<Map<String, dynamic>> saveNote({
     required String bookUuid,
-    required int eventId,
+    required String eventId,
     required Map<String, dynamic> noteData,
     required String deviceId,
     required String deviceToken,
@@ -139,7 +139,7 @@ class ApiClient {
   /// Delete a note from server
   Future<void> deleteNote({
     required String bookUuid,
-    required int eventId,
+    required String eventId,
     required String deviceId,
     required String deviceToken,
   }) async {

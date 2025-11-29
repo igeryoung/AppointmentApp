@@ -34,7 +34,7 @@ class NoteContentService {
   ///
   /// Returns cached note immediately without checking server
   /// Used for instant display in cache-first strategy
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     try {
       final cachedNote = await _noteRepository.getCached(eventId);
       if (cachedNote != null) {

@@ -316,7 +316,7 @@ class WebPRDDatabaseService implements IDatabaseService {
   // Note Operations
   // ===================
 
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     await Future.delayed(const Duration(milliseconds: 5));
     debugPrint('🗄️ WebDB: getCachedNote($eventId) - searching in ${_notes.length} notes');
 
