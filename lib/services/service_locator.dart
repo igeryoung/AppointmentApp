@@ -132,6 +132,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
     }
 
     // Register Phase 3 content services
+    if (getIt.isRegistered<NoteContentService>()) {
+      getIt.unregister<NoteContentService>();
+    }
     getIt.registerLazySingleton<NoteContentService>(
       () => NoteContentService(
         apiClient,
@@ -141,6 +144,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
       ),
     );
 
+    if (getIt.isRegistered<DrawingContentService>()) {
+      getIt.unregister<DrawingContentService>();
+    }
     getIt.registerLazySingleton<DrawingContentService>(
       () => DrawingContentService(
         apiClient,
@@ -150,6 +156,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
     );
 
     // Register Phase 4 cubits that depend on content services
+    if (getIt.isRegistered<ScheduleCubit>()) {
+      getIt.unregister<ScheduleCubit>();
+    }
     getIt.registerFactory<ScheduleCubit>(
       () => ScheduleCubit(
         getIt<IEventRepository>(),
@@ -158,6 +167,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
       ),
     );
 
+    if (getIt.isRegistered<EventDetailCubit>()) {
+      getIt.unregister<EventDetailCubit>();
+    }
     getIt.registerFactory<EventDetailCubit>(
       () => EventDetailCubit(
         getIt<IEventRepository>(),
