@@ -452,11 +452,6 @@ class NoteService {
         },
       );
 
-      // Update the sequence to prevent future ID conflicts
-      await db.query(
-        "SELECT setval('events_id_seq', (SELECT MAX(id) FROM events))",
-      );
-
       print('✅ Event auto-created: id=$eventId, book=${eventData['book_id']}, name="${eventData['name']}"');
     } catch (e) {
       print('❌ Create event failed: $e');
