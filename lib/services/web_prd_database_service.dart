@@ -168,7 +168,7 @@ class WebPRDDatabaseService implements IDatabaseService {
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
-  Future<Event?> getEventById(int id) async {
+  Future<Event?> getEventById(String id) async {
     await Future.delayed(const Duration(milliseconds: 5));
     try {
       return _events.firstWhere((e) => e.id == id);
@@ -215,7 +215,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     return updatedEvent;
   }
 
-  Future<void> deleteEvent(int id) async {
+  Future<void> deleteEvent(String id) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final eventIndex = _events.indexWhere((e) => e.id == id);
@@ -509,9 +509,9 @@ class WebPRDDatabaseService implements IDatabaseService {
     _notes.removeWhere((n) => n.eventId == eventId);
   }
 
-  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds) async {
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds) async {
     await Future.delayed(const Duration(milliseconds: 10));
-    final result = <int, Note>{};
+    final result = <String, Note>{};
     for (final eventId in eventIds) {
       final note = await getCachedNote(eventId);
       if (note != null) {

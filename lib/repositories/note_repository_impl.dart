@@ -11,7 +11,7 @@ class NoteRepositoryImpl implements INoteRepository {
   NoteRepositoryImpl(this._getDatabaseFn);
 
   @override
-  Future<Note?> getCached(int eventId) async {
+  Future<Note?> getCached(String eventId) async {
     final db = await _getDatabaseFn();
     final maps = await db.query('notes', where: 'event_id = ?', whereArgs: [eventId], limit: 1);
     if (maps.isEmpty) return null;
@@ -97,7 +97,7 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   @override
-  Future<void> deleteCache(int eventId) async {
+  Future<void> deleteCache(String eventId) async {
     final db = await _getDatabaseFn();
     await db.delete('notes', where: 'event_id = ?', whereArgs: [eventId]);
   }
@@ -131,7 +131,7 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   @override
-  Future<void> markClean(int eventId) async {
+  Future<void> markClean(String eventId) async {
     final db = await _getDatabaseFn();
     await db.update(
       'notes',
@@ -161,7 +161,7 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   /// Batch get cached notes
-  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds) async {
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds) async {
     if (eventIds.isEmpty) return {};
 
     final db = await _getDatabaseFn();
@@ -172,7 +172,7 @@ class NoteRepositoryImpl implements INoteRepository {
       whereArgs: eventIds,
     );
 
-    final result = <int, Note>{};
+    final result = <String, Note>{};
     for (final map in maps) {
       final note = Note.fromMap(map);
       result[note.eventId] = note;
@@ -183,7 +183,7 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   /// Batch save cached notes
-  Future<void> batchSaveCachedNotes(Map<int, Note> notes) async {
+  Future<void> batchSaveCachedNotes(Map<String, Note> notes) async {
     if (notes.isEmpty) return;
 
     final db = await _getDatabaseFn();
@@ -227,7 +227,7 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   @override
-  Future<void> markNoteSynced(int eventId, DateTime syncedAt) async {
+  Future<void> markNoteSynced(String eventId, DateTime syncedAt) async {
     final db = await _getDatabaseFn();
     await db.update(
       'notes',
@@ -243,7 +243,7 @@ class NoteRepositoryImpl implements INoteRepository {
   @override
   Future<void> applyServerChange(Map<String, dynamic> changeData) async {
     final db = await _getDatabaseFn();
-    final eventId = changeData['event_id'] as int;
+    final eventId = changeData['event_id'] as String;
 
     // Check if note exists locally
     final existing = await getCached(eventId);

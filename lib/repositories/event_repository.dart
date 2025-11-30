@@ -33,7 +33,7 @@ abstract class IEventRepository {
 
   /// Retrieve a single event by its ID
   /// Returns null if event not found
-  Future<Event?> getById(int id);
+  Future<Event?> getById(String id);
 
   /// Retrieve all events for a specific book
   Future<List<Event>> getByBookId(String bookUuid);
@@ -56,7 +56,7 @@ abstract class IEventRepository {
 
   /// Delete an event by its ID
   /// Also deletes associated notes from cache
-  Future<void> delete(int id);
+  Future<void> delete(String id);
 
   /// Remove an event (soft delete with reason)
   /// Returns the updated event with isRemoved flag set
@@ -96,12 +96,12 @@ abstract class IEventRepository {
   Future<List<Event>> getDirtyEvents();
 
   /// Mark an event as synced (clear dirty flag)
-  Future<void> markEventSynced(int id, DateTime syncedAt);
+  Future<void> markEventSynced(String id, DateTime syncedAt);
 
   /// Apply server change to local database
   /// Used when pulling changes from server
   Future<void> applyServerChange(Map<String, dynamic> changeData);
 
   /// Get event by server ID (used for sync)
-  Future<Event?> getByServerId(int serverId);
+  Future<Event?> getByServerId(String serverId);
 }

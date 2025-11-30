@@ -191,7 +191,7 @@ class NoteContentService {
   // ===================
 
   /// Delete note (from server and cache)
-  Future<void> deleteNote(int eventId) async {
+  Future<void> deleteNote(String eventId) async {
     try {
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
@@ -234,7 +234,7 @@ class NoteContentService {
   /// Does not block, returns immediately
   /// Failures are logged but don't throw
   Future<void> preloadNotes(
-    List<int> eventIds, {
+    List<String> eventIds, {
     Function(int loaded, int total)? onProgress,
   }) async {
     if (eventIds.isEmpty) {
@@ -253,7 +253,7 @@ class NoteContentService {
       }
 
       // Get cached notes to filter out
-      final cachedNotes = <int>{};
+      final cachedNotes = <String>{};
       for (final eventId in eventIds) {
         final cached = await _noteRepository.getCached(eventId);
         if (cached != null) {
@@ -271,7 +271,7 @@ class NoteContentService {
       debugPrint('ℹ️ NoteContentService: Fetching ${uncachedEventIds.length} uncached notes');
 
       // Get book IDs for events (need to group by book)
-      final eventsByBook = <String, List<int>>{};
+      final eventsByBook = <String, List<String>>{};
       for (final eventId in uncachedEventIds) {
         final event = await _eventRepository.getById(eventId);
         if (event != null) {

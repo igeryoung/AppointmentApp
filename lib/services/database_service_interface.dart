@@ -60,7 +60,7 @@ abstract class IDatabaseService {
   Future<void> deleteEvent(String id);
 
   /// Mark an event as removed (soft delete with reason)
-  Future<Event> removeEvent(int id, String reason);
+  Future<Event> removeEvent(String id, String reason);
 
   /// Change the time of an event (creates a new event and links them)
   Future<Event> changeEventTime(

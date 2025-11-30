@@ -5,20 +5,20 @@ import '../models/note.dart';
 abstract class INoteRepository {
   /// Retrieve a cached note for a specific event
   /// Returns null if not cached
-  Future<Note?> getCached(int eventId);
+  Future<Note?> getCached(String eventId);
 
   /// Save a note to local cache
   /// Marks as dirty if not synced with server
   Future<void> saveToCache(Note note, {required bool isDirty});
 
   /// Delete a note from cache
-  Future<void> deleteCache(int eventId);
+  Future<void> deleteCache(String eventId);
 
   /// Retrieve all notes marked as dirty (not synced to server)
   Future<List<Note>> getDirtyNotes();
 
   /// Mark a note as clean (synced with server)
-  Future<void> markClean(int eventId);
+  Future<void> markClean(String eventId);
 
   /// Retrieve all cached notes for a specific book
   Future<List<Note>> getAllCachedForBook(String bookUuid);
@@ -27,7 +27,7 @@ abstract class INoteRepository {
   Future<List<Note>> getAllCached();
 
   /// Mark a note as synced with timestamp (similar to markClean but with syncedAt)
-  Future<void> markNoteSynced(int eventId, DateTime syncedAt);
+  Future<void> markNoteSynced(String eventId, DateTime syncedAt);
 
   /// Apply server change to local database
   Future<void> applyServerChange(Map<String, dynamic> changeData);

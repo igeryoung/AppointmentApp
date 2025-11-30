@@ -5,8 +5,8 @@ import 'event_repository.dart';
 import 'base_repository.dart';
 
 /// Implementation of EventRepository using SQLite
-class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRepository {
-  final Future<Note?> Function(int eventId) _getCachedNoteFn;
+class EventRepositoryImpl extends BaseRepository<Event, String> implements IEventRepository {
+  final Future<Note?> Function(String eventId) _getCachedNoteFn;
 
   EventRepositoryImpl(Future<Database> Function() getDatabaseFn, this._getCachedNoteFn)
       : super(getDatabaseFn);
@@ -24,7 +24,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   Future<List<Event>> getAll() => queryAll(orderBy: 'start_time ASC');
 
   @override
-  Future<Event?> getById(int id) => super.getById(id);
+  Future<Event?> getById(String id) => super.getById(id);
 
   @override
   Future<List<Event>> getByBookId(String bookUuid) {
@@ -119,7 +119,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<void> delete(int id) async {
+  Future<void> delete(String id) async {
     // Perform soft delete: mark as deleted and dirty for sync
     final db = await getDatabaseFn();
     final event = await getById(id);
@@ -343,7 +343,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<void> markEventSynced(int id, DateTime syncedAt) async {
+  Future<void> markEventSynced(String id, DateTime syncedAt) async {
     final db = await getDatabaseFn();
     await db.update(
       'events',
@@ -359,7 +359,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   @override
   Future<void> applyServerChange(Map<String, dynamic> changeData) async {
     final db = await getDatabaseFn();
-    final id = changeData['id'] as int;
+    final id = changeData['id'] as String;
 
     // Check if event exists locally
     final existing = await getById(id);
@@ -382,7 +382,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<Event?> getByServerId(int serverId) async {
+  Future<Event?> getByServerId(String serverId) async {
     return getById(serverId);
   }
 }

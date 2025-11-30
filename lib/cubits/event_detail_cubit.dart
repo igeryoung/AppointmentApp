@@ -31,7 +31,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
   // ===================
 
   /// Load event and its note
-  Future<void> loadEvent(int eventId) async {
+  Future<void> loadEvent(String eventId) async {
     emit(const EventDetailLoading());
 
     try {
@@ -61,7 +61,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
   }
 
   /// Refresh note from server in background (non-blocking)
-  Future<void> _refreshNoteInBackground(int eventId) async {
+  Future<void> _refreshNoteInBackground(String eventId) async {
     try {
       final serverNote = await _noteContentService.getNote(eventId, forceRefresh: true);
       final currentState = state;
@@ -110,7 +110,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
   // ===================
 
   /// Load note from server (force refresh)
-  Future<void> loadNote(int eventId) async {
+  Future<void> loadNote(String eventId) async {
     final currentState = state;
     if (currentState is! EventDetailLoaded) return;
 
@@ -173,7 +173,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
   }
 
   /// Delete note
-  Future<void> deleteNote(int eventId) async {
+  Future<void> deleteNote(String eventId) async {
     final currentState = state;
     if (currentState is! EventDetailLoaded) return;
 
