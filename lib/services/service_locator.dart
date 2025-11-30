@@ -132,6 +132,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
     }
 
     // Register Phase 3 content services
+    if (getIt.isRegistered<NoteContentService>()) {
+      getIt.unregister<NoteContentService>();
+    }
     getIt.registerLazySingleton<NoteContentService>(
       () => NoteContentService(
         apiClient,
@@ -141,6 +144,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
       ),
     );
 
+    if (getIt.isRegistered<DrawingContentService>()) {
+      getIt.unregister<DrawingContentService>();
+    }
     getIt.registerLazySingleton<DrawingContentService>(
       () => DrawingContentService(
         apiClient,
