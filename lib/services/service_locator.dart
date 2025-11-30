@@ -156,6 +156,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
     );
 
     // Register Phase 4 cubits that depend on content services
+    if (getIt.isRegistered<ScheduleCubit>()) {
+      getIt.unregister<ScheduleCubit>();
+    }
     getIt.registerFactory<ScheduleCubit>(
       () => ScheduleCubit(
         getIt<IEventRepository>(),
@@ -164,6 +167,9 @@ Future<void> registerContentServices(ApiClient apiClient) async {
       ),
     );
 
+    if (getIt.isRegistered<EventDetailCubit>()) {
+      getIt.unregister<EventDetailCubit>();
+    }
     getIt.registerFactory<EventDetailCubit>(
       () => EventDetailCubit(
         getIt<IEventRepository>(),
