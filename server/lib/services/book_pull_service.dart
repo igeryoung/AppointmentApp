@@ -123,8 +123,8 @@ class BookPullService {
         'id': row['id'] as String,
         'book_uuid': row['book_uuid'] as String,
         'name': row['name'] as String,
-        'record_number': row['record_number'] as String,
-        'event_type': row['event_type'] as String,
+        'record_number': row['record_number'] as String?,
+        'event_type': row['event_type'] as String?,
         'start_time': (row['start_time'] as DateTime).toIso8601String(),
         'end_time': row['end_time'] != null
             ? (row['end_time'] as DateTime).toIso8601String()
