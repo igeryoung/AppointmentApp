@@ -87,7 +87,7 @@ abstract class IDatabaseService {
   Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds);
 
   /// Batch save cached notes
-  Future<void> batchSaveCachedNotes(Map<int, Note> notes);
+  Future<void> batchSaveCachedNotes(Map<String, Note> notes);
 
   // ===================
   // Schedule Drawing Cache Operations

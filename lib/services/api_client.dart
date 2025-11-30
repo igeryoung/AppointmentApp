@@ -168,7 +168,7 @@ class ApiClient {
 
   /// Batch fetch notes from server
   Future<List<Map<String, dynamic>>> batchFetchNotes({
-    required List<int> eventIds,
+    required List<String> eventIds,
     required String deviceId,
     required String deviceToken,
   }) async {

@@ -9,13 +9,13 @@ import 'database_service_interface.dart';
 /// Simple in-memory database for web platform testing
 class WebPRDDatabaseService implements IDatabaseService {
   static WebPRDDatabaseService? _instance;
+  static const _uuid = Uuid();
 
   // In-memory storage
   final List<Book> _books = [];
   final List<Event> _events = [];
   final List<Note> _notes = [];
   final List<ScheduleDrawing> _scheduleDrawings = [];
-  int _nextEventId = 1;
   int _nextNoteId = 1;
   int _nextScheduleDrawingId = 1;
 
@@ -181,8 +181,9 @@ class WebPRDDatabaseService implements IDatabaseService {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final now = DateTime.now();
+    final id = event.id ?? _uuid.v4();
     final newEvent = event.copyWith(
-      id: _nextEventId++,
+      id: id,
       createdAt: now,
       updatedAt: now,
     );
@@ -268,7 +269,7 @@ class WebPRDDatabaseService implements IDatabaseService {
 
     // Create a new event with the new time but same metadata
     final newEvent = originalEvent.copyWith(
-      id: _nextEventId++,
+      id: _uuid.v4(),
       startTime: newStartTime,
       endTime: newEndTime,
       originalEventId: originalEvent.id,

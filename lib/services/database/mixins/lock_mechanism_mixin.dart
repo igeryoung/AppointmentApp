@@ -18,7 +18,7 @@ mixin LockMechanismMixin {
 
   /// Try to acquire a lock on a note for editing
   /// Returns true if lock was acquired, false if already locked by another device
-  Future<bool> acquireNoteLock(int eventId) async {
+  Future<bool> acquireNoteLock(String eventId) async {
     final db = await database;
 
     // Get current device ID
@@ -63,7 +63,7 @@ mixin LockMechanismMixin {
 
   /// Release a lock on a note
   /// Only releases if current device holds the lock
-  Future<void> releaseNoteLock(int eventId) async {
+  Future<void> releaseNoteLock(String eventId) async {
     final db = await database;
 
     // Get current device ID
@@ -120,7 +120,7 @@ mixin LockMechanismMixin {
 
   /// Check if a note is currently locked by another device
   /// Returns true if locked by another device, false if unlocked or locked by current device
-  Future<bool> isNoteLockedByOther(int eventId) async {
+  Future<bool> isNoteLockedByOther(String eventId) async {
     final db = await database;
 
     // Get current device ID

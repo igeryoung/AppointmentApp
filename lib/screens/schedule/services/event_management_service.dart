@@ -41,10 +41,10 @@ class EventManagementService {
   final void Function(Event event) onUpdateEvent;
 
   /// Callback to delete event via cubit (soft delete with reason)
-  final Future<void> Function(int eventId, String reason) onDeleteEvent;
+  final Future<void> Function(String eventId, String reason) onDeleteEvent;
 
   /// Callback to hard delete event via cubit (permanent deletion)
-  final Future<void> Function(int eventId) onHardDeleteEvent;
+  final Future<void> Function(String eventId) onHardDeleteEvent;
 
   /// Callback to change event time via cubit
   final Future<void> Function(Event event, DateTime startTime, DateTime? endTime, String reason) onChangeEventTime;

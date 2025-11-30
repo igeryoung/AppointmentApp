@@ -148,7 +148,7 @@ class ContentService {
   ///
   /// **Data Safety First Principle**: Local save is guaranteed,
   /// server sync is handled separately in background (best effort)
-  Future<void> saveNote(int eventId, Note note) async {
+  Future<void> saveNote(String eventId, Note note) async {
     // **数据安全第一原则**: 只保存到本地 (标记为dirty)
     // Server sync由调用者通过 syncNote() 单独处理（后台best effort）
     await _cacheManager.saveNote(eventId, note, dirty: true);
@@ -296,7 +296,7 @@ class ContentService {
   /// Does not block, returns immediately
   /// Failures are logged but don't throw
   Future<void> preloadNotes(
-    List<int> eventIds, {
+    List<String> eventIds, {
     Function(int loaded, int total)? onProgress,
     int? generation,
     bool Function()? isCancelled,

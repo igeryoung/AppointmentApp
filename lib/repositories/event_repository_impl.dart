@@ -112,7 +112,7 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     final updateData = toMap(updatedEvent);
     updateData.remove('id');
 
-    final updatedRows = await update(updateData, where: 'id = ?', whereArgs: [event.id!]);
+    final updatedRows = await updateById(event.id!, updateData);
     if (updatedRows == 0) throw Exception('Event not found');
 
     return updatedEvent;
