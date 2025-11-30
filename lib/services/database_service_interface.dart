@@ -48,7 +48,7 @@ abstract class IDatabaseService {
   Future<List<Event>> getAllEventsByBook(String bookUuid);
 
   /// Get an event by its ID
-  Future<Event?> getEventById(int id);
+  Future<Event?> getEventById(String id);
 
   /// Create a new event
   Future<Event> createEvent(Event event);
@@ -57,7 +57,7 @@ abstract class IDatabaseService {
   Future<Event> updateEvent(Event event);
 
   /// Delete an event permanently
-  Future<void> deleteEvent(int id);
+  Future<void> deleteEvent(String id);
 
   /// Mark an event as removed (soft delete with reason)
   Future<Event> removeEvent(int id, String reason);
@@ -84,7 +84,7 @@ abstract class IDatabaseService {
   Future<void> deleteCachedNote(String eventId);
 
   /// Batch get cached notes
-  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds);
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds);
 
   /// Batch save cached notes
   Future<void> batchSaveCachedNotes(Map<int, Note> notes);

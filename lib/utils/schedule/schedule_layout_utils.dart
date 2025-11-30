@@ -230,11 +230,11 @@ class ScheduleLayoutUtils {
       // Sort each list by creation time for stable ordering (with ID as fallback)
       closeEndEvents.sort((a, b) {
         final timeComparison = a.createdAt.compareTo(b.createdAt);
-        return timeComparison != 0 ? timeComparison : (a.id ?? 0).compareTo(b.id ?? 0);
+        return timeComparison != 0 ? timeComparison : (a.id ?? '').compareTo(b.id ?? '');
       });
       openEndEvents.sort((a, b) {
         final timeComparison = a.createdAt.compareTo(b.createdAt);
-        return timeComparison != 0 ? timeComparison : (a.id ?? 0).compareTo(b.id ?? 0);
+        return timeComparison != 0 ? timeComparison : (a.id ?? '').compareTo(b.id ?? '');
       });
 
       // Process in order: close-end events first, then open-end events

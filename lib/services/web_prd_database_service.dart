@@ -227,7 +227,7 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   /// Soft remove an event with a reason
-  Future<Event> removeEvent(int eventId, String reason) async {
+  Future<Event> removeEvent(String eventId, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Removal reason cannot be empty');
     }
@@ -504,7 +504,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     );
   }
 
-  Future<void> deleteCachedNote(int eventId) async {
+  Future<void> deleteCachedNote(String eventId) async {
     await Future.delayed(const Duration(milliseconds: 5));
     _notes.removeWhere((n) => n.eventId == eventId);
   }

@@ -27,7 +27,7 @@ mixin NoteCacheOperationsMixin {
 
   /// Load note for event with person sync logic
   /// If event has record_number, syncs with latest note from same person group
-  Future<Note?> loadNoteForEvent(int eventId) async {
+  Future<Note?> loadNoteForEvent(String eventId) async {
     final db = await database;
 
     // Get the event to check for record_number
@@ -468,14 +468,14 @@ mixin NoteCacheOperationsMixin {
   }
 
   /// Delete cached note by event ID
-  Future<void> deleteCachedNote(int eventId) async {
+  Future<void> deleteCachedNote(String eventId) async {
     final db = await database;
     await db.delete('notes', where: 'event_id = ?', whereArgs: [eventId]);
   }
 
   /// Batch get cached notes
   /// Returns map of eventId → Note (only includes found notes)
-  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds) async {
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds) async {
     if (eventIds.isEmpty) return {};
 
     final db = await database;

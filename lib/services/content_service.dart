@@ -81,7 +81,7 @@ class ContentService {
   ///    - Failure → return cached (if exists) or null
   ///
   /// [forceRefresh] skips cache and forces server fetch
-  Future<Note?> getNote(int eventId, {bool forceRefresh = false}) async {
+  Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
     try {
       // Step 1: Check cache (unless forceRefresh)
       if (!forceRefresh) {
@@ -162,7 +162,7 @@ class ContentService {
   ///
   /// Throws exception on sync failure, keeps dirty flag intact
   /// Handles version conflicts with auto-retry using server version
-  Future<void> syncNote(int eventId, {int retryCount = 0}) async {
+  Future<void> syncNote(String eventId, {int retryCount = 0}) async {
     const maxRetries = 3;
 
     try {

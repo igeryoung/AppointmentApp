@@ -184,7 +184,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Delete an event (soft delete)
-  Future<void> deleteEvent(int eventId, {String reason = 'Deleted by user'}) async {
+  Future<void> deleteEvent(String eventId, {String reason = 'Deleted by user'}) async {
     try {
       await _eventRepository.removeEvent(eventId, reason);
       debugPrint('✅ ScheduleCubit: Deleted event (id: $eventId)');
@@ -198,7 +198,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Hard delete an event (permanent deletion)
-  Future<void> hardDeleteEvent(int eventId) async {
+  Future<void> hardDeleteEvent(String eventId) async {
     try {
       await _eventRepository.delete(eventId);
       debugPrint('✅ ScheduleCubit: Hard deleted event (id: $eventId)');

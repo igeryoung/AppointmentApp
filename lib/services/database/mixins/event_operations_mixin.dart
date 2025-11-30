@@ -106,7 +106,7 @@ mixin EventOperationsMixin {
     return maps.map((map) => Event.fromMap(map)).toList();
   }
 
-  Future<Event?> getEventById(int id) async {
+  Future<Event?> getEventById(String id) async {
     final db = await database;
     final maps = await db.query('events', where: 'id = ?', whereArgs: [id], limit: 1);
     if (maps.isEmpty) return null;
@@ -165,14 +165,14 @@ mixin EventOperationsMixin {
     return updatedEvent;
   }
 
-  Future<void> deleteEvent(int id) async {
+  Future<void> deleteEvent(String id) async {
     final db = await database;
     final deletedRows = await db.delete('events', where: 'id = ?', whereArgs: [id]);
     if (deletedRows == 0) throw Exception('Event not found');
   }
 
   /// Soft remove an event with a reason
-  Future<Event> removeEvent(int eventId, String reason) async {
+  Future<Event> removeEvent(String eventId, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Removal reason cannot be empty');
     }

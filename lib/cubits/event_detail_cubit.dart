@@ -150,7 +150,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
   }
 
   /// Sync note to server
-  Future<void> syncNote(int eventId) async {
+  Future<void> syncNote(String eventId) async {
     final currentState = state;
     if (currentState is! EventDetailLoaded) return;
 

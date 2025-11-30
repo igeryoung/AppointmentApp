@@ -58,7 +58,7 @@ class NoteContentService {
   ///    - Failure → return cached (if exists) or null
   ///
   /// [forceRefresh] skips cache and forces server fetch
-  Future<Note?> getNote(int eventId, {bool forceRefresh = false}) async {
+  Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
     try {
       // Step 1: Check cache (unless forceRefresh)
       if (!forceRefresh) {
@@ -129,7 +129,7 @@ class NoteContentService {
   ///
   /// **Data Safety First Principle**: Local save is guaranteed,
   /// server sync is handled separately in background (best effort)
-  Future<void> saveNote(int eventId, Note note) async {
+  Future<void> saveNote(String eventId, Note note) async {
     await _noteRepository.saveToCache(note, isDirty: true);
     debugPrint('✅ NoteContentService: Note saved locally (eventId: $eventId, marked dirty)');
   }
@@ -137,7 +137,7 @@ class NoteContentService {
   /// Force sync a note to server (clears dirty flag on success)
   ///
   /// Throws exception on sync failure, keeps dirty flag intact
-  Future<void> syncNote(int eventId) async {
+  Future<void> syncNote(String eventId) async {
     try {
       final note = await _noteRepository.getCached(eventId);
       if (note == null) {

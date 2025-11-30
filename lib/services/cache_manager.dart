@@ -21,7 +21,7 @@ class CacheManager {
 
   /// 从缓存获取Note（并增加命中计数）
   /// Uses person sync logic - if event has record_number, syncs with latest note from same person group
-  Future<Note?> getNote(int eventId) async {
+  Future<Note?> getNote(String eventId) async {
     final note = await _db.loadNoteForEvent(eventId);
     if (note != null) {
       // 增加cache命中计数
@@ -35,7 +35,7 @@ class CacheManager {
   /// [dirty] - 标记note是否需要同步到server (默认false)
   /// Uses person sync logic - if event has record_number, syncs strokes to all events in same person group
   /// Also releases lock on the note
-  Future<void> saveNote(int eventId, Note note, {bool dirty = false}) async {
+  Future<void> saveNote(String eventId, Note note, {bool dirty = false}) async {
     // 如果指定dirty参数，更新note的isDirty标记
     final noteToSave = dirty ? note.copyWith(isDirty: true) : note;
     await _db.saveNoteWithSync(eventId, noteToSave);
@@ -50,7 +50,7 @@ class CacheManager {
   /// 标记Note为clean（已同步到server）
   ///
   /// 清除isDirty标记，表示note已成功同步到server
-  Future<void> markNoteClean(int eventId) async {
+  Future<void> markNoteClean(String eventId) async {
     final note = await _db.getCachedNote(eventId);
     if (note != null && note.isDirty) {
       final cleanNote = note.copyWith(isDirty: false);
@@ -60,7 +60,7 @@ class CacheManager {
   }
 
   /// 从缓存删除Note
-  Future<void> deleteNote(int eventId) async {
+  Future<void> deleteNote(String eventId) async {
     await _db.deleteCachedNote(eventId);
   }
 
@@ -70,12 +70,12 @@ class CacheManager {
 
   /// Try to acquire a lock on a note for editing
   /// Returns true if lock was acquired, false if locked by another device
-  Future<bool> acquireNoteLock(int eventId) async {
+  Future<bool> acquireNoteLock(String eventId) async {
     return await _db.acquireNoteLock(eventId);
   }
 
   /// Release a lock on a note
-  Future<void> releaseNoteLock(int eventId) async {
+  Future<void> releaseNoteLock(String eventId) async {
     await _db.releaseNoteLock(eventId);
   }
 
