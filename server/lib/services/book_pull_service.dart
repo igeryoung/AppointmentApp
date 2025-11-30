@@ -120,7 +120,7 @@ class BookPullService {
 
     final events = eventsResults.map((row) {
       return {
-        'id': row['id'] as int,
+        'id': row['id'] as String,
         'book_uuid': row['book_uuid'] as String,
         'name': row['name'] as String,
         'record_number': row['record_number'] as String,
@@ -133,8 +133,8 @@ class BookPullService {
         'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
         'is_removed': row['is_removed'] as bool,
         'removal_reason': row['removal_reason'] as String?,
-        'original_event_id': row['original_event_id'] as int?,
-        'new_event_id': row['new_event_id'] as int?,
+        'original_event_id': row['original_event_id'] as String?,
+        'new_event_id': row['new_event_id'] as String?,
         'version': row['version'] as int,
         'is_deleted': row['is_deleted'] as bool,
       };
@@ -163,7 +163,7 @@ class BookPullService {
     final notes = notesResults.map((row) {
       return {
         'id': row['id'] as int,
-        'event_id': row['event_id'] as int,
+        'event_id': row['event_id'] as String,
         'strokes_data': row['strokes_data'] as String?,
         'pages_data': row['pages_data'] as String?,
         'created_at': (row['created_at'] as DateTime).toIso8601String(),
