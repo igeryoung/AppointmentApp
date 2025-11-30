@@ -2,10 +2,11 @@
 -- This prevents ID collisions when multiple devices create events locally
 -- and ensures globally unique event identifiers
 
--- Step 1: Create new events table with UUID primary key
+-- Step 1: Create new events table with UUID (TEXT) primary key
+-- Note: book_uuid must match the books table type (uuid in PostgreSQL)
 CREATE TABLE events_new (
     id TEXT PRIMARY KEY,
-    book_uuid TEXT NOT NULL,
+    book_uuid uuid NOT NULL,
     device_id TEXT NOT NULL,
     name TEXT NOT NULL,
     record_number TEXT,
@@ -16,8 +17,8 @@ CREATE TABLE events_new (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     is_removed BOOLEAN DEFAULT false,
     removal_reason TEXT,
-    original_event_id TEXT,  -- Changed from INTEGER to TEXT
-    new_event_id TEXT,       -- Changed from INTEGER to TEXT
+    original_event_id TEXT,  -- Changed from INTEGER to TEXT (UUID)
+    new_event_id TEXT,       -- Changed from INTEGER to TEXT (UUID)
     synced_at TIMESTAMP,
     version INTEGER DEFAULT 1,
     is_deleted BOOLEAN DEFAULT false,
@@ -29,7 +30,7 @@ CREATE TABLE events_new (
 -- Step 2: Create new notes table with TEXT event_id foreign key
 CREATE TABLE notes_new (
     id SERIAL PRIMARY KEY,
-    event_id TEXT NOT NULL UNIQUE,  -- Changed from INTEGER to TEXT
+    event_id TEXT NOT NULL UNIQUE,  -- Changed from INTEGER to TEXT (UUID)
     device_id TEXT NOT NULL,
     pages_data TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
