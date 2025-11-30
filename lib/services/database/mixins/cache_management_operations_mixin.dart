@@ -10,7 +10,7 @@ mixin CacheManagementOperationsMixin {
   // ===================
 
   /// Increment cache hit count for a note (called on every read)
-  Future<void> incrementNoteCacheHit(int eventId) async {
+  Future<void> incrementNoteCacheHit(String eventId) async {
     final db = await database;
     await db.rawUpdate('''
       UPDATE notes

@@ -34,7 +34,7 @@ class NoteContentService {
   ///
   /// Returns cached note immediately without checking server
   /// Used for instant display in cache-first strategy
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     try {
       final cachedNote = await _noteRepository.getCached(eventId);
       if (cachedNote != null) {
@@ -58,7 +58,7 @@ class NoteContentService {
   ///    - Failure → return cached (if exists) or null
   ///
   /// [forceRefresh] skips cache and forces server fetch
-  Future<Note?> getNote(int eventId, {bool forceRefresh = false}) async {
+  Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
     try {
       // Step 1: Check cache (unless forceRefresh)
       if (!forceRefresh) {
@@ -129,7 +129,7 @@ class NoteContentService {
   ///
   /// **Data Safety First Principle**: Local save is guaranteed,
   /// server sync is handled separately in background (best effort)
-  Future<void> saveNote(int eventId, Note note) async {
+  Future<void> saveNote(String eventId, Note note) async {
     await _noteRepository.saveToCache(note, isDirty: true);
     debugPrint('✅ NoteContentService: Note saved locally (eventId: $eventId, marked dirty)');
   }
@@ -137,7 +137,7 @@ class NoteContentService {
   /// Force sync a note to server (clears dirty flag on success)
   ///
   /// Throws exception on sync failure, keeps dirty flag intact
-  Future<void> syncNote(int eventId) async {
+  Future<void> syncNote(String eventId) async {
     try {
       final note = await _noteRepository.getCached(eventId);
       if (note == null) {
@@ -191,7 +191,7 @@ class NoteContentService {
   // ===================
 
   /// Delete note (from server and cache)
-  Future<void> deleteNote(int eventId) async {
+  Future<void> deleteNote(String eventId) async {
     try {
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
@@ -234,7 +234,7 @@ class NoteContentService {
   /// Does not block, returns immediately
   /// Failures are logged but don't throw
   Future<void> preloadNotes(
-    List<int> eventIds, {
+    List<String> eventIds, {
     Function(int loaded, int total)? onProgress,
   }) async {
     if (eventIds.isEmpty) {
@@ -253,7 +253,7 @@ class NoteContentService {
       }
 
       // Get cached notes to filter out
-      final cachedNotes = <int>{};
+      final cachedNotes = <String>{};
       for (final eventId in eventIds) {
         final cached = await _noteRepository.getCached(eventId);
         if (cached != null) {
@@ -271,7 +271,7 @@ class NoteContentService {
       debugPrint('ℹ️ NoteContentService: Fetching ${uncachedEventIds.length} uncached notes');
 
       // Get book IDs for events (need to group by book)
-      final eventsByBook = <String, List<int>>{};
+      final eventsByBook = <String, List<String>>{};
       for (final eventId in uncachedEventIds) {
         final event = await _eventRepository.getById(eventId);
         if (event != null) {

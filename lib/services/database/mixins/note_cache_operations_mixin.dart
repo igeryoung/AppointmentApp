@@ -10,7 +10,7 @@ mixin NoteCacheOperationsMixin {
   Future<Database> get database;
 
   /// Required from EventOperationsMixin
-  Future<Event?> getEventById(int id);
+  Future<Event?> getEventById(String id);
 
   // ===================
   // Note Cache Operations
@@ -18,7 +18,7 @@ mixin NoteCacheOperationsMixin {
 
   /// Get cached note by event ID
   /// Automatically increments cache hit count
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     final db = await database;
     final maps = await db.query('notes', where: 'event_id = ?', whereArgs: [eventId], limit: 1);
     if (maps.isEmpty) return null;
@@ -27,7 +27,7 @@ mixin NoteCacheOperationsMixin {
 
   /// Load note for event with person sync logic
   /// If event has record_number, syncs with latest note from same person group
-  Future<Note?> loadNoteForEvent(int eventId) async {
+  Future<Note?> loadNoteForEvent(String eventId) async {
     final db = await database;
 
     // Get the event to check for record_number
@@ -129,7 +129,7 @@ mixin NoteCacheOperationsMixin {
 
   /// Save note with person group sync and lock release
   /// If event has record_number, syncs strokes to all events in same person group
-  Future<Note> saveNoteWithSync(int eventId, Note note) async {
+  Future<Note> saveNoteWithSync(String eventId, Note note) async {
     final db = await database;
 
     // Get the event to check for record_number
@@ -264,7 +264,7 @@ mixin NoteCacheOperationsMixin {
           );
 
           for (final row in eventIdsResult) {
-            final syncEventId = row['event_id'] as int;
+            final syncEventId = row['event_id'] as String;
             await db.rawUpdate(
               'UPDATE events SET has_note = ? WHERE id = ?',
               [hasStrokes ? 1 : 0, syncEventId],
@@ -284,7 +284,7 @@ mixin NoteCacheOperationsMixin {
   /// Handle record number update for an event
   /// Called when event's record_number changes from NULL to a value
   /// Returns the updated note (may be synced from person group)
-  Future<Note?> handleRecordNumberUpdate(int eventId, Event updatedEvent) async {
+  Future<Note?> handleRecordNumberUpdate(String eventId, Event updatedEvent) async {
     final db = await database;
 
     // Get person key from updated event
@@ -468,14 +468,14 @@ mixin NoteCacheOperationsMixin {
   }
 
   /// Delete cached note by event ID
-  Future<void> deleteCachedNote(int eventId) async {
+  Future<void> deleteCachedNote(String eventId) async {
     final db = await database;
     await db.delete('notes', where: 'event_id = ?', whereArgs: [eventId]);
   }
 
   /// Batch get cached notes
   /// Returns map of eventId → Note (only includes found notes)
-  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds) async {
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds) async {
     if (eventIds.isEmpty) return {};
 
     final db = await database;
@@ -486,7 +486,7 @@ mixin NoteCacheOperationsMixin {
       whereArgs: eventIds,
     );
 
-    final result = <int, Note>{};
+    final result = <String, Note>{};
     for (final map in maps) {
       final note = Note.fromMap(map);
       result[note.eventId] = note;
@@ -498,7 +498,7 @@ mixin NoteCacheOperationsMixin {
 
   /// Batch save cached notes
   /// Updates cached_at timestamp for all notes
-  Future<void> batchSaveCachedNotes(Map<int, Note> notes) async {
+  Future<void> batchSaveCachedNotes(Map<String, Note> notes) async {
     if (notes.isEmpty) return;
 
     final db = await database;

@@ -367,7 +367,7 @@ class EventDetailController {
   }
 
   /// Save note with offline-first strategy
-  Future<void> saveNoteWithOfflineFirst(int eventId, List<List<Stroke>> pages) async {
+  Future<void> saveNoteWithOfflineFirst(String eventId, List<List<Stroke>> pages) async {
     debugPrint('💾 EventDetailController: Starting offline-first note save for event $eventId');
 
     if (_noteSyncAdapter == null) {
@@ -423,7 +423,7 @@ class EventDetailController {
   }
 
   /// Background sync note to server
-  Future<void> syncNoteInBackground(int eventId) async {
+  Future<void> syncNoteInBackground(String eventId) async {
     if (_noteSyncAdapter == null) {
       debugPrint('⚠️ EventDetailController: Cannot sync note - NoteSyncAdapter not initialized');
       return;

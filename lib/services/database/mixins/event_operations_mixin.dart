@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import '../../../models/event.dart';
 import '../../../models/note.dart';
 
@@ -8,8 +9,11 @@ mixin EventOperationsMixin {
   /// Subclasses must provide database access
   Future<Database> get database;
 
+  /// UUID generator for event IDs
+  static const _uuid = Uuid();
+
   /// Required for changeEventTime - must be provided by main class or another mixin
-  Future<Note?> getCachedNote(int eventId);
+  Future<Note?> getCachedNote(String eventId);
 
   /// Required for createEvent and changeEventTime - must be provided by PersonChargeItemOperationsMixin
   Future<void> updateEventsHasChargeItemsFlag({
@@ -102,7 +106,7 @@ mixin EventOperationsMixin {
     return maps.map((map) => Event.fromMap(map)).toList();
   }
 
-  Future<Event?> getEventById(int id) async {
+  Future<Event?> getEventById(String id) async {
     final db = await database;
     final maps = await db.query('events', where: 'id = ?', whereArgs: [id], limit: 1);
     if (maps.isEmpty) return null;
@@ -113,8 +117,11 @@ mixin EventOperationsMixin {
     final db = await database;
     final now = DateTime.now();
 
-    final eventToCreate = event.copyWith(createdAt: now, updatedAt: now);
-    final id = await db.insert('events', eventToCreate.toMap());
+    // Generate UUID for new event
+    final id = event.id ?? _uuid.v4();
+
+    final eventToCreate = event.copyWith(id: id, createdAt: now, updatedAt: now);
+    await db.insert('events', eventToCreate.toMap());
 
     // Create associated empty note with one empty page
     await db.insert('notes', {
@@ -135,7 +142,7 @@ mixin EventOperationsMixin {
       );
     }
 
-    return eventToCreate.copyWith(id: id);
+    return eventToCreate;
   }
 
   Future<Event> updateEvent(Event event) async {
@@ -158,14 +165,14 @@ mixin EventOperationsMixin {
     return updatedEvent;
   }
 
-  Future<void> deleteEvent(int id) async {
+  Future<void> deleteEvent(String id) async {
     final db = await database;
     final deletedRows = await db.delete('events', where: 'id = ?', whereArgs: [id]);
     if (deletedRows == 0) throw Exception('Event not found');
   }
 
   /// Soft remove an event with a reason
-  Future<Event> removeEvent(int eventId, String reason) async {
+  Future<Event> removeEvent(String eventId, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Removal reason cannot be empty');
     }
@@ -212,23 +219,24 @@ mixin EventOperationsMixin {
     // First, soft remove the original event
     await removeEvent(originalEvent.id!, reason.trim());
 
+    // Generate UUID for new event
+    final newEventId = _uuid.v4();
+
     // Create a new event with the new time but same metadata
     final newEvent = originalEvent.copyWith(
-      id: null, // Will be auto-generated
+      id: newEventId,
       startTime: newStartTime,
       endTime: newEndTime,
       originalEventId: originalEvent.id,
       isRemoved: false,
       removalReason: null,
       updatedAt: now,
+      isDirty: true, // Mark as dirty to trigger server sync
     );
 
-    // Insert the new event (remove id to let DB auto-generate)
-    final newEventMap = newEvent.toMap();
-    newEventMap.remove('id');
-    newEventMap['is_dirty'] = 1; // Mark as dirty to trigger server sync
-    final newEventId = await db.insert('events', newEventMap);
-    final createdEvent = newEvent.copyWith(id: newEventId);
+    // Insert the new event
+    await db.insert('events', newEvent.toMap());
+    final createdEvent = newEvent;
 
     // Update the original event to point to the new event
     await db.update(

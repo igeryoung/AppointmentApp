@@ -4,8 +4,8 @@ import 'charge_item.dart';
 
 /// Event model - Individual appointment entry with minimal metadata as per PRD
 class Event {
-  /// Nullable: new events don't have ID until saved to database
-  final int? id;
+  /// Nullable: new events don't have ID until saved to database (UUID string)
+  final String? id;
   final String bookUuid;
   final String name;
   /// Nullable: optional field per PRD
@@ -26,9 +26,9 @@ class Event {
   /// Nullable: only set when event is removed
   final String? removalReason;
   /// Nullable: only set for time-change related events
-  final int? originalEventId; // Reference to original event for time changes
+  final String? originalEventId; // Reference to original event for time changes (UUID)
   /// Nullable: only set for time-change related events
-  final int? newEventId; // Reference to new event if this event's time was changed
+  final String? newEventId; // Reference to new event if this event's time was changed (UUID)
   final bool isChecked; // Marks event as completed/checked
   final bool hasNote; // Indicates if this event has a handwriting note with strokes
   final int version; // Version number for optimistic locking during server sync
@@ -61,7 +61,7 @@ class Event {
        chargeItems = chargeItems ?? [];
 
   Event copyWith({
-    int? id,
+    String? id,
     String? bookUuid,
     String? name,
     String? recordNumber,
@@ -76,8 +76,8 @@ class Event {
     DateTime? updatedAt,
     bool? isRemoved,
     String? removalReason,
-    int? originalEventId,
-    int? newEventId,
+    String? originalEventId,
+    String? newEventId,
     bool? isChecked,
     bool? hasNote,
     int? version,
@@ -151,7 +151,7 @@ class Event {
     List<ChargeItem> chargeItems = [];
 
     return Event(
-      id: map['id']?.toInt(),
+      id: map['id'] as String?,
       bookUuid: map['book_uuid'] as String? ?? '',
       name: map['name'] ?? '',
       recordNumber: map['record_number'],
@@ -167,8 +167,8 @@ class Event {
       updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
       isRemoved: (map['is_removed'] ?? 0) == 1,
       removalReason: map['removal_reason'],
-      originalEventId: map['original_event_id']?.toInt(),
-      newEventId: map['new_event_id']?.toInt(),
+      originalEventId: map['original_event_id'] as String?,
+      newEventId: map['new_event_id'] as String?,
       isChecked: (map['is_checked'] ?? 0) == 1,
       hasNote: (map['has_note'] ?? 0) == 1,
       version: map['version']?.toInt() ?? 1,

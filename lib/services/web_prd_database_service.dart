@@ -9,13 +9,13 @@ import 'database_service_interface.dart';
 /// Simple in-memory database for web platform testing
 class WebPRDDatabaseService implements IDatabaseService {
   static WebPRDDatabaseService? _instance;
+  static const _uuid = Uuid();
 
   // In-memory storage
   final List<Book> _books = [];
   final List<Event> _events = [];
   final List<Note> _notes = [];
   final List<ScheduleDrawing> _scheduleDrawings = [];
-  int _nextEventId = 1;
   int _nextNoteId = 1;
   int _nextScheduleDrawingId = 1;
 
@@ -168,7 +168,7 @@ class WebPRDDatabaseService implements IDatabaseService {
       ..sort((a, b) => a.startTime.compareTo(b.startTime));
   }
 
-  Future<Event?> getEventById(int id) async {
+  Future<Event?> getEventById(String id) async {
     await Future.delayed(const Duration(milliseconds: 5));
     try {
       return _events.firstWhere((e) => e.id == id);
@@ -181,8 +181,9 @@ class WebPRDDatabaseService implements IDatabaseService {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final now = DateTime.now();
+    final id = event.id ?? _uuid.v4();
     final newEvent = event.copyWith(
-      id: _nextEventId++,
+      id: id,
       createdAt: now,
       updatedAt: now,
     );
@@ -215,7 +216,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     return updatedEvent;
   }
 
-  Future<void> deleteEvent(int id) async {
+  Future<void> deleteEvent(String id) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
     final eventIndex = _events.indexWhere((e) => e.id == id);
@@ -227,7 +228,7 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   /// Soft remove an event with a reason
-  Future<Event> removeEvent(int eventId, String reason) async {
+  Future<Event> removeEvent(String eventId, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Removal reason cannot be empty');
     }
@@ -268,7 +269,7 @@ class WebPRDDatabaseService implements IDatabaseService {
 
     // Create a new event with the new time but same metadata
     final newEvent = originalEvent.copyWith(
-      id: _nextEventId++,
+      id: _uuid.v4(),
       startTime: newStartTime,
       endTime: newEndTime,
       originalEventId: originalEvent.id,
@@ -316,7 +317,7 @@ class WebPRDDatabaseService implements IDatabaseService {
   // Note Operations
   // ===================
 
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     await Future.delayed(const Duration(milliseconds: 5));
     debugPrint('🗄️ WebDB: getCachedNote($eventId) - searching in ${_notes.length} notes');
 
@@ -504,14 +505,14 @@ class WebPRDDatabaseService implements IDatabaseService {
     );
   }
 
-  Future<void> deleteCachedNote(int eventId) async {
+  Future<void> deleteCachedNote(String eventId) async {
     await Future.delayed(const Duration(milliseconds: 5));
     _notes.removeWhere((n) => n.eventId == eventId);
   }
 
-  Future<Map<int, Note>> batchGetCachedNotes(List<int> eventIds) async {
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds) async {
     await Future.delayed(const Duration(milliseconds: 10));
-    final result = <int, Note>{};
+    final result = <String, Note>{};
     for (final eventId in eventIds) {
       final note = await getCachedNote(eventId);
       if (note != null) {
@@ -521,7 +522,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     return result;
   }
 
-  Future<void> batchSaveCachedNotes(Map<int, Note> notes) async {
+  Future<void> batchSaveCachedNotes(Map<String, Note> notes) async {
     await Future.delayed(const Duration(milliseconds: 10));
     for (final entry in notes.entries) {
       await saveCachedNote(entry.value);
@@ -559,7 +560,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     _notes.clear();
     _events.clear();
     _books.clear();
-    _nextEventId = 1;
+    // Event IDs are now UUIDs, no counter to reset
     _nextNoteId = 1;
     _nextScheduleDrawingId = 1;
   }

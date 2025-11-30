@@ -57,7 +57,7 @@ class ContentService {
   ///
   /// Returns cached note immediately without checking server
   /// Used for instant display in cache-first strategy
-  Future<Note?> getCachedNote(int eventId) async {
+  Future<Note?> getCachedNote(String eventId) async {
     try {
       final cachedNote = await _cacheManager.getNote(eventId);
       if (cachedNote != null) {
@@ -81,7 +81,7 @@ class ContentService {
   ///    - Failure → return cached (if exists) or null
   ///
   /// [forceRefresh] skips cache and forces server fetch
-  Future<Note?> getNote(int eventId, {bool forceRefresh = false}) async {
+  Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
     try {
       // Step 1: Check cache (unless forceRefresh)
       if (!forceRefresh) {
@@ -148,7 +148,7 @@ class ContentService {
   ///
   /// **Data Safety First Principle**: Local save is guaranteed,
   /// server sync is handled separately in background (best effort)
-  Future<void> saveNote(int eventId, Note note) async {
+  Future<void> saveNote(String eventId, Note note) async {
     // **数据安全第一原则**: 只保存到本地 (标记为dirty)
     // Server sync由调用者通过 syncNote() 单独处理（后台best effort）
     await _cacheManager.saveNote(eventId, note, dirty: true);
@@ -162,7 +162,7 @@ class ContentService {
   ///
   /// Throws exception on sync failure, keeps dirty flag intact
   /// Handles version conflicts with auto-retry using server version
-  Future<void> syncNote(int eventId, {int retryCount = 0}) async {
+  Future<void> syncNote(String eventId, {int retryCount = 0}) async {
     const maxRetries = 3;
 
     try {
@@ -255,7 +255,7 @@ class ContentService {
   }
 
   /// Delete note (from server and cache)
-  Future<void> deleteNote(int eventId) async {
+  Future<void> deleteNote(String eventId) async {
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
@@ -296,7 +296,7 @@ class ContentService {
   /// Does not block, returns immediately
   /// Failures are logged but don't throw
   Future<void> preloadNotes(
-    List<int> eventIds, {
+    List<String> eventIds, {
     Function(int loaded, int total)? onProgress,
     int? generation,
     bool Function()? isCancelled,
@@ -320,7 +320,7 @@ class ContentService {
 
         // Step 1: Filter out already-cached notes
         debugPrint('📦 ContentService: Checking cache for ${eventIds.length} notes...');
-        final uncachedIds = <int>[];
+        final uncachedIds = <String>[];
         for (final id in eventIds) {
           // RACE CONDITION FIX: Check cancellation during cache lookup
           if (isCancelled != null && isCancelled()) {

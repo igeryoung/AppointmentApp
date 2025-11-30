@@ -95,7 +95,7 @@ class NoteService {
   /// Verify that an event belongs to the specified book
   /// Returns true if event exists and belongs to the book
   /// bookUuid: UUID string of the book
-  Future<bool> verifyEventInBook(int eventId, String bookUuid) async {
+  Future<bool> verifyEventInBook(String eventId, String bookUuid) async {
     try {
       final row = await db.querySingle(
         'SELECT id FROM events WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false',
@@ -115,7 +115,7 @@ class NoteService {
 
   /// Get a single note by event ID
   /// Returns null if note doesn't exist or is deleted
-  Future<Map<String, dynamic>?> getNote(int eventId) async {
+  Future<Map<String, dynamic>?> getNote(String eventId) async {
     try {
       final row = await db.querySingle(
         '''
@@ -153,7 +153,7 @@ class NoteService {
   /// - NoteOperationResult.conflict(serverVersion, serverNote) on version conflict
   /// - NoteOperationResult.notFound() if note was deleted
   Future<NoteOperationResult> createOrUpdateNote({
-    required int eventId,
+    required String eventId,
     required String deviceId,
     String? pagesData,
     String? strokesData,
@@ -266,7 +266,7 @@ class NoteService {
 
   /// Delete a note (soft delete)
   /// Returns true if note was deleted, false if note didn't exist
-  Future<bool> deleteNote(int eventId) async {
+  Future<bool> deleteNote(String eventId) async {
     try {
       final result = await db.querySingle(
         '''
@@ -364,9 +364,9 @@ class NoteService {
     required String deviceId,
   }) async {
     try {
-      final eventId = eventData['id'] as int?;
-      if (eventId == null) {
-        throw ArgumentError('Event data must include id');
+      final eventId = eventData['id'] as String?;
+      if (eventId == null || eventId.isEmpty) {
+        throw ArgumentError('Event data must include id (UUID)');
       }
 
       // Check if event already exists

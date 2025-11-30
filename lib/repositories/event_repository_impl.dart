@@ -5,8 +5,8 @@ import 'event_repository.dart';
 import 'base_repository.dart';
 
 /// Implementation of EventRepository using SQLite
-class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRepository {
-  final Future<Note?> Function(int eventId) _getCachedNoteFn;
+class EventRepositoryImpl extends BaseRepository<Event, String> implements IEventRepository {
+  final Future<Note?> Function(String eventId) _getCachedNoteFn;
 
   EventRepositoryImpl(Future<Database> Function() getDatabaseFn, this._getCachedNoteFn)
       : super(getDatabaseFn);
@@ -24,7 +24,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   Future<List<Event>> getAll() => queryAll(orderBy: 'start_time ASC');
 
   @override
-  Future<Event?> getById(int id) => super.getById(id);
+  Future<Event?> getById(String id) => super.getById(id);
 
   @override
   Future<List<Event>> getByBookId(String bookUuid) {
@@ -84,17 +84,18 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
       version: 1,
       isDirty: true,
     );
-    final id = await insert(eventToCreate.toMap());
+    // For UUID events, id is already set before insert
+    await insert(eventToCreate.toMap());
 
     // Create associated empty note
     await db.insert('notes', {
-      'event_id': id,
+      'event_id': eventToCreate.id!,
       'strokes_data': '[]',
       'created_at': now.millisecondsSinceEpoch ~/ 1000,
       'updated_at': now.millisecondsSinceEpoch ~/ 1000,
     });
 
-    return eventToCreate.copyWith(id: id);
+    return eventToCreate;
   }
 
   @override
@@ -118,7 +119,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<void> delete(int id) async {
+  Future<void> delete(String id) async {
     // Perform soft delete: mark as deleted and dirty for sync
     final db = await getDatabaseFn();
     final event = await getById(id);
@@ -139,7 +140,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
 
   /// Soft remove an event with a reason
   @override
-  Future<Event> removeEvent(int eventId, String reason) async {
+  Future<Event> removeEvent(String eventId, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Removal reason cannot be empty');
     }
@@ -203,12 +204,12 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
       updatedAt: now,
     );
 
-    // Insert the new event (remove id to let DB auto-generate)
+    // Insert the new event (UUID already set)
     final newEventMap = toMap(newEvent);
-    newEventMap.remove('id');
     newEventMap['is_dirty'] = 1; // Mark as dirty to trigger server sync
-    final newEventId = await db.insert('events', newEventMap);
-    final createdEvent = newEvent.copyWith(id: newEventId);
+    await db.insert('events', newEventMap);
+    final createdEvent = newEvent;
+    final newEventId = newEvent.id!;
 
     // Update the original event to point to the new event
     await db.update(
@@ -342,7 +343,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<void> markEventSynced(int id, DateTime syncedAt) async {
+  Future<void> markEventSynced(String id, DateTime syncedAt) async {
     final db = await getDatabaseFn();
     await db.update(
       'events',
@@ -358,7 +359,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   @override
   Future<void> applyServerChange(Map<String, dynamic> changeData) async {
     final db = await getDatabaseFn();
-    final id = changeData['id'] as int;
+    final id = changeData['id'] as String;
 
     // Check if event exists locally
     final existing = await getById(id);
@@ -381,7 +382,7 @@ class EventRepositoryImpl extends BaseRepository<Event, int> implements IEventRe
   }
 
   @override
-  Future<Event?> getByServerId(int serverId) async {
+  Future<Event?> getByServerId(String serverId) async {
     return getById(serverId);
   }
 }

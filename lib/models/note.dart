@@ -10,7 +10,7 @@ enum StrokeType {
 /// Note model - Multi-page handwriting note linked to a single event
 class Note {
   final int? id;
-  final int eventId;
+  final String eventId; // Event UUID
   final List<List<Stroke>> pages; // Multi-page support: array of pages, each page contains strokes
   final DateTime createdAt;
   final DateTime updatedAt;
@@ -37,7 +37,7 @@ class Note {
 
   Note copyWith({
     int? id,
-    int? eventId,
+    String? eventId,
     List<List<Stroke>>? pages,
     DateTime? createdAt,
     DateTime? updatedAt,
@@ -184,7 +184,7 @@ class Note {
 
     return Note(
       id: map['id']?.toInt(),
-      eventId: (map['eventId'] ?? map['event_id'])?.toInt() ?? 0,
+      eventId: (map['eventId'] ?? map['event_id']) as String? ?? '',
       pages: pages,
       createdAt: parseTimestamp(
         map['createdAt'] ?? map['created_at'],

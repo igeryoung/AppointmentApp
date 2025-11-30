@@ -398,7 +398,7 @@ class ScheduleTestUtils {
     // ======================
     debugPrint('🚀 Heavy Load Test - Stage 1: Creating $totalEvents events...');
     int createdEventsCount = 0;
-    final createdEventIds = <int>[];
+    final createdEventIds = <String>[];
     final startDate = now.subtract(const Duration(days: 30));
 
     for (int day = 0; day < daysRange; day++) {
