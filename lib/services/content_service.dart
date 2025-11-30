@@ -255,7 +255,7 @@ class ContentService {
   }
 
   /// Delete note (from server and cache)
-  Future<void> deleteNote(int eventId) async {
+  Future<void> deleteNote(String eventId) async {
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
@@ -320,7 +320,7 @@ class ContentService {
 
         // Step 1: Filter out already-cached notes
         debugPrint('📦 ContentService: Checking cache for ${eventIds.length} notes...');
-        final uncachedIds = <int>[];
+        final uncachedIds = <String>[];
         for (final id in eventIds) {
           // RACE CONDITION FIX: Check cancellation during cache lookup
           if (isCancelled != null && isCancelled()) {

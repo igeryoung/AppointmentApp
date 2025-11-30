@@ -80,7 +80,7 @@ class CacheManager {
   }
 
   /// Check if a note is locked by another device
-  Future<bool> isNoteLockedByOther(int eventId) async {
+  Future<bool> isNoteLockedByOther(String eventId) async {
     return await _db.isNoteLockedByOther(eventId);
   }
 

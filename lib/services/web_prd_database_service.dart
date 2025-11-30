@@ -522,7 +522,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     return result;
   }
 
-  Future<void> batchSaveCachedNotes(Map<int, Note> notes) async {
+  Future<void> batchSaveCachedNotes(Map<String, Note> notes) async {
     await Future.delayed(const Duration(milliseconds: 10));
     for (final entry in notes.entries) {
       await saveCachedNote(entry.value);
@@ -560,7 +560,7 @@ class WebPRDDatabaseService implements IDatabaseService {
     _notes.clear();
     _events.clear();
     _books.clear();
-    _nextEventId = 1;
+    // Event IDs are now UUIDs, no counter to reset
     _nextNoteId = 1;
     _nextScheduleDrawingId = 1;
   }
