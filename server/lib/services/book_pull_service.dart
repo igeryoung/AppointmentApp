@@ -146,7 +146,6 @@ class BookPullService {
       SELECT
         n.id,
         n.event_id,
-        n.strokes_data,
         n.pages_data,
         n.created_at,
         n.updated_at,
@@ -164,7 +163,6 @@ class BookPullService {
       return {
         'id': row['id'] as int,
         'event_id': row['event_id'] as String,
-        'strokes_data': row['strokes_data'] as String?,
         'pages_data': row['pages_data'] as String?,
         'created_at': (row['created_at'] as DateTime).toIso8601String(),
         'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
