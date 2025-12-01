@@ -101,6 +101,7 @@ class BookPullService {
         name,
         record_number,
         event_type,
+        event_types,
         start_time,
         end_time,
         created_at,
@@ -125,6 +126,7 @@ class BookPullService {
         'name': row['name'] as String,
         'record_number': row['record_number'] as String?,
         'event_type': row['event_type'] as String?,
+        'event_types': row['event_types'] as String,
         'start_time': (row['start_time'] as DateTime).toIso8601String(),
         'end_time': row['end_time'] != null
             ? (row['end_time'] as DateTime).toIso8601String()
