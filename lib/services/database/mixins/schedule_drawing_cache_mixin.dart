@@ -58,7 +58,6 @@ mixin ScheduleDrawingCacheMixin {
     final drawingMap = updatedDrawing.toMap();
     // Add cache metadata
     drawingMap['cached_at'] = now.millisecondsSinceEpoch ~/ 1000;
-    debugPrint('🎨 SQLite: updateScheduleDrawing called with ${updatedDrawing.strokes.length} strokes');
 
     try {
       // Try to update existing drawing
@@ -80,17 +79,14 @@ mixin ScheduleDrawingCacheMixin {
 
       // If no rows updated, insert new drawing
       if (updatedRows == 0) {
-        debugPrint('🎨 SQLite: Inserting new schedule drawing');
         // Initialize cache_hit_count for new drawings
         drawingMap['cache_hit_count'] = 0;
         final id = await db.insert('schedule_drawings', drawingMap);
         return updatedDrawing.copyWith(id: id);
       }
 
-      debugPrint('✅ SQLite: Schedule drawing updated successfully');
       return updatedDrawing;
     } catch (e) {
-      debugPrint('❌ SQLite: Failed to save schedule drawing: $e');
       rethrow;
     }
   }
@@ -143,7 +139,6 @@ mixin ScheduleDrawingCacheMixin {
     );
 
     final drawings = maps.map((map) => ScheduleDrawing.fromMap(map)).toList();
-    debugPrint('✅ batchGetCachedDrawings: Found ${drawings.length} drawings');
     return drawings;
   }
 
@@ -192,7 +187,6 @@ mixin ScheduleDrawingCacheMixin {
     }
 
     await batch.commit(noResult: true);
-    debugPrint('✅ batchSaveCachedDrawings: Saved ${drawings.length} drawings');
   }
 
   // Sync-related methods
@@ -208,7 +202,6 @@ mixin ScheduleDrawingCacheMixin {
     );
 
     final dirtyDrawings = maps.map((map) => ScheduleDrawing.fromMap(map)).toList();
-    debugPrint('✅ getDirtyDrawings: Found ${dirtyDrawings.length} dirty drawings');
     return dirtyDrawings;
   }
 

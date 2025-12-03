@@ -2,6 +2,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../models/note.dart';
 
+
 /// Drawing tool type enum
 enum DrawingTool {
   pen,
@@ -135,8 +136,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   void initState() {
     super.initState();
     _strokes = List<Stroke>.from(widget.initialStrokes);
-    debugPrint('🎨 Canvas: initState() with ${widget.initialStrokes.length} initial strokes');
-    debugPrint('🎨 Canvas: Internal _strokes now has ${_strokes.length} strokes');
   }
 
   @override
@@ -144,8 +143,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     super.didUpdateWidget(oldWidget);
     // Update strokes if initialStrokes changed (e.g., when note loads)
     if (oldWidget.initialStrokes != widget.initialStrokes) {
-      debugPrint('🎨 Canvas: didUpdateWidget triggered');
-      debugPrint('🎨 Canvas: Old strokes: ${oldWidget.initialStrokes.length}, New strokes: ${widget.initialStrokes.length}');
 
       // ENHANCED LOGIC: Update canvas strokes when:
       // 1. Canvas is currently empty AND we have strokes to load (note loading)
@@ -172,20 +169,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       final shouldUpdate = isLoadingContent ||
                           (hasNewWidgetContent && !wouldLoseUserWork);
 
-      debugPrint('🔍 Canvas: Update decision analysis:');
-      debugPrint('   - Current canvas strokes: $currentStrokeCount');
-      debugPrint('   - New widget strokes: $newStrokeCount');
-      debugPrint('   - Old widget strokes: $oldStrokeCount');
-      debugPrint('   - Canvas is empty: $isCanvasEmpty');
-      debugPrint('   - Has new widget content: $hasNewWidgetContent');
-      debugPrint('   - Is loading content: $isLoadingContent');
-      debugPrint('   - Widget stroke count unchanged: $widgetStrokeCountUnchanged');
-      debugPrint('   - Would lose user work: $wouldLoseUserWork');
-      debugPrint('   - Has user work: $hasUserWork');
-      debugPrint('   - Decision: ${shouldUpdate ? "UPDATE" : "PRESERVE"}');
 
       if (shouldUpdate) {
-        debugPrint('🎨 Canvas: Updating strokes ($currentStrokeCount → $newStrokeCount)');
 
         // Validate state before update
         validateState();
@@ -202,38 +187,30 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         if (newStrokeCount > 0 && oldStrokeCount == 0) {
           // Loading saved content into empty canvas - clear current stroke
           _currentStroke = null;
-          debugPrint('🎨 Canvas: Cleared _currentStroke (loading saved content)');
         } else {
-          debugPrint('🎨 Canvas: Preserved _currentStroke (widget rebuild, user may be drawing)');
         }
 
-        debugPrint('🎨 Canvas: Updated internal _strokes to ${_strokes.length} strokes');
 
         // Trigger a rebuild to show the loaded strokes
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) {
             setState(() {});
-            debugPrint('🔄 Canvas: Post-frame callback - Rebuilt with ${_strokes.length} strokes');
             validateState();
           }
         });
       } else {
-        debugPrint('🛡️ Canvas: Preserving $currentStrokeCount user strokes (not updating)');
       }
     }
   }
 
   /// Get current strokes (for saving)
   List<Stroke> getStrokes() {
-    debugPrint('🎨 Canvas: getStrokes() called - returning ${_strokes.length} strokes');
     final List<Stroke> strokes = List<Stroke>.from(_strokes);
-    debugPrint('🎨 Canvas: getStrokes() - copied ${strokes.length} strokes for return');
     return strokes;
   }
 
   /// Load strokes from external source (for loading saved notes)
   void loadStrokes(List<Stroke> strokes) {
-    debugPrint('🎨 Canvas: loadStrokes() called with ${strokes.length} strokes');
     setState(() {
       _strokes = List<Stroke>.from(strokes);
       // RACE CONDITION FIX: Preserve undo history even when loading
@@ -243,7 +220,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       _strokesBeforeErase = null;
       _canvasVersion++; // Increment version when loading new content
     });
-    debugPrint('🎨 Canvas: loadStrokes() completed. Internal _strokes now has ${_strokes.length} strokes, version: $_canvasVersion');
   }
 
   /// Get current drawing settings
@@ -273,28 +249,23 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
   /// Validate canvas internal state
   void validateState() {
-    debugPrint('🔍 Canvas: State validation - _strokes: ${_strokes.length}, _operationHistory: ${_operationHistory.length}, _redoStack: ${_redoStack.length}');
-    debugPrint('🔍 Canvas: Current stroke: ${_currentStroke != null ? "${_currentStroke!.points.length} points" : "null"}');
 
     // Validate stroke integrity
     for (int i = 0; i < _strokes.length; i++) {
       final stroke = _strokes[i];
       if (stroke.points.isEmpty) {
-        debugPrint('⚠️ Canvas: WARNING - Stroke $i has no points!');
       }
     }
   }
 
   /// Force refresh canvas state with explicit stroke list
   void forceRefreshState(List<Stroke> strokes) {
-    debugPrint('🔄 Canvas: Force refresh with ${strokes.length} strokes');
     setState(() {
       _strokes = List<Stroke>.from(strokes);
       _operationHistory.clear();
       _redoStack.clear();
       _currentStroke = null;
     });
-    debugPrint('🔄 Canvas: Force refresh completed. Internal state: ${_strokes.length} strokes');
   }
 
   /// Get detailed state information
@@ -324,7 +295,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
     // ONLY start drawing if this is a SINGLE-finger touch
     if (_activePointers.length > 1) {
-      debugPrint('🚫 Multi-touch detected (${_activePointers.length} fingers) - ignoring draw');
       // Cancel any in-progress stroke
       _currentStroke = null;
       _currentPointerPosition = null;
@@ -332,10 +302,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       return;
     }
 
-    debugPrint('👆 TOUCH: raw localPosition=(${point.dx.toStringAsFixed(2)}, ${point.dy.toStringAsFixed(2)})');
 
     final clippedPoint = _clipPointToBounds(point);
-    debugPrint('🎨 Canvas: Starting new stroke at local:(${point.dx.toStringAsFixed(2)}, ${point.dy.toStringAsFixed(2)}) clipped:(${clippedPoint.dx.toStringAsFixed(2)}, ${clippedPoint.dy.toStringAsFixed(2)}) canvasSize:(${_canvasSize.width.toStringAsFixed(2)}, ${_canvasSize.height.toStringAsFixed(2)})');
 
     // Update pointer position for eraser visualization
     _currentPointerPosition = point;
@@ -366,11 +334,9 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         color: color.value,
         strokeType: strokeType,
       );
-      debugPrint('✏️ STROKE: firstPoint=(${clippedPoint.dx.toStringAsFixed(2)}, ${clippedPoint.dy.toStringAsFixed(2)}) strokeWidth=$width tool=$_currentTool');
 
       // Clear redo stack when starting new drawing operation (standard undo/redo behavior)
       _redoStack.clear();
-      debugPrint('🎨 Canvas: Current stroke created with 1 point');
     }
 
     setState(() {});
@@ -382,7 +348,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     if (_activePointers.length > 1) {
       // Cancel current stroke if one exists
       if (_currentStroke != null) {
-        debugPrint('🚫 Second finger detected - canceling current stroke');
         _currentStroke = null;
         _currentPointerPosition = null;
         setState(() {});
@@ -416,7 +381,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     // Only complete stroke if this was a single-touch gesture
     if (_activePointers.isEmpty) {
       if (_currentStroke != null && _currentStroke!.points.isNotEmpty) {
-        debugPrint('🎨 Canvas: Ending stroke with ${_currentStroke!.points.length} points');
 
         // Add stroke to canvas
         _strokes.add(_currentStroke!);
@@ -428,15 +392,12 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         // Increment canvas version to track state changes
         _canvasVersion++;
 
-        debugPrint('🎨 Canvas: Added stroke to _strokes. Total strokes now: ${_strokes.length}, Version: $_canvasVersion');
         _currentStroke = null;
         _currentPointerPosition = null; // Clear pointer position when done
 
         widget.onStrokesChanged?.call();
-        debugPrint('🎨 Canvas: Called onStrokesChanged callback');
         setState(() {});
       } else {
-        debugPrint('🎨 Canvas: _endStroke called but no valid current stroke to add');
         _currentPointerPosition = null; // Clear pointer position
         // If we were erasing, create EraseOperation
         if (_currentTool == DrawingTool.eraser && _strokesBeforeErase != null) {
@@ -451,7 +412,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
             _operationHistory.add(operation);
             // Increment canvas version to track state changes
             _canvasVersion++;
-            debugPrint('🎨 Canvas: Recorded EraseOperation, Version: $_canvasVersion');
           }
           _strokesBeforeErase = null;
           widget.onStrokesChanged?.call();
@@ -459,7 +419,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       }
     } else {
       // Other fingers still down - just clear current stroke without saving
-      debugPrint('🚫 Finger lifted but ${_activePointers.length} fingers remain - discarding stroke');
       _currentStroke = null;
       _currentPointerPosition = null;
       setState(() {});
@@ -476,7 +435,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       _currentPointerPosition = null;
       _strokesBeforeErase = null;
       setState(() {});
-      debugPrint('🚫 Pointer $pointerId canceled - cleared stroke');
     }
   }
 
@@ -501,7 +459,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     }
 
     if (newStrokes.length != _strokes.length) {
-      debugPrint('🎨 Canvas: Eraser at (${point.dx}, ${point.dy}) - ${_strokes.length} strokes → ${newStrokes.length} strokes');
       _strokes = newStrokes;
     }
   }
@@ -607,7 +564,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   void undo() async {
     // RACE CONDITION FIX: Prevent concurrent undo operations
     if (_isUndoRedoInProgress || _operationHistory.isEmpty) {
-      debugPrint('⚠️ Canvas: Undo blocked (inProgress: $_isUndoRedoInProgress, historyEmpty: ${_operationHistory.isEmpty})');
       return;
     }
 
@@ -626,7 +582,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         // Increment canvas version to track state changes
         _canvasVersion++;
 
-        debugPrint('🎨 Canvas: Undid operation (${operation.runtimeType}). History: ${_operationHistory.length}, Redo: ${_redoStack.length}, Version: $_canvasVersion');
       });
 
       // Wait for setState to complete before allowing next operation
@@ -642,7 +597,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   void redo() async {
     // RACE CONDITION FIX: Prevent concurrent redo operations
     if (_isUndoRedoInProgress || _redoStack.isEmpty) {
-      debugPrint('⚠️ Canvas: Redo blocked (inProgress: $_isUndoRedoInProgress, redoEmpty: ${_redoStack.isEmpty})');
       return;
     }
 
@@ -661,7 +615,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         // Increment canvas version to track state changes
         _canvasVersion++;
 
-        debugPrint('🎨 Canvas: Redid operation (${operation.runtimeType}). History: ${_operationHistory.length}, Redo: ${_redoStack.length}, Version: $_canvasVersion');
       });
 
       // Wait for setState to complete before allowing next operation
@@ -692,7 +645,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
       // Increment canvas version to track state changes
       _canvasVersion++;
-      debugPrint('🎨 Canvas: Cleared all strokes, Version: $_canvasVersion');
     });
     widget.onStrokesChanged?.call();
   }
@@ -858,7 +810,6 @@ class HandwritingPainter extends CustomPainter {
     // Debug log for current stroke being drawn
     if (isCurrentStroke && stroke.points.isNotEmpty) {
       final firstPoint = stroke.points.first;
-      debugPrint('🎨 PAINT: drawing ${stroke.points.length == 1 ? "dot" : "line"} firstPoint=(${firstPoint.dx.toStringAsFixed(2)}, ${firstPoint.dy.toStringAsFixed(2)}) totalPoints=${stroke.points.length}');
     }
 
     final paint = Paint()

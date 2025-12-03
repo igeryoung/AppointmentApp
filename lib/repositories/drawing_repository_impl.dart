@@ -39,7 +39,7 @@ class DrawingRepositoryImpl implements IDrawingRepository {
   @override
   Future<void> saveToCache(ScheduleDrawing drawing, {required bool isDirty}) async {
     final db = await _getDatabaseFn();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     final normalizedDate = DateTime(drawing.date.year, drawing.date.month, drawing.date.day);
     final updatedDrawing = drawing.copyWith(
       date: normalizedDate,
@@ -50,7 +50,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
     drawingMap['cached_at'] = now.millisecondsSinceEpoch ~/ 1000;
     drawingMap['is_dirty'] = isDirty ? 1 : 0;
 
-    debugPrint('🎨 SQLite: updateScheduleDrawing called with ${updatedDrawing.strokes.length} strokes');
 
     try {
       // Try to update existing drawing
@@ -72,14 +71,11 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
       // If no rows updated, insert new drawing
       if (updatedRows == 0) {
-        debugPrint('🎨 SQLite: Inserting new schedule drawing');
         drawingMap['cache_hit_count'] = 0;
         await db.insert('schedule_drawings', drawingMap);
       }
 
-      debugPrint('✅ SQLite: Schedule drawing saved successfully');
     } catch (e) {
-      debugPrint('❌ SQLite: Failed to save schedule drawing: $e');
       rethrow;
     }
   }
@@ -116,7 +112,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
     );
 
     final dirtyDrawings = maps.map((map) => ScheduleDrawing.fromMap(map)).toList();
-    debugPrint('✅ getAllDirtyDrawings: Found ${dirtyDrawings.length} dirty drawings');
     return dirtyDrawings;
   }
 
@@ -194,7 +189,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
     );
 
     final drawings = maps.map((map) => ScheduleDrawing.fromMap(map)).toList();
-    debugPrint('✅ batchGetCachedDrawings: Found ${drawings.length} drawings');
     return drawings;
   }
 
@@ -243,7 +237,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
     }
 
     await batch.commit(noResult: true);
-    debugPrint('✅ batchSaveCachedDrawings: Saved ${drawings.length} drawings');
   }
 
   /// Clear all drawings cache

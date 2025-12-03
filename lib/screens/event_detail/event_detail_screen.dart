@@ -17,6 +17,7 @@ import 'dialogs/delete_event_dialog.dart';
 import 'dialogs/remove_event_dialog.dart';
 import '../../widgets/dialogs/change_time_dialog.dart';
 
+
 /// Event Detail screen with handwriting notes - refactored version
 class EventDetailScreen extends StatefulWidget {
   final Event event;
@@ -92,7 +93,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
             _nameController.text = state.name;  // Then update controller
           }
 
-          // Update phone controller if state changed (to sync from loadPhone)
+          // Update phone controller if state changed
           // Check to avoid infinite loop: only update if different
           if (_phoneController.text != state.phone) {
             _phoneController.text = state.phone;
@@ -162,7 +163,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _fetchAvailableRecordNumbers() async {
     final recordNumbers = await _controller.getRecordNumbersForCurrentName();
-    debugPrint('📋 EventDetail: Fetched ${recordNumbers.length} record numbers for name "${_controller.state.name}"');
     if (mounted) {
       setState(() {
         _availableRecordNumbers = recordNumbers;
@@ -173,7 +173,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _fetchAllNamesAndRecordNumbers() async {
     final names = await _controller.getAllNamesForAutocomplete();
     final recordNumbers = await _controller.getAllRecordNumbersForAutocomplete();
-    debugPrint('📋 EventDetail: Fetched ${names.length} names and ${recordNumbers.length} record numbers for autocomplete');
     if (mounted) {
       setState(() {
         _allNames = names;
@@ -197,12 +196,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _onPagesChanged(List<List<Stroke>> pages) {
-    debugPrint('🏗️ EventDetail: onPagesChanged callback fired with ${pages.length} pages');
 
     _controller.updatePages(pages);
 
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    debugPrint('🔄 EventDetail: Updated pages (${pages.length} pages, $totalStrokes total strokes)');
   }
 
   Future<void> _saveEvent() async {
@@ -215,9 +212,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
     try {
       // Ensure current canvas state is saved before reading pages
-      debugPrint('🔍 DEBUG _saveEvent: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');
       _saveCurrentPageCallback?.call();
-      debugPrint('🔍 DEBUG _saveEvent: Callback invoked, now calling controller.saveEvent()');
 
       // Save is handled by the controller which already has the latest pages
       // from onPagesChanged callbacks
@@ -368,7 +363,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
       // If current event has no handwriting, auto-load without dialog
       if (!hasCurrentHandwriting) {
-        debugPrint('📝 EventDetail: Auto-loading existing note (current canvas is empty)');
         await _controller.loadExistingPersonNote(existingNote);
         // Canvas will be updated by rebuilding HandwritingSection with new note pages
         setState(() {});
@@ -451,9 +445,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (widget.isNew && hasName) {
       try {
         // Save current canvas state
-        debugPrint('🔍 DEBUG _onWillPop: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');
         _saveCurrentPageCallback?.call();
-        debugPrint('🔍 DEBUG _onWillPop: Callback invoked, now calling controller.saveEvent()');
 
         // Save the event
         await _controller.saveEvent();
@@ -529,9 +521,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // For EXISTING events with changes and a name, auto-save
     try {
       // Save current canvas state
-      debugPrint('🔍 DEBUG _onWillPop: About to call _saveCurrentPageCallback (${_saveCurrentPageCallback != null ? "exists" : "null"})');
       _saveCurrentPageCallback?.call();
-      debugPrint('🔍 DEBUG _onWillPop: Callback invoked, now calling controller.saveEvent()');
 
       // Save the event
       await _controller.saveEvent();
@@ -780,7 +770,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                           builder: (context) {
                             final initialPages = state.note?.pages ?? state.lastKnownPages;
                             final totalStrokes = initialPages.fold<int>(0, (sum, page) => sum + page.length);
-                            debugPrint('🔍 DEBUG Screen build: Creating HandwritingSection with initialPages=${initialPages.length} pages, $totalStrokes strokes (note=${state.note?.pages.length}, lastKnown=${state.lastKnownPages.length})');
                             return HandwritingSection(
                               canvasKey: _canvasKey,
                               initialPages: initialPages,
@@ -832,8 +821,6 @@ class _NewRecordNumberDialogState extends State<_NewRecordNumberDialog> {
   bool _validateAndSubmit() {
     final value = _controller.text.trim();
 
-    debugPrint('🔍 Validating record number: "$value"');
-    debugPrint('🔍 Existing record numbers: ${widget.existingRecordNumbers}');
 
     if (value.isEmpty) {
       setState(() {
@@ -847,7 +834,6 @@ class _NewRecordNumberDialogState extends State<_NewRecordNumberDialog> {
       (existing) => existing.toLowerCase() == value.toLowerCase(),
     );
 
-    debugPrint('🔍 Is duplicate: $isDuplicate');
 
     if (isDuplicate) {
       setState(() {

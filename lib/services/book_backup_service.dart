@@ -51,7 +51,6 @@ class BookBackupService {
 
   /// Upload a book to server
   Future<int> uploadBook(String bookUuid, {String? customName}) async {
-    debugPrint('📤 Uploading book #$bookUuid...');
 
     // Get device info directly from database
     final db = await dbService.database;
@@ -79,13 +78,10 @@ class BookBackupService {
 
   /// List all backups for this device
   Future<List<Map<String, dynamic>>> listBackups() async {
-    debugPrint('📋 [1/4] Starting listBackups...');
 
     // Get device info directly from database
-    debugPrint('📋 [2/4] Getting database handle...');
     final db = await dbService.database;
 
-    debugPrint('📋 [3/4] Querying device_info...');
     final deviceRows = await db.query('device_info', limit: 1);
     if (deviceRows.isEmpty) {
       throw Exception('Device not registered. Please register device first.');
@@ -94,21 +90,18 @@ class BookBackupService {
     final deviceId = deviceRow['device_id'] as String;
     final deviceToken = deviceRow['device_token'] as String;
 
-    debugPrint('📋 [4/4] Calling API to list server books (deviceId: ${deviceId.substring(0, 8)}...)');
     // Use ApiClient to list server books
     final result = await apiClient.listServerBooks(
       deviceId: deviceId,
       deviceToken: deviceToken,
     );
 
-    debugPrint('✅ Got ${result.length} books from server');
     return result;
   }
 
   /// Restore a book from server backup and download directly to local device
   /// backupId is the server book ID (integer)
   Future<String> restoreBook(int backupId) async {
-    debugPrint('📥 Restoring book from backup #$backupId...');
 
     // Get device info directly from database
     final db = await dbService.database;
@@ -135,12 +128,10 @@ class BookBackupService {
       deviceToken: deviceToken,
     );
 
-    debugPrint('✅ Book data pulled from server');
 
     // Apply book data directly to local database
     final count = await _applyBackupDataLocally(bookData);
 
-    debugPrint('✅ Book restored to local device: $count items');
     return 'Book restored successfully ($count items)';
   }
 
@@ -165,7 +156,7 @@ class BookBackupService {
         'name': book['name'],
         'created_at': book['created_at'] is int
             ? book['created_at']
-            : DateTime.parse(book['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            : DateTime.parse(book['created_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000,
         'archived_at': null,  // Clear archived status when restoring
         'version': book['version'] ?? 1,
         'is_dirty': book['is_dirty'] == true ? 1 : 0,
@@ -181,15 +172,15 @@ class BookBackupService {
         final endTime = event['end_time'] != null
             ? (event['end_time'] is int
                 ? event['end_time']
-                : DateTime.parse(event['end_time'] as String).millisecondsSinceEpoch ~/ 1000)
+                : DateTime.parse(event['end_time'] as String).toUtc().millisecondsSinceEpoch ~/ 1000)
             : null;
         final createdAt = event['created_at'] is int
             ? event['created_at']
-            : DateTime.parse(event['created_at'] as String).millisecondsSinceEpoch ~/ 1000;
+            : DateTime.parse(event['created_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000;
         final updatedAt = event['updated_at'] != null
             ? (event['updated_at'] is int
                 ? event['updated_at']
-                : DateTime.parse(event['updated_at'] as String).millisecondsSinceEpoch ~/ 1000)
+                : DateTime.parse(event['updated_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000)
             : createdAt;
 
         await txn.insert('events', {
@@ -222,11 +213,11 @@ class BookBackupService {
         // Parse timestamps (handle both int and string formats)
         final createdAt = note['created_at'] is int
             ? note['created_at']
-            : DateTime.parse(note['created_at'] as String).millisecondsSinceEpoch ~/ 1000;
+            : DateTime.parse(note['created_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000;
         final updatedAt = note['updated_at'] != null
             ? (note['updated_at'] is int
                 ? note['updated_at']
-                : DateTime.parse(note['updated_at'] as String).millisecondsSinceEpoch ~/ 1000)
+                : DateTime.parse(note['updated_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000)
             : createdAt;
 
         await txn.insert('notes', {
@@ -247,14 +238,14 @@ class BookBackupService {
         // Parse timestamps (handle both int and string formats)
         final date = drawing['date'] is int
             ? drawing['date']
-            : DateTime.parse(drawing['date'] as String).millisecondsSinceEpoch ~/ 1000;
+            : DateTime.parse(drawing['date'] as String).toUtc().millisecondsSinceEpoch ~/ 1000;
         final createdAt = drawing['created_at'] is int
             ? drawing['created_at']
-            : DateTime.parse(drawing['created_at'] as String).millisecondsSinceEpoch ~/ 1000;
+            : DateTime.parse(drawing['created_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000;
         final updatedAt = drawing['updated_at'] != null
             ? (drawing['updated_at'] is int
                 ? drawing['updated_at']
-                : DateTime.parse(drawing['updated_at'] as String).millisecondsSinceEpoch ~/ 1000)
+                : DateTime.parse(drawing['updated_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000)
             : createdAt;
 
         await txn.insert('schedule_drawings', {

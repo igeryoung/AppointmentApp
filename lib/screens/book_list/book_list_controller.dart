@@ -92,12 +92,9 @@ class BookListController extends ChangeNotifier {
       if (createdBook != null && backup.available && createdBook.uuid.isNotEmpty) {
         try {
           await backup.upload(createdBook.uuid);
-          debugPrint('✅ Book "${createdBook.name}" created and registered on server');
         } catch (uploadError) {
-          debugPrint('❌ Failed to upload book backup: $uploadError');
           // ROLLBACK: Delete the local book since server sync failed
           await repo.delete(createdBook.uuid);
-          debugPrint('🔄 Rolled back local book creation due to server sync failure');
           throw Exception('Server sync failed: $uploadError');
         }
       }
@@ -252,9 +249,7 @@ class BookListController extends ChangeNotifier {
     // Run upload in background without blocking UI
     try {
       await backup.upload(book.uuid);
-      debugPrint('✅ Book "${book.name}" auto-registered on server');
     } catch (e) {
-      debugPrint('⚠️  Failed to auto-register book on server: $e');
       // Show warning to user but don't block the flow
       if (context.mounted) {
         SnackBarUtils.showWarningWithAction(

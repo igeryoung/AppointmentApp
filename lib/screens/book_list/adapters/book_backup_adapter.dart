@@ -32,34 +32,26 @@ class BookBackupAdapter {
 
   /// Lazily initialize BookBackupService with ApiClient
   Future<BookBackupService> _ensureInitialized() async {
-    debugPrint('🔧 [Init] Checking if service already initialized...');
     if (_backupService != null) {
-      debugPrint('🔧 [Init] Service already exists, returning cached instance');
       return _backupService!;
     }
 
-    debugPrint('🔧 [Init] Service not initialized, creating new instance...');
     if (_dbService == null) {
       throw Exception('Book backup is not available on this platform');
     }
 
     // Create ApiClient with server URL
-    debugPrint('🔧 [Init] Getting server URL...');
     final serverConfig = ServerConfigService(_dbService!);
     final serverUrl = await serverConfig.getServerUrlOrDefault();
-    debugPrint('🔧 [Init] Server URL: $serverUrl');
 
-    debugPrint('🔧 [Init] Creating ApiClient...');
     _apiClient = ApiClient(baseUrl: serverUrl);
 
     // Create BookBackupService
-    debugPrint('🔧 [Init] Creating BookBackupService...');
     _backupService = BookBackupService(
       dbService: _dbService!,
       apiClient: _apiClient!,
     );
 
-    debugPrint('🔧 [Init] ✅ Service initialized successfully');
     return _backupService!;
   }
 
@@ -75,12 +67,8 @@ class BookBackupAdapter {
 
   /// List all backups from server
   Future<List<Map<String, dynamic>>> listBackups() async {
-    debugPrint('🔧 [Adapter] Starting listBackups...');
-    debugPrint('🔧 [Adapter] Ensuring service is initialized...');
     final service = await _ensureInitialized();
-    debugPrint('🔧 [Adapter] Service initialized, calling service.listBackups()...');
     final result = await service.listBackups();
-    debugPrint('🔧 [Adapter] Got ${result.length} backups');
     return result;
   }
 

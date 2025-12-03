@@ -248,24 +248,20 @@ class _BookListView extends StatelessWidget {
   Future<void> _uploadBookToServer(BuildContext context, Book book) async {
     // Note: This functionality remains as-is for now (not part of cubit)
     // TODO: Move to a dedicated BackupCubit in future refactoring
-    debugPrint('Upload book to server: ${book.name}');
   }
 
   Future<void> _autoRegisterBookOnServer(BuildContext context, Book book) async {
     // Note: This functionality remains as-is for now (not part of cubit)
     // TODO: Move to a dedicated BackupCubit in future refactoring
-    debugPrint('Auto-register book on server: ${book.name}');
   }
 
   Future<void> _showRestoreDialog(BuildContext context) async {
     // Note: Restore functionality kept as-is for now
     // TODO: Move to a dedicated BackupCubit in future refactoring
-    debugPrint('Show restore dialog');
   }
 
   Future<void> _showServerSettings(BuildContext context) async {
     // Note: Server settings kept as-is for now
     // TODO: Move to a dedicated SettingsCubit in future refactoring
-    debugPrint('Show server settings');
   }
 }

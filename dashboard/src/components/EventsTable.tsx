@@ -1,6 +1,10 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Event } from '../types';
+import { parseServerDate } from '../utils/date';
+import { getBookDisplayName } from '../utils/book';
+import { formatShortId } from '../utils/id';
+import { parseEventTypes } from '../utils/event';
 
 interface EventsTableProps {
   events: Event[];
@@ -14,12 +18,15 @@ interface EventsTableProps {
 export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = false }) => {
   const navigate = useNavigate();
 
-  const handleViewDetails = (eventId: number) => {
+  const handleViewDetails = (eventId: string) => {
     navigate(`/events/${eventId}`);
   };
 
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
+  const formatDateTime = (dateString?: string | null) => {
+    const date = parseServerDate(dateString);
+    if (!date) {
+      return '-';
+    }
     return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'short',
@@ -27,14 +34,6 @@ export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = fals
       hour: '2-digit',
       minute: '2-digit',
     });
-  };
-
-  const parseEventTypes = (eventTypesJson: string): string[] => {
-    try {
-      return JSON.parse(eventTypesJson);
-    } catch {
-      return [];
-    }
   };
 
   if (loading) {
@@ -71,6 +70,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = fals
                 <th>Book</th>
                 <th>Patient Name</th>
                 <th>Record #</th>
+                <th>Phone</th>
                 <th>Event Types</th>
                 <th>Start Time</th>
                 <th>End Time</th>
@@ -86,11 +86,14 @@ export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = fals
                   onClick={() => handleViewDetails(event.id)}
                   style={{ cursor: 'pointer' }}
                 >
-                  <td>{event.id}</td>
-                  <td>{event.bookName || `Book ${event.bookId}`}</td>
+                  <td style={{ fontFamily: 'monospace' }}>{formatShortId(event.id)}</td>
+                  <td>{getBookDisplayName(event.bookName, event.bookUuid)}</td>
                   <td style={{ fontWeight: '500' }}>{event.name}</td>
                   <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                     {event.recordNumber || '-'}
+                  </td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
+                    {event.phone || '-'}
                   </td>
                   <td>
                     <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.25rem' }}>

@@ -4,6 +4,7 @@ import 'sync_service.dart';
 import 'network_service.dart';
 import '../models/sync_models.dart';
 
+
 /// SyncCoordinator - Coordinates automatic background sync for all entities
 ///
 /// Responsibilities:
@@ -39,19 +40,11 @@ class SyncCoordinator {
   /// Triggers sync at regular intervals
   void startAutoSync() {
     if (_syncTimer != null && _syncTimer!.isActive) {
-      debugPrint('⚠️  Auto-sync already running');
       return;
     }
 
-    debugPrint('🔄 Starting auto-sync (interval: ${syncInterval.inSeconds}s)');
-
-    // Perform initial sync immediately
-    syncNow();
-
-    // Schedule periodic sync
-    _syncTimer = Timer.periodic(syncInterval, (_) async {
-      await syncNow();
-    });
+    // Temporarily disable periodic sync scheduler
+    _syncTimer = Timer.periodic(syncInterval, (_) {});
   }
 
   /// Stop automatic background sync
@@ -59,7 +52,6 @@ class SyncCoordinator {
     if (_syncTimer != null) {
       _syncTimer!.cancel();
       _syncTimer = null;
-      debugPrint('🛑 Auto-sync stopped');
     }
   }
 
@@ -75,7 +67,6 @@ class SyncCoordinator {
   Future<bool> syncNow() async {
     // Prevent concurrent syncs
     if (_isSyncing) {
-      debugPrint('⚠️  Sync already in progress, skipping...');
       return false;
     }
 
@@ -85,7 +76,6 @@ class SyncCoordinator {
       // Check network connectivity
       final hasConnection = await _networkService.hasConnectivity();
       if (!hasConnection) {
-        debugPrint('📡 No network connection, skipping sync');
         _lastSyncResult = SyncResult(
           success: false,
           message: 'No network connection',
@@ -94,30 +84,17 @@ class SyncCoordinator {
         return false;
       }
 
-      // Perform full sync
-      debugPrint('🔄 Performing full sync...');
-      final result = await _syncService.performFullSync();
-
+      // Temporarily skip full sync
       _lastSyncTime = DateTime.now();
-      _lastSyncResult = result;
-
-      if (result.success) {
-        debugPrint('✅ Sync completed successfully');
-        debugPrint('   - Pushed: ${result.pushedChanges}');
-        debugPrint('   - Pulled: ${result.pulledChanges}');
-        debugPrint('   - Conflicts: ${result.conflictsResolved}');
-        return true;
-      } else {
-        debugPrint('❌ Sync failed: ${result.message}');
-        if (result.errors.isNotEmpty) {
-          for (final error in result.errors) {
-            debugPrint('   - $error');
-          }
-        }
-        return false;
-      }
+      _lastSyncResult = const SyncResult(
+        success: true,
+        message: 'Full sync temporarily disabled',
+        pushedChanges: 0,
+        pulledChanges: 0,
+        conflictsResolved: 0,
+      );
+      return true;
     } catch (e) {
-      debugPrint('❌ Sync error: $e');
       _lastSyncResult = SyncResult(
         success: false,
         message: 'Sync error',

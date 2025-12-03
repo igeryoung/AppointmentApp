@@ -71,7 +71,6 @@ class ScheduleDrawingService {
     // RACE CONDITION FIX: Increment generation counter
     _drawingLoadGeneration++;
     final loadGeneration = _drawingLoadGeneration;
-    debugPrint('🔄 ScheduleDrawingService: loadDrawing() called, generation=$loadGeneration');
 
     try {
       // Reset current drawing to avoid carrying old IDs
@@ -84,7 +83,6 @@ class ScheduleDrawingService {
       // Use ContentService for cache-first strategy with server fallback
       ScheduleDrawing? drawing;
       if (_contentService != null) {
-        debugPrint('📖 Loading drawing via ContentService (cache-first with server fallback, generation=$loadGeneration)...');
         drawing = await _contentService!.getDrawing(
           bookUuid: bookUuid,
           date: effectiveDate,
@@ -93,7 +91,6 @@ class ScheduleDrawingService {
         );
       } else {
         // Fallback to direct database access
-        debugPrint('⚠️ ContentService not available, loading drawing from cache only (generation=$loadGeneration)');
         drawing = await _dbService.getCachedDrawing(
           bookUuid,
           effectiveDate,
@@ -103,7 +100,6 @@ class ScheduleDrawingService {
 
       // RACE CONDITION FIX: Check if this load is still valid
       if (loadGeneration != _drawingLoadGeneration) {
-        debugPrint('⚠️ ScheduleDrawingService: Ignoring stale drawing load (gen $loadGeneration vs current $_drawingLoadGeneration)');
         return;
       }
 
@@ -116,13 +112,10 @@ class ScheduleDrawingService {
         if (loadGeneration == _drawingLoadGeneration) {
           _loadStrokesIntoCanvas(selectedDate, drawing);
         } else {
-          debugPrint('⚠️ ScheduleDrawingService: Skipping canvas load for stale drawing (gen $loadGeneration vs current $_drawingLoadGeneration)');
         }
       });
 
-      debugPrint('✅ ScheduleDrawingService: Drawing loaded successfully (generation=$loadGeneration)');
     } catch (e) {
-      debugPrint('❌ Error loading drawing (generation=$loadGeneration): $e');
       // Only update state if this load is still current
       if (loadGeneration == _drawingLoadGeneration) {
         _currentDrawing = null;
@@ -138,10 +131,8 @@ class ScheduleDrawingService {
     final effectiveDate = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
 
     if (drawing != null && drawing.strokes.isNotEmpty) {
-      debugPrint('📖 Loading ${drawing.strokes.length} strokes for page $pageId (effectiveDate: $effectiveDate)');
       canvasKey.currentState?.loadStrokes(drawing.strokes);
     } else {
-      debugPrint('📖 Clearing canvas for empty page $pageId (effectiveDate: $effectiveDate)');
       canvasKey.currentState?.clear();
     }
   }
@@ -152,7 +143,6 @@ class ScheduleDrawingService {
     _saveDebounceTimer = Timer(const Duration(milliseconds: 500), () {
       saveDrawing(selectedDate);
     });
-    debugPrint('⏱️ Scheduled debounced save (500ms)');
   }
 
   /// Cancel pending debounced save
@@ -164,7 +154,6 @@ class ScheduleDrawingService {
   Future<void> saveDrawing(DateTime selectedDate) async {
     // Prevent concurrent saves
     if (_isSaving) {
-      debugPrint('⚠️ Save already in progress, skipping...');
       return;
     }
 
@@ -175,14 +164,12 @@ class ScheduleDrawingService {
     final canvasKey = getCanvasKey(selectedDate);
     final canvasState = canvasKey.currentState;
     if (canvasState == null) {
-      debugPrint('⚠️ Cannot save: canvas state is null');
       return;
     }
 
     // Check if canvas version has changed since last save
     final currentCanvasVersion = canvasState.canvasVersion;
     if (currentCanvasVersion == _lastSavedCanvasVersion) {
-      debugPrint('⏩ Canvas unchanged (version: $currentCanvasVersion), skipping save');
       return;
     }
 
@@ -219,17 +206,14 @@ class ScheduleDrawingService {
         updatedAt: now,
       );
 
-      debugPrint('💾 Saving ${strokes.length} strokes for page $pageId (effectiveDate: $effectiveDate, id: $drawingId, version: $version)');
 
       // Use ContentService or fallback to database
       if (_contentService != null) {
-        debugPrint('💾 Saving drawing via ContentService (syncs to server + cache)...');
         await _contentService!.saveDrawing(drawing);
 
         // RACE CONDITION FIX: Verify date hasn't changed during save
         final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
         if (effectiveDateAtStart != effectiveDateAfterSave) {
-          debugPrint('⚠️ ScheduleDrawingService: Date changed during save ($effectiveDateAtStart → $effectiveDateAfterSave). Aborting state update.');
           return;
         }
 
@@ -237,7 +221,6 @@ class ScheduleDrawingService {
         final currentStateAfterSave = canvasKey.currentState;
         if (currentStateAfterSave != null &&
             currentStateAfterSave.canvasVersion != currentCanvasVersion) {
-          debugPrint('⚠️ Canvas changed during save (v$currentCanvasVersion → v${currentStateAfterSave.canvasVersion}), skipping state update');
           return;
         }
 
@@ -249,13 +232,11 @@ class ScheduleDrawingService {
         );
         _currentDrawing = savedDrawing ?? drawing;
       } else {
-        debugPrint('⚠️ ContentService not available, saving to cache only');
         final savedDrawing = await _dbService.saveCachedDrawing(drawing);
 
         // RACE CONDITION FIX: Verify date hasn't changed during save
         final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
         if (effectiveDateAtStart != effectiveDateAfterSave) {
-          debugPrint('⚠️ ScheduleDrawingService: Date changed during save ($effectiveDateAtStart → $effectiveDateAfterSave). Aborting state update.');
           return;
         }
 
@@ -263,18 +244,15 @@ class ScheduleDrawingService {
         final currentStateAfterSave = canvasKey.currentState;
         if (currentStateAfterSave != null &&
             currentStateAfterSave.canvasVersion != currentCanvasVersion) {
-          debugPrint('⚠️ Canvas changed during save (v$currentCanvasVersion → v${currentStateAfterSave.canvasVersion}), skipping state update');
           return;
         }
 
         _currentDrawing = savedDrawing;
       }
 
-      debugPrint('✅ Save successful, id: ${_currentDrawing?.id}');
       _lastSavedCanvasVersion = currentCanvasVersion;
       onDrawingChanged();
     } catch (e) {
-      debugPrint('❌ Error saving drawing: $e');
       rethrow; // Let caller handle the error
     } finally {
       _isSaving = false;

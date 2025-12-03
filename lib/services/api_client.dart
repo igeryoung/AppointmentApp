@@ -18,12 +18,9 @@ class ApiClient {
 
     // Log SSL configuration
     if (baseUrl.startsWith('https://')) {
-      debugPrint('🔒 API client using HTTPS: $baseUrl');
       if (kDebugMode) {
-        debugPrint('   Self-signed certificates are accepted in debug mode');
       }
     } else if (baseUrl.startsWith('http://')) {
-      debugPrint('⚠️  API client using HTTP (insecure): $baseUrl');
     }
   }
 
@@ -41,8 +38,41 @@ class ApiClient {
 
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('❌ Health check failed: $e');
       return false;
+    }
+  }
+
+  /// Fetch event metadata from server
+  Future<Map<String, dynamic>?> fetchEvent({
+    required String bookUuid,
+    required String eventId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['event'] as Map<String, dynamic>?;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw ApiException(
+          'Fetch event failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
     }
   }
 
@@ -79,7 +109,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Fetch note failed: $e');
       rethrow;
     }
   }
@@ -131,7 +160,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Save note failed: $e');
       rethrow;
     }
   }
@@ -161,7 +189,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Delete note failed: $e');
       rethrow;
     }
   }
@@ -195,7 +222,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Batch fetch notes failed: $e');
       rethrow;
     }
   }
@@ -242,7 +268,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Fetch drawing failed: $e');
       rethrow;
     }
   }
@@ -283,7 +308,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Save drawing failed: $e');
       rethrow;
     }
   }
@@ -322,7 +346,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Delete drawing failed: $e');
       rethrow;
     }
   }
@@ -366,7 +389,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Batch fetch drawings failed: $e');
       rethrow;
     }
   }
@@ -421,7 +443,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Book creation failed: $e');
       rethrow;
     }
   }
@@ -483,7 +504,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ List server books failed: $e');
       rethrow;
     }
   }
@@ -528,7 +548,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Pull book failed: $e');
       rethrow;
     }
   }
@@ -573,7 +592,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Get server book info failed: $e');
       rethrow;
     }
   }
@@ -592,7 +610,6 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      debugPrint('📤 Uploading book backup: $backupName');
 
       final response = await _client.post(
         Uri.parse('$baseUrl/api/books/$bookUuid/backup'),
@@ -609,7 +626,6 @@ class ApiClient {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final backupId = json['backupId'] as int;
-        debugPrint('✅ Book backup uploaded successfully: Backup ID $backupId');
         return backupId;
       } else if (response.statusCode == 401) {
         throw ApiException(
@@ -625,7 +641,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Upload book backup failed: $e');
       rethrow;
     }
   }
@@ -645,7 +660,6 @@ class ApiClient {
 
       return response.statusCode == 200;
     } catch (e) {
-      debugPrint('❌ Check device registration failed: $e');
       return false;
     }
   }
@@ -686,7 +700,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Device registration failed: $e');
       rethrow;
     }
   }
@@ -699,7 +712,6 @@ class ApiClient {
   /// Sends local changes and returns server acknowledgment
   Future<SyncResponse> pushChanges(SyncRequest request) async {
     try {
-      debugPrint('🔄 Pushing ${request.localChanges?.length ?? 0} changes to server');
 
       final response = await _client.post(
         Uri.parse('$baseUrl/api/sync/push'),
@@ -714,9 +726,7 @@ class ApiClient {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final syncResponse = SyncResponse.fromJson(json);
-        debugPrint('✅ Push successful: ${syncResponse.changesApplied} changes applied');
         if (syncResponse.conflicts != null && syncResponse.conflicts!.isNotEmpty) {
-          debugPrint('⚠️  ${syncResponse.conflicts!.length} conflicts detected');
         }
         return syncResponse;
       } else if (response.statusCode == 401) {
@@ -737,7 +747,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Push changes failed: $e');
       rethrow;
     }
   }
@@ -746,7 +755,6 @@ class ApiClient {
   /// Retrieves changes from server since last sync
   Future<SyncResponse> pullChanges(SyncRequest request) async {
     try {
-      debugPrint('🔄 Pulling changes from server (lastSync: ${request.lastSyncAt})');
 
       final response = await _client.post(
         Uri.parse('$baseUrl/api/sync/pull'),
@@ -761,7 +769,6 @@ class ApiClient {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final syncResponse = SyncResponse.fromJson(json);
-        debugPrint('✅ Pull successful: ${syncResponse.serverChanges?.length ?? 0} changes received');
         return syncResponse;
       } else if (response.statusCode == 401) {
         throw ApiException(
@@ -777,7 +784,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Pull changes failed: $e');
       rethrow;
     }
   }
@@ -786,7 +792,6 @@ class ApiClient {
   /// Pushes local changes and pulls server changes in a single transaction
   Future<SyncResponse> fullSync(SyncRequest request) async {
     try {
-      debugPrint('🔄 Starting full sync (${request.localChanges?.length ?? 0} local changes)');
 
       final response = await _client.post(
         Uri.parse('$baseUrl/api/sync/full'),
@@ -801,11 +806,7 @@ class ApiClient {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final syncResponse = SyncResponse.fromJson(json);
-        debugPrint('✅ Full sync successful:');
-        debugPrint('   - Applied: ${syncResponse.changesApplied} local changes');
-        debugPrint('   - Received: ${syncResponse.serverChanges?.length ?? 0} server changes');
         if (syncResponse.conflicts != null && syncResponse.conflicts!.isNotEmpty) {
-          debugPrint('   - Conflicts: ${syncResponse.conflicts!.length}');
         }
         return syncResponse;
       } else if (response.statusCode == 401) {
@@ -818,7 +819,6 @@ class ApiClient {
         // Conflicts detected
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final syncResponse = SyncResponse.fromJson(json);
-        debugPrint('⚠️  Full sync completed with conflicts: ${syncResponse.conflicts!.length}');
         return syncResponse;
       } else {
         throw ApiException(
@@ -828,7 +828,6 @@ class ApiClient {
         );
       }
     } catch (e) {
-      debugPrint('❌ Full sync failed: $e');
       rethrow;
     }
   }

@@ -26,13 +26,11 @@ class TimeService extends ChangeNotifier {
   void setTestTime(DateTime time) {
     _overrideTime = time;
     notifyListeners();
-    debugPrint('⏰ Test time set to: $time');
   }
 
   /// Reset to real time
   void resetToRealTime() {
     _overrideTime = null;
     notifyListeners();
-    debugPrint('⏰ Reset to real time');
   }
 }

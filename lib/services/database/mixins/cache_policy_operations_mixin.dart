@@ -18,7 +18,6 @@ mixin CachePolicyOperationsMixin {
 
     if (maps.isEmpty) {
       // Fallback to default if not found (shouldn't happen after v8 migration)
-      debugPrint('⚠️ Cache policy not found, returning default');
       return CachePolicy.defaultPolicy();
     }
 
@@ -36,10 +35,8 @@ mixin CachePolicyOperationsMixin {
 
     if (updatedRows == 0) {
       // If update failed, insert (shouldn't happen after v8 migration)
-      debugPrint('⚠️ Cache policy update failed, inserting new row');
       await db.insert('cache_policy', policy.toMap());
     }
 
-    debugPrint('✅ Cache policy updated: $policy');
   }
 }

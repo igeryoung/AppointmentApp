@@ -66,7 +66,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
       throw Exception('Device not registered. Please register device before creating books.');
     }
 
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
 
     try {
       // Call /api/create-books endpoint
@@ -78,7 +78,6 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
 
       final serverUuid = response['uuid'] as String;
 
-      debugPrint('✅ Book created on server with UUID: $serverUuid');
 
       // Step 2: Create book locally with server-provided UUID
       await insert({
@@ -93,7 +92,6 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
         createdAt: now,
       );
     } catch (e) {
-      debugPrint('❌ Failed to create book: $e');
       throw Exception('Failed to create book: Server connection required. $e');
     }
   }
@@ -129,7 +127,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
   @override
   Future<void> archive(String uuid) async {
     final db = await getDatabaseFn();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     final updatedRows = await db.update(
       'books',
       {'archived_at': now.millisecondsSinceEpoch ~/ 1000},
@@ -145,7 +143,6 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
     // This is a placeholder for future implementation
     // For now, ordering is handled by created_at DESC in getAll()
     // and by BookOrderService which uses SharedPreferences
-    debugPrint('⚠️ Book.reorder() called but not implemented - use BookOrderService instead');
   }
 
   @override
@@ -166,7 +163,6 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
         searchQuery: searchQuery,
       );
     } catch (e) {
-      debugPrint('❌ Failed to list server books: $e');
       rethrow;
     }
   }
@@ -190,12 +186,55 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
 
     try {
       // Pull complete book data from server
-      debugPrint('📥 Pulling book from server: $bookUuid');
       final bookData = await _apiClient!.pullBook(
         bookUuid: bookUuid,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
+
+      DateTime _parseServerTimestamp(dynamic value) {
+        if (value == null) {
+          throw ArgumentError('Server timestamp is null');
+        }
+
+        if (value is int) {
+          return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+        }
+
+        if (value is String) {
+          final parsed = DateTime.parse(value);
+          if (parsed.isUtc) return parsed;
+          return DateTime.utc(
+            parsed.year,
+            parsed.month,
+            parsed.day,
+            parsed.hour,
+            parsed.minute,
+            parsed.second,
+            parsed.millisecond,
+            parsed.microsecond,
+          );
+        }
+
+        if (value is DateTime) {
+          if (value.isUtc) return value;
+          return DateTime.utc(
+            value.year,
+            value.month,
+            value.day,
+            value.hour,
+            value.minute,
+            value.second,
+            value.millisecond,
+            value.microsecond,
+          );
+        }
+
+        throw ArgumentError('Unsupported timestamp type: ${value.runtimeType}');
+      }
+
+      int _toSeconds(dynamic value) => _parseServerTimestamp(value).millisecondsSinceEpoch ~/ 1000;
+      int? _toSecondsOrNull(dynamic value) => value == null ? null : _toSeconds(value);
 
       final db = await getDatabaseFn();
 
@@ -211,7 +250,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
         await txn.insert('books', {
           'book_uuid': bookMap['book_uuid'],
           'name': bookMap['name'],
-          'created_at': DateTime.parse(bookMap['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+          'created_at': _toSeconds(bookMap['created_at']),
           'archived_at': null,  // Clear archived status when pulling from server
           'version': bookMap['version'],
           'is_dirty': 0,
@@ -229,14 +268,12 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'event_type': event['event_type'],
             'event_types': event['event_types'] ?? '[]',
             'has_charge_items': event['has_charge_items'] == true ? 1 : 0,
-            'start_time': DateTime.parse(event['start_time'] as String).millisecondsSinceEpoch ~/ 1000,
-            'end_time': event['end_time'] != null
-                ? DateTime.parse(event['end_time'] as String).millisecondsSinceEpoch ~/ 1000
-                : null,
-            'created_at': DateTime.parse(event['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            'start_time': _toSeconds(event['start_time']),
+            'end_time': _toSecondsOrNull(event['end_time']),
+            'created_at': _toSeconds(event['created_at']),
             'updated_at': event['updated_at'] != null
-                ? DateTime.parse(event['updated_at'] as String).millisecondsSinceEpoch ~/ 1000
-                : DateTime.parse(event['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+                ? _toSeconds(event['updated_at'])
+                : _toSeconds(event['created_at']),
             'is_removed': event['is_removed'] == true ? 1 : 0,
             'removal_reason': event['removal_reason'],
             'original_event_id': event['original_event_id'],
@@ -256,10 +293,10 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
             'event_id': note['event_id'],
             'strokes_data': note['strokes_data'],
             'pages_data': note['pages_data'],
-            'created_at': DateTime.parse(note['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            'created_at': _toSeconds(note['created_at']),
             'updated_at': note['updated_at'] != null
-                ? DateTime.parse(note['updated_at'] as String).millisecondsSinceEpoch ~/ 1000
-                : DateTime.parse(note['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+                ? _toSeconds(note['updated_at'])
+                : _toSeconds(note['created_at']),
             'version': note['version'],
             'is_dirty': 0,
           });
@@ -271,25 +308,20 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
           await txn.insert('schedule_drawings', {
             'id': drawing['id'],
             'book_uuid': drawing['book_uuid'],
-            'date': DateTime.parse(drawing['date'] as String).millisecondsSinceEpoch ~/ 1000,
+            'date': _toSeconds(drawing['date']),
             'view_mode': drawing['view_mode'],
             'strokes_data': drawing['strokes_data'],
-            'created_at': DateTime.parse(drawing['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+            'created_at': _toSeconds(drawing['created_at']),
             'updated_at': drawing['updated_at'] != null
-                ? DateTime.parse(drawing['updated_at'] as String).millisecondsSinceEpoch ~/ 1000
-                : DateTime.parse(drawing['created_at'] as String).millisecondsSinceEpoch ~/ 1000,
+                ? _toSeconds(drawing['updated_at'])
+                : _toSeconds(drawing['created_at']),
             'version': drawing['version'],
             'is_dirty': 0,
           });
         }
       });
 
-      debugPrint('✅ Book pulled successfully: $bookUuid');
-      debugPrint('   - Events: ${events.length}');
-      debugPrint('   - Notes: ${notes.length}');
-      debugPrint('   - Drawings: ${drawings.length}');
     } catch (e) {
-      debugPrint('❌ Failed to pull book from server: $e');
       throw Exception('Failed to pull book from server: $e');
     }
   }
@@ -315,7 +347,6 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
       if (e is ApiException && e.statusCode == 404) {
         return null;
       }
-      debugPrint('❌ Failed to get server book info: $e');
       rethrow;
     }
   }

@@ -70,6 +70,9 @@ abstract class IDatabaseService {
     String reason,
   );
 
+  /// Replace local event row with authoritative server data
+  Future<void> replaceEventWithServerData(Event event);
+
   // ===================
   // Note Cache Operations
   // ===================

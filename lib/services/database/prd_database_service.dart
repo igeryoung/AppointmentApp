@@ -75,13 +75,10 @@ class PRDDatabaseService
   }
 
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
-    debugPrint('Database upgrade from v$oldVersion to v$newVersion');
 
     // Version 22 introduces UUID event IDs (breaking change)
     // For development ease, we recreate the database rather than migrate data
     if (oldVersion < 22) {
-      debugPrint('⚠️ Database upgrade from v$oldVersion to v$newVersion requires recreation.');
-      debugPrint('⚠️ Event IDs changed from INTEGER to UUID. Deleting old database and recreating...');
 
       // Close the database
       await db.close();

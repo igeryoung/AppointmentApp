@@ -317,6 +317,25 @@ class NoteRoutes {
         }
       }
 
+      // Update event metadata if payload is provided
+      if (eventData != null) {
+        try {
+          await noteService.updateEventMetadata(
+            eventData: eventData,
+            bookUuid: bookUuid,
+          );
+        } catch (e) {
+          print('❌ Failed to update event metadata from note sync: $e');
+          return Response.internalServerError(
+            body: jsonEncode({
+              'success': false,
+              'message': 'Failed to update event metadata: $e',
+            }),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
+      }
+
       // Create or update the note
       // Client sends its current version (after increment), but we need the version it's based on
       // So expectedVersion = client version - 1 (or null for first sync)

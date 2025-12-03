@@ -296,4 +296,22 @@ mixin EventOperationsMixin {
     );
     return maps.map((map) => Event.fromMap(map)).toList();
   }
+
+  /// Replace local event with server-provided data (used after server fetch)
+  Future<void> replaceEventWithServerData(Event event) async {
+    if (event.id == null) {
+      throw ArgumentError('Event ID cannot be null');
+    }
+
+    final db = await database;
+    final updateData = event.toMap();
+    updateData.remove('id');
+
+    await db.update(
+      'events',
+      updateData,
+      where: 'id = ?',
+      whereArgs: [event.id],
+    );
+  }
 }

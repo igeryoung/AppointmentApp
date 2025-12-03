@@ -24,7 +24,6 @@ mixin LockMechanismMixin {
     // Get current device ID
     final deviceCreds = await getDeviceCredentials();
     if (deviceCreds == null) {
-      debugPrint('⚠️ Cannot acquire lock: device not registered');
       return false;
     }
 
@@ -49,14 +48,11 @@ mixin LockMechanismMixin {
       ]);
 
       if (updatedRows > 0) {
-        debugPrint('✅ Lock acquired for note (event_id: $eventId)');
         return true;
       } else {
-        debugPrint('⚠️ Failed to acquire lock: note is locked by another device');
         return false;
       }
     } catch (e) {
-      debugPrint('❌ Error acquiring lock: $e');
       return false;
     }
   }
@@ -69,7 +65,6 @@ mixin LockMechanismMixin {
     // Get current device ID
     final deviceCreds = await getDeviceCredentials();
     if (deviceCreds == null) {
-      debugPrint('⚠️ Cannot release lock: device not registered');
       return;
     }
 
@@ -83,10 +78,8 @@ mixin LockMechanismMixin {
       ''', [eventId, deviceCreds.deviceId]);
 
       if (updatedRows > 0) {
-        debugPrint('✅ Lock released for note (event_id: $eventId)');
       }
     } catch (e) {
-      debugPrint('❌ Error releasing lock: $e');
     }
   }
 
@@ -109,11 +102,9 @@ mixin LockMechanismMixin {
       ''', [staleLockCutoff]);
 
       if (deletedRows > 0) {
-        debugPrint('✅ Cleaned up $deletedRows stale lock(s)');
       }
       return deletedRows;
     } catch (e) {
-      debugPrint('❌ Error cleaning up stale locks: $e');
       return 0;
     }
   }

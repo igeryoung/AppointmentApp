@@ -5,6 +5,7 @@ import '../repositories/note_repository.dart';
 import 'api_client.dart';
 import 'database_service_interface.dart';
 import 'database/mixins/device_info_operations_mixin.dart';
+import 'database/prd_database_service.dart';
 
 /// Unified sync service for all entities (events, notes, schedule_drawings)
 /// Handles bidirectional sync with conflict resolution
@@ -13,22 +14,24 @@ class SyncService {
   final IEventRepository eventRepository;
   final INoteRepository noteRepository;
   final IDatabaseService databaseService;
+  final PRDDatabaseService? _prdDatabaseService;
 
   SyncService({
     required this.apiClient,
     required this.eventRepository,
     required this.noteRepository,
     required this.databaseService,
-  });
+  }) : _prdDatabaseService = databaseService is PRDDatabaseService
+            ? databaseService as PRDDatabaseService
+            : null;
 
   /// Perform full bidirectional sync for all entities
   /// Returns SyncResult with summary of sync operation
   Future<SyncResult> performFullSync() async {
     try {
-      debugPrint('🔄 Starting full sync...');
 
       // Get device credentials
-      final deviceCreds = await databaseService.getDeviceCredentials();
+      final deviceCreds = await _prdDatabaseService?.getDeviceCredentials();
       if (deviceCreds == null) {
         return SyncResult(
           success: false,
@@ -43,7 +46,6 @@ class SyncService {
       // Collect dirty records from all entities
       final localChanges = await _collectDirtyRecords();
 
-      debugPrint('📤 Collected ${localChanges.length} local changes');
 
       // Build sync request
       final request = SyncRequest(
@@ -79,10 +81,6 @@ class SyncService {
       // Update last sync time
       await _updateLastSyncTime(response.serverTime);
 
-      debugPrint('✅ Full sync completed successfully');
-      debugPrint('   - Pushed: ${response.changesApplied} changes');
-      debugPrint('   - Pulled: $pulledChanges changes');
-      debugPrint('   - Conflicts resolved: $conflictsResolved');
 
       return SyncResult(
         success: true,
@@ -93,7 +91,6 @@ class SyncService {
         lastSyncTime: response.serverTime,
       );
     } catch (e) {
-      debugPrint('❌ Sync failed: $e');
       return SyncResult(
         success: false,
         message: 'Sync failed',
@@ -106,7 +103,7 @@ class SyncService {
   /// Groups events with their related notes for atomic sync
   Future<List<SyncChange>> _collectDirtyRecords() async {
     final changes = <SyncChange>[];
-    final syncedEventIds = <int>{};
+    final syncedEventIds = <String>{};
 
     // Collect dirty events
     try {
@@ -140,15 +137,11 @@ class SyncService {
               version: relatedNote.version,
             ));
             syncedEventIds.add(relatedNote.eventId);
-            debugPrint('📋 Added related note for event ${event.id} (atomic sync)');
           }
         } catch (e) {
-          debugPrint('⚠️  Failed to get related note for event ${event.id}: $e');
         }
       }
-      debugPrint('📋 Collected ${dirtyEvents.length} dirty events (with related notes)');
     } catch (e) {
-      debugPrint('⚠️  Failed to collect dirty events: $e');
     }
 
     // Collect remaining dirty notes (not already synced with their events)
@@ -169,29 +162,27 @@ class SyncService {
           version: note.version,
         ));
       }
-      debugPrint('📋 Collected ${dirtyNotes.length} dirty notes (standalone)');
     } catch (e) {
-      debugPrint('⚠️  Failed to collect dirty notes: $e');
     }
 
-    // Collect dirty schedule drawings
-    try {
-      final dirtyDrawings = await databaseService.getDirtyDrawings();
-      for (final drawing in dirtyDrawings) {
-        if (drawing.id == null) continue;
+    // Collect dirty schedule drawings (only supported on PRD database)
+    if (_prdDatabaseService != null) {
+      try {
+        final dirtyDrawings = await _prdDatabaseService!.getDirtyDrawings();
+        for (final drawing in dirtyDrawings) {
+          if (drawing.id == null) continue;
 
-        changes.add(SyncChange(
-          tableName: 'schedule_drawings',
-          recordId: drawing.id!,
-          operation: 'update',
-          data: drawing.toMap(),
-          timestamp: drawing.updatedAt,
-          version: drawing.version,
-        ));
+          changes.add(SyncChange(
+            tableName: 'schedule_drawings',
+            recordId: drawing.id!.toString(),
+            operation: 'update',
+            data: drawing.toMap(),
+            timestamp: drawing.updatedAt,
+            version: drawing.version,
+          ));
+        }
+      } catch (e) {
       }
-      debugPrint('📋 Collected ${dirtyDrawings.length} dirty drawings');
-    } catch (e) {
-      debugPrint('⚠️  Failed to collect dirty drawings: $e');
     }
 
     return changes;
@@ -215,15 +206,16 @@ class SyncService {
             break;
 
           case 'schedule_drawings':
-            await databaseService.applyServerDrawingChange(change.data);
-            appliedCount++;
+            if (_prdDatabaseService != null) {
+              await _prdDatabaseService!.applyServerDrawingChange(change.data);
+              appliedCount++;
+            } else {
+            }
             break;
 
           default:
-            debugPrint('⚠️  Unknown table: ${change.tableName}');
         }
       } catch (e) {
-        debugPrint('⚠️  Failed to apply change for ${change.tableName}/${change.recordId}: $e');
       }
     }
 
@@ -236,7 +228,6 @@ class SyncService {
 
     for (final conflict in conflicts) {
       try {
-        debugPrint('⚙️  Resolving conflict for ${conflict.tableName}/${conflict.recordId}');
 
         // Use newest timestamp wins strategy
         final winningData = conflict.resolveByNewestTimestamp();
@@ -244,7 +235,6 @@ class SyncService {
 
         if (isServerNewer) {
           // Server wins - apply server data
-          debugPrint('   → Server wins (${conflict.serverTimestamp} > ${conflict.localTimestamp})');
           switch (conflict.tableName) {
             case 'events':
               await eventRepository.applyServerChange(winningData);
@@ -253,18 +243,18 @@ class SyncService {
               await noteRepository.applyServerChange(winningData);
               break;
             case 'schedule_drawings':
-              await databaseService.applyServerDrawingChange(winningData);
+              if (_prdDatabaseService != null) {
+                await _prdDatabaseService!.applyServerDrawingChange(winningData);
+              }
               break;
           }
         } else {
           // Local wins - mark as dirty to re-push
-          debugPrint('   → Local wins (${conflict.localTimestamp} > ${conflict.serverTimestamp})');
           // Local data is already dirty, so it will be re-pushed on next sync
         }
 
         resolvedCount++;
       } catch (e) {
-        debugPrint('⚠️  Failed to resolve conflict for ${conflict.tableName}/${conflict.recordId}: $e');
       }
     }
 
@@ -285,11 +275,13 @@ class SyncService {
             break;
 
           case 'schedule_drawings':
-            await databaseService.markDrawingSynced(change.recordId, syncedAt);
+            final drawingId = int.tryParse(change.recordId);
+            if (_prdDatabaseService != null && drawingId != null) {
+              await _prdDatabaseService!.markDrawingSynced(drawingId, syncedAt);
+            }
             break;
         }
       } catch (e) {
-        debugPrint('⚠️  Failed to mark ${change.tableName}/${change.recordId} as synced: $e');
       }
     }
   }
@@ -302,7 +294,6 @@ class SyncService {
       // TODO: Implement proper sync_metadata tracking
       return null;
     } catch (e) {
-      debugPrint('⚠️  Failed to get last sync time: $e');
       return null;
     }
   }
@@ -312,9 +303,7 @@ class SyncService {
     try {
       // Update sync_metadata table with last successful sync time
       // TODO: Implement proper sync_metadata tracking
-      debugPrint('📝 Last sync time: $syncTime');
     } catch (e) {
-      debugPrint('⚠️  Failed to update last sync time: $e');
     }
   }
 }

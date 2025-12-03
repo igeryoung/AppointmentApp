@@ -36,10 +36,8 @@ class ServerConfigService {
         {'server_url': url},
         where: 'id = 1',
       );
-      debugPrint('✅ Server URL updated in registered device: $url');
     } else {
       // Device not registered yet - URL will be saved during registration
-      debugPrint('ℹ️  Server URL will be saved during device registration: $url');
     }
   }
 
@@ -60,10 +58,7 @@ class ServerConfigService {
     if (url.startsWith('http://')) {
       final httpsUrl = url.replaceFirst('http://', 'https://');
       if (kDebugMode) {
-        debugPrint('🔒 Auto-upgraded HTTP to HTTPS (debug mode): $httpsUrl');
-        debugPrint('   Self-signed certificates are accepted in debug mode');
       } else {
-        debugPrint('🔒 Auto-upgraded HTTP to HTTPS: $httpsUrl');
       }
       return httpsUrl;
     }

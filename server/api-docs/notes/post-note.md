@@ -29,12 +29,15 @@ Requires device credentials
 
 **Note:** Either `pagesData` or `strokesData` must be provided. `pagesData` is preferred for new implementations.
 
-**EventData Object Fields (all optional, used for event auto-creation):**
+**EventData Object Fields (all optional, used for event auto-creation & metadata updates):**
 - `id` (integer): Event identifier (must match eventId in path)
 - `book_id` (integer): Book identifier (must match bookId in path)
 - `name` (string): Event name
 - `record_number` (string): Record number
-- `event_type` (string): Event type (e.g., "appointment")
+- `phone` (string): Patient phone number (optional)
+- `event_types` (string): JSON array string of event types (e.g., `["consultation","treatment"]`)
+- `event_type` (string, deprecated): Legacy single event type for backward compatibility
+- `has_charge_items` (boolean): Indicates if this event/person has charge items cached locally
 - `start_time` (integer): Start time in Unix seconds
 - `end_time` (integer): End time in Unix seconds (optional)
 - `created_at` (integer): Creation timestamp in Unix seconds
@@ -81,7 +84,7 @@ Body:
     "book_id": 1,
     "name": "Patient Appointment",
     "record_number": "REC001",
-    "event_type": "appointment",
+    "event_types": "[\"consultation\"]",
     "start_time": 1705838400,
     "end_time": 1705842000,
     "created_at": 1705838000,
@@ -155,6 +158,7 @@ Unauthorized access.
 - For updating, always include the current `version` to prevent conflicts
 - On conflict (409), fetch the latest note, merge if needed, and retry with correct version
 - Use `pagesData` for new implementations (supports multi-page notes)
+- When `eventData` is included, the server will auto-create the event if it doesn't exist and update the event metadata (name, phone, types, etc.) before saving the note. This keeps the schedule in sync with the device after auto-save.
 - `strokesData` is maintained for backward compatibility with older clients
 - Both `pagesData` and `strokesData` should be valid JSON strings
 - Server automatically increments version on each save

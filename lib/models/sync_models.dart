@@ -4,7 +4,7 @@
 /// Represents a single change in a sync operation
 class SyncChange {
   final String tableName;
-  final int recordId;
+  final String recordId;
   final String operation; // 'create', 'update', 'delete'
   final Map<String, dynamic> data;
   final DateTime timestamp;
@@ -22,7 +22,7 @@ class SyncChange {
   factory SyncChange.fromJson(Map<String, dynamic> json) {
     return SyncChange(
       tableName: json['tableName'] as String,
-      recordId: json['recordId'] as int,
+          recordId: json['recordId'].toString(),
       operation: json['operation'] as String,
       data: Map<String, dynamic>.from(json['data'] as Map),
       timestamp: DateTime.parse(json['timestamp'] as String),
@@ -151,7 +151,7 @@ class SyncResponse {
 /// Represents a conflict between local and server data
 class SyncConflict {
   final String tableName;
-  final int recordId;
+  final String recordId;
   final Map<String, dynamic> localData;
   final Map<String, dynamic> serverData;
   final int localVersion;
@@ -173,7 +173,7 @@ class SyncConflict {
   factory SyncConflict.fromJson(Map<String, dynamic> json) {
     return SyncConflict(
       tableName: json['tableName'] as String,
-      recordId: json['recordId'] as int,
+          recordId: json['recordId'].toString(),
       localData: Map<String, dynamic>.from(json['localData'] as Map),
       serverData: Map<String, dynamic>.from(json['serverData'] as Map),
       localVersion: json['localVersion'] as int,

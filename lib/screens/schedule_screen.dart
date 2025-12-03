@@ -8,8 +8,16 @@ import '../l10n/app_localizations.dart';
 import '../models/book.dart';
 import '../models/event.dart';
 import '../models/schedule_drawing.dart';
+import '../repositories/event_repository.dart';
+import '../repositories/note_repository.dart';
+import '../services/api_client.dart';
+import '../services/database/prd_database_service.dart';
 import '../services/database_service_interface.dart';
+import '../services/network_service.dart';
+import '../services/server_config_service.dart';
 import '../services/service_locator.dart';
+import '../services/sync_coordinator.dart';
+import '../services/sync_service.dart';
 import '../services/time_service.dart';
 import '../services/content_service.dart';
 import '../services/cache_manager.dart';
@@ -69,6 +77,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
   // Event management service
   EventManagementService? _eventService;
+
+  // Sync coordinator to push/pull updates
+  SyncCoordinator? _syncCoordinator;
+  SyncService? _syncService;
+  Future<void>? _syncCoordinatorInit;
+  final NetworkService _networkService = NetworkService();
 
   // FAB menu visibility state
   bool _isFabMenuVisible = false;
@@ -139,7 +153,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       onLoadDrawing: () async => await _loadDrawing(),
       onUpdateCubit: (date) {
         // RACE CONDITION FIX: Pass navigation generation to cubit
-        debugPrint('🚀 ScheduleScreen: Navigation gen $_navigationGeneration for date $date');
         context.read<ScheduleCubit>().selectDate(date);
       },
       onShowNotification: (messageKey) {
@@ -272,7 +285,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       },
       isMounted: () => mounted,
       getLocalizedString: (getter) => getter(AppLocalizations.of(context)!),
-      onSyncEvent: (event) async => await _connectivityService?.syncEventToServer(event),
+      onSyncEvent: (event) async {
+        await _connectivityService?.syncEventToServer(event);
+      },
       onSetPendingNextAppointment: (pending) => context.read<ScheduleCubit>().setPendingNextAppointment(pending),
       dateService: _dateService!,
     );
@@ -281,6 +296,7 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     _dateService?.startPeriodicCheck();
     _connectivityService?.initialize();
     _connectivityService?.setupConnectivityMonitoring();
+    Future.microtask(() => _ensureSyncCoordinator());
 
     // Cubit is initialized in BlocProvider - it automatically loads events
     _drawingService?.loadDrawing(_selectedDate);
@@ -296,6 +312,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     _dateService?.dispose();
     _connectivityService?.dispose();
     _drawingService?.dispose();
+    _syncCoordinator?.stopAutoSync();
+    _syncCoordinator = null;
 
     _transformationController.dispose();
     super.dispose();
@@ -306,10 +324,8 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
     super.didChangeAppLifecycleState(state);
 
     if (state == AppLifecycleState.resumed) {
-      debugPrint('📅 App resumed - checking for date changes');
       _dateService?.checkAndHandleDateChange();
     } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
-      debugPrint('📅 App backgrounding - saving drawing if in drawing mode');
       // Auto-save drawing before going to background
       if (_isDrawingMode) {
         _saveDrawing();
@@ -337,17 +353,14 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
   /// [generation] - Preload generation number for race condition prevention
   Future<void> _preloadNotesInBackground(List<Event> events, int generation) async {
     if (events.isEmpty) {
-      debugPrint('📦 ScheduleScreen: No events to preload (generation=$generation)');
       return;
     }
 
     if (_contentService == null) {
-      debugPrint('⚠️ ScheduleScreen: Cannot preload - ContentService not initialized');
       return;
     }
 
     final preloadStartTime = DateTime.now();
-    debugPrint('📦 ScheduleScreen: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events (generation=$generation)');
 
     // Extract all event IDs (filter out null IDs)
     final eventIds = events
@@ -356,11 +369,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         .toList();
 
     if (eventIds.isEmpty) {
-      debugPrint('📦 ScheduleScreen: No valid event IDs to preload');
       return;
     }
 
-    debugPrint('📦 ScheduleScreen: Calling ContentService.preloadNotes with ${eventIds.length} event IDs');
 
     try {
       // RACE CONDITION FIX: Pass generation and cancellation check to ContentService
@@ -371,7 +382,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         onProgress: (loaded, total) {
           // Only log progress if this preload is still active
           if (generation == _currentPreloadGeneration) {
-            debugPrint('📦 ScheduleScreen: Progress update - $loaded/$total notes loaded (generation=$generation)');
           }
         },
       );
@@ -381,16 +391,48 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
       // Only log completion if this preload is still active
       if (generation == _currentPreloadGeneration) {
-        debugPrint('✅ ScheduleScreen: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes, generation=$generation)');
       } else {
-        debugPrint('🚫 ScheduleScreen: Preload completed but was cancelled (generation=$generation vs current=$_currentPreloadGeneration)');
       }
     } catch (e) {
       // Preload failure is non-critical - user can still use the app
       // Notes will be fetched on-demand when user taps events
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('⚠️ ScheduleScreen: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical, generation=$generation): $e');
+    }
+  }
+
+  Future<void> _ensureSyncCoordinator() async {
+    if (_syncCoordinator != null) return;
+    _syncCoordinatorInit ??= _createSyncCoordinator();
+    await _syncCoordinatorInit;
+  }
+
+  Future<void> _createSyncCoordinator() async {
+    if (!mounted) return;
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final serverConfig = ServerConfigService(prdDb);
+      final serverUrl = await serverConfig.getServerUrlOrDefault(
+        defaultUrl: 'http://localhost:8080',
+      );
+      final apiClient = ApiClient(baseUrl: serverUrl);
+      _syncService = SyncService(
+        apiClient: apiClient,
+        eventRepository: getIt<IEventRepository>(),
+        noteRepository: getIt<INoteRepository>(),
+        databaseService: _dbService,
+      );
+      _syncCoordinator = SyncCoordinator(
+        syncService: _syncService!,
+        networkService: _networkService,
+      );
+      _syncCoordinator!.startAutoSync();
+      await _syncCoordinator!.syncNow();
+    } catch (e) {
     }
   }
 
@@ -405,7 +447,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
         context.read<ScheduleCubit>().saveDrawing(savedDrawing);
       }
     } catch (e) {
-      debugPrint('❌ Error saving drawing: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(AppLocalizations.of(context)!.errorSavingDrawing(e.toString()))),
@@ -466,7 +507,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
           // RACE CONDITION FIX: Increment generation to cancel previous preload
           _currentPreloadGeneration++;
           final preloadGeneration = _currentPreloadGeneration;
-          debugPrint('🔄 ScheduleScreen: Starting preload for generation $preloadGeneration');
           _preloadNotesInBackground(state.events, preloadGeneration);
 
           // Check if date has changed to a different 3-day window
@@ -483,11 +523,9 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
             if (newWindow == localWindow) {
               // State is for the same window we're already in locally
               // This is likely a stale state from an old navigation that completed late
-              debugPrint('⚠️ ScheduleScreen: Ignoring stale state (state: ${state.selectedDate}, local: $_selectedDate, both in window: $localWindow)');
               _previousSelectedDate = state.selectedDate; // Track that we saw this state
             } else {
               // State is for a different window - this is a new navigation completing
-              debugPrint('✅ ScheduleScreen: Accepting state for new window (state: ${state.selectedDate}, new window: $newWindow, local: $_selectedDate in $localWindow)');
               _previousSelectedDate = state.selectedDate;
               if (_selectedDate != state.selectedDate) {
                 setState(() {
@@ -832,4 +870,3 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
 
 
 }
-

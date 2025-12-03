@@ -26,7 +26,6 @@ class ScheduleTestUtils {
         try {
           await dbService.deleteEvent(event.id!);
         } catch (e) {
-          debugPrint('Error deleting event ${event.id}: $e');
         }
       }
     }
@@ -396,7 +395,6 @@ class ScheduleTestUtils {
     // ======================
     // STAGE 1: Create Events
     // ======================
-    debugPrint('🚀 Heavy Load Test - Stage 1: Creating $totalEvents events...');
     int createdEventsCount = 0;
     final createdEventIds = <String>[];
     final startDate = now.subtract(const Duration(days: 30));
@@ -442,18 +440,15 @@ class ScheduleTestUtils {
               'total': totalEvents,
             });
           } catch (e) {
-            debugPrint('❌ Error creating event: $e');
           }
         }
       }
     }
 
-    debugPrint('✅ Stage 1 Complete: Created $createdEventsCount events');
 
     // ==========================
     // STAGE 2: Add Strokes
     // ==========================
-    debugPrint('🚀 Heavy Load Test - Stage 2: Adding strokes to $createdEventsCount events...');
     int strokesAddedCount = 0;
     int totalStrokes = 0;
 
@@ -488,11 +483,9 @@ class ScheduleTestUtils {
           await Future.delayed(Duration.zero);
         }
       } catch (e) {
-        debugPrint('❌ Error adding strokes to event $eventId: $e');
       }
     }
 
-    debugPrint('✅ Stage 2 Complete: Added strokes to $strokesAddedCount events');
 
     // Close progress dialog
     if (context.mounted) {
@@ -516,7 +509,6 @@ class ScheduleTestUtils {
       );
     }
 
-    debugPrint('🎉 Heavy Load Test Complete: $createdEventsCount events, $totalStrokes strokes, $timeStr');
   }
 
   /// Stage 1 Only: Create events without strokes
@@ -587,7 +579,6 @@ class ScheduleTestUtils {
       ),
     );
 
-    debugPrint('🚀 Stage 1: Creating $totalEvents events...');
     int createdEventsCount = 0;
     final startDate = now.subtract(const Duration(days: 30));
 
@@ -632,14 +623,12 @@ class ScheduleTestUtils {
                 'total': totalEvents,
               });
             } catch (e) {
-              debugPrint('❌ Error creating event: $e');
             }
           }
         }
       }
     }
 
-    debugPrint('✅ Stage 1 Complete: Created $createdEventsCount events');
 
     // Close progress dialog
     if (context.mounted) {
@@ -663,7 +652,6 @@ class ScheduleTestUtils {
       );
     }
 
-    debugPrint('🎉 Stage 1 Complete: $createdEventsCount events, $timeStr');
   }
 
   /// Stage 2 Only: Add strokes to existing HEAVY- events
@@ -683,7 +671,6 @@ class ScheduleTestUtils {
     const strokesPerEvent = 750;
     final now = TimeService.instance.now();
 
-    debugPrint('🔍 Stage 2: Querying existing HEAVY- events...');
 
     // Query all events in the book
     final allEvents = await dbService.getAllEventsByBook(bookUuid);
@@ -705,9 +692,7 @@ class ScheduleTestUtils {
     // Limit events if maxEvents is specified
     if (maxEvents != null && maxEvents < heavyEvents.length) {
       heavyEvents = heavyEvents.sublist(0, maxEvents);
-      debugPrint('📋 Found ${allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).length} HEAVY- events, processing first $maxEvents');
     } else {
-      debugPrint('📋 Found ${heavyEvents.length} HEAVY- events');
     }
 
     // Show progress dialog
@@ -749,14 +734,12 @@ class ScheduleTestUtils {
       ),
     );
 
-    debugPrint('🚀 Stage 2: Adding strokes to ${heavyEvents.length} events...');
     int strokesAddedCount = 0;
     int totalStrokes = 0;
 
     for (int i = 0; i < heavyEvents.length; i++) {
       // Check for cancellation
       if (isCancelled) {
-        debugPrint('⚠️ Stage 2 cancelled by user');
         break;
       }
 
@@ -795,14 +778,10 @@ class ScheduleTestUtils {
           await Future.delayed(Duration.zero);
         }
       } catch (e) {
-        debugPrint('❌ Error adding strokes to event ${event.id}: $e');
       }
     }
 
     final wasCancelled = isCancelled;
-    debugPrint(wasCancelled
-      ? '⚠️ Stage 2 Cancelled: Added strokes to $strokesAddedCount events before cancellation'
-      : '✅ Stage 2 Complete: Added strokes to $strokesAddedCount events');
 
     // Close progress dialog
     if (context.mounted) {
@@ -828,9 +807,6 @@ class ScheduleTestUtils {
       );
     }
 
-    debugPrint(wasCancelled
-      ? '⚠️ Stage 2 Cancelled: $strokesAddedCount events, $totalStrokes strokes, $timeStr'
-      : '🎉 Stage 2 Complete: $strokesAddedCount events, $totalStrokes strokes, $timeStr');
   }
 
   /// Generate random strokes for handwriting notes

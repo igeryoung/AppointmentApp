@@ -38,13 +38,10 @@ class NoteContentService {
     try {
       final cachedNote = await _noteRepository.getCached(eventId);
       if (cachedNote != null) {
-        debugPrint('✅ NoteContentService: Cache-only note retrieved (eventId: $eventId, isDirty: ${cachedNote.isDirty})');
       } else {
-        debugPrint('ℹ️ NoteContentService: No cached note found (eventId: $eventId)');
       }
       return cachedNote;
     } catch (e) {
-      debugPrint('❌ NoteContentService: Error getting cached note: $e');
       return null;
     }
   }
@@ -64,16 +61,13 @@ class NoteContentService {
       if (!forceRefresh) {
         final cachedNote = await _noteRepository.getCached(eventId);
         if (cachedNote != null) {
-          debugPrint('✅ NoteContentService: Note cache hit (eventId: $eventId)');
           return cachedNote;
         }
-        debugPrint('ℹ️ NoteContentService: Note cache miss (eventId: $eventId)');
       }
 
       // Step 2: Fetch from server
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ NoteContentService: Device not registered, cannot fetch from server');
         // Return cache if available
         return await _noteRepository.getCached(eventId);
       }
@@ -81,7 +75,6 @@ class NoteContentService {
       // Get bookId for the event
       final event = await _eventRepository.getById(eventId);
       if (event == null) {
-        debugPrint('⚠️ NoteContentService: Event $eventId not found');
         return null;
       }
 
@@ -96,24 +89,19 @@ class NoteContentService {
         // Parse and save to cache
         final note = Note.fromMap(serverNote);
         await _noteRepository.saveToCache(note, isDirty: false);
-        debugPrint('✅ NoteContentService: Note fetched from server and cached (eventId: $eventId)');
         return note;
       }
 
-      debugPrint('ℹ️ NoteContentService: Note not found on server (eventId: $eventId)');
       return null;
     } catch (e) {
-      debugPrint('❌ NoteContentService: Error fetching note (eventId: $eventId): $e');
 
       // Fallback to cache on error
       try {
         final cachedNote = await _noteRepository.getCached(eventId);
         if (cachedNote != null) {
-          debugPrint('⚠️ NoteContentService: Returning cached note after server error');
           return cachedNote;
         }
       } catch (cacheError) {
-        debugPrint('❌ NoteContentService: Cache fallback also failed: $cacheError');
       }
 
       return null;
@@ -131,7 +119,6 @@ class NoteContentService {
   /// server sync is handled separately in background (best effort)
   Future<void> saveNote(String eventId, Note note) async {
     await _noteRepository.saveToCache(note, isDirty: true);
-    debugPrint('✅ NoteContentService: Note saved locally (eventId: $eventId, marked dirty)');
   }
 
   /// Force sync a note to server (clears dirty flag on success)
@@ -141,7 +128,6 @@ class NoteContentService {
     try {
       final note = await _noteRepository.getCached(eventId);
       if (note == null) {
-        debugPrint('⚠️ NoteContentService: Cannot sync - note $eventId not found in cache');
         return;
       }
 
@@ -178,9 +164,7 @@ class NoteContentService {
       // Sync successful, clear dirty flag
       await _noteRepository.markClean(eventId);
 
-      debugPrint('✅ NoteContentService: Note synced to server (eventId: $eventId, dirty flag cleared)');
     } catch (e) {
-      debugPrint('❌ NoteContentService: Sync failed for note $eventId: $e');
       // Keep dirty flag, retry later
       rethrow;
     }
@@ -212,9 +196,7 @@ class NoteContentService {
       // Delete from cache
       await _noteRepository.deleteCache(eventId);
 
-      debugPrint('✅ NoteContentService: Note deleted (eventId: $eventId)');
     } catch (e) {
-      debugPrint('❌ NoteContentService: Error deleting note: $e');
       rethrow;
     }
   }
@@ -243,12 +225,10 @@ class NoteContentService {
     }
 
     try {
-      debugPrint('📥 NoteContentService: Preloading ${eventIds.length} notes...');
 
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ NoteContentService: Device not registered, skipping preload');
         return;
       }
 
@@ -263,12 +243,10 @@ class NoteContentService {
 
       final uncachedEventIds = eventIds.where((id) => !cachedNotes.contains(id)).toList();
       if (uncachedEventIds.isEmpty) {
-        debugPrint('✅ NoteContentService: All notes already cached');
         onProgress?.call(eventIds.length, eventIds.length);
         return;
       }
 
-      debugPrint('ℹ️ NoteContentService: Fetching ${uncachedEventIds.length} uncached notes');
 
       // Get book IDs for events (need to group by book)
       final eventsByBook = <String, List<String>>{};
@@ -306,14 +284,11 @@ class NoteContentService {
               onProgress?.call(loaded, total);
             }
           } catch (e) {
-            debugPrint('❌ NoteContentService: Batch fetch failed for book $bookUuid: $e');
           }
         }
       }
 
-      debugPrint('✅ NoteContentService: Preload complete ($loaded/$total notes)');
     } catch (e) {
-      debugPrint('❌ NoteContentService: Preload error: $e');
       // Don't throw - preload is best-effort
     }
   }

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Search, Download, RefreshCw } from 'lucide-react';
 import { dashboardAPI } from '../services/api';
 import type { Book } from '../types';
+import { parseServerDate } from '../utils/date';
 
 export function Books() {
   const [books, setBooks] = useState<Book[]>([]);
@@ -33,6 +34,11 @@ export function Books() {
 
   const handleExport = async () => {
     await dashboardAPI.exportData('books', 'csv', { searchQuery });
+  };
+
+  const formatDate = (value?: string | null) => {
+    const date = parseServerDate(value);
+    return date ? date.toLocaleDateString() : '-';
   };
 
   return (
@@ -129,7 +135,7 @@ export function Books() {
                       <td>{book.eventCount}</td>
                       <td>{book.noteCount}</td>
                       <td>{book.drawingCount}</td>
-                      <td>{new Date(book.createdAt).toLocaleDateString()}</td>
+                      <td>{formatDate(book.createdAt)}</td>
                       <td>
                         {book.archivedAt ? (
                           <span className="badge badge-warning">Archived</span>

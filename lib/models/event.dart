@@ -108,6 +108,12 @@ class Event {
   }
 
   Map<String, dynamic> toMap() {
+    // Normalize timestamps to UTC before persisting/syncing
+    final startUtc = startTime.toUtc();
+    final endUtc = endTime?.toUtc();
+    final createdUtc = createdAt.toUtc();
+    final updatedUtc = updatedAt.toUtc();
+
     return {
       'id': id,
       'book_uuid': bookUuid,
@@ -116,10 +122,10 @@ class Event {
       'phone': phone,
       'event_types': EventType.toJsonList(eventTypes), // Convert list to JSON array string
       'has_charge_items': hasChargeItems ? 1 : 0,
-      'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
-      'end_time': endTime != null ? endTime!.millisecondsSinceEpoch ~/ 1000 : null,
-      'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
-      'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
+      'start_time': startUtc.millisecondsSinceEpoch ~/ 1000,
+      'end_time': endUtc != null ? endUtc.millisecondsSinceEpoch ~/ 1000 : null,
+      'created_at': createdUtc.millisecondsSinceEpoch ~/ 1000,
+      'updated_at': updatedUtc.millisecondsSinceEpoch ~/ 1000,
       'is_removed': isRemoved ? 1 : 0,
       'removal_reason': removalReason,
       'original_event_id': originalEventId,
@@ -150,6 +156,29 @@ class Event {
     // This keeps list queries lightweight
     List<ChargeItem> chargeItems = [];
 
+    DateTime _parseToLocal(dynamic value) {
+      DateTime fromSeconds(int seconds) =>
+          DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal();
+
+      if (value == null) {
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
+      }
+
+      if (value is int) return fromSeconds(value);
+      if (value is num) return fromSeconds(value.toInt());
+      if (value is String) {
+        final seconds = int.tryParse(value);
+        if (seconds != null) return fromSeconds(seconds);
+
+        final parsed = DateTime.tryParse(value);
+        if (parsed != null) {
+          return parsed.isUtc ? parsed.toLocal() : parsed;
+        }
+      }
+
+      return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
+    }
+
     return Event(
       id: map['id'] as String?,
       bookUuid: map['book_uuid'] as String? ?? '',
@@ -159,12 +188,12 @@ class Event {
       eventTypes: eventTypes,
       chargeItems: chargeItems,
       hasChargeItems: (map['has_charge_items'] ?? 0) == 1,
-      startTime: DateTime.fromMillisecondsSinceEpoch((map['start_time'] ?? 0) * 1000),
-      endTime: map['end_time'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['end_time'] * 1000)
-          : null,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000),
+      // User-selected times: stored in UTC, displayed in local timezone (UTC+8 expected)
+      startTime: _parseToLocal(map['start_time']),
+      endTime: map['end_time'] != null ? _parseToLocal(map['end_time']) : null,
+      // System timestamps: explicitly marked as UTC
+      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000, isUtc: true),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000, isUtc: true),
       isRemoved: (map['is_removed'] ?? 0) == 1,
       removalReason: map['removal_reason'],
       originalEventId: map['original_event_id'] as String?,

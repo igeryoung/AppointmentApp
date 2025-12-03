@@ -139,9 +139,9 @@ class BookBackupService {
       'bookUuid': row['book_uuid'],
       'backupName': row['backup_name'],
       'backupSize': row['backup_size'],
-      'createdAt': (row['created_at'] as DateTime).toIso8601String(),
+      'createdAt': (row['created_at'] as DateTime).toUtc().toIso8601String(),
       'restoredAt': row['restored_at'] != null
-          ? (row['restored_at'] as DateTime).toIso8601String()
+          ? (row['restored_at'] as DateTime).toUtc().toIso8601String()
           : null,
       'deviceId': row['device_id'],
     }).toList();
@@ -174,9 +174,75 @@ class BookBackupService {
       return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
     }
     if (value is String) {
-      return DateTime.parse(value);
+      return DateTime.parse(value).toUtc();
     }
     return null;
+  }
+
+  String? _normalizePhone(dynamic value) {
+    if (value == null) return null;
+    final trimmed = value.toString().trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+    return false;
+  }
+
+  List<String> _normalizeEventTypes(dynamic eventTypesValue, dynamic legacyEventType) {
+    final parsed = _decodeEventTypesValue(eventTypesValue);
+    if (parsed.isNotEmpty) {
+      return parsed;
+    }
+
+    if (legacyEventType != null) {
+      final legacy = legacyEventType.toString().trim();
+      if (legacy.isNotEmpty) {
+        return [legacy];
+      }
+    }
+
+    return const ['other'];
+  }
+
+  List<String> _decodeEventTypesValue(dynamic value) {
+    if (value == null) return const [];
+    try {
+      List<dynamic> rawList;
+
+      if (value is List) {
+        rawList = value;
+      } else if (value is String) {
+        final trimmed = value.trim();
+        if (trimmed.isEmpty) return const [];
+        final decoded = jsonDecode(trimmed);
+        if (decoded is List) {
+          rawList = decoded;
+        } else {
+          rawList = [decoded];
+        }
+      } else {
+        rawList = [value];
+      }
+
+      final cleaned = rawList
+          .map((entry) => entry == null ? null : entry.toString().trim())
+          .where((entry) => entry != null && entry!.isNotEmpty)
+          .map((entry) => entry!)
+          .toList();
+
+      cleaned.sort((a, b) => a.compareTo(b));
+      return cleaned;
+    } catch (e) {
+      print('⚠️  Failed to parse event_types payload in backup: $e');
+      return const [];
+    }
   }
 
   /// Restore a book from backup (replace existing)
@@ -230,16 +296,20 @@ class BookBackupService {
       // Insert events
       for (final event in events) {
         final eventCreatedAt = _convertTimestamp(event['created_at']);
+        final normalizedTypes = _normalizeEventTypes(event['event_types'], event['event_type']);
+        final eventTypesJson = jsonEncode(normalizedTypes);
+        final primaryEventType = normalizedTypes.first;
+
         await txn.execute(
           Sql.named('''
           INSERT INTO events (
-            id, book_uuid, device_id, name, record_number, event_type,
-            start_time, end_time, created_at, updated_at,
+            id, book_uuid, device_id, name, record_number, phone, event_type, event_types,
+            has_charge_items, start_time, end_time, created_at, updated_at,
             is_removed, removal_reason, original_event_id, new_event_id,
             synced_at, version, is_deleted
           ) VALUES (
-            @id, @bookUuid, @deviceId, @name, @recordNumber, @eventType,
-            @startTime, @endTime, @createdAt, @updatedAt,
+            @id, @bookUuid, @deviceId, @name, @recordNumber, @phone, @eventType, @eventTypes,
+            @hasChargeItems, @startTime, @endTime, @createdAt, @updatedAt,
             @isRemoved, @removalReason, @originalEventId, @newEventId,
             CURRENT_TIMESTAMP, @version, @isDeleted
           )
@@ -250,7 +320,10 @@ class BookBackupService {
             'deviceId': deviceId,
             'name': event['name'],
             'recordNumber': event['record_number'],
-            'eventType': event['event_type'],
+            'phone': _normalizePhone(event['phone']),
+            'eventType': primaryEventType,
+            'eventTypes': eventTypesJson,
+            'hasChargeItems': _toBool(event['has_charge_items']),
             'startTime': _convertTimestamp(event['start_time']),
             'endTime': _convertTimestamp(event['end_time']),
             'createdAt': eventCreatedAt,
@@ -572,9 +645,9 @@ class BookBackupService {
         'sizeBytes': sizeBytes,
         'sizeMB': (sizeBytes / 1024 / 1024).toStringAsFixed(2),
         'isFileBased': isFileBased,
-        'createdAt': (row['created_at'] as DateTime).toIso8601String(),
+        'createdAt': (row['created_at'] as DateTime).toUtc().toIso8601String(),
         'restoredAt': row['restored_at'] != null
-            ? (row['restored_at'] as DateTime).toIso8601String()
+            ? (row['restored_at'] as DateTime).toUtc().toIso8601String()
             : null,
         'deviceId': row['device_id'],
       };
@@ -747,13 +820,20 @@ class BookBackupService {
       buffer.writeln('-- Events (${events.length})');
       final bookUuid = data['book']['book_uuid'];
       for (final event in events) {
-        buffer.write('INSERT INTO events (id, book_uuid, device_id, name, record_number, event_type, start_time, end_time, created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, synced_at, version, is_deleted) VALUES (');
+        final normalizedTypes = _normalizeEventTypes(event['event_types'], event['event_type']);
+        final eventTypesJson = jsonEncode(normalizedTypes);
+        final primaryEventType = normalizedTypes.first;
+
+        buffer.write('INSERT INTO events (id, book_uuid, device_id, name, record_number, phone, event_type, event_types, has_charge_items, start_time, end_time, created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, synced_at, version, is_deleted) VALUES (');
         buffer.write('${event['id']}, ');
         buffer.write('${escape(bookUuid)}, ');
         buffer.write('${escape(event['device_id'])}, ');
         buffer.write('${escape(event['name'])}, ');
         buffer.write('${escape(event['record_number'])}, ');
-        buffer.write('${escape(event['event_type'])}, ');
+        buffer.write('${escape(event['phone'])}, ');
+        buffer.write('${escape(primaryEventType)}, ');
+        buffer.write('${escape(eventTypesJson)}, ');
+        buffer.write('${escape(_toBool(event['has_charge_items']))}, ');
         buffer.write('${escape(event['start_time'])}, ');
         buffer.write('${escape(event['end_time'])}, ');
         buffer.write('${escape(event['created_at'])}, ');
@@ -858,7 +938,7 @@ class BookBackupService {
     return rows.map((row) => {
       'deviceId': row['device_id'],
       'accessType': row['access_type'],
-      'createdAt': (row['created_at'] as DateTime).toIso8601String(),
+      'createdAt': (row['created_at'] as DateTime).toUtc().toIso8601String(),
     }).toList();
   }
 }

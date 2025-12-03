@@ -21,16 +21,13 @@ class NoteRepositoryImpl implements INoteRepository {
   @override
   Future<void> saveToCache(Note note, {required bool isDirty}) async {
     final db = await _getDatabaseFn();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
     // Increment version when saving dirty note
     final newVersion = isDirty ? note.version + 1 : note.version;
     final updatedNote = note.copyWith(updatedAt: now, version: newVersion, isDirty: isDirty);
 
     final noteMap = updatedNote.toMap();
-    debugPrint('🔍 SQLite: updateNote called with ${updatedNote.strokes.length} strokes');
-    debugPrint('🔍 SQLite: noteMap contents:');
     noteMap.forEach((key, value) {
-      debugPrint('   $key: $value (${value.runtimeType})');
     });
 
     try {
@@ -39,21 +36,16 @@ class NoteRepositoryImpl implements INoteRepository {
 
       // Force string conversion to prevent SQLite parameter binding corruption
       if (originalPagesData is String) {
-        debugPrint('🔍 SQLite: pages_data is String, ensuring it stays as String');
         updateMap['pages_data'] = originalPagesData.toString();
       } else {
-        debugPrint('⚠️ SQLite: pages_data is NOT a String: ${originalPagesData.runtimeType}');
         updateMap['pages_data'] = originalPagesData.toString();
       }
 
-      debugPrint('🔍 SQLite: Final pages_data type: ${updateMap['pages_data'].runtimeType}');
-      debugPrint('🔍 SQLite: Final pages_data length: ${updateMap['pages_data'].toString().length} chars');
 
       final pagesDataString = updateMap['pages_data'] as String;
       final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
       final isDirtyFlag = updateMap['is_dirty'] ?? 0;
 
-      debugPrint('🔍 SQLite: Using raw SQL with explicit string parameter');
       final updatedRows = await db.rawUpdate(
         'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ?, is_dirty = ? WHERE event_id = ?',
         [
@@ -68,10 +60,8 @@ class NoteRepositoryImpl implements INoteRepository {
         ],
       );
 
-      debugPrint('✅ SQLite: Update successful, updated $updatedRows rows');
 
       if (updatedRows == 0) {
-        debugPrint('🔍 SQLite: Inserting new note using raw SQL');
         await db.rawInsert(
           'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
           [
@@ -84,13 +74,9 @@ class NoteRepositoryImpl implements INoteRepository {
             isDirtyFlag,
           ],
         );
-        debugPrint('✅ SQLite: Insert successful');
       }
     } catch (e) {
-      debugPrint('❌ SQLite: Database operation failed: $e');
-      debugPrint('❌ SQLite: Failed noteMap was:');
       noteMap.forEach((key, value) {
-        debugPrint('   $key: $value (${value.runtimeType})');
       });
       rethrow;
     }
@@ -112,7 +98,6 @@ class NoteRepositoryImpl implements INoteRepository {
     );
 
     final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    debugPrint('✅ getAllDirtyNotes: Found ${dirtyNotes.length} dirty notes');
     return dirtyNotes;
   }
 
@@ -126,7 +111,6 @@ class NoteRepositoryImpl implements INoteRepository {
     ''', [1, bookUuid]);
 
     final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    debugPrint('✅ getDirtyNotesByBookId: Found ${dirtyNotes.length} dirty notes for book $bookUuid');
     return dirtyNotes;
   }
 
@@ -178,7 +162,6 @@ class NoteRepositoryImpl implements INoteRepository {
       result[note.eventId] = note;
     }
 
-    debugPrint('✅ batchGetCachedNotes: Found ${result.length}/${eventIds.length} notes');
     return result;
   }
 
@@ -217,7 +200,6 @@ class NoteRepositoryImpl implements INoteRepository {
     }
 
     await batch.commit(noResult: true);
-    debugPrint('✅ batchSaveCachedNotes: Saved ${notes.length} notes');
   }
 
   /// Clear all notes cache

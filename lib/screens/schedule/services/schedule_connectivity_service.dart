@@ -87,7 +87,6 @@ class ScheduleConnectivityService {
       // Update drawing service with ContentService
       onUpdateDrawingServiceContentService(_contentService);
 
-      debugPrint('✅ ScheduleConnectivityService: ContentService initialized');
 
       // Check server connectivity
       final serverReachable = await checkServerConnectivity();
@@ -96,14 +95,12 @@ class ScheduleConnectivityService {
       onStateChanged(_isOffline, _isSyncing);
       onUpdateCubitOfflineStatus(_isOffline);
 
-      debugPrint('✅ ScheduleConnectivityService: Initial connectivity check - offline: $_isOffline');
 
       // Auto-sync dirty notes for this book if online
       if (serverReachable) {
         autoSyncDirtyNotes();
       }
     } catch (e) {
-      debugPrint('❌ ScheduleConnectivityService: Failed to initialize ContentService: $e');
       // Continue without ContentService - sync will not work but UI remains functional
       _isOffline = true;
       onStateChanged(_isOffline, _isSyncing);
@@ -116,7 +113,6 @@ class ScheduleConnectivityService {
 
   /// Setup network connectivity monitoring for automatic sync retry
   void setupConnectivityMonitoring() {
-    debugPrint('🌐 ScheduleConnectivityService: Setting up connectivity monitoring...');
 
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
       (ConnectivityResult result) {
@@ -134,19 +130,13 @@ class ScheduleConnectivityService {
   /// Returns true if server is reachable, false otherwise
   Future<bool> checkServerConnectivity() async {
     if (_contentService == null) {
-      debugPrint('⚠️ ScheduleConnectivityService: Cannot check server - ContentService not initialized');
       return false;
     }
 
     try {
-      debugPrint('🔍 ScheduleConnectivityService: Checking server connectivity via health check...');
       final isHealthy = await _contentService!.healthCheck();
-      debugPrint(isHealthy
-        ? '✅ ScheduleConnectivityService: Server is reachable'
-        : '❌ ScheduleConnectivityService: Server health check returned false');
       return isHealthy;
     } catch (e) {
-      debugPrint('❌ ScheduleConnectivityService: Server health check failed: $e');
       return false;
     }
   }
@@ -155,7 +145,6 @@ class ScheduleConnectivityService {
   void _onConnectivityChanged(ConnectivityResult result) {
     final hasConnection = result != ConnectivityResult.none;
 
-    debugPrint('🌐 ScheduleConnectivityService: Connectivity changed - hasConnection: $hasConnection, result: $result');
 
     // Verify actual server connectivity, not just network interface status
     Future.microtask(() async {
@@ -168,11 +157,9 @@ class ScheduleConnectivityService {
         onStateChanged(_isOffline, _isSyncing);
         onUpdateCubitOfflineStatus(_isOffline);
 
-        debugPrint('🌐 ScheduleConnectivityService: Offline state updated based on server check: $_isOffline');
 
         // Network just came back online - auto-sync dirty notes
         if (serverReachable && wasOfflineBefore) {
-          debugPrint('🌐 ScheduleConnectivityService: Server restored! Auto-syncing dirty notes...');
 
           // Wait a bit for network to stabilize
           Future.delayed(const Duration(seconds: 1), () {
@@ -193,7 +180,6 @@ class ScheduleConnectivityService {
     onStateChanged(_isOffline, _isSyncing);
 
     try {
-      debugPrint('🔄 ScheduleConnectivityService: Auto-syncing dirty notes for book $_bookUuid...');
 
       final result = await _contentService!.syncDirtyNotesForBook(_bookUuid);
 
@@ -203,16 +189,13 @@ class ScheduleConnectivityService {
 
         // Show user feedback
         if (result.nothingToSync) {
-          debugPrint('✅ ScheduleConnectivityService: No dirty notes to sync');
         } else if (result.allSucceeded) {
-          debugPrint('✅ ScheduleConnectivityService: All ${result.total} notes synced successfully');
           onShowSnackbar(
             'Synced ${result.total} offline note${result.total > 1 ? 's' : ''}',
             backgroundColor: Colors.green,
             durationSeconds: 2,
           );
         } else if (result.hasFailures) {
-          debugPrint('⚠️ ScheduleConnectivityService: ${result.success}/${result.total} notes synced, ${result.failed} failed');
           onShowSnackbar(
             'Synced ${result.success}/${result.total} notes. ${result.failed} failed - check if book is backed up',
             backgroundColor: Colors.orange,
@@ -224,7 +207,6 @@ class ScheduleConnectivityService {
         }
       }
     } catch (e) {
-      debugPrint('❌ ScheduleConnectivityService: Auto-sync failed: $e');
       if (isMounted()) {
         _isSyncing = false;
         onStateChanged(_isOffline, _isSyncing);
@@ -235,23 +217,18 @@ class ScheduleConnectivityService {
   /// Sync event and note to server in background (best effort)
   Future<void> syncEventToServer(Event event) async {
     if (_contentService == null) {
-      debugPrint('⚠️ ScheduleConnectivityService: ContentService not available, cannot sync event ${event.id}');
       return;
     }
 
     if (event.id == null) {
-      debugPrint('⚠️ ScheduleConnectivityService: Event ID is null, cannot sync');
       return;
     }
 
     try {
-      debugPrint('🔄 ScheduleConnectivityService: Syncing event ${event.id} and note to server...');
       await _contentService!.syncNote(event.id!);
-      debugPrint('✅ ScheduleConnectivityService: Event ${event.id} synced to server successfully');
     } catch (e) {
       // Silent failure - data is already saved locally and marked as dirty
       // It will be synced when the user opens the event detail screen
-      debugPrint('⚠️ ScheduleConnectivityService: Background sync failed (will retry later): $e');
     }
   }
 

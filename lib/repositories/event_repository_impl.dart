@@ -75,7 +75,7 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
   @override
   Future<Event> create(Event event) async {
     final db = await getDatabaseFn();
-    final now = DateTime.now();
+    final now = DateTime.now().toUtc();
 
     // Mark as dirty and set version to 1 for new events
     final eventToCreate = event.copyWith(
