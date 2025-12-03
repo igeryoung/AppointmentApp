@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, FileText } from 'lucide-react';
 import { PositionedEvent } from './types';
+import { parseEventTypes } from '../../utils/event';
 
 interface EventTileProps {
   positionedEvent: PositionedEvent;
@@ -26,18 +27,11 @@ export const EventTile: React.FC<EventTileProps> = ({ positionedEvent, slotHeigh
   const navigate = useNavigate();
   const { event, top, left, width, height, zIndex } = positionedEvent;
 
-  // Parse event types
-  let eventTypes: string[] = [];
-  try {
-    eventTypes = JSON.parse(event.eventTypes || '[]');
-  } catch {
-    if (event.eventType) {
-      eventTypes = [event.eventType];
-    }
-  }
+  const eventTypes = parseEventTypes(event.eventTypes);
+  const resolvedTypes = eventTypes.length > 0 ? eventTypes : ['other'];
 
   // Get colors (max 2, sorted alphabetically)
-  const sortedTypes = [...eventTypes].sort();
+  const sortedTypes = [...resolvedTypes].sort();
   const colors = sortedTypes.slice(0, 2).map(getEventTypeColor);
 
   // Background rendering

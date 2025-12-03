@@ -244,13 +244,10 @@ class ScheduleTestMenuHelper {
               isDirty: true, // Mark as dirty so it syncs to server when first opened
             );
             await dbService.saveCachedNote(note);
-            debugPrint('✅ Generated note with ${strokes.length} strokes for event ${createdEvent.id}');
           } catch (e) {
-            debugPrint('⚠️ Error creating random note for event ${createdEvent.id}: $e');
           }
         }
       } catch (e) {
-        debugPrint('Error creating random event: $e');
       }
     }
 

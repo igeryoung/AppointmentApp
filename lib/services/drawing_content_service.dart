@@ -53,16 +53,13 @@ class DrawingContentService {
         final cachedDrawing = await (_drawingRepository as DrawingRepositoryImpl)
             .getCachedWithViewMode(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
-          debugPrint('✅ DrawingContentService: Drawing cache hit (bookUuid: $bookUuid, date: $date, viewMode: $viewMode)');
           return cachedDrawing;
         }
-        debugPrint('ℹ️ DrawingContentService: Drawing cache miss');
       }
 
       // Step 2: Fetch from server
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ DrawingContentService: Device not registered, cannot fetch drawing');
         return await (_drawingRepository as DrawingRepositoryImpl)
             .getCachedWithViewMode(bookUuid, date, viewMode);
       }
@@ -79,25 +76,20 @@ class DrawingContentService {
         // Parse and save to cache
         final drawing = ScheduleDrawing.fromMap(serverDrawing);
         await _drawingRepository.saveToCache(drawing, isDirty: false);
-        debugPrint('✅ DrawingContentService: Drawing fetched from server and cached');
         return drawing;
       }
 
-      debugPrint('ℹ️ DrawingContentService: Drawing not found on server');
       return null;
     } catch (e) {
-      debugPrint('❌ DrawingContentService: Error fetching drawing: $e');
 
       // Fallback to cache
       try {
         final cachedDrawing = await (_drawingRepository as DrawingRepositoryImpl)
             .getCachedWithViewMode(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
-          debugPrint('⚠️ DrawingContentService: Returning cached drawing after server error');
           return cachedDrawing;
         }
       } catch (cacheError) {
-        debugPrint('❌ DrawingContentService: Cache fallback also failed: $cacheError');
       }
 
       return null;
@@ -143,7 +135,6 @@ class DrawingContentService {
         try {
           await operation();
         } catch (e) {
-          debugPrint('❌ DrawingContentService: Queue operation failed: $e');
         }
       }
       _isProcessingDrawingSaveQueue = false;
@@ -159,7 +150,6 @@ class DrawingContentService {
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ DrawingContentService: Device not registered, saving drawing to cache only');
         await _drawingRepository.saveToCache(drawing, isDirty: true);
         return;
       }
@@ -172,7 +162,6 @@ class DrawingContentService {
         if (drawing.id != null) 'version': drawing.version,
       };
 
-      debugPrint('📤 DrawingContentService: Saving drawing (bookUuid: ${drawing.bookUuid}, version: ${drawing.version}, retry: $retryCount)');
 
       final serverResponse = await _apiClient.saveDrawing(
         bookUuid: drawing.bookUuid,
@@ -188,17 +177,14 @@ class DrawingContentService {
       // Save to cache with updated version
       await _drawingRepository.saveToCache(updatedDrawing, isDirty: false);
 
-      debugPrint('✅ DrawingContentService: Drawing saved to server (version: $newVersion) and cached');
     } catch (e) {
       // RACE CONDITION FIX: Detect version conflicts and retry with server version
       if (e is ApiConflictException && retryCount < maxRetries) {
-        debugPrint('⚠️ DrawingContentService: Version conflict detected, fetching server version...');
 
         try {
           // Get credentials for retry
           final retryCredentials = await _deviceRepository.getCredentials();
           if (retryCredentials == null) {
-            debugPrint('⚠️ DrawingContentService: Device not registered, cannot retry');
             return;
           }
 
@@ -227,26 +213,20 @@ class DrawingContentService {
               updatedAt: DateTime.now(),
             );
 
-            debugPrint('🔄 DrawingContentService: Retrying with server version: $serverVersion');
 
             // Retry with server version
             return await _saveDrawingInternal(mergedDrawing, retryCount: retryCount + 1);
           } else {
-            debugPrint('⚠️ DrawingContentService: Server version not available in conflict response');
           }
         } catch (retryError) {
-          debugPrint('❌ DrawingContentService: Failed to prepare retry: $retryError');
         }
       }
 
-      debugPrint('❌ DrawingContentService: Error saving drawing to server: $e');
 
       // Still save to cache for offline access
       try {
         await _drawingRepository.saveToCache(drawing, isDirty: true);
-        debugPrint('⚠️ DrawingContentService: Drawing saved to cache only (offline mode)');
       } catch (cacheError) {
-        debugPrint('❌ DrawingContentService: Failed to save drawing to cache: $cacheError');
         rethrow;
       }
     }
@@ -280,9 +260,7 @@ class DrawingContentService {
       await (_drawingRepository as DrawingRepositoryImpl)
           .deleteCacheWithViewMode(bookUuid, date, viewMode);
 
-      debugPrint('✅ DrawingContentService: Drawing deleted');
     } catch (e) {
-      debugPrint('❌ DrawingContentService: Error deleting drawing: $e');
       rethrow;
     }
   }
@@ -299,12 +277,10 @@ class DrawingContentService {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    debugPrint('🔄 DrawingContentService: Preloading drawings from $startDate to $endDate...');
 
     try {
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ DrawingContentService: Device not registered, skipping preload');
         return;
       }
 
@@ -322,13 +298,10 @@ class DrawingContentService {
           final drawing = ScheduleDrawing.fromMap(drawingData);
           await _drawingRepository.saveToCache(drawing, isDirty: false);
         } catch (e) {
-          debugPrint('⚠️ DrawingContentService: Failed to preload drawing: $e');
         }
       }
 
-      debugPrint('✅ DrawingContentService: Preloaded ${serverDrawings.length} drawings');
     } catch (e) {
-      debugPrint('❌ DrawingContentService: Preload error: $e');
       // Don't throw - preload is best-effort
     }
   }

@@ -147,7 +147,7 @@ class DashboardRoutes {
     final result = <String, dynamic>{};
     for (final entry in row.entries) {
       final camelKey = _snakeToCamel(entry.key);
-      result[camelKey] = _serializeValue(entry.value);
+      result[camelKey] = _serializeValue(entry.key, entry.value);
     }
     return result;
   }
@@ -164,14 +164,21 @@ class DashboardRoutes {
   }
 
   /// Convert a value to JSON-serializable format
-  dynamic _serializeValue(dynamic value) {
+  dynamic _serializeValue(String column, dynamic value) {
     if (value == null) return null;
-    if (value is DateTime) return value.toIso8601String();
+    if (value is DateTime) {
+      // Event timestamps are stored as UTC in DB but PostgreSQL returns them as local DateTime.
+      // Normalize to UTC ISO for API consumers (e.g., dashboard).
+      if (column == 'start_time' || column == 'end_time' || column == 'created_at' || column == 'updated_at') {
+        return value.toUtc().toIso8601String();
+      }
+      return value.toUtc().toIso8601String();
+    }
     if (value is Map) {
-      return value.map((k, v) => MapEntry(k.toString(), _serializeValue(v)));
+      return value.map((k, v) => MapEntry(k.toString(), _serializeValue(k.toString(), v)));
     }
     if (value is List) {
-      return value.map(_serializeValue).toList();
+      return value.map((v) => _serializeValue(column, v)).toList();
     }
     // For primitive types and already serializable types
     return value;
@@ -302,12 +309,28 @@ class DashboardRoutes {
       );
 
       final eventTypeRows = await db.queryRows(
-        'SELECT event_type, COUNT(*) as count FROM events WHERE is_deleted = false GROUP BY event_type',
+        '''
+        WITH normalized_event_types AS (
+          SELECT
+            jsonb_array_elements_text(
+              COALESCE(
+                NULLIF(TRIM(e.event_types), '')::jsonb,
+                '["other"]'::jsonb
+              )
+            ) AS normalized_type
+          FROM events e
+          WHERE e.is_deleted = false
+        )
+        SELECT normalized_type, COUNT(*) as count
+        FROM normalized_event_types
+        GROUP BY normalized_type
+        ORDER BY normalized_type
+        ''',
       );
 
       final byType = <String, int>{};
       for (final row in eventTypeRows) {
-        final eventType = row['event_type']?.toString() ?? 'unknown';
+        final eventType = row['normalized_type']?.toString() ?? 'unknown';
         final count = _safeInt(row['count']);
         byType[eventType] = count;
       }
@@ -540,8 +563,8 @@ class DashboardRoutes {
   /// Get single event detail by ID
   Future<Response> _getEventDetail(Request request, String eventId) async {
     try {
-      final id = int.tryParse(eventId);
-      if (id == null) {
+      final id = eventId.trim();
+      if (id.isEmpty) {
         return Response.badRequest(
           body: jsonEncode({'error': 'Invalid event ID'}),
           headers: {'Content-Type': 'application/json'},
@@ -556,7 +579,7 @@ class DashboardRoutes {
           EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
-        WHERE e.id = @id AND e.is_deleted = false
+        WHERE e.id::text = @id AND e.is_deleted = false
         ''',
         parameters: {'id': id},
       );
@@ -584,8 +607,8 @@ class DashboardRoutes {
   /// Get note for a specific event
   Future<Response> _getEventNote(Request request, String eventId) async {
     try {
-      final id = int.tryParse(eventId);
-      if (id == null) {
+      final id = eventId.trim();
+      if (id.isEmpty) {
         return Response.badRequest(
           body: jsonEncode({'error': 'Invalid event ID'}),
           headers: {'Content-Type': 'application/json'},
@@ -597,7 +620,7 @@ class DashboardRoutes {
         SELECT
           n.*
         FROM notes n
-        WHERE n.event_id = @eventId AND n.is_deleted = false
+        WHERE n.event_id::text = @eventId AND n.is_deleted = false
         ''',
         parameters: {'eventId': id},
       );

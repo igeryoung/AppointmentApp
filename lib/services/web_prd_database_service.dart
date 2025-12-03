@@ -216,6 +216,16 @@ class WebPRDDatabaseService implements IDatabaseService {
     return updatedEvent;
   }
 
+  Future<void> replaceEventWithServerData(Event event) async {
+    if (event.id == null) throw ArgumentError('Event ID cannot be null');
+
+    await Future.delayed(const Duration(milliseconds: 5));
+    final index = _events.indexWhere((e) => e.id == event.id);
+    if (index == -1) throw Exception('Event not found');
+
+    _events[index] = event;
+  }
+
   Future<void> deleteEvent(String id) async {
     await Future.delayed(const Duration(milliseconds: 10));
 
@@ -319,52 +329,42 @@ class WebPRDDatabaseService implements IDatabaseService {
 
   Future<Note?> getCachedNote(String eventId) async {
     await Future.delayed(const Duration(milliseconds: 5));
-    debugPrint('🗄️ WebDB: getCachedNote($eventId) - searching in ${_notes.length} notes');
 
     try {
       final note = _notes.firstWhere((n) => n.eventId == eventId);
-      debugPrint('🗄️ WebDB: Found note for event $eventId with ${note.strokes.length} strokes');
 
       // Log first few strokes for debugging
       for (int i = 0; i < note.strokes.length && i < 3; i++) {
         final stroke = note.strokes[i];
-        debugPrint('🗄️ WebDB: Retrieved stroke $i has ${stroke.points.length} points, color: ${stroke.color}');
       }
 
       return note;
     } catch (e) {
-      debugPrint('🗄️ WebDB: No note found for event $eventId');
       return null;
     }
   }
 
   Future<Note> saveCachedNote(Note note) async {
     await Future.delayed(const Duration(milliseconds: 10));
-    debugPrint('🗄️ WebDB: saveCachedNote() called for event ${note.eventId} with ${note.strokes.length} strokes');
 
     // Log stroke details before storing
     for (int i = 0; i < note.strokes.length && i < 3; i++) {
       final stroke = note.strokes[i];
-      debugPrint('🗄️ WebDB: Storing stroke $i with ${stroke.points.length} points, color: ${stroke.color}');
     }
 
     final index = _notes.indexWhere((n) => n.eventId == note.eventId);
     if (index == -1) {
       // Create new note if doesn't exist
-      debugPrint('🗄️ WebDB: Creating new note for event ${note.eventId}');
       final newNote = note.copyWith(
         id: _nextNoteId++,
         updatedAt: DateTime.now(),
       );
       _notes.add(newNote);
-      debugPrint('🗄️ WebDB: New note created with ID ${newNote.id}, total notes: ${_notes.length}');
       return newNote;
     }
 
-    debugPrint('🗄️ WebDB: Updating existing note at index $index');
     final updatedNote = note.copyWith(updatedAt: DateTime.now());
     _notes[index] = updatedNote;
-    debugPrint('🗄️ WebDB: Note updated successfully');
     return updatedNote;
   }
 
@@ -457,7 +457,6 @@ class WebPRDDatabaseService implements IDatabaseService {
     final normalizedDate = DateTime(drawing.date.year, drawing.date.month, drawing.date.day);
     final now = DateTime.now();
 
-    debugPrint('🎨 Web: saveCachedDrawing called with ${drawing.strokes.length} strokes');
 
     // Find existing drawing
     final index = _scheduleDrawings.indexWhere(
@@ -477,7 +476,6 @@ class WebPRDDatabaseService implements IDatabaseService {
     if (index != -1) {
       // Update existing
       _scheduleDrawings[index] = updatedDrawing.copyWith(id: _scheduleDrawings[index].id);
-      debugPrint('✅ Web: Schedule drawing updated');
       return _scheduleDrawings[index];
     } else {
       // Insert new
@@ -486,7 +484,6 @@ class WebPRDDatabaseService implements IDatabaseService {
         createdAt: now,
       );
       _scheduleDrawings.add(newDrawing);
-      debugPrint('✅ Web: New schedule drawing created');
       return newDrawing;
     }
   }

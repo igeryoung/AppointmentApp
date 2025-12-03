@@ -1,9 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
 import { HandwritingCanvas, PageNavigation } from '../components';
 import type { Event, Note, NotePages } from '../types';
 import { dashboardAPI } from '../services/api';
+import { parseServerDate } from '../utils/date';
+import { getBookDisplayName } from '../utils/book';
+import { formatShortId } from '../utils/id';
+import { parseEventTypes } from '../utils/event';
 
 /**
  * Event Detail Page
@@ -22,11 +27,11 @@ export const EventDetail: React.FC = () => {
 
   useEffect(() => {
     if (eventId) {
-      loadEventData(parseInt(eventId));
+      loadEventData(eventId);
     }
   }, [eventId]);
 
-  const loadEventData = async (id: number) => {
+  const loadEventData = async (id: string) => {
     try {
       setLoading(true);
       setError(null);
@@ -53,7 +58,13 @@ export const EventDetail: React.FC = () => {
       }
     } catch (err) {
       console.error('Failed to load event:', err);
-      setError('Failed to load event details. Please try again.');
+      if (axios.isAxiosError(err)) {
+        const serverData = err.response?.data as { message?: string; error?: string } | undefined;
+        const serverMessage = serverData?.message || serverData?.error;
+        setError(serverMessage ?? 'Failed to load event details. Please try again.');
+      } else {
+        setError('Failed to load event details. Please try again.');
+      }
     } finally {
       setLoading(false);
     }
@@ -75,16 +86,11 @@ export const EventDetail: React.FC = () => {
     }
   };
 
-  const parseEventTypes = (eventTypesJson: string): string[] => {
-    try {
-      return JSON.parse(eventTypesJson);
-    } catch {
-      return [];
+  const formatDateTime = (dateString?: string | null) => {
+    const date = parseServerDate(dateString);
+    if (!date) {
+      return '-';
     }
-  };
-
-  const formatDateTime = (dateString: string) => {
-    const date = new Date(dateString);
     return date.toLocaleString('en-US', {
       year: 'numeric',
       month: 'long',
@@ -145,7 +151,7 @@ export const EventDetail: React.FC = () => {
           Back to Events List
         </button>
         <h1 className="page-title">Event Details</h1>
-        <p className="page-subtitle">Event ID: {event.id}</p>
+        <p className="page-subtitle">Event ID: {formatShortId(event.id)}</p>
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
@@ -160,7 +166,9 @@ export const EventDetail: React.FC = () => {
                 <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
                   Book
                 </label>
-                <p style={{ marginTop: '0.25rem' }}>{event.bookName || `Book ${event.bookId}`}</p>
+                <p style={{ marginTop: '0.25rem' }}>
+                  {getBookDisplayName(event.bookName, event.bookUuid)}
+                </p>
               </div>
 
               <div>
@@ -175,6 +183,13 @@ export const EventDetail: React.FC = () => {
                   Record Number
                 </label>
                 <p style={{ marginTop: '0.25rem', fontFamily: 'monospace' }}>{event.recordNumber || '-'}</p>
+              </div>
+
+              <div>
+                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
+                  Phone
+                </label>
+                <p style={{ marginTop: '0.25rem', fontFamily: 'monospace' }}>{event.phone || '-'}</p>
               </div>
 
               <div>

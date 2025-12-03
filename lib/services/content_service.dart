@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import '../models/note.dart';
+import '../models/event.dart';
 import '../models/schedule_drawing.dart';
 import 'api_client.dart';
+
 
 /// ContentService - Unified content management with cache-first strategy
 ///
@@ -44,9 +46,91 @@ class ContentService {
     try {
       return await _apiClient.healthCheck();
     } catch (e) {
-      debugPrint('❌ ContentService: Health check failed: $e');
       return false;
     }
+  }
+
+  // ===================
+  // Event Operations
+  // ===================
+
+  /// Fetch event metadata from server and update local cache
+  Future<Event?> refreshEventFromServer(String eventId) async {
+    try {
+      final credentials = await _db.getDeviceCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered, cannot fetch event');
+      }
+
+      final localEvent = await _db.getEventById(eventId);
+      if (localEvent == null) {
+        throw Exception('Event $eventId not found locally');
+      }
+
+      final serverEvent = await _apiClient.fetchEvent(
+        bookUuid: localEvent.bookUuid,
+        eventId: eventId,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+
+      if (serverEvent == null) {
+        return null;
+      }
+
+      _debugPrintEventMap('server_event_raw', serverEvent);
+      final normalized = _convertServerEventTimestamps(serverEvent);
+      _debugPrintEventMap('server_event_normalized', normalized);
+      final refreshedEvent = Event.fromMap(normalized);
+      _debugPrintEvent('server_event_parsed', refreshedEvent);
+      return refreshedEvent;
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  Map<String, dynamic> _convertServerEventTimestamps(Map<String, dynamic> original) {
+    int? _parseSeconds(dynamic value) {
+      if (value == null) return null;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value.toString());
+    }
+
+    final copy = Map<String, dynamic>.from(original);
+    final startSeconds = _parseSeconds(copy['start_time']);
+    if (startSeconds != null) copy['start_time'] = startSeconds;
+
+    final endSeconds = _parseSeconds(copy['end_time']);
+    if (endSeconds != null) copy['end_time'] = endSeconds;
+
+    final createdSeconds = _parseSeconds(copy['created_at']);
+    if (createdSeconds != null) copy['created_at'] = createdSeconds;
+
+    final updatedSeconds = _parseSeconds(copy['updated_at']);
+    if (updatedSeconds != null) copy['updated_at'] = updatedSeconds;
+
+    return copy;
+  }
+
+  void _debugPrintEventMap(String label, Map<String, dynamic> map) {
+    assert(() {
+      try {
+        final start = map['start_time'];
+        final end = map['end_time'];
+        final created = map['created_at'];
+        final updated = map['updated_at'];
+        print('[ContentService] $label start=${start.runtimeType}=$start end=${end.runtimeType}=$end created=${created.runtimeType}=$created updated=${updated.runtimeType}=$updated');
+      } catch (_) {}
+      return true;
+    }());
+  }
+
+  void _debugPrintEvent(String label, Event event) {
+    assert(() {
+      print('[ContentService] $label id=${event.id} start=${event.startTime.toIso8601String()} (isUtc=${event.startTime.isUtc}) end=${event.endTime?.toIso8601String()}');
+      return true;
+    }());
   }
 
   // ===================
@@ -61,13 +145,10 @@ class ContentService {
     try {
       final cachedNote = await _cacheManager.getNote(eventId);
       if (cachedNote != null) {
-        debugPrint('✅ ContentService: Cache-only note retrieved (eventId: $eventId, isDirty: ${cachedNote.isDirty})');
       } else {
-        debugPrint('ℹ️ ContentService: No cached note found (eventId: $eventId)');
       }
       return cachedNote;
     } catch (e) {
-      debugPrint('❌ ContentService: Error getting cached note: $e');
       return null;
     }
   }
@@ -87,16 +168,13 @@ class ContentService {
       if (!forceRefresh) {
         final cachedNote = await _cacheManager.getNote(eventId);
         if (cachedNote != null) {
-          debugPrint('✅ ContentService: Note cache hit (eventId: $eventId)');
           return cachedNote;
         }
-        debugPrint('ℹ️ ContentService: Note cache miss (eventId: $eventId)');
       }
 
       // Step 2: Fetch from server
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ ContentService: Device not registered, cannot fetch from server');
         // Return cache if available
         return await _cacheManager.getNote(eventId);
       }
@@ -104,7 +182,6 @@ class ContentService {
       // Get bookId for the event
       final event = await _db.getEventById(eventId);
       if (event == null) {
-        debugPrint('⚠️ ContentService: Event $eventId not found');
         return null;
       }
 
@@ -119,24 +196,19 @@ class ContentService {
         // Parse and save to cache
         final note = Note.fromMap(serverNote);
         await _cacheManager.saveNote(eventId, note);
-        debugPrint('✅ ContentService: Note fetched from server and cached (eventId: $eventId)');
         return note;
       }
 
-      debugPrint('ℹ️ ContentService: Note not found on server (eventId: $eventId)');
       return null;
     } catch (e) {
-      debugPrint('❌ ContentService: Error fetching note (eventId: $eventId): $e');
 
       // Fallback to cache on error
       try {
         final cachedNote = await _cacheManager.getNote(eventId);
         if (cachedNote != null) {
-          debugPrint('⚠️ ContentService: Returning cached note after server error');
           return cachedNote;
         }
       } catch (cacheError) {
-        debugPrint('❌ ContentService: Cache fallback also failed: $cacheError');
       }
 
       return null;
@@ -152,7 +224,6 @@ class ContentService {
     // **数据安全第一原则**: 只保存到本地 (标记为dirty)
     // Server sync由调用者通过 syncNote() 单独处理（后台best effort）
     await _cacheManager.saveNote(eventId, note, dirty: true);
-    debugPrint('✅ ContentService: Note saved locally (eventId: $eventId, marked dirty)');
 
     // Note: 不在这里同步到server！调用者会通过 _syncNoteInBackground() 处理
     // 这样可以保证本地保存永远不会因为网络错误而失败
@@ -168,7 +239,6 @@ class ContentService {
     try {
       final note = await _cacheManager.getNote(eventId);
       if (note == null) {
-        debugPrint('⚠️ ContentService: Cannot sync - note $eventId not found in cache');
         return;
       }
 
@@ -194,7 +264,6 @@ class ContentService {
       // Include event data for auto-creation on server if event doesn't exist
       final eventData = event.toMap();
 
-      debugPrint('📤 ContentService: Syncing note (eventId: $eventId, version: ${note.version}, retry: $retryCount)');
 
       final serverNote = await _apiClient.saveNote(
         bookUuid: event.bookUuid,
@@ -208,7 +277,6 @@ class ContentService {
       // Update local note with server version
       final serverVersion = serverNote['version'] as int?;
       if (serverVersion != null && serverVersion != note.version) {
-        debugPrint('🔄 ContentService: Updating local note version from ${note.version} to $serverVersion');
         final updatedNote = note.copyWith(version: serverVersion, isDirty: false);
         await _cacheManager.saveNote(eventId, updatedNote, dirty: false);
       } else {
@@ -216,17 +284,14 @@ class ContentService {
         await _cacheManager.markNoteClean(eventId);
       }
 
-      debugPrint('✅ ContentService: Note synced to server (eventId: $eventId, version: $serverVersion, dirty flag cleared)');
     } catch (e) {
       // Handle version conflicts with auto-retry
       if (e is ApiConflictException && retryCount < maxRetries) {
-        debugPrint('⚠️ ContentService: Version conflict detected (attempt ${retryCount + 1}/$maxRetries)');
 
         final serverVersion = e.serverVersion;
         final serverState = e.serverState;
 
         if (serverVersion != null) {
-          debugPrint('   Server version: $serverVersion, retrying with server version...');
 
           // Fetch current note from cache to get latest local data
           final currentNote = await _cacheManager.getNote(eventId);
@@ -238,17 +303,14 @@ class ContentService {
             // Save merged note to cache with new version
             await _cacheManager.saveNote(eventId, mergedNote, dirty: true);
 
-            debugPrint('🔄 ContentService: Retrying sync with server version $serverVersion');
 
             // Retry with updated version
             return await syncNote(eventId, retryCount: retryCount + 1);
           }
         } else {
-          debugPrint('⚠️ ContentService: Server version not available in conflict response');
         }
       }
 
-      debugPrint('❌ ContentService: Sync failed for note $eventId: $e');
       // 保留dirty标记，稍后重试
       rethrow;
     }
@@ -276,9 +338,7 @@ class ContentService {
       // Delete from cache
       await _cacheManager.deleteNote(eventId);
 
-      debugPrint('✅ ContentService: Note deleted (eventId: $eventId)');
     } catch (e) {
-      debugPrint('❌ ContentService: Error deleting note: $e');
       rethrow;
     }
   }
@@ -307,24 +367,20 @@ class ContentService {
     }
 
     final startTime = DateTime.now();
-    debugPrint('🔄 ContentService: [${startTime.toIso8601String()}] Preload STARTED for ${eventIds.length} notes (generation=$generation) [eventIds: ${eventIds.join(', ')}]');
 
     // Run in background, don't block caller
     Future.microtask(() async {
       try {
         // RACE CONDITION FIX: Check if cancelled before starting
         if (isCancelled != null && isCancelled()) {
-          debugPrint('🚫 ContentService: Preload cancelled before starting (generation=$generation)');
           return;
         }
 
         // Step 1: Filter out already-cached notes
-        debugPrint('📦 ContentService: Checking cache for ${eventIds.length} notes...');
         final uncachedIds = <String>[];
         for (final id in eventIds) {
           // RACE CONDITION FIX: Check cancellation during cache lookup
           if (isCancelled != null && isCancelled()) {
-            debugPrint('🚫 ContentService: Preload cancelled during cache check (generation=$generation)');
             return;
           }
 
@@ -335,40 +391,31 @@ class ContentService {
         }
 
         if (uncachedIds.isEmpty) {
-          debugPrint('✅ ContentService: All ${eventIds.length} notes already cached - preload complete (generation=$generation)');
           if (isCancelled == null || !isCancelled()) {
             onProgress?.call(eventIds.length, eventIds.length);
           }
           return;
         }
 
-        debugPrint('📦 ContentService: Found ${eventIds.length - uncachedIds.length} cached, ${uncachedIds.length} uncached');
-        debugPrint('🔄 ContentService: Need to fetch ${uncachedIds.length} notes from server: [${uncachedIds.join(', ')}]');
 
         // Get credentials once
-        debugPrint('🔐 ContentService: Checking device credentials...');
         final credentials = await _db.getDeviceCredentials();
         if (credentials == null) {
-          debugPrint('❌ ContentService: Device not registered, cannot preload from server');
-          debugPrint('   → Register device to enable preloading');
           if (isCancelled == null || !isCancelled()) {
             onProgress?.call(eventIds.length - uncachedIds.length, eventIds.length);
           }
           return;
         }
-        debugPrint('✅ ContentService: Device credentials found (deviceId: ${credentials.deviceId.substring(0, 8)}...)');
 
         // Step 2: Batch fetch (max 50 per request to avoid timeout)
         const batchSize = 50;
         int loaded = eventIds.length - uncachedIds.length; // Already cached
         final totalBatches = (uncachedIds.length / batchSize).ceil();
 
-        debugPrint('🌐 ContentService: Starting batch fetch (${uncachedIds.length} notes in $totalBatches batch${totalBatches > 1 ? 'es' : ''})');
 
         for (int i = 0; i < uncachedIds.length; i += batchSize) {
           // RACE CONDITION FIX: Check cancellation before each batch
           if (isCancelled != null && isCancelled()) {
-            debugPrint('🚫 ContentService: Preload cancelled during batch processing (generation=$generation)');
             return;
           }
 
@@ -377,7 +424,6 @@ class ContentService {
 
           try {
             // Batch fetch from server
-            debugPrint('🌐 ContentService: Calling POST /api/notes/batch for batch $batchNumber/${totalBatches} (${batch.length} notes: [${batch.join(', ')}])');
             final serverNotes = await _apiClient.batchFetchNotes(
               eventIds: batch,
               deviceId: credentials.deviceId,
@@ -386,11 +432,9 @@ class ContentService {
 
             // RACE CONDITION FIX: Check cancellation after fetch completes
             if (isCancelled != null && isCancelled()) {
-              debugPrint('🚫 ContentService: Preload cancelled after batch fetch (generation=$generation)');
               return;
             }
 
-            debugPrint('✅ ContentService: Batch API returned ${serverNotes.length} notes');
 
             // Step 3: Save each to cache
             for (final noteData in serverNotes) {
@@ -399,7 +443,6 @@ class ContentService {
                 await _cacheManager.saveNote(note.eventId, note, dirty: false);
                 loaded++;
               } catch (e) {
-                debugPrint('⚠️ ContentService: Failed to parse/save note: $e');
               }
             }
 
@@ -408,20 +451,16 @@ class ContentService {
               onProgress?.call(loaded, eventIds.length);
             }
 
-            debugPrint('✅ ContentService: Batch $batchNumber/${totalBatches} completed ($loaded/${eventIds.length} total)');
           } catch (e) {
-            debugPrint('❌ ContentService: Batch $batchNumber fetch failed (skipping): $e');
             // Continue with next batch, don't fail entire preload
           }
         }
 
         final endTime = DateTime.now();
         final duration = endTime.difference(startTime);
-        debugPrint('✅ ContentService: Preload COMPLETED - $loaded/${eventIds.length} notes loaded in ${duration.inMilliseconds}ms (generation=$generation)');
       } catch (e) {
         final endTime = DateTime.now();
         final duration = endTime.difference(startTime);
-        debugPrint('❌ ContentService: Preload FAILED after ${duration.inMilliseconds}ms (generation=$generation): $e');
       }
     });
   }
@@ -430,22 +469,18 @@ class ContentService {
   /// Returns result object with sync statistics
   Future<BulkSyncResult> syncAllDirtyNotes() async {
     try {
-      debugPrint('🔄 ContentService: Starting bulk sync of all dirty notes...');
 
       // Get all dirty notes from database
       final dirtyNotes = await _db.getAllDirtyNotes();
 
       if (dirtyNotes.isEmpty) {
-        debugPrint('✅ ContentService: No dirty notes to sync');
         return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
       }
 
-      debugPrint('🔄 ContentService: Found ${dirtyNotes.length} dirty notes to sync');
 
       // Get credentials once
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        debugPrint('❌ ContentService: Device not registered, cannot sync');
         throw Exception('Device not registered');
       }
 
@@ -458,7 +493,6 @@ class ContentService {
         try {
           await syncNote(note.eventId);
           successCount++;
-          debugPrint('✅ ContentService: Synced note ${note.eventId} ($successCount/${dirtyNotes.length})');
         } catch (e) {
           failedCount++;
           failedEventIds.add(note.eventId);
@@ -472,17 +506,12 @@ class ContentService {
               if (event != null) {
                 final book = await _db.getBookByUuid(event.bookUuid);
                 if (book != null) {
-                  debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book "${book.name}" (UUID: ${book.uuid}) not found on server.');
-                  debugPrint('   → SOLUTION: Backup the book "${book.name}" to sync it to the server, then notes will sync automatically.');
                 } else {
-                  debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
                 }
               }
             } catch (infoError) {
-              debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
             }
           } else {
-            debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: $e');
           }
           // Continue syncing other notes even if one fails
         }
@@ -495,10 +524,8 @@ class ContentService {
         failedEventIds: failedEventIds,
       );
 
-      debugPrint('✅ ContentService: Bulk sync complete - ${result.success}/${result.total} succeeded, ${result.failed} failed');
       return result;
     } catch (e) {
-      debugPrint('❌ ContentService: Bulk sync failed: $e');
       rethrow;
     }
   }
@@ -507,22 +534,18 @@ class ContentService {
   /// Returns result object with sync statistics
   Future<BulkSyncResult> syncDirtyNotesForBook(String bookUuid) async {
     try {
-      debugPrint('🔄 ContentService: Starting bulk sync for book $bookUuid...');
 
       // Get dirty notes for this book
       final dirtyNotes = await _db.getDirtyNotesByBookId(bookUuid);
 
       if (dirtyNotes.isEmpty) {
-        debugPrint('✅ ContentService: No dirty notes to sync for book $bookUuid');
         return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
       }
 
-      debugPrint('🔄 ContentService: Found ${dirtyNotes.length} dirty notes to sync for book $bookUuid');
 
       // Get credentials once
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        debugPrint('❌ ContentService: Device not registered, cannot sync');
         throw Exception('Device not registered');
       }
 
@@ -535,7 +558,6 @@ class ContentService {
         try {
           await syncNote(note.eventId);
           successCount++;
-          debugPrint('✅ ContentService: Synced note ${note.eventId} ($successCount/${dirtyNotes.length})');
         } catch (e) {
           failedCount++;
           failedEventIds.add(note.eventId);
@@ -549,17 +571,12 @@ class ContentService {
               if (event != null) {
                 final book = await _db.getBookByUuid(event.bookUuid);
                 if (book != null) {
-                  debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book "${book.name}" (UUID: ${book.uuid}) not found on server.');
-                  debugPrint('   → SOLUTION: Backup the book "${book.name}" to sync it to the server, then notes will sync automatically.');
                 } else {
-                  debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
                 }
               }
             } catch (infoError) {
-              debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: Book not found on server. Please backup the book first.');
             }
           } else {
-            debugPrint('❌ ContentService: Failed to sync note ${note.eventId}: $e');
           }
           // Continue syncing other notes even if one fails
         }
@@ -572,10 +589,8 @@ class ContentService {
         failedEventIds: failedEventIds,
       );
 
-      debugPrint('✅ ContentService: Bulk sync complete for book $bookUuid - ${result.success}/${result.total} succeeded, ${result.failed} failed');
       return result;
     } catch (e) {
-      debugPrint('❌ ContentService: Bulk sync for book $bookUuid failed: $e');
       rethrow;
     }
   }
@@ -596,16 +611,13 @@ class ContentService {
       if (!forceRefresh) {
         final cachedDrawing = await _cacheManager.getDrawing(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
-          debugPrint('✅ ContentService: Drawing cache hit (bookUuid: $bookUuid, date: $date, viewMode: $viewMode)');
           return cachedDrawing;
         }
-        debugPrint('ℹ️ ContentService: Drawing cache miss');
       }
 
       // Step 2: Fetch from server
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ ContentService: Device not registered, cannot fetch drawing');
         return await _cacheManager.getDrawing(bookUuid, date, viewMode);
       }
 
@@ -621,24 +633,19 @@ class ContentService {
         // Parse and save to cache
         final drawing = ScheduleDrawing.fromMap(serverDrawing);
         await _cacheManager.saveDrawing(drawing);
-        debugPrint('✅ ContentService: Drawing fetched from server and cached');
         return drawing;
       }
 
-      debugPrint('ℹ️ ContentService: Drawing not found on server');
       return null;
     } catch (e) {
-      debugPrint('❌ ContentService: Error fetching drawing: $e');
 
       // Fallback to cache
       try {
         final cachedDrawing = await _cacheManager.getDrawing(bookUuid, date, viewMode);
         if (cachedDrawing != null) {
-          debugPrint('⚠️ ContentService: Returning cached drawing after server error');
           return cachedDrawing;
         }
       } catch (cacheError) {
-        debugPrint('❌ ContentService: Cache fallback failed: $cacheError');
       }
 
       return null;
@@ -659,7 +666,6 @@ class ContentService {
         try {
           await saveOperation();
         } catch (e) {
-          debugPrint('❌ ContentService: Queue save operation failed: $e');
           // Continue processing queue even if one operation fails
         }
       }
@@ -700,7 +706,6 @@ class ContentService {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        debugPrint('⚠️ ContentService: Device not registered, saving drawing to cache only');
         await _cacheManager.saveDrawing(drawing);
         return;
       }
@@ -716,7 +721,6 @@ class ContentService {
         if (drawing.id != null) 'version': drawing.version, // Include current version for updates (optimistic locking)
       };
 
-      debugPrint('📤 ContentService: Saving drawing (bookUuid: ${drawing.bookUuid}, version: ${drawing.version}, retry: $retryCount)');
 
       final serverResponse = await _apiClient.saveDrawing(
         bookUuid: drawing.bookUuid,
@@ -732,18 +736,15 @@ class ContentService {
       // Save to cache with updated version
       await _cacheManager.saveDrawing(updatedDrawing);
 
-      debugPrint('✅ ContentService: Drawing saved to server (version: $newVersion) and cached');
     } catch (e) {
       // RACE CONDITION FIX: Detect version conflicts and retry with server version
       if (e is ApiConflictException && retryCount < maxRetries) {
-        debugPrint('⚠️ ContentService: Version conflict detected (attempt ${retryCount + 1}/$maxRetries)');
 
         try {
           // Extract server version from 409 response
           final serverVersion = e.serverVersion;
 
           if (serverVersion != null) {
-            debugPrint('   Server version: $serverVersion, Client version: ${drawing.version}');
 
             // Fetch drawing from cache to preserve metadata (id, createdAt)
             final latestDrawing = await _db.getCachedDrawing(
@@ -759,26 +760,20 @@ class ContentService {
               createdAt: latestDrawing?.createdAt,
             );
 
-            debugPrint('🔄 ContentService: Retrying with server version: $serverVersion');
 
             // Retry with server version
             return await _saveDrawingInternal(mergedDrawing, retryCount: retryCount + 1);
           } else {
-            debugPrint('⚠️ ContentService: Server version not available in conflict response');
           }
         } catch (retryError) {
-          debugPrint('❌ ContentService: Failed to prepare retry: $retryError');
         }
       }
 
-      debugPrint('❌ ContentService: Error saving drawing to server: $e');
 
       // Still save to cache for offline access
       try {
         await _cacheManager.saveDrawing(drawing);
-        debugPrint('⚠️ ContentService: Drawing saved to cache only (offline mode)');
       } catch (cacheError) {
-        debugPrint('❌ ContentService: Failed to save drawing to cache: $cacheError');
         rethrow;
       }
     }
@@ -807,9 +802,7 @@ class ContentService {
       // Delete from cache
       await _cacheManager.deleteDrawing(bookUuid, date, viewMode);
 
-      debugPrint('✅ ContentService: Drawing deleted');
     } catch (e) {
-      debugPrint('❌ ContentService: Error deleting drawing: $e');
       rethrow;
     }
   }
@@ -822,7 +815,6 @@ class ContentService {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    debugPrint('🔄 ContentService: Preloading drawings from $startDate to $endDate...');
 
     // Run in background
     Future.microtask(() async {
@@ -844,13 +836,10 @@ class ContentService {
             final drawing = ScheduleDrawing.fromMap(drawingData);
             await _cacheManager.saveDrawing(drawing);
           } catch (e) {
-            debugPrint('⚠️ ContentService: Failed to preload drawing: $e');
           }
         }
 
-        debugPrint('✅ ContentService: Preloaded ${serverDrawings.length} drawings');
       } catch (e) {
-        debugPrint('❌ ContentService: Preload drawings failed: $e');
       }
     });
   }

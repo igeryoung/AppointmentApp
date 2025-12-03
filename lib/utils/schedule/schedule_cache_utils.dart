@@ -148,9 +148,7 @@ class ScheduleCacheUtils {
       final totalItemsBefore = statsBefore.notesCount + statsBefore.drawingsCount;
 
       // Clear all cache
-      debugPrint('🗑️ ScheduleScreen: Clearing all cache...');
       await cacheManager.clearAll();
-      debugPrint('✅ ScheduleScreen: Cache cleared');
 
       // Get stats after clearing to confirm
       final statsAfter = await cacheManager.getStats();
@@ -167,11 +165,9 @@ class ScheduleCacheUtils {
       }
 
       // Optionally trigger preload again to test
-      debugPrint('🔄 ScheduleScreen: Triggering preload to test cache mechanism...');
       onPreloadNotes();
 
     } catch (e) {
-      debugPrint('❌ ScheduleScreen: Failed to clear cache: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -201,7 +197,6 @@ class ScheduleCacheUtils {
       final drawingsCountBefore = statsBefore.drawingsCount;
 
       // Clear drawings cache only
-      debugPrint('🗑️ ScheduleScreen: Clearing drawings cache...');
       await cacheManager.deleteDrawing(
         bookUuid,
         effectiveDate,
@@ -211,14 +206,12 @@ class ScheduleCacheUtils {
       // Actually clear all drawings cache to properly test
       final db = dbService as PRDDatabaseService;
       await db.clearDrawingsCache();
-      debugPrint('✅ ScheduleScreen: Drawings cache cleared');
 
       // Get stats after clearing to confirm
       final statsAfter = await cacheManager.getStats();
       final drawingsCountAfter = statsAfter.drawingsCount;
 
       // Reload current drawing - this will trigger server fetch via ContentService
-      debugPrint('🔄 ScheduleScreen: Reloading drawing from server...');
       onReloadDrawing();
 
       if (context.mounted) {
@@ -232,7 +225,6 @@ class ScheduleCacheUtils {
       }
 
     } catch (e) {
-      debugPrint('❌ ScheduleScreen: Failed to clear drawings cache: $e');
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(

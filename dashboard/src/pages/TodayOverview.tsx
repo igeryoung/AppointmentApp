@@ -5,6 +5,7 @@ import { ScheduleGrid } from '../components/TodaySchedule/ScheduleGrid';
 import { BookWithEvents, TOTAL_SLOTS } from '../components/TodaySchedule/types';
 import { Book, Event } from '../types';
 import { dashboardAPI } from '../services/api';
+import { parseServerDate } from '../utils/date';
 
 const SESSION_STORAGE_KEY = 'todayOverview_selectedBooks';
 const COLUMN_WIDTH = 250; // pixels
@@ -95,7 +96,10 @@ export const TodayOverview: React.FC = () => {
 
         // Filter for today and selected books
         const todayEvents = allEvents.filter((event) => {
-          const eventStart = new Date(event.startTime);
+          const eventStart = parseServerDate(event.startTime);
+          if (!eventStart) {
+            return false;
+          }
 
           // Check if event starts today
           const isToday =

@@ -281,7 +281,6 @@ class ScheduleLayoutUtils {
 
         // If no position found, skip this event (should not happen with dynamic positioning)
         if (!positionFound) {
-          debugPrint('⚠️ No position found for event ${event.id} at slot $slotIndex');
           continue;
         }
 

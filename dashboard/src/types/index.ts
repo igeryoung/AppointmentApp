@@ -51,27 +51,27 @@ export interface EventStats {
   active: number;
   removed: number;
   byType: Record<string, number>;
-  byBook: Record<number, number>;
+  byBook: Record<string, number>;
   recent: Event[];
 }
 
 export interface Event {
-  id: number;
-  bookId: number;
+  id: string;
+  bookUuid: string;
   bookName?: string;
   deviceId: string;
   name: string;
-  recordNumber: string;
-  eventType: string; // Legacy single event type
-  eventTypes: string; // JSON array of event types
+  recordNumber?: string | null;
+  phone?: string | null;
+  eventTypes: string[];
   startTime: string;
   endTime: string | null;
   isRemoved: boolean;
   removalReason?: string | null;
   isChecked: boolean;
   hasNote: boolean;
-  originalEventId?: number | null;
-  newEventId?: number | null;
+  originalEventId?: string | null;
+  newEventId?: string | null;
   version: number;
   createdAt: string;
   updatedAt: string;
@@ -86,7 +86,7 @@ export interface NoteStats {
 
 export interface Note {
   id: number;
-  eventId: number;
+  eventId: string;
   deviceId: string;
   pagesData: string; // JSON string: array of pages, each page is array of strokes
   strokesData?: string; // Legacy single-page data
@@ -124,7 +124,7 @@ export interface DrawingStats {
 
 export interface Drawing {
   id: number;
-  bookId: number;
+  bookUuid: string;
   deviceId: string;
   date: string;
   viewMode: number;
@@ -143,7 +143,7 @@ export interface BackupStats {
 
 export interface Backup {
   id: number;
-  bookId: number;
+  bookUuid: string;
   bookName: string;
   backupName: string;
   backupType: string;

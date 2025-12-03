@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:postgres/postgres.dart';
 import '../database/connection.dart';
 
@@ -8,6 +9,48 @@ class BookPullService {
   final DatabaseConnection db;
 
   BookPullService(this.db);
+
+  /// Format timestamps that represent user-facing schedule times.
+  /// Always returns a UTC ISO string so clients don't double-apply timezone offsets.
+  String _formatUserTimestamp(DateTime dateTime) {
+    final utc = dateTime.isUtc
+        ? dateTime
+        : DateTime.utc(
+            dateTime.year,
+            dateTime.month,
+            dateTime.day,
+            dateTime.hour,
+            dateTime.minute,
+            dateTime.second,
+            dateTime.millisecond,
+            dateTime.microsecond,
+          );
+    return utc.toIso8601String();
+  }
+
+  bool _toBool(dynamic value) {
+    if (value is bool) return value;
+    if (value is int) return value != 0;
+    if (value is num) return value != 0;
+    if (value is String) {
+      final normalized = value.trim().toLowerCase();
+      return normalized == 'true' || normalized == '1';
+    }
+    return value == true;
+  }
+
+  String _normalizeEventTypes(dynamic value) {
+    if (value == null) return '[]';
+    if (value is String) {
+      final trimmed = value.trim();
+      return trimmed.isEmpty ? '[]' : value;
+    }
+    try {
+      return jsonEncode(value);
+    } catch (_) {
+      return '[]';
+    }
+  }
 
   /// List all books with optional search by name
   ///
@@ -48,10 +91,10 @@ class BookPullService {
       return {
         'book_uuid': row['book_uuid'] as String,
         'name': row['name'] as String,
-        'created_at': (row['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
+        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
+        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
         'archived_at': row['archived_at'] != null
-            ? (row['archived_at'] as DateTime).toIso8601String()
+            ? (row['archived_at'] as DateTime).toUtc().toIso8601String()
             : null,
         'version': row['version'] as int,
         'is_deleted': row['is_deleted'] as bool,
@@ -100,7 +143,12 @@ class BookPullService {
         book_uuid,
         name,
         record_number,
+        phone,
         event_type,
+        event_types,
+        has_charge_items,
+        is_checked,
+        has_note,
         start_time,
         end_time,
         created_at,
@@ -120,21 +168,26 @@ class BookPullService {
 
     final events = eventsResults.map((row) {
       return {
-        'id': row['id'] as int,
+        'id': row['id'] as String,
         'book_uuid': row['book_uuid'] as String,
         'name': row['name'] as String,
-        'record_number': row['record_number'] as String,
-        'event_type': row['event_type'] as String,
-        'start_time': (row['start_time'] as DateTime).toIso8601String(),
+        'record_number': row['record_number'] as String?,
+        'phone': row['phone'] as String?,
+        'event_type': row['event_type'] as String?,
+        'event_types': _normalizeEventTypes(row['event_types']),
+        'has_charge_items': _toBool(row['has_charge_items']),
+        'is_checked': _toBool(row['is_checked']),
+        'has_note': _toBool(row['has_note']),
+        'start_time': _formatUserTimestamp(row['start_time'] as DateTime),
         'end_time': row['end_time'] != null
-            ? (row['end_time'] as DateTime).toIso8601String()
+            ? _formatUserTimestamp(row['end_time'] as DateTime)
             : null,
-        'created_at': (row['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
+        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
+        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
         'is_removed': row['is_removed'] as bool,
         'removal_reason': row['removal_reason'] as String?,
-        'original_event_id': row['original_event_id'] as int?,
-        'new_event_id': row['new_event_id'] as int?,
+        'original_event_id': row['original_event_id'] as String?,
+        'new_event_id': row['new_event_id'] as String?,
         'version': row['version'] as int,
         'is_deleted': row['is_deleted'] as bool,
       };
@@ -146,7 +199,6 @@ class BookPullService {
       SELECT
         n.id,
         n.event_id,
-        n.strokes_data,
         n.pages_data,
         n.created_at,
         n.updated_at,
@@ -163,11 +215,10 @@ class BookPullService {
     final notes = notesResults.map((row) {
       return {
         'id': row['id'] as int,
-        'event_id': row['event_id'] as int,
-        'strokes_data': row['strokes_data'] as String?,
+        'event_id': row['event_id'] as String,
         'pages_data': row['pages_data'] as String?,
-        'created_at': (row['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
+        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
+        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
         'version': row['version'] as int,
         'is_deleted': row['is_deleted'] as bool,
       };
@@ -197,11 +248,11 @@ class BookPullService {
       return {
         'id': row['id'] as int,
         'book_uuid': row['book_uuid'] as String,
-        'date': (row['date'] as DateTime).toIso8601String(),
+        'date': _formatUserTimestamp(row['date'] as DateTime),
         'view_mode': row['view_mode'] as int,
         'strokes_data': row['strokes_data'] as String?,
-        'created_at': (row['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
+        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
+        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
         'version': row['version'] as int,
         'is_deleted': row['is_deleted'] as bool,
       };
@@ -215,10 +266,10 @@ class BookPullService {
       'book': {
         'book_uuid': bookResult['book_uuid'] as String,
         'name': bookResult['name'] as String,
-        'created_at': (bookResult['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (bookResult['updated_at'] as DateTime).toIso8601String(),
+        'created_at': (bookResult['created_at'] as DateTime).toUtc().toIso8601String(),
+        'updated_at': (bookResult['updated_at'] as DateTime).toUtc().toIso8601String(),
         'archived_at': bookResult['archived_at'] != null
-            ? (bookResult['archived_at'] as DateTime).toIso8601String()
+            ? (bookResult['archived_at'] as DateTime).toUtc().toIso8601String()
             : null,
         'version': bookResult['version'] as int,
         'is_deleted': bookResult['is_deleted'] as bool,
@@ -263,10 +314,10 @@ class BookPullService {
     return {
       'book_uuid': bookResult['book_uuid'] as String,
       'name': bookResult['name'] as String,
-      'created_at': (bookResult['created_at'] as DateTime).toIso8601String(),
-      'updated_at': (bookResult['updated_at'] as DateTime).toIso8601String(),
+      'created_at': (bookResult['created_at'] as DateTime).toUtc().toIso8601String(),
+      'updated_at': (bookResult['updated_at'] as DateTime).toUtc().toIso8601String(),
       'archived_at': bookResult['archived_at'] != null
-          ? (bookResult['archived_at'] as DateTime).toIso8601String()
+          ? (bookResult['archived_at'] as DateTime).toUtc().toIso8601String()
           : null,
       'version': bookResult['version'] as int,
       'is_deleted': bookResult['is_deleted'] as bool,

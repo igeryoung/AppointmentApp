@@ -51,7 +51,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// [generation] - Request generation number for race condition prevention
   Future<void> loadEvents({DateTime? date, bool? showOldEvents, int? generation}) async {
     if (_currentBookUuid == null) {
-      debugPrint('⚠️ ScheduleCubit: Cannot load events - no book selected');
       emit(const ScheduleError('No book selected'));
       return;
     }
@@ -87,7 +86,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       final windowSize = _getWindowSize(viewMode);
       final windowEnd = windowStart.add(Duration(days: windowSize));
 
-      debugPrint('🔄 ScheduleCubit: Fetching events for $windowSize-day window $windowStart (generation=$generation)');
 
       final events = await _eventRepository.getByDateRange(
         _currentBookUuid!,
@@ -97,7 +95,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
       // RACE CONDITION FIX: Check if this request is still valid
       if (generation != null && generation != _currentRequestGeneration) {
-        debugPrint('⚠️ ScheduleCubit: Ignoring stale event query (gen $generation vs current $_currentRequestGeneration)');
         return; // Don't emit state for stale data
       }
 
@@ -115,9 +112,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         viewMode: viewMode,
       ));
 
-      debugPrint('✅ ScheduleCubit: Loaded ${filteredEvents.length} events for $windowSize-day window starting $windowStart (generation=$generation)');
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to load events: $e');
       emit(ScheduleError('Failed to load events: $e'));
     }
   }
@@ -127,7 +122,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     // RACE CONDITION FIX: Increment generation counter on each date change
     _currentRequestGeneration++;
     final requestGeneration = _currentRequestGeneration;
-    debugPrint('🔄 ScheduleCubit: selectDate() called, generation=$requestGeneration');
 
     await loadEvents(date: date, showOldEvents: true, generation: requestGeneration);
   }
@@ -139,26 +133,22 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Create a new event
   Future<Event?> createEvent(Event event) async {
     if (_currentBookUuid == null) {
-      debugPrint('⚠️ ScheduleCubit: Cannot create event - no book selected');
       emit(const ScheduleError('No book selected'));
       return null;
     }
 
     if (event.bookUuid != _currentBookUuid) {
-      debugPrint('⚠️ ScheduleCubit: Event bookUuid mismatch');
       emit(const ScheduleError('Event book UUID does not match selected book'));
       return null;
     }
 
     try {
       final newEvent = await _eventRepository.create(event);
-      debugPrint('✅ ScheduleCubit: Created event "${newEvent.name}" (id: ${newEvent.id})');
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
       return newEvent;
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to create event: $e');
       emit(ScheduleError('Failed to create event: $e'));
       return null;
     }
@@ -173,12 +163,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
     try {
       await _eventRepository.update(event);
-      debugPrint('✅ ScheduleCubit: Updated event "${event.name}"');
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to update event: $e');
       emit(ScheduleError('Failed to update event: $e'));
     }
   }
@@ -187,12 +175,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   Future<void> deleteEvent(String eventId, {String reason = 'Deleted by user'}) async {
     try {
       await _eventRepository.removeEvent(eventId, reason);
-      debugPrint('✅ ScheduleCubit: Deleted event (id: $eventId)');
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to delete event: $e');
       emit(ScheduleError('Failed to delete event: $e'));
     }
   }
@@ -201,12 +187,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   Future<void> hardDeleteEvent(String eventId) async {
     try {
       await _eventRepository.delete(eventId);
-      debugPrint('✅ ScheduleCubit: Hard deleted event (id: $eventId)');
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to hard delete event: $e');
       emit(ScheduleError('Failed to hard delete event: $e'));
     }
   }
@@ -225,13 +209,11 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         newEndTime,
         reason,
       );
-      debugPrint('✅ ScheduleCubit: Changed event time for "${originalEvent.name}" (old id: ${originalEvent.id}, new id: ${newEvent.id})');
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
       return newEvent;
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to change event time: $e');
       emit(ScheduleError('Failed to change event time: $e'));
       return null;
     }
@@ -244,13 +226,11 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Load drawing for the current date and view mode (always 3-day view)
   Future<void> loadDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY, bool forceRefresh = false}) async {
     if (_currentBookUuid == null) {
-      debugPrint('⚠️ ScheduleCubit: Cannot load drawing - no book selected');
       return;
     }
 
     final currentState = state;
     if (currentState is! ScheduleLoaded) {
-      debugPrint('⚠️ ScheduleCubit: Cannot load drawing - state is not ScheduleLoaded');
       return;
     }
 
@@ -263,9 +243,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       );
 
       emit(currentState.copyWith(drawing: drawing));
-      debugPrint('✅ ScheduleCubit: Loaded drawing (${drawing != null ? "${drawing.strokes.length} strokes" : "null"})');
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to load drawing: $e');
       // Don't emit error - drawing is optional
     }
   }
@@ -273,7 +251,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Save drawing
   Future<void> saveDrawing(ScheduleDrawing drawing) async {
     if (_currentBookUuid == null) {
-      debugPrint('⚠️ ScheduleCubit: Cannot save drawing - no book selected');
       return;
     }
 
@@ -286,9 +263,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         emit(currentState.copyWith(drawing: drawing));
       }
 
-      debugPrint('✅ ScheduleCubit: Saved drawing (${drawing.strokes.length} strokes)');
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to save drawing: $e');
       emit(ScheduleError('Failed to save drawing: $e'));
     }
   }
@@ -296,13 +271,11 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Delete current drawing (always 3-day view)
   Future<void> deleteDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY}) async {
     if (_currentBookUuid == null) {
-      debugPrint('⚠️ ScheduleCubit: Cannot delete drawing - no book selected');
       return;
     }
 
     final currentState = state;
     if (currentState is! ScheduleLoaded) {
-      debugPrint('⚠️ ScheduleCubit: Cannot delete drawing - state is not ScheduleLoaded');
       return;
     }
 
@@ -314,9 +287,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       );
 
       emit(currentState.copyWith(clearDrawing: true));
-      debugPrint('✅ ScheduleCubit: Deleted drawing');
     } catch (e) {
-      debugPrint('❌ ScheduleCubit: Failed to delete drawing: $e');
       emit(ScheduleError('Failed to delete drawing: $e'));
     }
   }
@@ -330,7 +301,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   @Deprecated('All events are now always visible')
   void toggleOldEvents() {
     // No-op: All events are always visible now
-    debugPrint('⚠️ ScheduleCubit: toggleOldEvents() called but is deprecated');
   }
 
   /// Toggle visibility of drawing overlay
@@ -340,7 +310,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
     final newShowDrawing = !currentState.showDrawing;
     emit(currentState.copyWith(showDrawing: newShowDrawing));
-    debugPrint('✅ ScheduleCubit: Drawing visibility updated: $newShowDrawing');
   }
 
   /// Change view mode (2-day or 3-day)
@@ -348,7 +317,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final currentState = state;
     if (currentState is! ScheduleLoaded) return;
 
-    debugPrint('🔄 ScheduleCubit: Changing view mode to $viewMode');
 
     // Clear drawing when changing view mode (different view modes have different drawings)
     emit(currentState.copyWith(viewMode: viewMode, clearDrawing: true));
@@ -367,7 +335,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     if (currentState is! ScheduleLoaded) return;
 
     emit(currentState.copyWith(isOffline: isOffline));
-    debugPrint('✅ ScheduleCubit: Offline status updated: $isOffline');
   }
 
   /// Set pending next appointment data for pre-filling event creation
@@ -376,7 +343,6 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     if (currentState is! ScheduleLoaded) return;
 
     emit(currentState.copyWith(pendingNextAppointment: pendingAppointment));
-    debugPrint('✅ ScheduleCubit: Pending next appointment set: ${pendingAppointment.name}');
   }
 
   /// Clear pending next appointment data
@@ -385,12 +351,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     if (currentState is! ScheduleLoaded) return;
 
     emit(currentState.copyWith(clearPendingNextAppointment: true));
-    debugPrint('✅ ScheduleCubit: Pending next appointment cleared');
   }
 
   /// Change the center date and navigate to that date
   Future<void> changeDate(DateTime targetDate) async {
-    debugPrint('✅ ScheduleCubit: Changing date to $targetDate');
     await selectDate(targetDate);
   }
 

@@ -115,7 +115,6 @@ class ScheduleDateService {
     final lastActiveDate = DateTime(_lastActiveDate.year, _lastActiveDate.month, _lastActiveDate.day);
 
     if (currentDate != lastActiveDate) {
-      debugPrint('📅 Date changed detected: $lastActiveDate → $currentDate');
 
       // Check if user is viewing a window that contains "today" (the new current date)
       final windowStart = getWindowStart();
@@ -126,7 +125,6 @@ class ScheduleDateService {
                                           lastActiveDate.isBefore(windowEnd);
 
       if (isViewingWindowContainingToday) {
-        debugPrint('📅 User was viewing window containing "today" - auto-updating to new today');
 
         // Save current drawing before switching dates
         if (isInDrawingMode()) {
@@ -154,7 +152,6 @@ class ScheduleDateService {
       } else {
         // User is viewing a different window - just update last active date
         // Recalculate day offset based on new "today"
-        debugPrint('📅 User viewing different window - keeping current view, recalculating offset');
         _lastActiveDate = now;
         _dayOffset = _calculateDayOffsetFromToday(_selectedDate);
       }
@@ -165,15 +162,12 @@ class ScheduleDateService {
   /// Returns true if successful, false if save failed
   Future<bool> _autoSaveAndExitDrawingMode() async {
     if (isInDrawingMode()) {
-      debugPrint('📝 Auto-saving drawing before navigation...');
       try {
         onCancelPendingSave();
         await onSaveDrawing();
         onExitDrawingMode?.call();
-        debugPrint('✅ Drawing saved and exited drawing mode');
         return true;
       } catch (e) {
-        debugPrint('❌ Failed to save drawing: $e');
         return false;
       }
     }

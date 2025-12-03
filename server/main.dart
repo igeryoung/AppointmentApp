@@ -14,6 +14,7 @@ import 'lib/routes/note_routes.dart';
 import 'lib/routes/drawing_routes.dart';
 import 'lib/routes/batch_routes.dart';
 import 'lib/routes/dashboard_routes.dart';
+import 'lib/routes/event_routes.dart';
 
 void main(List<String> args) async {
   // Load environment variables from .env file
@@ -25,7 +26,6 @@ void main(List<String> args) async {
     final mergedEnv = Map<String, String>.from(Platform.environment);
     mergedEnv.addAll(env.map);
     setEnvironmentOverride(mergedEnv);
-    print('📄 Loaded environment variables from .env file');
   }
 
   // Parse command line arguments
@@ -39,55 +39,16 @@ void main(List<String> args) async {
       ? DatabaseConfig.development()
       : DatabaseConfig.production();
 
-  print('🚀 Starting Schedule Note Sync Server');
-  print('   Mode: ${isDevelopment ? 'Development' : 'Production'}');
-  print('   $serverConfig');
-  print('   $dbConfig');
-
   // Initialize database connection
   final db = DatabaseConnection(config: dbConfig);
 
   // Health check
-  print('🔍 Checking database connection...');
   final isHealthy = await db.healthCheck();
   if (!isHealthy) {
     print('❌ Database connection failed. Please check your configuration.');
     exit(1);
   }
   print('✅ Database connection established');
-
-  // Run migrations if needed
-  if (args.contains('--migrate')) {
-    print('🔄 Running migrations...');
-    final migrations = [
-      'migrations/001_initial_schema.sql',
-      'migrations/002_book_backups.sql',
-      'migrations/002_multi_event_types.sql',
-      'migrations/003_add_book_uuid.sql',
-      'migrations/004_server_store_optimization.sql',
-      'migrations/005_cleanup_book_id.sql',
-      'migrations/005_optional_record_number.sql',
-      'migrations/006_book_uuid_foreign_keys.sql',
-      'migrations/006_shared_person_notes.sql',
-      'migrations/007_add_is_checked.sql',
-      'migrations/008_multi_page_notes.sql',
-      'migrations/009_book_uuid_as_primary_key.sql',
-      'migrations/010_book_multi_device_access.sql',
-      'migrations/011_add_has_note_to_events.sql',
-    ];
-
-    for (final migrationPath in migrations) {
-      final migrationFile = File(migrationPath);
-      if (await migrationFile.exists()) {
-        print('   Running: ${migrationPath.split('/').last}');
-        final migrationSql = await migrationFile.readAsString();
-        await db.runMigrations(migrationSql);
-      } else {
-        print('   ⚠️  Migration file not found: $migrationPath');
-      }
-    }
-    print('✅ Migrations completed');
-  }
 
   // Create router and add routes
   final app = Router();
@@ -119,6 +80,10 @@ void main(List<String> args) async {
   final noteRoutes = NoteRoutes(db);
   app.mount('/api/notes/', noteRoutes.router);
   app.mount('/api/books/', noteRoutes.bookScopedRouter);
+
+  // Event routes (device event details)
+  final eventRoutes = EventRoutes(db);
+  app.mount('/api/books/', eventRoutes.bookScopedRouter);
 
   // Drawing routes (Server-Store API)
   final drawingRoutes = DrawingRoutes(db);

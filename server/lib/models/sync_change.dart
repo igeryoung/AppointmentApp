@@ -6,7 +6,7 @@ part 'sync_change.g.dart';
 @JsonSerializable()
 class SyncChange {
   final String tableName;
-  final int recordId;
+  final String recordId;
   final String operation; // 'create', 'update', 'delete'
   final Map<String, dynamic> data;
   final DateTime timestamp;
@@ -74,7 +74,7 @@ class SyncResponse {
 @JsonSerializable()
 class SyncConflict {
   final String tableName;
-  final int recordId;
+  final String recordId;
   final Map<String, dynamic> localData;
   final Map<String, dynamic> serverData;
   final int localVersion;
@@ -104,7 +104,7 @@ class ConflictResolutionRequest {
   final String deviceId;
   final String deviceToken;
   final String tableName;
-  final int recordId;
+  final String recordId;
   final String resolution; // 'use_local', 'use_server', 'merge'
   final Map<String, dynamic>? mergedData; // For merge resolution
 

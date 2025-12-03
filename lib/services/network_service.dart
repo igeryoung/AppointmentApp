@@ -12,26 +12,20 @@ class NetworkService {
     try {
       final result = await _connectivity.checkConnectivity();
 
-      // Check if any connection type is available
-      if (result.contains(ConnectivityResult.none)) {
-        debugPrint('📡 No network connectivity');
+      if (result == ConnectivityResult.none) {
         return false;
       }
 
-      // Has wifi, mobile, or ethernet connection
-      final hasConnection = result.contains(ConnectivityResult.wifi) ||
-          result.contains(ConnectivityResult.mobile) ||
-          result.contains(ConnectivityResult.ethernet);
+      final hasConnection = result == ConnectivityResult.wifi ||
+          result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.ethernet;
 
       if (hasConnection) {
-        debugPrint('📡 Network connectivity: $result');
       } else {
-        debugPrint('📡 No active network connection');
       }
 
       return hasConnection;
     } catch (e) {
-      debugPrint('❌ Failed to check connectivity: $e');
       return false;
     }
   }
@@ -47,7 +41,7 @@ class NetworkService {
 
   /// Stream of connectivity changes
   /// Subscribe to this to react to network changes
-  Stream<List<ConnectivityResult>> get onConnectivityChanged {
+  Stream<ConnectivityResult> get onConnectivityChanged {
     return _connectivity.onConnectivityChanged;
   }
 
@@ -55,9 +49,8 @@ class NetworkService {
   Future<bool> isConnectedToWiFi() async {
     try {
       final result = await _connectivity.checkConnectivity();
-      return result.contains(ConnectivityResult.wifi);
+      return result == ConnectivityResult.wifi;
     } catch (e) {
-      debugPrint('❌ Failed to check WiFi connectivity: $e');
       return false;
     }
   }
@@ -66,9 +59,8 @@ class NetworkService {
   Future<bool> isConnectedToMobile() async {
     try {
       final result = await _connectivity.checkConnectivity();
-      return result.contains(ConnectivityResult.mobile);
+      return result == ConnectivityResult.mobile;
     } catch (e) {
-      debugPrint('❌ Failed to check mobile connectivity: $e');
       return false;
     }
   }

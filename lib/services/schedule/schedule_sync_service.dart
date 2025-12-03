@@ -53,7 +53,6 @@ class ScheduleSyncService {
       final apiClient = ApiClient(baseUrl: serverUrl);
       _cacheManager = CacheManager(prdDb);
       _contentService = ContentService(apiClient, _cacheManager!, dbService);
-      debugPrint('✅ ScheduleSyncService: ContentService initialized');
 
       // Check server connectivity
       final serverReachable = await checkServerConnectivity();
@@ -63,14 +62,12 @@ class ScheduleSyncService {
         context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
       }
 
-      debugPrint('✅ ScheduleSyncService: Initial connectivity check - offline: $_isOffline');
 
       // Auto-sync dirty notes for this book if online
       if (serverReachable) {
         autoSyncDirtyNotes();
       }
     } catch (e) {
-      debugPrint('❌ ScheduleSyncService: Failed to initialize ContentService: $e');
       // Continue without ContentService - sync will not work but UI remains functional
       _setOfflineState(true);
 
@@ -82,7 +79,6 @@ class ScheduleSyncService {
 
   /// Setup network connectivity monitoring for automatic sync retry
   void setupConnectivityMonitoring() {
-    debugPrint('🌐 ScheduleSyncService: Setting up connectivity monitoring...');
 
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
       (ConnectivityResult result) {
@@ -99,19 +95,13 @@ class ScheduleSyncService {
   /// Check actual server connectivity using health check
   Future<bool> checkServerConnectivity() async {
     if (_contentService == null) {
-      debugPrint('⚠️ ScheduleSyncService: Cannot check server - ContentService not initialized');
       return false;
     }
 
     try {
-      debugPrint('🔍 ScheduleSyncService: Checking server connectivity via health check...');
       final isHealthy = await _contentService!.healthCheck();
-      debugPrint(isHealthy
-        ? '✅ ScheduleSyncService: Server is reachable'
-        : '❌ ScheduleSyncService: Server health check returned false');
       return isHealthy;
     } catch (e) {
-      debugPrint('❌ ScheduleSyncService: Server health check failed: $e');
       return false;
     }
   }
@@ -120,7 +110,6 @@ class ScheduleSyncService {
   void _onConnectivityChanged(ConnectivityResult result) {
     final hasConnection = result != ConnectivityResult.none;
 
-    debugPrint('🌐 ScheduleSyncService: Connectivity changed - hasConnection: $hasConnection, result: $result');
 
     // Verify actual server connectivity, not just network interface status
     Future.microtask(() async {
@@ -133,11 +122,9 @@ class ScheduleSyncService {
         context.read<ScheduleCubit>().setOfflineStatus(_isOffline);
       }
 
-      debugPrint('🌐 ScheduleSyncService: Offline state updated based on server check: $_isOffline');
 
       // Network just came back online - auto-sync dirty notes
       if (serverReachable && wasOfflineBefore) {
-        debugPrint('🌐 ScheduleSyncService: Server restored! Auto-syncing dirty notes...');
 
         // Wait a bit for network to stabilize
         Future.delayed(const Duration(seconds: 1), () {
@@ -156,7 +143,6 @@ class ScheduleSyncService {
     _setSyncingState(true);
 
     try {
-      debugPrint('🔄 ScheduleSyncService: Auto-syncing dirty notes for book ${book.uuid}...');
 
       final result = await _contentService!.syncDirtyNotesForBook(book.uuid);
 
@@ -165,9 +151,7 @@ class ScheduleSyncService {
       // Show user feedback
       if (context.mounted) {
         if (result.nothingToSync) {
-          debugPrint('✅ ScheduleSyncService: No dirty notes to sync');
         } else if (result.allSucceeded) {
-          debugPrint('✅ ScheduleSyncService: All ${result.total} notes synced successfully');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Synced ${result.total} offline note${result.total > 1 ? 's' : ''}'),
@@ -176,7 +160,6 @@ class ScheduleSyncService {
             ),
           );
         } else if (result.hasFailures) {
-          debugPrint('⚠️ ScheduleSyncService: ${result.success}/${result.total} notes synced, ${result.failed} failed');
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
               content: Text('Synced ${result.success}/${result.total} notes. ${result.failed} failed - check if book is backed up'),
@@ -211,7 +194,6 @@ class ScheduleSyncService {
       }
     } catch (e) {
       _setSyncingState(false);
-      debugPrint('❌ ScheduleSyncService: Auto-sync failed: $e');
 
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -234,7 +216,6 @@ class ScheduleSyncService {
 
     while (getEvents().isEmpty) {
       if (DateTime.now().difference(startTime) > maxWaitTime) {
-        debugPrint('⚠️ ScheduleSyncService: Timeout waiting for events to load (waited ${maxWaitTime.inMilliseconds}ms), skipping preload');
         return;
       }
       await Future.delayed(pollInterval);
@@ -242,24 +223,20 @@ class ScheduleSyncService {
 
     final events = getEvents();
     final waitTime = DateTime.now().difference(startTime);
-    debugPrint('✅ ScheduleSyncService: Events loaded after ${waitTime.inMilliseconds}ms (${events.length} events), triggering preload...');
     preloadNotesInBackground(events);
   }
 
   /// Preload notes for all events in current 3-day window (background, non-blocking)
   Future<void> preloadNotesInBackground(List<Event> events) async {
     if (events.isEmpty) {
-      debugPrint('📦 ScheduleSyncService: No events to preload');
       return;
     }
 
     if (_contentService == null) {
-      debugPrint('⚠️ ScheduleSyncService: Cannot preload - ContentService not initialized');
       return;
     }
 
     final preloadStartTime = DateTime.now();
-    debugPrint('📦 ScheduleSyncService: [${preloadStartTime.toIso8601String()}] Starting preload for ${events.length} events');
 
     // Extract all event IDs (filter out null IDs)
     final eventIds = events
@@ -268,11 +245,9 @@ class ScheduleSyncService {
         .toList();
 
     if (eventIds.isEmpty) {
-      debugPrint('📦 ScheduleSyncService: No valid event IDs to preload');
       return;
     }
 
-    debugPrint('📦 ScheduleSyncService: Calling ContentService.preloadNotes with ${eventIds.length} event IDs');
 
     try {
       // Call ContentService to preload notes with progress callback
@@ -280,42 +255,34 @@ class ScheduleSyncService {
         eventIds,
         onProgress: (loaded, total) {
           // Log progress for debugging
-          debugPrint('📦 ScheduleSyncService: Progress update - $loaded/$total notes loaded');
         },
       );
 
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('✅ ScheduleSyncService: Preload call completed in ${preloadDuration.inMilliseconds}ms (initiated for ${eventIds.length} notes)');
     } catch (e) {
       // Preload failure is non-critical - user can still use the app
       // Notes will be fetched on-demand when user taps events
       final preloadEndTime = DateTime.now();
       final preloadDuration = preloadEndTime.difference(preloadStartTime);
-      debugPrint('⚠️ ScheduleSyncService: Preload failed after ${preloadDuration.inMilliseconds}ms (non-critical): $e');
     }
   }
 
   /// Sync event and note to server in background (best effort)
   Future<void> syncEventToServer(Event event) async {
     if (_contentService == null) {
-      debugPrint('⚠️ ScheduleSyncService: ContentService not available, cannot sync event ${event.id}');
       return;
     }
 
     if (event.id == null) {
-      debugPrint('⚠️ ScheduleSyncService: Event ID is null, cannot sync');
       return;
     }
 
     try {
-      debugPrint('🔄 ScheduleSyncService: Syncing event ${event.id} and note to server...');
       await _contentService!.syncNote(event.id!);
-      debugPrint('✅ ScheduleSyncService: Event ${event.id} synced to server successfully');
     } catch (e) {
       // Silent failure - data is already saved locally and marked as dirty
       // It will be synced when the user opens the event detail screen
-      debugPrint('⚠️ ScheduleSyncService: Background sync failed (will retry later): $e');
     }
   }
 
@@ -335,6 +302,5 @@ class ScheduleSyncService {
   /// Dispose resources
   void dispose() {
     _connectivitySubscription?.cancel();
-    debugPrint('🧹 ScheduleSyncService: Disposed');
   }
 }

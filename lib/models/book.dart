@@ -21,9 +21,10 @@ class Book {
       name: map['name'] as String,
       createdAt: DateTime.fromMillisecondsSinceEpoch(
         (map['created_at'] as int) * 1000,
+        isUtc: true,
       ),
       archivedAt: map['archived_at'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['archived_at'] * 1000)
+          ? DateTime.fromMillisecondsSinceEpoch(map['archived_at'] * 1000, isUtc: true)
           : null,
     );
   }

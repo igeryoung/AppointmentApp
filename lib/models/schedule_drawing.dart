@@ -88,15 +88,24 @@ class ScheduleDrawing {
       strokes = strokesJson.map((s) => Stroke.fromMap(s)).toList();
     }
 
-    // Parse timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
-    DateTime parseTimestamp(dynamic value, {required DateTime fallback}) {
+    // Parse user-selected timestamps - kept as local time
+    DateTime parseUserTimestamp(dynamic value, {required DateTime fallback}) {
       if (value == null) return fallback;
       if (value is String) {
-        // ISO 8601 string from server
-        return DateTime.parse(value);
+        return DateTime.parse(value); // Keep as local
       } else if (value is int) {
-        // Unix seconds from local DB
-        return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000); // Keep as local
+      }
+      return fallback;
+    }
+
+    // Parse system timestamps - interpreted as UTC
+    DateTime parseSystemTimestamp(dynamic value, {required DateTime fallback}) {
+      if (value == null) return fallback;
+      if (value is String) {
+        return DateTime.parse(value).toUtc();
+      } else if (value is int) {
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
       }
       return fallback;
     }
@@ -107,23 +116,23 @@ class ScheduleDrawing {
     return ScheduleDrawing(
       id: map['id']?.toInt(),
       bookUuid: (map['bookUuid'] ?? map['book_uuid']) as String? ?? '',
-      date: parseTimestamp(
+      date: parseUserTimestamp(
         map['date'],
         fallback: DateTime.now(),
       ),
       viewMode: (map['viewMode'] ?? map['view_mode'])?.toInt() ?? 0,
       strokes: strokes,
       version: map['version']?.toInt() ?? 1,
-      createdAt: parseTimestamp(
+      createdAt: parseSystemTimestamp(
         map['createdAt'] ?? map['created_at'],
         fallback: DateTime.now(),
       ),
-      updatedAt: parseTimestamp(
+      updatedAt: parseSystemTimestamp(
         map['updatedAt'] ?? map['updated_at'],
         fallback: DateTime.now(),
       ),
       syncedAt: syncedAtValue != null
-          ? parseTimestamp(syncedAtValue, fallback: DateTime.now())
+          ? parseSystemTimestamp(syncedAtValue, fallback: DateTime.now())
           : null,
       isDirty: isDirtyValue != null
           ? (isDirtyValue is int ? isDirtyValue == 1 : isDirtyValue as bool)

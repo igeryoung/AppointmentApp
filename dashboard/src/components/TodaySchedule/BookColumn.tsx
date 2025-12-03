@@ -8,6 +8,7 @@ import {
   PositionedEvent,
   EventWithPosition,
 } from './types';
+import { parseServerDate } from '../../utils/date';
 
 interface BookColumnProps {
   events: Event[];
@@ -17,7 +18,10 @@ interface BookColumnProps {
 
 // Calculate which slot an event starts in (0-47)
 const getStartSlotIndex = (startTime: string): number => {
-  const date = new Date(startTime);
+  const date = parseServerDate(startTime);
+  if (!date) {
+    return 0;
+  }
   const hour = date.getHours();
   const minute = date.getMinutes();
 
@@ -35,8 +39,11 @@ const getSlotsSpanned = (event: Event): number => {
     return 1;
   }
 
-  const start = new Date(event.startTime);
-  const end = new Date(event.endTime);
+  const start = parseServerDate(event.startTime);
+  const end = parseServerDate(event.endTime);
+  if (!start || !end) {
+    return 1;
+  }
   const durationMinutes = Math.floor((end.getTime() - start.getTime()) / (1000 * 60));
 
   // At least 1 slot, at most TOTAL_SLOTS

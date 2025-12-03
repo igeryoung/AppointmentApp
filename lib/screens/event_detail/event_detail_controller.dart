@@ -19,6 +19,7 @@ import 'adapters/connectivity_watcher.dart';
 import 'adapters/server_health_checker.dart';
 import 'adapters/note_sync_adapter.dart';
 
+
 /// Controller for Event Detail Screen business logic
 class EventDetailController {
   final Event event;
@@ -36,6 +37,7 @@ class EventDetailController {
   // State tracking
   EventDetailState _state;
   bool _wasOfflineLastCheck = false;
+  int _noteEditGeneration = 0;
 
   EventDetailController({
     required this.event,
@@ -56,7 +58,6 @@ class EventDetailController {
   /// Initialize ContentService and load initial data
   Future<void> initialize() async {
     try {
-      debugPrint('🔧 EventDetailController: Starting ContentService initialization...');
 
       // Step 1: Initialize ContentService with correct server URL
       final prdDb = _dbService as PRDDatabaseService;
@@ -67,14 +68,11 @@ class EventDetailController {
         defaultUrl: 'http://localhost:8080',
       );
 
-      debugPrint('🔧 EventDetailController: Initializing ContentService with server URL: $serverUrl');
 
       // Get device credentials for logging
       final credentials = await prdDb.getDeviceCredentials();
       if (credentials != null) {
-        debugPrint('🔧 EventDetailController: Device registered - ID: ${credentials.deviceId.substring(0, 8)}..., Token: ${credentials.deviceToken.substring(0, 16)}...');
       } else {
-        debugPrint('⚠️ EventDetailController: No device credentials found! User needs to register device first.');
       }
 
       final apiClient = ApiClient(baseUrl: serverUrl);
@@ -86,29 +84,25 @@ class EventDetailController {
       // Mark services as ready
       _updateState(_state.copyWith(isServicesReady: true));
 
-      debugPrint('✅ EventDetailController: ContentService initialized successfully');
 
       // Step 1.5: Check actual server connectivity on startup
-      debugPrint('🔍 EventDetailController: Checking initial server connectivity...');
       final serverReachable = await _checkServerConnectivity();
       _updateState(_state.copyWith(
         isOffline: !serverReachable,
       ));
       _wasOfflineLastCheck = !serverReachable;
-      debugPrint('✅ EventDetailController: Initial connectivity check complete - offline: ${_state.isOffline}');
 
       // Step 2: Load initial data (now that ContentService is ready)
       if (!isNew) {
+        await _logLocalEventSnapshot();
+        await _refreshEventFromServer();
         await loadNote();
         await loadChargeItems(); // Load charge items from person_charge_items table
-        await loadPhone(); // Load phone from person_info table
         if (event.hasNewTime) {
           await _loadNewEvent();
         }
       }
     } catch (e, stackTrace) {
-      debugPrint('❌ EventDetailController: Failed to initialize ContentService: $e');
-      debugPrint('❌ EventDetailController: Stack trace: $stackTrace');
 
       // Mark services as ready anyway to avoid blocking UI forever
       _updateState(_state.copyWith(
@@ -127,13 +121,38 @@ class EventDetailController {
       final newEvent = await _dbService.getEventById(event.newEventId!);
       _updateState(_state.copyWith(newEvent: newEvent));
     } catch (e) {
-      debugPrint('Error loading new event: $e');
+    }
+  }
+
+  Future<void> _refreshEventFromServer() async {
+    if (_contentService == null || event.id == null) {
+      return;
+    }
+
+    try {
+      await _logEventTime('before_server_fetch', event);
+      final refreshedEvent = await _contentService!.refreshEventFromServer(event.id!);
+      if (refreshedEvent != null) {
+        // Persist server-authoritative data locally to prevent stale local values from overriding UI
+        await _dbService.replaceEventWithServerData(refreshedEvent);
+
+        await _logEventTime('after_server_fetch', refreshedEvent);
+        _updateState(_state.copyWith(
+          name: refreshedEvent.name,
+          recordNumber: refreshedEvent.recordNumber ?? '',
+          phone: refreshedEvent.phone ?? '',
+          selectedEventTypes: refreshedEvent.eventTypes,
+          startTime: refreshedEvent.startTime,
+          endTime: refreshedEvent.endTime,
+        ));
+        await _logStateTime('after_state_update');
+      }
+    } catch (e) {
     }
   }
 
   /// Setup network connectivity monitoring for automatic sync retry
   void setupConnectivityMonitoring() {
-    debugPrint('🌐 EventDetailController: Setting up connectivity monitoring...');
 
     _connectivityWatcher.startWatching();
     _connectivitySubscription = _connectivityWatcher.onConnectivityChanged.listen(
@@ -146,7 +165,6 @@ class EventDetailController {
   /// Check actual server connectivity using health check
   Future<bool> _checkServerConnectivity() async {
     if (_serverHealthChecker == null) {
-      debugPrint('⚠️ EventDetailController: Cannot check server - ServerHealthChecker not initialized');
       return false;
     }
 
@@ -155,7 +173,6 @@ class EventDetailController {
 
   /// Handle connectivity changes - automatically retry sync when network returns
   void _onConnectivityChanged(bool hasConnection) async {
-    debugPrint('🌐 EventDetailController: Connectivity changed - hasConnection: $hasConnection');
 
     // Verify actual server connectivity
     final serverReachable = await _checkServerConnectivity();
@@ -164,15 +181,12 @@ class EventDetailController {
     _updateState(_state.copyWith(isOffline: !serverReachable));
     _wasOfflineLastCheck = !serverReachable;
 
-    debugPrint('🌐 EventDetailController: Offline state updated based on server check: ${_state.isOffline}');
 
     // Network just came back online
     if (serverReachable && wasOfflineBefore) {
-      debugPrint('🌐 EventDetailController: Server restored! Checking for unsynced changes...');
 
       // If we have unsynced changes, automatically retry sync
       if (_state.hasUnsyncedChanges && event.id != null) {
-        debugPrint('🌐 EventDetailController: Auto-retrying sync after server restoration...');
 
         // Wait a bit for network to stabilize
         await Future.delayed(const Duration(seconds: 1));
@@ -186,64 +200,27 @@ class EventDetailController {
   /// Load note with cache-first strategy
   Future<void> loadNote() async {
     if (event.id == null) {
-      debugPrint('🔍 EventDetailController: Cannot load note - event ID is null');
       return;
     }
 
     if (_noteSyncAdapter == null) {
-      debugPrint('⚠️ EventDetailController: Cannot load note - NoteSyncAdapter not initialized');
       return;
     }
 
-    debugPrint('📖 EventDetailController: Loading note for event ${event.id}');
+    final noteLoadGeneration = _noteEditGeneration;
 
-    // Step 1: Load from cache immediately
-    final cachedNote = await _noteSyncAdapter!.getCachedNote(event.id!);
-    if (cachedNote != null) {
-      final totalStrokes = cachedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-      debugPrint('🔍 DEBUG loadNote: Loaded from cache - ${cachedNote.pages.length} pages, $totalStrokes total strokes');
-      _updateState(_state.copyWith(
-        note: cachedNote,
-        lastKnownPages: cachedNote.pages,
-        hasUnsyncedChanges: cachedNote.isDirty,
-      ));
-      debugPrint('🔍 DEBUG loadNote: State updated - lastKnownPages now ${_state.lastKnownPages.length} pages');
-      debugPrint('✅ EventDetailController: Loaded from cache (${cachedNote.strokes.length} strokes, isDirty: ${cachedNote.isDirty})');
-    } else {
-      debugPrint('🔍 DEBUG loadNote: No cached note found, lastKnownPages = ${_state.lastKnownPages.length} pages');
-    }
-
-    // Step 2: Background refresh from server
-    if (cachedNote != null && cachedNote.isDirty) {
-      debugPrint('📤 EventDetailController: Cached note is dirty, syncing to server instead of fetching');
-      _updateState(_state.copyWith(isLoadingFromServer: true));
-
-      try {
-        await _noteSyncAdapter!.syncNote(event.id!);
-        _updateState(_state.copyWith(
-          hasUnsyncedChanges: false,
-          isLoadingFromServer: false,
-          isOffline: false,
-        ));
-        debugPrint('✅ EventDetailController: Dirty note synced to server successfully');
-      } catch (e) {
-        debugPrint('⚠️ EventDetailController: Failed to sync dirty note: $e');
-        _updateState(_state.copyWith(
-          isLoadingFromServer: false,
-          isOffline: true,
-        ));
-      }
-      return;
-    }
-
-    // Normal flow: Fetch from server
+    // Always fetch from server first
     _updateState(_state.copyWith(isLoadingFromServer: true));
-
     try {
       final serverNote = await _noteSyncAdapter!.getNote(
         event.id!,
-        forceRefresh: false,
+        forceRefresh: true,
       );
+
+      if (_noteEditGeneration != noteLoadGeneration) {
+        _updateState(_state.copyWith(isLoadingFromServer: false));
+        return;
+      }
 
       if (serverNote != null) {
         _updateState(_state.copyWith(
@@ -253,27 +230,37 @@ class EventDetailController {
           isLoadingFromServer: false,
           isOffline: false,
         ));
-        debugPrint('✅ EventDetailController: Refreshed from server');
+        return;
       } else {
-        _updateState(_state.copyWith(isLoadingFromServer: false));
       }
     } catch (e) {
-      _updateState(_state.copyWith(
-        isLoadingFromServer: false,
-        isOffline: true,
-      ));
-      debugPrint('⚠️ EventDetailController: Server fetch failed, using cache: $e');
+      _updateState(_state.copyWith(isOffline: true));
     }
+
+    // Fallback to cache if server fetch failed or note absent
+    final cachedNote = await _noteSyncAdapter!.getCachedNote(event.id!);
+    if (cachedNote != null) {
+      if (_noteEditGeneration != noteLoadGeneration) {
+      } else {
+        final totalStrokes = cachedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
+        _updateState(_state.copyWith(
+          note: cachedNote,
+          lastKnownPages: cachedNote.pages,
+          hasUnsyncedChanges: cachedNote.isDirty,
+          isLoadingFromServer: false,
+        ));
+        return;
+      }
+    }
+
+    _updateState(_state.copyWith(isLoadingFromServer: false));
   }
 
   /// Save event with handwriting note
   Future<Event> saveEvent() async {
-    debugPrint('💾 EventDetailController: Saving event...');
 
     final pages = _state.lastKnownPages;
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    debugPrint('🔍 DEBUG saveEvent: lastKnownPages has ${pages.length} pages, $totalStrokes total strokes');
-    debugPrint('🔍 DEBUG saveEvent: state.note has ${_state.note?.pages.length ?? 0} pages');
 
     _updateState(_state.copyWith(isLoading: true));
 
@@ -307,7 +294,6 @@ class EventDetailController {
         // Safety check: If new event has record number, check for existing person note
         // This prevents accidental overwriting if UI dialog wasn't shown
         if (recordNumberText.isNotEmpty && _dbService is PRDDatabaseService) {
-          debugPrint('🔍 EventDetailController: NEW event with record number, checking for existing person note...');
           final prdDb = _dbService as PRDDatabaseService;
           final existingNote = await prdDb.findExistingPersonNote(
             _state.name.trim(),
@@ -317,14 +303,12 @@ class EventDetailController {
           if (existingNote != null) {
             // DB has handwriting - auto-load it (safety: never lose existing patient data)
             final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-            debugPrint('⚠️ EventDetailController: Found existing person note (${existingNote.pages.length} pages, $totalStrokes strokes), loading DB handwriting');
             await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
             _updateState(_state.copyWith(
               note: existingNote,
               lastKnownPages: existingNote.pages,
               isLoading: false,
             ));
-            debugPrint('✅ EventDetailController: Loaded DB handwriting, skipping canvas save (patient data protected)');
             return savedEvent;
           }
         }
@@ -333,7 +317,6 @@ class EventDetailController {
 
         // If record_number was added, handle person note sync
         if (recordNumberAdded && savedEvent.id != null && _dbService is PRDDatabaseService) {
-          debugPrint('🔄 EventDetailController: Record number added, syncing with person group...');
           final prdDb = _dbService as PRDDatabaseService;
           final syncedNote = await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
 
@@ -343,7 +326,6 @@ class EventDetailController {
               note: syncedNote,
               lastKnownPages: syncedNote.pages,
             ));
-            debugPrint('✅ EventDetailController: Note synced from person group, skipping save');
             // Return early - we don't need to save the note again since it was synced
             _updateState(_state.copyWith(isLoading: false));
             return savedEvent;
@@ -368,14 +350,12 @@ class EventDetailController {
 
   /// Save note with offline-first strategy
   Future<void> saveNoteWithOfflineFirst(String eventId, List<List<Stroke>> pages) async {
-    debugPrint('💾 EventDetailController: Starting offline-first note save for event $eventId');
 
     if (_noteSyncAdapter == null) {
       throw Exception('NoteSyncAdapter not initialized. Cannot save note.');
     }
 
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    debugPrint('💾 EventDetailController: Saving note with ${pages.length} pages, $totalStrokes total strokes');
 
     final noteToSave = Note(
       eventId: eventId,
@@ -385,12 +365,9 @@ class EventDetailController {
     );
 
     try {
-      debugPrint('💾 EventDetailController: Calling NoteSyncAdapter.saveNote()...');
       await _noteSyncAdapter!.saveNote(eventId, noteToSave);
-      debugPrint('✅ EventDetailController: NoteSyncAdapter.saveNote() completed');
 
       // Verify local save succeeded
-      debugPrint('🔍 EventDetailController: Verifying local save by reading back from cache...');
       final verifyNote = await _noteSyncAdapter!.getCachedNote(eventId);
 
       if (verifyNote == null) {
@@ -402,7 +379,6 @@ class EventDetailController {
         throw Exception('Local save verification failed: Expected $totalStrokes strokes but found $verifyTotalStrokes');
       }
 
-      debugPrint('✅ EventDetailController: Local save verified - ${verifyNote.pages.length} pages, $verifyTotalStrokes strokes in cache, isDirty: ${verifyNote.isDirty}');
 
       _updateState(_state.copyWith(
         note: noteToSave,
@@ -411,13 +387,10 @@ class EventDetailController {
         lastKnownPages: pages,
       ));
 
-      debugPrint('✅ EventDetailController: Note saved locally with ${pages.length} pages, $totalStrokes total strokes');
 
       // Background sync to server
       await syncNoteInBackground(eventId);
     } catch (e, stackTrace) {
-      debugPrint('❌ EventDetailController: Failed to save note: $e');
-      debugPrint('❌ EventDetailController: Stack trace: $stackTrace');
       rethrow;
     }
   }
@@ -425,14 +398,11 @@ class EventDetailController {
   /// Background sync note to server
   Future<void> syncNoteInBackground(String eventId) async {
     if (_noteSyncAdapter == null) {
-      debugPrint('⚠️ EventDetailController: Cannot sync note - NoteSyncAdapter not initialized');
       return;
     }
 
     try {
-      debugPrint('🔄 EventDetailController: Starting background sync for note $eventId...');
       await _noteSyncAdapter!.syncNote(eventId);
-      debugPrint('✅ EventDetailController: Background sync completed successfully');
 
       _updateState(_state.copyWith(
         hasUnsyncedChanges: false,
@@ -440,9 +410,7 @@ class EventDetailController {
       ));
       _wasOfflineLastCheck = false;
 
-      debugPrint('✅ EventDetailController: Note synced to server (eventId: $eventId), offline status updated');
     } catch (e) {
-      debugPrint('⚠️ EventDetailController: Background sync failed (will retry later): $e');
 
       // Verify server connectivity after failure
       final serverReachable = await _checkServerConnectivity();
@@ -450,7 +418,6 @@ class EventDetailController {
       _updateState(_state.copyWith(isOffline: !serverReachable));
       _wasOfflineLastCheck = !serverReachable;
 
-      debugPrint('ℹ️ EventDetailController: Verified connectivity after sync failure - offline: ${_state.isOffline}');
     }
   }
 
@@ -509,11 +476,6 @@ class EventDetailController {
     if (oldRecordNumber != newRecordNumber) {
       // Load charge items asynchronously (don't wait for it)
       loadChargeItems().catchError((e) {
-        debugPrint('❌ EventDetailController: Failed to reload charge items after record number change: $e');
-      });
-      // Load phone asynchronously (don't wait for it)
-      loadPhone().catchError((e) {
-        debugPrint('❌ EventDetailController: Failed to reload phone after record number change: $e');
       });
     }
   }
@@ -560,46 +522,7 @@ class EventDetailController {
           .toList();
 
       _updateState(_state.copyWith(chargeItems: chargeItems));
-      debugPrint('✅ EventDetailController: Loaded ${chargeItems.length} charge items for $name + $recordNumber');
     } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to load charge items: $e');
-    }
-  }
-
-  /// Load phone number for the current event (based on name + record number)
-  Future<void> loadPhone() async {
-    final name = _state.name.trim();
-    final recordNumber = _state.recordNumber.trim();
-
-    // Only load if we have both name and record number
-    if (name.isEmpty || recordNumber.isEmpty) {
-      // Clear phone if no record number
-      _updateState(_state.copyWith(phone: ''));
-      return;
-    }
-
-    if (_dbService is! PRDDatabaseService) {
-      return;
-    }
-
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
-      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
-
-      // Get person phone
-      final phone = await prdDb.getPersonPhone(
-        personNameNormalized: nameNormalized,
-        recordNumberNormalized: recordNumberNormalized,
-      );
-
-      // Always update phone state (even if null/empty) to clear old values
-      _updateState(_state.copyWith(phone: phone ?? ''));
-      debugPrint('✅ EventDetailController: Loaded phone number for $name + $recordNumber: ${phone ?? "(empty)"}');
-    } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to load phone: $e');
-      // Clear phone on error
-      _updateState(_state.copyWith(phone: ''));
     }
   }
 
@@ -630,9 +553,7 @@ class EventDetailController {
         phone: phone.isEmpty ? null : phone,
       );
 
-      debugPrint('✅ EventDetailController: Saved phone number for $name + $recordNumber');
     } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to save phone: $e');
     }
   }
 
@@ -642,7 +563,6 @@ class EventDetailController {
     final recordNumber = _state.recordNumber.trim();
 
     if (name.isEmpty || recordNumber.isEmpty) {
-      debugPrint('⚠️ EventDetailController: Cannot add charge item - name or record number is empty');
       return;
     }
 
@@ -663,7 +583,6 @@ class EventDetailController {
       );
 
       if (exists) {
-        debugPrint('⚠️ EventDetailController: Charge item "${item.itemName}" already exists');
         // TODO: Show error message to user
         return;
       }
@@ -685,16 +604,13 @@ class EventDetailController {
       // Reload all charge items
       await loadChargeItems();
 
-      debugPrint('✅ EventDetailController: Added charge item "${item.itemName}"');
     } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to add charge item: $e');
     }
   }
 
   /// Edit an existing charge item
   Future<void> editChargeItem(ChargeItem item) async {
     if (item.id == null) {
-      debugPrint('⚠️ EventDetailController: Cannot edit charge item - ID is null');
       return;
     }
 
@@ -716,7 +632,6 @@ class EventDetailController {
       );
 
       if (exists) {
-        debugPrint('⚠️ EventDetailController: Charge item "${item.itemName}" already exists');
         // TODO: Show error message to user
         return;
       }
@@ -724,7 +639,6 @@ class EventDetailController {
       // Get existing item
       final existingItem = await prdDb.getPersonChargeItemById(item.id!);
       if (existingItem == null) {
-        debugPrint('⚠️ EventDetailController: Charge item not found');
         return;
       }
 
@@ -740,16 +654,13 @@ class EventDetailController {
       // Reload all charge items
       await loadChargeItems();
 
-      debugPrint('✅ EventDetailController: Edited charge item "${item.itemName}"');
     } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to edit charge item: $e');
     }
   }
 
   /// Delete a charge item
   Future<void> deleteChargeItem(ChargeItem item) async {
     if (item.id == null) {
-      debugPrint('⚠️ EventDetailController: Cannot delete charge item - ID is null');
       return;
     }
 
@@ -764,16 +675,13 @@ class EventDetailController {
       // Reload all charge items
       await loadChargeItems();
 
-      debugPrint('✅ EventDetailController: Deleted charge item "${item.itemName}"');
     } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to delete charge item: $e');
     }
   }
 
   /// Toggle paid status of a charge item
   Future<void> toggleChargeItemPaidStatus(ChargeItem item) async {
     if (item.id == null) {
-      debugPrint('⚠️ EventDetailController: Cannot toggle charge item - ID is null');
       return;
     }
 
@@ -791,9 +699,7 @@ class EventDetailController {
       // Reload all charge items
       await loadChargeItems();
 
-      debugPrint('✅ EventDetailController: Toggled paid status for "${item.itemName}"');
     } catch (e) {
-      debugPrint('❌ EventDetailController: Failed to toggle charge item: $e');
     }
   }
 
@@ -835,7 +741,7 @@ class EventDetailController {
       note: existingNote,
       lastKnownPages: existingNote.pages,
     ));
-    debugPrint('✅ EventDetailController: Loaded existing person note (${existingNote.pages.length} pages, $totalStrokes strokes)');
+    _incrementNoteGeneration();
   }
 
   /// Get all record numbers for the current person name
@@ -922,10 +828,6 @@ class EventDetailController {
 
       // Load associated data (charge items, phone, and handwritten note)
       loadChargeItems().catchError((e) {
-        debugPrint('❌ EventDetailController: Failed to load charge items after record number selection: $e');
-      });
-      loadPhone().catchError((e) {
-        debugPrint('❌ EventDetailController: Failed to load phone after record number selection: $e');
       });
 
       // Load existing person note if it exists
@@ -933,13 +835,10 @@ class EventDetailController {
         final existingNote = await prdDb.findExistingPersonNote(name, recordNumber);
         if (existingNote != null && existingNote.isNotEmpty) {
           final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-          debugPrint('✅ EventDetailController: Found existing person note (${existingNote.pages.length} pages, $totalStrokes strokes), loading it');
           loadExistingPersonNote(existingNote);
         } else {
-          debugPrint('ℹ️ EventDetailController: No existing person note found for $name + $recordNumber');
         }
       } catch (e) {
-        debugPrint('❌ EventDetailController: Failed to load existing person note: $e');
       }
     }
   }
@@ -980,12 +879,50 @@ class EventDetailController {
   /// Update strokes (called when canvas changes)
   void updatePages(List<List<Stroke>> pages) {
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    debugPrint('🔍 DEBUG updatePages: Received ${pages.length} pages, $totalStrokes total strokes');
     _updateState(_state.copyWith(
       lastKnownPages: pages,
       hasChanges: true,
     ));
-    debugPrint('🔍 DEBUG updatePages: State updated, lastKnownPages now ${_state.lastKnownPages.length} pages');
+    _incrementNoteGeneration();
+  }
+
+  void _incrementNoteGeneration() {
+    _noteEditGeneration++;
+  }
+
+  Future<void> _logLocalEventSnapshot() async {
+    if (!kDebugMode || event.id == null) return;
+
+    try {
+      final local = await _dbService.getEventById(event.id!);
+      if (local == null) {
+        debugPrint('[EventDetail] Local fetch for ${event.id} returned null');
+        return;
+      }
+
+      debugPrint(
+        '[EventDetail] Local event snapshot id=${local.id} start=${local.startTime.toIso8601String()} (isUtc=${local.startTime.isUtc}) '
+        'end=${local.endTime?.toIso8601String()} created=${local.createdAt.toIso8601String()} updated=${local.updatedAt.toIso8601String()}',
+      );
+    } catch (e) {
+      debugPrint('[EventDetail] Failed to log local event snapshot: $e');
+    }
+  }
+
+  Future<void> _logEventTime(String label, Event e) async {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[EventDetail] $label id=${e.id} start=${e.startTime.toIso8601String()} (isUtc=${e.startTime.isUtc}) '
+      'end=${e.endTime?.toIso8601String()}',
+    );
+  }
+
+  Future<void> _logStateTime(String label) async {
+    if (!kDebugMode) return;
+    debugPrint(
+      '[EventDetail] $label state start=${_state.startTime.toIso8601String()} (isUtc=${_state.startTime.isUtc}) '
+      'end=${_state.endTime?.toIso8601String()}',
+    );
   }
 
   /// Dispose resources

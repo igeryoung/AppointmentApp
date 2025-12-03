@@ -55,7 +55,6 @@ class CacheManager {
     if (note != null && note.isDirty) {
       final cleanNote = note.copyWith(isDirty: false);
       await _db.saveCachedNote(cleanNote);
-      debugPrint('✅ CacheManager: Marked note $eventId as clean (synced)');
     }
   }
 
@@ -138,8 +137,6 @@ class CacheManager {
 
     final totalDeleted = notesDeleted + drawingsDeleted;
     if (totalDeleted > 0) {
-      debugPrint(
-          '🗑️ CacheManager: Evicted $totalDeleted expired entries (Notes: $notesDeleted, Drawings: $drawingsDeleted)');
     }
 
     return totalDeleted;
@@ -177,15 +174,12 @@ class CacheManager {
 
       // 避免无限循环
       if (totalDeleted > 1000) {
-        debugPrint('⚠️ CacheManager: LRU eviction limit reached (1000 entries)');
         break;
       }
     }
 
     if (totalDeleted > 0) {
       final finalSize = await getCacheSizeMB();
-      debugPrint(
-          '🗑️ CacheManager: LRU evicted $totalDeleted entries. Cache size: ${finalSize.toStringAsFixed(2)}MB');
     }
 
     return totalDeleted;
@@ -208,7 +202,6 @@ class CacheManager {
   Future<void> clearAll() async {
     await _db.clearNotesCache();
     await _db.clearDrawingsCache();
-    debugPrint('🗑️ CacheManager: All cache cleared');
   }
 
   // ===================
@@ -256,11 +249,9 @@ class CacheManager {
   Future<void> performStartupCleanup() async {
     final policy = await _db.getCachePolicy();
     if (!policy.autoCleanup) {
-      debugPrint('ℹ️ CacheManager: Auto-cleanup disabled, skipping startup cleanup');
       return;
     }
 
-    debugPrint('🧹 CacheManager: Starting startup cleanup...');
 
     // 1. 删除过期条目
     final expiredCount = await evictExpired();
@@ -268,9 +259,6 @@ class CacheManager {
     // 2. 检查缓存大小
     final currentSizeMB = await getCacheSizeMB();
     final maxSizeMB = policy.maxCacheSizeMb;
-
-    debugPrint(
-        'ℹ️ CacheManager: Cache size: ${currentSizeMB.toStringAsFixed(2)}MB / ${maxSizeMB}MB');
 
     // 3. 如果超限，LRU淘汰
     int lruCount = 0;
@@ -282,8 +270,6 @@ class CacheManager {
     final updatedPolicy = policy.copyWith(lastCleanupAt: DateTime.now());
     await _db.updateCachePolicy(updatedPolicy);
 
-    debugPrint(
-        '✅ CacheManager: Startup cleanup complete (Expired: $expiredCount, LRU: $lruCount)');
   }
 
   /// 内部: 检查是否需要自动清理（保存后调用）
@@ -293,9 +279,6 @@ class CacheManager {
 
     // 只有超过限制时才清理
     if (currentSizeMB > policy.maxCacheSizeMb) {
-      debugPrint(
-          '⚠️ CacheManager: Cache size (${currentSizeMB.toStringAsFixed(2)}MB) exceeds limit (${policy.maxCacheSizeMb}MB), triggering cleanup...');
-
       // 先删除过期
       await evictExpired();
 

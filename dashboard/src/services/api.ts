@@ -8,6 +8,11 @@ import type {
   Note,
   EventFilters,
 } from '../types';
+import { parseEventTypes } from '../utils/event';
+
+type RawEvent = Omit<Event, 'eventTypes'> & {
+  eventTypes?: string | string[] | null;
+};
 
 class DashboardAPI {
   private client: AxiosInstance;
@@ -44,6 +49,17 @@ class DashboardAPI {
     this.client.defaults.headers.common['Authorization'] = `Bearer ${token}`;
   }
 
+  private normalizeEvent(event: RawEvent | Event): Event {
+    return {
+      ...event,
+      eventTypes: parseEventTypes(event.eventTypes),
+    };
+  }
+
+  private normalizeEvents(events: Array<RawEvent | Event> = []): Event[] {
+    return events.map((event) => this.normalizeEvent(event));
+  }
+
   // Authentication
   async login(credentials: LoginCredentials): Promise<AuthResponse> {
     const response = await this.client.post<AuthResponse>('/auth/login', credentials);
@@ -70,7 +86,9 @@ class DashboardAPI {
     const response = await this.client.get<DashboardStats>('/stats', {
       params: filters,
     });
-    return response.data;
+    const stats = response.data;
+    stats.events.recent = this.normalizeEvents(stats.events.recent);
+    return stats;
   }
 
   async getDevices(filters?: DashboardFilters) {
@@ -112,16 +130,18 @@ class DashboardAPI {
   async getFilteredEvents(filters: EventFilters): Promise<{ events: Event[] }> {
     // Always include 'list' param to tell backend we want the events list, not stats
     const params = { ...filters, list: true };
-    const response = await this.client.get<{ events: Event[] }>('/events', { params });
-    return response.data;
+    const response = await this.client.get<{ events: RawEvent[] }>('/events', { params });
+    return {
+      events: this.normalizeEvents(response.data.events),
+    };
   }
 
-  async getEventDetail(eventId: number): Promise<Event> {
-    const response = await this.client.get<Event>(`/events/${eventId}`);
-    return response.data;
+  async getEventDetail(eventId: string): Promise<Event> {
+    const response = await this.client.get<RawEvent>(`/events/${eventId}`);
+    return this.normalizeEvent(response.data);
   }
 
-  async getEventNote(eventId: number): Promise<Note> {
+  async getEventNote(eventId: string): Promise<Note> {
     const response = await this.client.get<Note>(`/events/${eventId}/note`);
     return response.data;
   }

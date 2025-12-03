@@ -33,7 +33,6 @@ mixin NoteCacheOperationsMixin {
     // Get the event to check for record_number
     final event = await getEventById(eventId);
     if (event == null) {
-      debugPrint('⚠️ Event not found: $eventId');
       return null;
     }
 
@@ -83,7 +82,6 @@ mixin NoteCacheOperationsMixin {
     // If current note doesn't exist or group note is newer, sync
     if (currentNote == null ||
         latestGroupNote.updatedAt.isAfter(currentNote.updatedAt)) {
-      debugPrint('🔄 Syncing note from person group (${nameNorm}+${recordNorm})');
 
       // Update current event's note with latest pages
       await db.update(
@@ -106,7 +104,6 @@ mixin NoteCacheOperationsMixin {
         recordNumberNormalized: recordNorm,
       );
 
-      debugPrint('✅ Note synced from person group');
     } else {
       // Current note is up to date, just ensure normalized keys are set
       await db.update(
@@ -165,7 +162,6 @@ mixin NoteCacheOperationsMixin {
     noteMap['cached_at'] = cachedAt;
 
     final totalStrokes = updatedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-    debugPrint('🔍 SQLite: saveNoteWithSync called with ${updatedNote.pages.length} pages, $totalStrokes total strokes');
 
     try {
       // Force pages_data to be a string
@@ -196,7 +192,6 @@ mixin NoteCacheOperationsMixin {
 
       // If no rows updated, insert new note
       if (updatedRows == 0) {
-        debugPrint('🔍 SQLite: Inserting new note');
         await db.rawInsert(
           '''INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at,
              cache_hit_count, version, is_dirty, person_name_normalized, record_number_normalized,
@@ -218,7 +213,6 @@ mixin NoteCacheOperationsMixin {
         );
       }
 
-      debugPrint('✅ SQLite: Note saved successfully');
 
       // Update event's hasNote field based on whether note has strokes
       final hasStrokes = totalStrokes > 0;
@@ -226,13 +220,11 @@ mixin NoteCacheOperationsMixin {
         'UPDATE events SET has_note = ? WHERE id = ?',
         [hasStrokes ? 1 : 0, eventId],
       );
-      debugPrint('✅ Updated event.hasNote = $hasStrokes for event $eventId');
 
       // If event has record number, sync to all other events in same person group
       if (personKey != null) {
         final (nameNorm, recordNorm) = personKey;
 
-        debugPrint('🔄 Syncing note to person group (${nameNorm}+${recordNorm})');
 
         // Update all other notes in the group (that are not locked)
         final syncedRows = await db.rawUpdate(
@@ -251,7 +243,6 @@ mixin NoteCacheOperationsMixin {
           ],
         );
 
-        debugPrint('✅ Synced note to $syncedRows other event(s) in person group');
 
         // Update hasNote for all events in the person group
         if (syncedRows > 0) {
@@ -270,11 +261,9 @@ mixin NoteCacheOperationsMixin {
               [hasStrokes ? 1 : 0, syncEventId],
             );
           }
-          debugPrint('✅ Updated hasNote for ${eventIdsResult.length} events in person group');
         }
       }
     } catch (e) {
-      debugPrint('❌ SQLite: Failed to save note: $e');
       rethrow;
     }
 
@@ -290,13 +279,11 @@ mixin NoteCacheOperationsMixin {
     // Get person key from updated event
     final personKey = PersonInfoUtilitiesMixin.getPersonKeyFromEvent(updatedEvent);
     if (personKey == null) {
-      debugPrint('⚠️ No record number in event, skipping person sync');
       return await getCachedNote(eventId);
     }
 
     final (nameNorm, recordNorm) = personKey;
 
-    debugPrint('🔄 Handling record number update for event $eventId: ${nameNorm}+${recordNorm}');
 
     // Get current event's note
     final currentNote = await getCachedNote(eventId);
@@ -314,7 +301,6 @@ mixin NoteCacheOperationsMixin {
     if (groupNotes.isNotEmpty) {
       final groupNote = Note.fromMap(groupNotes.first);
 
-      debugPrint('✅ Found existing person note, loading strokes');
 
       // Update current event's note with person group pages
       await db.update(
@@ -339,7 +325,6 @@ mixin NoteCacheOperationsMixin {
 
     // Case 2: No existing person note, but current has strokes
     if (currentNote != null && currentNote.isNotEmpty) {
-      debugPrint('✅ No person note found, marking current as person note');
 
       // Mark current note as the person note
       await db.update(
@@ -360,7 +345,6 @@ mixin NoteCacheOperationsMixin {
 
     // Case 3: No person note, no current strokes - just mark with person keys
     if (currentNote != null) {
-      debugPrint('✅ No person note, no strokes - marking with person keys');
 
       await db.update(
         'notes',
@@ -393,10 +377,7 @@ mixin NoteCacheOperationsMixin {
     // Debug the serialization
     final noteMap = updatedNote.toMap();
     final totalStrokes = updatedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-    debugPrint('🔍 SQLite: updateNote called with ${updatedNote.pages.length} pages, $totalStrokes total strokes');
-    debugPrint('🔍 SQLite: noteMap contents:');
     noteMap.forEach((key, value) {
-      debugPrint('   $key: $value (${value.runtimeType})');
     });
 
     try {
@@ -406,22 +387,17 @@ mixin NoteCacheOperationsMixin {
 
       // Force string conversion to prevent SQLite parameter binding corruption
       if (originalPagesData is String) {
-        debugPrint('🔍 SQLite: pages_data is String, ensuring it stays as String');
         updateMap['pages_data'] = originalPagesData.toString();
       } else {
-        debugPrint('⚠️ SQLite: pages_data is NOT a String: ${originalPagesData.runtimeType}');
         updateMap['pages_data'] = originalPagesData.toString();
       }
 
-      debugPrint('🔍 SQLite: Final pages_data type: ${updateMap['pages_data'].runtimeType}');
-      debugPrint('🔍 SQLite: Final pages_data length: ${updateMap['pages_data'].toString().length} chars');
 
       // Try to update existing note first using raw SQL to avoid parameter binding issues
       final pagesDataString = updateMap['pages_data'] as String;
       final cachedAt = now.millisecondsSinceEpoch ~/ 1000; // Cache timestamp
       final isDirty = updateMap['is_dirty'] ?? 0; // Get dirty flag from note
       final version = updateMap['version'] ?? 1; // Get version from note
-      debugPrint('🔍 SQLite: Using raw SQL with explicit string parameter');
       final updatedRows = await db.rawUpdate(
         'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ?, is_dirty = ? WHERE event_id = ?',
         [
@@ -436,11 +412,9 @@ mixin NoteCacheOperationsMixin {
         ],
       );
 
-      debugPrint('✅ SQLite: Update successful, updated $updatedRows rows');
 
       // If no rows were updated, insert new note
       if (updatedRows == 0) {
-        debugPrint('🔍 SQLite: Inserting new note using raw SQL');
         await db.rawInsert(
           'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
           [
@@ -453,13 +427,9 @@ mixin NoteCacheOperationsMixin {
             isDirty, // Set dirty flag
           ],
         );
-        debugPrint('✅ SQLite: Insert successful');
       }
     } catch (e) {
-      debugPrint('❌ SQLite: Database operation failed: $e');
-      debugPrint('❌ SQLite: Failed noteMap was:');
       noteMap.forEach((key, value) {
-        debugPrint('   $key: $value (${value.runtimeType})');
       });
       rethrow;
     }
@@ -492,7 +462,6 @@ mixin NoteCacheOperationsMixin {
       result[note.eventId] = note;
     }
 
-    debugPrint('✅ batchGetCachedNotes: Found ${result.length}/${eventIds.length} notes');
     return result;
   }
 
@@ -533,7 +502,6 @@ mixin NoteCacheOperationsMixin {
     }
 
     await batch.commit(noResult: true);
-    debugPrint('✅ batchSaveCachedNotes: Saved ${notes.length} notes');
   }
 
   /// Get all dirty notes (notes that need to be synced to server)
@@ -547,7 +515,6 @@ mixin NoteCacheOperationsMixin {
     );
 
     final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    debugPrint('✅ getAllDirtyNotes: Found ${dirtyNotes.length} dirty notes');
     return dirtyNotes;
   }
 
@@ -564,7 +531,6 @@ mixin NoteCacheOperationsMixin {
     ''', [1, bookUuid]);
 
     final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    debugPrint('✅ getDirtyNotesByBookId: Found ${dirtyNotes.length} dirty notes for book $bookUuid');
     return dirtyNotes;
   }
 }

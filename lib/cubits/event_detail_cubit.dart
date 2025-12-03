@@ -50,12 +50,10 @@ class EventDetailCubit extends Cubit<EventDetailState> {
         note: note,
       ));
 
-      debugPrint('✅ EventDetailCubit: Loaded event "${event.name}" (id: $eventId)');
 
       // Background refresh note from server if online
       _refreshNoteInBackground(eventId);
     } catch (e) {
-      debugPrint('❌ EventDetailCubit: Failed to load event: $e');
       emit(EventDetailError('Failed to load event: $e'));
     }
   }
@@ -68,10 +66,8 @@ class EventDetailCubit extends Cubit<EventDetailState> {
       if (currentState is EventDetailLoaded && !currentState.isDirty) {
         // Only update if no local changes
         emit(currentState.copyWith(note: serverNote));
-        debugPrint('✅ EventDetailCubit: Note refreshed from server');
       }
     } catch (e) {
-      debugPrint('⚠️ EventDetailCubit: Background note refresh failed: $e');
       // Ignore errors - cached note is sufficient
     }
   }
@@ -98,9 +94,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
         isDirty: false,
       ));
 
-      debugPrint('✅ EventDetailCubit: Updated event "${updatedEvent.name}"');
     } catch (e) {
-      debugPrint('❌ EventDetailCubit: Failed to update event: $e');
       emit(EventDetailError('Failed to update event: $e'));
     }
   }
@@ -122,9 +116,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
         isDirty: false,
       ));
 
-      debugPrint('✅ EventDetailCubit: Loaded note for event $eventId');
     } catch (e) {
-      debugPrint('❌ EventDetailCubit: Failed to load note: $e');
       // Don't emit error - note loading is optional
     }
   }
@@ -142,9 +134,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
         isDirty: true,
       ));
 
-      debugPrint('✅ EventDetailCubit: Note saved locally (eventId: ${note.eventId})');
     } catch (e) {
-      debugPrint('❌ EventDetailCubit: Failed to save note locally: $e');
       emit(EventDetailError('Failed to save note: $e'));
     }
   }
@@ -164,9 +154,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
         isSyncing: false,
       ));
 
-      debugPrint('✅ EventDetailCubit: Note synced to server (eventId: $eventId)');
     } catch (e) {
-      debugPrint('❌ EventDetailCubit: Failed to sync note: $e');
       emit(currentState.copyWith(isSyncing: false));
       emit(EventDetailError('Failed to sync note: $e'));
     }
@@ -185,9 +173,7 @@ class EventDetailCubit extends Cubit<EventDetailState> {
         isDirty: false,
       ));
 
-      debugPrint('✅ EventDetailCubit: Note deleted (eventId: $eventId)');
     } catch (e) {
-      debugPrint('❌ EventDetailCubit: Failed to delete note: $e');
       emit(EventDetailError('Failed to delete note: $e'));
     }
   }
@@ -202,7 +188,6 @@ class EventDetailCubit extends Cubit<EventDetailState> {
     if (currentState is! EventDetailLoaded) return;
 
     emit(currentState.copyWith(isEditMode: !currentState.isEditMode));
-    debugPrint('✅ EventDetailCubit: Edit mode toggled: ${!currentState.isEditMode}');
   }
 
   /// Set edit mode
@@ -211,7 +196,6 @@ class EventDetailCubit extends Cubit<EventDetailState> {
     if (currentState is! EventDetailLoaded) return;
 
     emit(currentState.copyWith(isEditMode: isEditMode));
-    debugPrint('✅ EventDetailCubit: Edit mode set: $isEditMode');
   }
 
   /// Update dirty state manually (for unsaved changes tracking)

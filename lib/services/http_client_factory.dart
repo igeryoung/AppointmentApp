@@ -16,14 +16,9 @@ class HttpClientFactory {
     ioClient.badCertificateCallback = (X509Certificate cert, String host, int port) {
       if (kDebugMode) {
         // Development: accept self-signed certificates
-        debugPrint('⚠️  Accepting certificate for $host:$port (DEBUG MODE)');
-        debugPrint('   Subject: ${cert.subject}');
-        debugPrint('   Issuer: ${cert.issuer}');
         return true;
       } else {
         // Production: strict certificate validation
-        debugPrint('❌ Invalid certificate rejected for $host:$port');
-        debugPrint('   Subject: ${cert.subject}');
         return false;
       }
     };

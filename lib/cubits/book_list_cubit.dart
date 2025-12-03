@@ -42,9 +42,7 @@ class BookListCubit extends Cubit<BookListState> {
       final orderedBooks = _bookOrderService.applyOrder(books, savedOrder);
 
       emit(BookListLoaded(orderedBooks));
-      debugPrint('✅ BookListCubit: Loaded ${orderedBooks.length} books');
     } catch (e) {
-      debugPrint('❌ BookListCubit: Failed to load books: $e');
       emit(BookListError('Failed to load books: $e'));
     }
   }
@@ -68,10 +66,8 @@ class BookListCubit extends Cubit<BookListState> {
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Created book "${newBook.name}" (uuid: ${newBook.uuid})');
       return newBook;
     } catch (e) {
-      debugPrint('❌ BookListCubit: Failed to create book: $e');
       emit(BookListError('Failed to create book: $e'));
       return null;
     }
@@ -99,9 +95,7 @@ class BookListCubit extends Cubit<BookListState> {
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Updated book "${updatedBook.name}"');
     } catch (e) {
-      debugPrint('❌ BookListCubit: Failed to update book: $e');
       emit(BookListError('Failed to update book: $e'));
     }
   }
@@ -118,9 +112,7 @@ class BookListCubit extends Cubit<BookListState> {
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Archived book (uuid: $bookUuid)');
     } catch (e) {
-      debugPrint('❌ BookListCubit: Failed to archive book: $e');
       emit(BookListError('Failed to archive book: $e'));
     }
   }
@@ -137,9 +129,7 @@ class BookListCubit extends Cubit<BookListState> {
       // Reload books to update UI
       await loadBooks();
 
-      debugPrint('✅ BookListCubit: Deleted book (uuid: $bookUuid)');
     } catch (e) {
-      debugPrint('❌ BookListCubit: Failed to delete book: $e');
       emit(BookListError('Failed to delete book: $e'));
     }
   }
@@ -153,7 +143,6 @@ class BookListCubit extends Cubit<BookListState> {
   Future<void> reorderBooks(int oldIndex, int newIndex) async {
     final currentState = state;
     if (currentState is! BookListLoaded) {
-      debugPrint('⚠️ BookListCubit: Cannot reorder - state is not BookListLoaded');
       return;
     }
 
@@ -173,9 +162,7 @@ class BookListCubit extends Cubit<BookListState> {
     // Persist the new order
     try {
       await _bookOrderService.saveCurrentOrder(books);
-      debugPrint('✅ BookListCubit: Reordered books ($oldIndex → $newIndex)');
     } catch (e) {
-      debugPrint('❌ BookListCubit: Failed to save book order: $e');
       // Don't emit error - UI already updated, order just won't persist
     }
   }

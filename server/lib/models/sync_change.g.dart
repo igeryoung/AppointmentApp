@@ -8,7 +8,7 @@ part of 'sync_change.dart';
 
 SyncChange _$SyncChangeFromJson(Map<String, dynamic> json) => SyncChange(
   tableName: json['tableName'] as String,
-  recordId: (json['recordId'] as num).toInt(),
+  recordId: json['recordId'].toString(),
   operation: json['operation'] as String,
   data: json['data'] as Map<String, dynamic>,
   timestamp: DateTime.parse(json['timestamp'] as String),
@@ -41,7 +41,8 @@ Map<String, dynamic> _$SyncRequestToJson(SyncRequest instance) =>
       'deviceId': instance.deviceId,
       'deviceToken': instance.deviceToken,
       'lastSyncAt': instance.lastSyncAt?.toIso8601String(),
-      'localChanges': instance.localChanges,
+      'localChanges':
+          instance.localChanges?.map((e) => e.toJson()).toList(),
     };
 
 SyncResponse _$SyncResponseFromJson(Map<String, dynamic> json) => SyncResponse(
@@ -61,15 +62,17 @@ Map<String, dynamic> _$SyncResponseToJson(SyncResponse instance) =>
     <String, dynamic>{
       'success': instance.success,
       'message': instance.message,
-      'serverChanges': instance.serverChanges,
-      'conflicts': instance.conflicts,
+      'serverChanges':
+          instance.serverChanges?.map((e) => e.toJson()).toList(),
+      'conflicts':
+          instance.conflicts?.map((e) => e.toJson()).toList(),
       'serverTime': instance.serverTime.toIso8601String(),
       'changesApplied': instance.changesApplied,
     };
 
 SyncConflict _$SyncConflictFromJson(Map<String, dynamic> json) => SyncConflict(
   tableName: json['tableName'] as String,
-  recordId: (json['recordId'] as num).toInt(),
+  recordId: json['recordId'].toString(),
   localData: json['localData'] as Map<String, dynamic>,
   serverData: json['serverData'] as Map<String, dynamic>,
   localVersion: (json['localVersion'] as num).toInt(),
@@ -96,7 +99,7 @@ ConflictResolutionRequest _$ConflictResolutionRequestFromJson(
   deviceId: json['deviceId'] as String,
   deviceToken: json['deviceToken'] as String,
   tableName: json['tableName'] as String,
-  recordId: (json['recordId'] as num).toInt(),
+  recordId: json['recordId'].toString(),
   resolution: json['resolution'] as String,
   mergedData: json['mergedData'] as Map<String, dynamic>?,
 );

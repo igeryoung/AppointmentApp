@@ -193,7 +193,7 @@ class EventManagementService {
       onUpdateEvent(updatedEvent);
 
       // Sync to server in background (best effort)
-      onSyncEvent(updatedEvent);
+      await onSyncEvent(updatedEvent);
     } catch (e) {
       if (isMounted()) {
         onShowSnackbar(
@@ -597,7 +597,7 @@ class EventManagementService {
         onReloadEvents();
 
         // Sync to server in background (best effort, no error handling needed)
-        onSyncEvent(newEvent);
+        await onSyncEvent(newEvent);
 
         if (isMounted()) {
           onShowSnackbar(

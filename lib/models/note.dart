@@ -74,7 +74,7 @@ class Note {
   Note addPage() {
     return copyWith(
       pages: [...pages, []],
-      updatedAt: DateTime.now(),
+      updatedAt: DateTime.now().toUtc(),
     );
   }
 
@@ -84,7 +84,7 @@ class Note {
     updatedPages[pageIndex] = strokes;
     return copyWith(
       pages: updatedPages,
-      updatedAt: DateTime.now(),
+      updatedAt: DateTime.now().toUtc(),
     );
   }
 
@@ -99,7 +99,7 @@ class Note {
   @Deprecated('Use addPage and updatePageStrokes instead')
   Note addStroke(Stroke stroke) {
     if (pages.isEmpty) {
-      return copyWith(pages: [[stroke]], updatedAt: DateTime.now());
+      return copyWith(pages: [[stroke]], updatedAt: DateTime.now().toUtc());
     }
     final firstPage = List<Stroke>.from(pages[0]);
     firstPage.add(stroke);
@@ -138,15 +138,16 @@ class Note {
     // Handle both camelCase (from server API) and snake_case (from local DB)
     List<List<Stroke>> pages = [];
 
-    // Parse timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
+    // Parse system timestamps - handle both ISO strings (from server) and Unix seconds (from local DB)
+    // Notes don't have user-selected times, only system-generated timestamps (createdAt, updatedAt)
     DateTime? parseTimestamp(dynamic value, {required DateTime? fallback}) {
       if (value == null) return fallback;
       if (value is String) {
-        // ISO 8601 string from server
-        return DateTime.parse(value);
+        // ISO 8601 string from server - ensure UTC
+        return DateTime.parse(value).toUtc();
       } else if (value is int) {
-        // Unix seconds from local DB
-        return DateTime.fromMillisecondsSinceEpoch(value * 1000);
+        // Unix seconds from local DB - interpret as UTC
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
       }
       return fallback;
     }

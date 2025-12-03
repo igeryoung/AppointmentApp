@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../database/connection.dart';
 
 /// Result of note operation that may have version conflict
@@ -119,7 +121,7 @@ class NoteService {
     try {
       final row = await db.querySingle(
         '''
-        SELECT id, event_id, strokes_data, created_at, updated_at, version
+        SELECT id, event_id, pages_data, created_at, updated_at, version
         FROM notes
         WHERE event_id = @eventId AND is_deleted = false
         ''',
@@ -317,7 +319,7 @@ class NoteService {
       // Join through events -> books to verify ownership
       final rows = await db.queryRows(
         '''
-        SELECT n.id, n.event_id, n.strokes_data, n.created_at, n.updated_at, n.version
+        SELECT n.id, n.event_id, n.pages_data, n.created_at, n.updated_at, n.version
         FROM notes n
         INNER JOIN events e ON n.event_id = e.id
         INNER JOIN books b ON e.book_id = b.id
@@ -397,39 +399,30 @@ class NoteService {
       }
 
       // Parse timestamps (client sends Unix seconds)
-      final startTime = eventData['start_time'] is int
-          ? DateTime.fromMillisecondsSinceEpoch((eventData['start_time'] as int) * 1000)
-          : eventData['start_time'] as DateTime;
+      final startTime = _parseTimestamp(eventData['start_time']);
+      if (startTime == null) {
+        throw ArgumentError('Event data must include start_time');
+      }
 
-      final endTime = eventData['end_time'] != null
-          ? (eventData['end_time'] is int
-              ? DateTime.fromMillisecondsSinceEpoch((eventData['end_time'] as int) * 1000)
-              : eventData['end_time'] as DateTime)
-          : null;
+      final endTime = _parseTimestamp(eventData['end_time']);
+      final createdAt = _parseTimestamp(eventData['created_at']) ?? DateTime.now();
+      final updatedAt = _parseTimestamp(eventData['updated_at']) ?? DateTime.now();
 
-      final createdAt = eventData['created_at'] != null
-          ? (eventData['created_at'] is int
-              ? DateTime.fromMillisecondsSinceEpoch((eventData['created_at'] as int) * 1000)
-              : eventData['created_at'] as DateTime)
-          : DateTime.now();
-
-      final updatedAt = eventData['updated_at'] != null
-          ? (eventData['updated_at'] is int
-              ? DateTime.fromMillisecondsSinceEpoch((eventData['updated_at'] as int) * 1000)
-              : eventData['updated_at'] as DateTime)
-          : DateTime.now();
+      final eventTypes = _parseEventTypes(eventData);
+      final eventTypesJson = jsonEncode(eventTypes);
+      final primaryEventType = eventTypes.first;
 
       // Insert event with client-provided ID
       await db.query(
         '''
         INSERT INTO events (
-          id, book_uuid, device_id, name, record_number, event_type,
-          start_time, end_time, created_at, updated_at,
+          id, book_uuid, device_id, name, record_number, phone, event_type, event_types,
+          has_charge_items, start_time, end_time, created_at, updated_at,
           is_removed, removal_reason, original_event_id, new_event_id,
           synced_at, version, is_deleted
         ) VALUES (
-          @id, @bookUuid, @deviceId, @name, @recordNumber, @eventType,
-          @startTime, @endTime, @createdAt, @updatedAt,
+          @id, @bookUuid, @deviceId, @name, @recordNumber, @phone, @eventType, @eventTypes,
+          @hasChargeItems, @startTime, @endTime, @createdAt, @updatedAt,
           @isRemoved, @removalReason, @originalEventId, @newEventId,
           CURRENT_TIMESTAMP, 1, false
         )
@@ -440,7 +433,10 @@ class NoteService {
           'deviceId': deviceId,
           'name': eventData['name'] ?? '',
           'recordNumber': eventData['record_number'],
-          'eventType': eventData['event_type'] ?? '',
+          'phone': _normalizePhone(eventData['phone']),
+          'eventType': primaryEventType,
+          'eventTypes': eventTypesJson,
+          'hasChargeItems': eventData['has_charge_items'] == 1 || eventData['has_charge_items'] == true,
           'startTime': startTime,
           'endTime': endTime,
           'createdAt': createdAt,
@@ -457,5 +453,168 @@ class NoteService {
       print('❌ Create event failed: $e');
       rethrow;
     }
+  }
+
+  /// Update event metadata when eventData is provided during note sync
+  Future<void> updateEventMetadata({
+    required Map<String, dynamic> eventData,
+    required String bookUuid,
+  }) async {
+    final eventId = eventData['id'] as String?;
+    if (eventId == null || eventId.isEmpty) {
+      throw ArgumentError('Event data must include id (UUID)');
+    }
+
+    final resolvedBookUuid = (eventData['book_uuid'] as String?) ?? bookUuid;
+    final startTime = _parseTimestamp(eventData['start_time']);
+    if (startTime == null) {
+      throw ArgumentError('Event data must include start_time');
+    }
+
+    final endTime = _parseTimestamp(eventData['end_time']);
+    final updatedAt = _parseTimestamp(eventData['updated_at']) ?? DateTime.now();
+    final eventTypes = _parseEventTypes(eventData);
+    final primaryEventType = eventTypes.isNotEmpty ? eventTypes.first : 'other';
+    final eventTypesJson = jsonEncode(eventTypes);
+
+    final parameters = {
+      'id': eventId,
+      'bookUuid': resolvedBookUuid,
+      'name': eventData['name']?.toString().trim() ?? '',
+      'recordNumber': _normalizeNullableString(eventData['record_number']),
+      'phone': _normalizePhone(eventData['phone']),
+      'eventType': primaryEventType,
+      'eventTypes': eventTypesJson,
+      'hasChargeItems': _toBool(eventData['has_charge_items']),
+      'startTime': startTime,
+      'endTime': endTime,
+      'updatedAt': updatedAt,
+      'isRemoved': _toBool(eventData['is_removed']),
+      'removalReason': _normalizeNullableString(eventData['removal_reason']),
+      'originalEventId': _normalizeNullableString(eventData['original_event_id']),
+      'newEventId': _normalizeNullableString(eventData['new_event_id']),
+      'isChecked': _toBool(eventData['is_checked']),
+      'version': _toInt(eventData['version']) ?? 1,
+    };
+
+    await db.query(
+      '''
+      UPDATE events
+      SET
+        name = @name,
+        record_number = @recordNumber,
+        phone = @phone,
+        event_type = @eventType,
+        event_types = @eventTypes,
+        has_charge_items = @hasChargeItems,
+        start_time = @startTime,
+        end_time = @endTime,
+        updated_at = @updatedAt,
+        is_removed = @isRemoved,
+        removal_reason = @removalReason,
+        original_event_id = @originalEventId,
+        new_event_id = @newEventId,
+        is_checked = @isChecked,
+        version = @version,
+        synced_at = CURRENT_TIMESTAMP,
+        is_deleted = false
+      WHERE id = @id AND book_uuid = @bookUuid
+      ''',
+      parameters: parameters,
+    );
+
+    print('✅ Event metadata updated via note sync: id=$eventId');
+  }
+
+  List<String> _parseEventTypes(Map<String, dynamic> eventData) {
+    final parsed = _decodeEventTypes(eventData['event_types']);
+    if (parsed.isNotEmpty) {
+      return parsed;
+    }
+
+    final legacyValue = eventData['event_type'];
+    if (legacyValue != null) {
+      final legacyType = legacyValue.toString().trim();
+      if (legacyType.isNotEmpty) {
+        return [legacyType];
+      }
+    }
+
+    return const ['other'];
+  }
+
+  List<String> _decodeEventTypes(dynamic rawValue) {
+    if (rawValue == null) return const [];
+
+    try {
+      List<dynamic> rawList;
+      if (rawValue is List) {
+        rawList = rawValue;
+      } else if (rawValue is String) {
+        final trimmed = rawValue.trim();
+        if (trimmed.isEmpty) return const [];
+        final decoded = jsonDecode(trimmed);
+        if (decoded is List) {
+          rawList = decoded;
+        } else {
+          rawList = [decoded];
+        }
+      } else {
+        rawList = [rawValue];
+      }
+
+      final cleaned = rawList
+          .map((value) => value == null ? null : value.toString().trim())
+          .where((value) => value != null && value!.isNotEmpty)
+          .map((value) => value!)
+          .toList();
+
+      cleaned.sort((a, b) => a.compareTo(b));
+      return cleaned;
+    } catch (e) {
+      print('⚠️  Failed to decode event_types payload: $e');
+      return const [];
+    }
+  }
+
+  String? _normalizePhone(dynamic value) {
+    if (value == null) return null;
+    final trimmed = value.toString().trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  String? _normalizeNullableString(dynamic value) {
+    if (value == null) return null;
+    final trimmed = value.toString().trim();
+    return trimmed.isEmpty ? null : trimmed;
+  }
+
+  bool _toBool(dynamic value) {
+    if (value == null) return false;
+    if (value is bool) return value;
+    if (value is num) return value != 0;
+    final normalized = value.toString().trim().toLowerCase();
+    return normalized == 'true' || normalized == '1';
+  }
+
+  int? _toInt(dynamic value) {
+    if (value == null) return null;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString());
+  }
+
+  DateTime? _parseTimestamp(dynamic value) {
+    if (value == null) return null;
+    if (value is DateTime) return value.toUtc();
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+    }
+    if (value is String && value.isNotEmpty) {
+      final parsed = DateTime.tryParse(value);
+      if (parsed == null) return null;
+      return parsed.isUtc ? parsed : parsed.toUtc();
+    }
+    return null;
   }
 }
