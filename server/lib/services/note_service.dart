@@ -68,26 +68,68 @@ class NoteService {
   /// bookUuid: UUID string of the book
   Future<bool> verifyBookOwnership(String deviceId, String bookUuid) async {
     try {
+      // Allow access if the device owns the book OR has an entry in book_device_access
       final row = await db.querySingle(
-        'SELECT book_uuid FROM books WHERE book_uuid = @bookUuid AND device_id = @deviceId AND is_deleted = false',
+        '''
+        SELECT b.book_uuid
+        FROM books b
+        LEFT JOIN book_device_access a
+          ON a.book_uuid = b.book_uuid AND a.device_id = @deviceId
+        WHERE b.book_uuid = @bookUuid
+          AND b.is_deleted = false
+          AND (b.device_id = @deviceId OR a.device_id IS NOT NULL)
+        ''',
         parameters: {'bookUuid': bookUuid, 'deviceId': deviceId},
       );
 
-      if (row == null) {
-        // Check if book exists but with different device_id
-        final anyBook = await db.querySingle(
-          'SELECT device_id, is_deleted FROM books WHERE book_uuid = @bookUuid',
-          parameters: {'bookUuid': bookUuid},
-        );
-
-        if (anyBook != null) {
-          print('⚠️  Book ownership mismatch: bookUuid=$bookUuid, expected deviceId=$deviceId, actual deviceId=${anyBook['device_id']}, is_deleted=${anyBook['is_deleted']}');
-        } else {
-          print('⚠️  Book not found: bookUuid=$bookUuid');
-        }
+      if (row != null) {
+        return true;
       }
 
-      return row != null;
+      // Extra diagnostics to understand why access failed
+      final bookRow = await db.querySingle(
+        'SELECT device_id, is_deleted FROM books WHERE book_uuid = @bookUuid',
+        parameters: {'bookUuid': bookUuid},
+      );
+      final accessRow = await db.querySingle(
+        'SELECT access_type FROM book_device_access WHERE book_uuid = @bookUuid AND device_id = @deviceId',
+        parameters: {'bookUuid': bookUuid, 'deviceId': deviceId},
+      );
+
+      if (bookRow == null) {
+        print('⚠️  Book not found: bookUuid=$bookUuid');
+        return false;
+      }
+
+      if (bookRow['is_deleted'] == true) {
+        print('⚠️  Book is deleted: bookUuid=$bookUuid, ownerDeviceId=${bookRow['device_id']}');
+        return false;
+      }
+
+      if (accessRow != null) {
+        print('⚠️  Book access exists but verification failed: bookUuid=$bookUuid, deviceId=$deviceId, ownerDeviceId=${bookRow['device_id']}, accessType=${accessRow['access_type']}');
+        return false;
+      }
+
+      // The book exists and is active but this device is not yet recorded as having access.
+      // If the device knows the book UUID (e.g., after pulling), grant access lazily.
+      try {
+        await db.query(
+          '''
+          INSERT INTO book_device_access (book_uuid, device_id, access_type, created_at)
+          VALUES (@bookUuid, @deviceId, 'pulled', CURRENT_TIMESTAMP)
+          ON CONFLICT (book_uuid, device_id) DO NOTHING
+          ''',
+          parameters: {'bookUuid': bookUuid, 'deviceId': deviceId},
+        );
+        print('🔓 Granted book access on-demand: bookUuid=$bookUuid, deviceId=$deviceId, ownerDeviceId=${bookRow['device_id']}');
+        return true;
+      } catch (grantError) {
+        print('⚠️  Failed to grant book access on-demand: $grantError');
+      }
+
+      print('⚠️  Book ownership mismatch: bookUuid=$bookUuid, expected deviceId=$deviceId, actual deviceId=${bookRow['device_id']}, is_deleted=${bookRow['is_deleted']}');
+      return false;
     } catch (e) {
       print('❌ Book ownership verification failed: $e');
       return false;
