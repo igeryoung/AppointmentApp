@@ -10,6 +10,7 @@ import '../../../widgets/schedule/schedule_next_appointment_dialog.dart';
 import '../dialogs/change_event_type_dialog.dart';
 import '../../event_detail_screen.dart';
 import '../../../constants/change_reasons.dart';
+import '../../../utils/event_time_validator.dart';
 import 'schedule_date_service.dart';
 
 /// Service for managing event CRUD operations, context menu interactions,
@@ -482,6 +483,44 @@ class EventManagementService {
         event.startTime.minute == newStartTime.minute) {
       closeEventMenu();
       return;
+    }
+
+    // Validate new start time is within business hours (9:00-21:00)
+    final startTimeError = EventTimeValidator.validateStartTime(newStartTime);
+    if (startTimeError != null) {
+      onShowSnackbar(startTimeError, backgroundColor: Colors.orange);
+      closeEventMenu();
+      return;
+    }
+
+    // Calculate new end time if original event had one, and validate
+    DateTime? potentialNewEndTime;
+    if (event.endTime != null) {
+      final duration = event.endTime!.difference(event.startTime);
+      potentialNewEndTime = newStartTime.add(duration);
+
+      // Validate the new end time
+      final endTimeError = EventTimeValidator.validateEndTime(potentialNewEndTime);
+      if (endTimeError != null) {
+        final endHour = potentialNewEndTime.hour.toString().padLeft(2, '0');
+        final endMin = potentialNewEndTime.minute.toString().padLeft(2, '0');
+        onShowSnackbar(
+          'Cannot move: end time would be $endHour:$endMin (exceeds 21:00)',
+          backgroundColor: Colors.orange,
+        );
+        closeEventMenu();
+        return;
+      }
+
+      // Validate same day
+      if (!EventTimeValidator.isSameDay(newStartTime, potentialNewEndTime)) {
+        onShowSnackbar(
+          'Events cannot span across dates',
+          backgroundColor: Colors.orange,
+        );
+        closeEventMenu();
+        return;
+      }
     }
 
     final l10n = AppLocalizations.of(context)!;

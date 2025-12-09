@@ -5,6 +5,7 @@ import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/service_locator.dart';
 import '../../utils/datetime_picker_utils.dart';
+import '../../utils/event_time_validator.dart';
 import '../../widgets/handwriting_canvas.dart';
 import 'event_detail_controller.dart';
 import 'event_detail_state.dart';
@@ -417,19 +418,53 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final result = await DateTimePickerUtils.pickDateTime(
       context,
       initialDateTime: _controller.state.startTime,
+      validateBusinessHours: true,
+      isEndTime: false,
     );
 
     if (result == null) return;
 
     _controller.updateStartTime(result);
+
+    // If end time exists and is now invalid (before start or exceeds 21:00), clear it
+    final currentEndTime = _controller.state.endTime;
+    if (currentEndTime != null) {
+      final error = EventTimeValidator.validateTimeRange(result, currentEndTime);
+      if (error != null) {
+        _controller.clearEndTime();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('End time cleared: $error'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
+      }
+    }
   }
 
   Future<void> _selectEndTime() async {
+    final startTime = _controller.state.startTime;
+    final currentEndTime = _controller.state.endTime ?? startTime.add(const Duration(minutes: 30));
+
+    // Ensure initial value is on same day as start time
+    final adjustedInitial = DateTime(
+      startTime.year,
+      startTime.month,
+      startTime.day,
+      currentEndTime.hour,
+      currentEndTime.minute,
+    );
+
     final result = await DateTimePickerUtils.pickDateTime(
       context,
-      initialDateTime: _controller.state.endTime ?? _controller.state.startTime,
-      firstDate: _controller.state.startTime,
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      initialDateTime: adjustedInitial,
+      firstDate: startTime,
+      lastDate: EventTimeValidator.getLatestEndTime(startTime),
+      validateBusinessHours: true,
+      isEndTime: true,
+      referenceStartTime: startTime,
     );
 
     if (result == null) return;

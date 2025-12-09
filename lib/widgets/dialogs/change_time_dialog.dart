@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:intl/intl.dart';
 import '../../l10n/app_localizations.dart';
 import '../../utils/datetime_picker_utils.dart';
+import '../../utils/event_time_validator.dart';
 import '../../constants/change_reasons.dart';
 
 /// Result class for change time dialog
@@ -62,6 +63,10 @@ class ChangeTimeDialog {
               ));
             }
 
+            // Validate time range
+            final timeError = EventTimeValidator.validateTimeRange(newStartTime, calculatedEndTime);
+            final bool hasValidTime = timeError == null;
+
             return AlertDialog(
               title: Text(
                 l10n.changeEventTimeTitle,
@@ -107,11 +112,20 @@ class ChangeTimeDialog {
                               final result = await DateTimePickerUtils.pickDateTime(
                                 context,
                                 initialDateTime: newStartTime,
+                                validateBusinessHours: true,
+                                isEndTime: false,
                               );
                               if (result == null) return;
 
                               setState(() {
                                 newStartTime = result;
+                                // Adjust duration if it would exceed end of day
+                                final maxMinutes = EventTimeValidator.getMaxDurationMinutes(result);
+                                final currentDurationMinutes = durationHours * 60 + durationMinutes;
+                                if (currentDurationMinutes > maxMinutes) {
+                                  durationHours = maxMinutes ~/ 60;
+                                  durationMinutes = ((maxMinutes % 60) ~/ 15) * 15;
+                                }
                               });
                             },
                             borderRadius: BorderRadius.circular(8),
@@ -162,114 +176,138 @@ class ChangeTimeDialog {
                           ),
                           const SizedBox(height: 12),
                           // Inline Duration Spinners
-                          Container(
-                            height: 150,
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[300]!),
-                            ),
-                            child: Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                // Hours picker
-                                Expanded(
-                                  flex: 2,
-                                  child: CupertinoPicker(
-                                    scrollController: FixedExtentScrollController(initialItem: durationHours),
-                                    itemExtent: 36,
-                                    squeeze: 1.2,
-                                    diameterRatio: 1.5,
-                                    onSelectedItemChanged: (int index) {
-                                      setState(() {
-                                        durationHours = index;
-                                      });
-                                    },
-                                    selectionOverlay: Container(
-                                      decoration: BoxDecoration(
-                                        border: Border.symmetric(
-                                          horizontal: BorderSide(
-                                            color: Colors.orange[200]!,
-                                            width: 1.5,
+                          Builder(
+                            builder: (context) {
+                              // Calculate max duration based on start time
+                              final maxDurationMinutes = EventTimeValidator.getMaxDurationMinutes(newStartTime);
+                              final maxHours = maxDurationMinutes ~/ 60;
+
+                              // Clamp current selection to valid range
+                              final clampedHours = durationHours.clamp(0, maxHours);
+
+                              // Calculate available minutes for the selected hours
+                              final isAtMaxHours = clampedHours == maxHours;
+                              final maxMinutesForHour = isAtMaxHours
+                                  ? ((maxDurationMinutes % 60) ~/ 15) * 15
+                                  : 45;
+                              final availableMinutes = [0, 15, 30, 45]
+                                  .where((m) => m <= maxMinutesForHour)
+                                  .toList();
+
+                              return Container(
+                                height: 150,
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: Colors.grey[300]!),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    // Hours picker - dynamically limited
+                                    Expanded(
+                                      flex: 2,
+                                      child: CupertinoPicker(
+                                        scrollController: FixedExtentScrollController(initialItem: clampedHours),
+                                        itemExtent: 36,
+                                        squeeze: 1.2,
+                                        diameterRatio: 1.5,
+                                        onSelectedItemChanged: (int index) {
+                                          setState(() {
+                                            durationHours = index;
+                                            // If at max hours, clamp minutes
+                                            if (index == maxHours && durationMinutes > maxMinutesForHour) {
+                                              durationMinutes = maxMinutesForHour;
+                                            }
+                                          });
+                                        },
+                                        selectionOverlay: Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.symmetric(
+                                              horizontal: BorderSide(
+                                                color: Colors.orange[200]!,
+                                                width: 1.5,
+                                              ),
+                                            ),
                                           ),
+                                        ),
+                                        children: List<Widget>.generate(maxHours + 1, (int index) {
+                                          return Center(
+                                            child: Text(
+                                              '$index',
+                                              style: const TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                            ),
+                                          );
+                                        }),
+                                      ),
+                                    ),
+                                    Padding(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      child: Text(
+                                        'hours',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[700],
                                         ),
                                       ),
                                     ),
-                                    children: List<Widget>.generate(13, (int index) {
-                                      return Center(
-                                        child: Text(
-                                          '$index',
-                                          style: const TextStyle(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w400,
+                                    // Minutes picker - limited based on selected hours
+                                    Expanded(
+                                      flex: 2,
+                                      child: CupertinoPicker(
+                                        scrollController: FixedExtentScrollController(
+                                          initialItem: availableMinutes.indexOf(durationMinutes.clamp(0, maxMinutesForHour)).clamp(0, availableMinutes.length - 1),
+                                        ),
+                                        itemExtent: 36,
+                                        squeeze: 1.2,
+                                        diameterRatio: 1.5,
+                                        onSelectedItemChanged: (int index) {
+                                          setState(() {
+                                            durationMinutes = availableMinutes[index];
+                                          });
+                                        },
+                                        selectionOverlay: Container(
+                                          decoration: BoxDecoration(
+                                            border: Border.symmetric(
+                                              horizontal: BorderSide(
+                                                color: Colors.orange[200]!,
+                                                width: 1.5,
+                                              ),
+                                            ),
                                           ),
                                         ),
-                                      );
-                                    }),
-                                  ),
-                                ),
-                                Padding(
-                                  padding: const EdgeInsets.symmetric(horizontal: 8),
-                                  child: Text(
-                                    'hours',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey[700],
+                                        children: availableMinutes.map((int minute) {
+                                          return Center(
+                                            child: Text(
+                                              '$minute',
+                                              style: const TextStyle(
+                                                fontSize: 24,
+                                                fontWeight: FontWeight.w400,
+                                              ),
+                                            ),
+                                          );
+                                        }).toList(),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                // Minutes picker (0, 15, 30, 45)
-                                Expanded(
-                                  flex: 2,
-                                  child: CupertinoPicker(
-                                    scrollController: FixedExtentScrollController(
-                                      initialItem: [0, 15, 30, 45].indexOf(durationMinutes).clamp(0, 3),
-                                    ),
-                                    itemExtent: 36,
-                                    squeeze: 1.2,
-                                    diameterRatio: 1.5,
-                                    onSelectedItemChanged: (int index) {
-                                      setState(() {
-                                        durationMinutes = [0, 15, 30, 45][index];
-                                      });
-                                    },
-                                    selectionOverlay: Container(
-                                      decoration: BoxDecoration(
-                                        border: Border.symmetric(
-                                          horizontal: BorderSide(
-                                            color: Colors.orange[200]!,
-                                            width: 1.5,
-                                          ),
+                                    Padding(
+                                      padding: const EdgeInsets.only(right: 16, left: 8),
+                                      child: Text(
+                                        'min',
+                                        style: TextStyle(
+                                          fontSize: 14,
+                                          fontWeight: FontWeight.w500,
+                                          color: Colors.grey[700],
                                         ),
                                       ),
                                     ),
-                                    children: [0, 15, 30, 45].map((int minute) {
-                                      return Center(
-                                        child: Text(
-                                          '$minute',
-                                          style: const TextStyle(
-                                            fontSize: 24,
-                                            fontWeight: FontWeight.w400,
-                                          ),
-                                        ),
-                                      );
-                                    }).toList(),
-                                  ),
+                                  ],
                                 ),
-                                Padding(
-                                  padding: const EdgeInsets.only(right: 16, left: 8),
-                                  child: Text(
-                                    'min',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.w500,
-                                      color: Colors.grey[700],
-                                    ),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              );
+                            },
                           ),
 
                           const SizedBox(height: 16),
@@ -294,7 +332,9 @@ class ChangeTimeDialog {
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: Colors.grey[300]!),
+                              border: Border.all(
+                                color: timeError != null ? Colors.red : Colors.grey[300]!,
+                              ),
                             ),
                             child: Text(
                               calculatedEndTime != null
@@ -307,6 +347,17 @@ class ChangeTimeDialog {
                               ),
                             ),
                           ),
+                          // Show time error if any
+                          if (timeError != null) ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              timeError,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: Colors.red[700],
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
@@ -411,7 +462,7 @@ class ChangeTimeDialog {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: hasValidReason ? () {
+                  onPressed: (hasValidReason && hasValidTime) ? () {
                     // Validation
                     if (selectedReason == null) {
                       setState(() {
