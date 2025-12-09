@@ -42,6 +42,43 @@ class ApiClient {
     }
   }
 
+  /// Fetch person data by record number from server
+  /// Returns person info including name and latest note
+  Future<Map<String, dynamic>?> fetchPersonByRecordNumber({
+    required String bookUuid,
+    required String recordNumber,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      // URL encode the record number in case it contains special characters
+      final encodedRecordNumber = Uri.encodeComponent(recordNumber);
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/books/$bookUuid/persons/$encodedRecordNumber'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['person'] as Map<String, dynamic>?;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw ApiException(
+          'Fetch person failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Fetch event metadata from server
   Future<Map<String, dynamic>?> fetchEvent({
     required String bookUuid,

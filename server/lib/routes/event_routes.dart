@@ -12,7 +12,8 @@ class EventRoutes {
 
   EventRoutes(this.db) : _noteService = NoteService(db) {
     bookScopedRouter = Router()
-      ..get('/<bookUuid>/events/<eventId>', _getEventDetail);
+      ..get('/<bookUuid>/events/<eventId>', _getEventDetail)
+      ..get('/<bookUuid>/persons/<recordNumber>', _getPersonByRecordNumber);
   }
 
   Future<Response> _getEventDetail(Request request, String bookUuid, String eventId) async {
@@ -108,6 +109,137 @@ class EventRoutes {
         body: jsonEncode({
           'success': false,
           'message': 'Failed to load event: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  /// Get person data by record number (name and latest note)
+  Future<Response> _getPersonByRecordNumber(Request request, String bookUuid, String recordNumber) async {
+    try {
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
+
+      if (deviceId == null || deviceToken == null) {
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Verify device and book ownership
+      if (!await _noteService.verifyDeviceAccess(deviceId, deviceToken)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Invalid device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (!await _noteService.verifyBookOwnership(deviceId, bookUuid)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Unauthorized access to book',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      // Decode record number (may be URL encoded)
+      final decodedRecordNumber = Uri.decodeComponent(recordNumber);
+
+      // Get the latest event with this record number to get the name
+      final eventRow = await db.querySingle(
+        '''
+        SELECT name, record_number
+        FROM events
+        WHERE book_uuid = @bookUuid
+          AND LOWER(TRIM(record_number)) = LOWER(TRIM(@recordNumber))
+          AND is_deleted = false
+          AND is_removed = false
+        ORDER BY updated_at DESC
+        LIMIT 1
+        ''',
+        parameters: {
+          'bookUuid': bookUuid,
+          'recordNumber': decodedRecordNumber,
+        },
+      );
+
+      if (eventRow == null) {
+        return Response.notFound(
+          jsonEncode({
+            'success': false,
+            'message': 'Person not found with this record number',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final name = eventRow['name'] as String;
+      final nameNormalized = name.trim().toLowerCase();
+      final recordNumberNormalized = decodedRecordNumber.trim().toLowerCase();
+
+      // Get the latest note for this person (using normalized person key)
+      final noteRow = await db.querySingle(
+        '''
+        SELECT
+          n.id,
+          n.event_id,
+          n.strokes_data,
+          n.created_at,
+          n.updated_at,
+          n.version
+        FROM notes n
+        WHERE n.person_name_normalized = @nameNormalized
+          AND n.record_number_normalized = @recordNumberNormalized
+          AND n.is_deleted = false
+        ORDER BY n.updated_at DESC
+        LIMIT 1
+        ''',
+        parameters: {
+          'nameNormalized': nameNormalized,
+          'recordNumberNormalized': recordNumberNormalized,
+        },
+      );
+
+      Map<String, dynamic>? noteJson;
+      if (noteRow != null) {
+        noteJson = {
+          'id': noteRow['id'],
+          'event_id': noteRow['event_id'],
+          'strokes_data': noteRow['strokes_data'],
+          'created_at': noteRow['created_at']?.toString(),
+          'updated_at': noteRow['updated_at']?.toString(),
+          'version': noteRow['version'],
+        };
+      }
+
+      return Response.ok(
+        jsonEncode({
+          'success': true,
+          'person': {
+            'name': name,
+            'recordNumber': eventRow['record_number'],
+            'latestNote': noteJson,
+          },
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      print('❌ GET person by record number failed: $e');
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to load person data: $e',
         }),
         headers: {'Content-Type': 'application/json'},
       );

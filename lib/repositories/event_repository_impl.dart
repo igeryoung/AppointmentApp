@@ -1,4 +1,5 @@
 import 'package:sqflite/sqflite.dart';
+import 'package:uuid/uuid.dart';
 import '../models/event.dart';
 import '../models/note.dart';
 import 'event_repository.dart';
@@ -7,6 +8,7 @@ import 'base_repository.dart';
 /// Implementation of EventRepository using SQLite
 class EventRepositoryImpl extends BaseRepository<Event, String> implements IEventRepository {
   final Future<Note?> Function(String eventId) _getCachedNoteFn;
+  final _uuid = const Uuid();
 
   EventRepositoryImpl(Future<Database> Function() getDatabaseFn, this._getCachedNoteFn)
       : super(getDatabaseFn);
@@ -193,9 +195,12 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     // First, soft remove the original event
     await removeEvent(originalEvent.id!, reason.trim());
 
+    // Generate UUID for new event
+    final newEventId = _uuid.v4();
+
     // Create a new event with the new time but same metadata
     final newEvent = originalEvent.copyWith(
-      id: null, // Will be auto-generated
+      id: newEventId,
       startTime: newStartTime,
       endTime: newEndTime,
       originalEventId: originalEvent.id,
@@ -204,12 +209,11 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
       updatedAt: now,
     );
 
-    // Insert the new event (UUID already set)
+    // Insert the new event
     final newEventMap = toMap(newEvent);
     newEventMap['is_dirty'] = 1; // Mark as dirty to trigger server sync
     await db.insert('events', newEventMap);
     final createdEvent = newEvent;
-    final newEventId = newEvent.id!;
 
     // Update the original event to point to the new event
     await db.update(

@@ -307,8 +307,9 @@ class EventDetailController {
             _updateState(_state.copyWith(
               note: existingNote,
               lastKnownPages: existingNote.pages,
-              isLoading: false,
             ));
+            // Still sync to server even when using existing note
+            await saveNoteWithOfflineFirst(savedEvent.id!, existingNote.pages);
             return savedEvent;
           }
         }
@@ -326,8 +327,8 @@ class EventDetailController {
               note: syncedNote,
               lastKnownPages: syncedNote.pages,
             ));
-            // Return early - we don't need to save the note again since it was synced
-            _updateState(_state.copyWith(isLoading: false));
+            // Still sync to server even when using synced note
+            await saveNoteWithOfflineFirst(savedEvent.id!, syncedNote.pages);
             return savedEvent;
           }
         }
@@ -809,38 +810,98 @@ class EventDetailController {
     }
   }
 
-  /// Handle record number selected - auto-fill name and set read-only
+  /// Handle record number selected - auto-fill name, phone, and note
+  /// Tries to fetch from server first, falls back to local database
   Future<void> onRecordNumberSelected(String recordNumber) async {
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    final name = await prdDb.getNameByRecordNumber(event.bookUuid, recordNumber);
+    String? name;
+    Note? serverNote;
 
-    if (name != null && name.isNotEmpty) {
-      _updateState(_state.copyWith(
-        name: name,
-        recordNumber: recordNumber,
-        isNameReadOnly: true,
-        hasChanges: true,
-      ));
-
-      // Load associated data (charge items, phone, and handwritten note)
-      loadChargeItems().catchError((e) {
-      });
-
-      // Load existing person note if it exists
+    // Step 1: Try to fetch person data from server (name + note)
+    if (_contentService != null) {
       try {
-        final existingNote = await prdDb.findExistingPersonNote(name, recordNumber);
-        if (existingNote != null && existingNote.isNotEmpty) {
-          final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-          loadExistingPersonNote(existingNote);
-        } else {
+        final credentials = await prdDb.getDeviceCredentials();
+        if (credentials != null) {
+          final apiClient = ApiClient(baseUrl: await _getServerUrl());
+          final personData = await apiClient.fetchPersonByRecordNumber(
+            bookUuid: event.bookUuid,
+            recordNumber: recordNumber,
+            deviceId: credentials.deviceId,
+            deviceToken: credentials.deviceToken,
+          );
+
+          if (personData != null) {
+            name = personData['name'] as String?;
+
+            // Parse server note if available
+            final latestNote = personData['latestNote'] as Map<String, dynamic>?;
+            if (latestNote != null && latestNote['strokes_data'] != null) {
+              serverNote = Note.fromMap(latestNote);
+            }
+          }
         }
       } catch (e) {
+        // Server fetch failed, will fallback to local database
       }
     }
+
+    // Step 2: Fallback to local database if server didn't return name
+    if (name == null || name.isEmpty) {
+      name = await prdDb.getNameByRecordNumber(event.bookUuid, recordNumber);
+    }
+
+    if (name == null || name.isEmpty) {
+      return; // No person found with this record number
+    }
+
+    // Step 3: Fetch phone number from local person_info table
+    final nameNorm = PersonInfoUtilitiesMixin.normalizePersonKey(name);
+    final recordNorm = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
+    final phone = await prdDb.getPersonPhone(
+      personNameNormalized: nameNorm,
+      recordNumberNormalized: recordNorm,
+    );
+
+    // Step 4: Update state with name, record number, and phone
+    _updateState(_state.copyWith(
+      name: name,
+      recordNumber: recordNumber,
+      phone: phone ?? '',
+      isNameReadOnly: true,
+      hasChanges: true,
+    ));
+
+    // Step 5: Load associated charge items
+    loadChargeItems().catchError((e) {
+    });
+
+    // Step 6: Load person note (prefer server version, fallback to local)
+    try {
+      Note? noteToLoad = serverNote;
+
+      // If no server note, try local database
+      if (noteToLoad == null || noteToLoad.isEmpty) {
+        noteToLoad = await prdDb.findExistingPersonNote(name, recordNumber);
+      }
+
+      if (noteToLoad != null && noteToLoad.isNotEmpty) {
+        loadExistingPersonNote(noteToLoad);
+      }
+    } catch (e) {
+    }
+  }
+
+  /// Get server URL from config
+  Future<String> _getServerUrl() async {
+    final prdDb = _dbService as PRDDatabaseService;
+    final serverConfig = ServerConfigService(prdDb);
+    return await serverConfig.getServerUrlOrDefault(
+      defaultUrl: 'http://localhost:8080',
+    );
   }
 
   /// Handle name selected from autocomplete - set editable mode
