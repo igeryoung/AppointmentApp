@@ -6,6 +6,7 @@ import { TodayOverview } from './pages/TodayOverview';
 import { Books } from './pages/Books';
 import { EventsAndNotes } from './pages/EventsAndNotes';
 import { EventDetail } from './pages/EventDetail';
+import { Devices } from './pages/Devices';
 import { dashboardAPI } from './services/api';
 import './styles/index.css';
 
@@ -62,7 +63,7 @@ function App() {
           element={
             <ProtectedRoute>
               <DashboardLayout>
-                <PlaceholderPage title="Devices" />
+                <Devices />
               </DashboardLayout>
             </ProtectedRoute>
           }
