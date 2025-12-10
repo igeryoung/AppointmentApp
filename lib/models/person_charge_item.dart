@@ -12,7 +12,6 @@ class PersonChargeItem {
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version;
-  final bool isDirty; // Indicates unsaved changes not synced to server
 
   const PersonChargeItem({
     this.id,
@@ -24,7 +23,6 @@ class PersonChargeItem {
     required this.createdAt,
     required this.updatedAt,
     this.version = 1,
-    this.isDirty = false,
   });
 
   PersonChargeItem copyWith({
@@ -37,7 +35,6 @@ class PersonChargeItem {
     DateTime? createdAt,
     DateTime? updatedAt,
     int? version,
-    bool? isDirty,
   }) {
     return PersonChargeItem(
       id: id ?? this.id,
@@ -49,7 +46,6 @@ class PersonChargeItem {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
-      isDirty: isDirty ?? this.isDirty,
     );
   }
 
@@ -65,7 +61,6 @@ class PersonChargeItem {
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
       'version': version,
-      'is_dirty': isDirty ? 1 : 0,
     };
   }
 
@@ -100,7 +95,6 @@ class PersonChargeItem {
         fallback: DateTime.now(),
       ) ?? DateTime.now(),
       version: map['version']?.toInt() ?? 1,
-      isDirty: (map['isDirty'] ?? map['is_dirty'] ?? 0) == 1,
     );
   }
 
@@ -114,7 +108,7 @@ class PersonChargeItem {
 
   @override
   String toString() {
-    return 'PersonChargeItem(id: $id, person: $personKey, item: $itemName, cost: $cost, isPaid: $isPaid, isDirty: $isDirty)';
+    return 'PersonChargeItem(id: $id, person: $personKey, item: $itemName, cost: $cost, isPaid: $isPaid)';
   }
 
   @override

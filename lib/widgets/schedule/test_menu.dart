@@ -241,7 +241,6 @@ class ScheduleTestMenuHelper {
               pages: [strokes], // Wrap strokes in array for multi-page format
               createdAt: now,
               updatedAt: now,
-              isDirty: true, // Mark as dirty so it syncs to server when first opened
             );
             await dbService.saveCachedNote(note);
           } catch (e) {

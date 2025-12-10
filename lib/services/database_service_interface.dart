@@ -2,6 +2,7 @@ import '../models/book.dart';
 import '../models/event.dart';
 import '../models/note.dart';
 import '../models/schedule_drawing.dart';
+import 'database/mixins/event_operations_mixin.dart';
 
 /// Interface for database services
 ///
@@ -63,7 +64,8 @@ abstract class IDatabaseService {
   Future<Event> removeEvent(String id, String reason);
 
   /// Change the time of an event (creates a new event and links them)
-  Future<Event> changeEventTime(
+  /// Returns both the new event and the old event (marked as removed)
+  Future<ChangeEventTimeResult> changeEventTime(
     Event originalEvent,
     DateTime newStartTime,
     DateTime? newEndTime,

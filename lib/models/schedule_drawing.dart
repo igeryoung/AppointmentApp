@@ -18,7 +18,6 @@ class ScheduleDrawing {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? syncedAt; // Last sync timestamp
-  final bool isDirty; // Marks drawing as needing sync to server
 
   const ScheduleDrawing({
     this.id,
@@ -30,7 +29,6 @@ class ScheduleDrawing {
     required this.createdAt,
     required this.updatedAt,
     this.syncedAt,
-    this.isDirty = true,
   });
 
   ScheduleDrawing copyWith({
@@ -43,7 +41,6 @@ class ScheduleDrawing {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? syncedAt,
-    bool? isDirty,
   }) {
     return ScheduleDrawing(
       id: id ?? this.id,
@@ -55,7 +52,6 @@ class ScheduleDrawing {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       syncedAt: syncedAt ?? this.syncedAt,
-      isDirty: isDirty ?? this.isDirty,
     );
   }
 
@@ -70,7 +66,6 @@ class ScheduleDrawing {
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
       'synced_at': syncedAt != null ? syncedAt!.millisecondsSinceEpoch ~/ 1000 : null,
-      'is_dirty': isDirty ? 1 : 0,
     };
   }
 
@@ -111,7 +106,6 @@ class ScheduleDrawing {
     }
 
     final syncedAtValue = map['syncedAt'] ?? map['synced_at'];
-    final isDirtyValue = map['isDirty'] ?? map['is_dirty'];
 
     return ScheduleDrawing(
       id: map['id']?.toInt(),
@@ -134,9 +128,6 @@ class ScheduleDrawing {
       syncedAt: syncedAtValue != null
           ? parseSystemTimestamp(syncedAtValue, fallback: DateTime.now())
           : null,
-      isDirty: isDirtyValue != null
-          ? (isDirtyValue is int ? isDirtyValue == 1 : isDirtyValue as bool)
-          : true,
     );
   }
 

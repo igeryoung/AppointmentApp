@@ -42,10 +42,12 @@ class EventManagementService {
   final void Function(Event event) onUpdateEvent;
 
   /// Callback to delete event via cubit (soft delete with reason)
-  final Future<void> Function(String eventId, String reason) onDeleteEvent;
+  /// Returns the updated event with isRemoved=true for syncing
+  final Future<Event?> Function(String eventId, String reason) onDeleteEvent;
 
   /// Callback to hard delete event via cubit (permanent deletion)
-  final Future<void> Function(String eventId) onHardDeleteEvent;
+  /// Returns the event with isRemoved=true for syncing
+  final Future<Event?> Function(String eventId) onHardDeleteEvent;
 
   /// Callback to change event time via cubit
   final Future<void> Function(Event event, DateTime startTime, DateTime? endTime, String reason) onChangeEventTime;
@@ -414,7 +416,12 @@ class EventManagementService {
 
     if (reason != null && reason.isNotEmpty) {
       try {
-        await onDeleteEvent(event.id!, reason);
+        final updatedEvent = await onDeleteEvent(event.id!, reason);
+
+        // Sync the removed event to server
+        if (updatedEvent != null) {
+          await onSyncEvent(updatedEvent);
+        }
 
         if (isMounted()) {
           onShowSnackbar(
@@ -456,7 +463,12 @@ class EventManagementService {
 
     if (confirmed == true) {
       try {
-        await onHardDeleteEvent(event.id!);
+        final updatedEvent = await onHardDeleteEvent(event.id!);
+
+        // Sync the deleted event to server
+        if (updatedEvent != null) {
+          await onSyncEvent(updatedEvent);
+        }
 
         if (isMounted()) {
           onShowSnackbar(
@@ -630,13 +642,15 @@ class EventManagementService {
           newEndTime = newStartTime.add(duration);
         }
 
-        final newEvent = await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
+        final result = await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
         closeEventMenu();
 
         onReloadEvents();
 
-        // Sync to server in background (best effort, no error handling needed)
-        await onSyncEvent(newEvent);
+        // Sync both old event (with isRemoved=true) and new event to server
+        // Old event must be synced first to ensure server knows it's removed
+        await onSyncEvent(result.oldEvent);
+        await onSyncEvent(result.newEvent);
 
         if (isMounted()) {
           onShowSnackbar(

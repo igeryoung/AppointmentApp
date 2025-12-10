@@ -48,11 +48,9 @@ mixin ScheduleDrawingCacheMixin {
     final db = await database;
     final now = DateTime.now();
     final normalizedDate = DateTime(drawing.date.year, drawing.date.month, drawing.date.day);
-    // Mark as dirty for sync
     final updatedDrawing = drawing.copyWith(
       date: normalizedDate,
       updatedAt: now,
-      isDirty: true,
     );
 
     final drawingMap = updatedDrawing.toMap();

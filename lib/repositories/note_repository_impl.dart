@@ -4,7 +4,7 @@ import '../models/note.dart';
 import 'note_repository.dart';
 
 /// Implementation of NoteRepository using SQLite
-/// Handles local caching of notes with dirty flag tracking
+/// Handles local caching of notes for display
 class NoteRepositoryImpl implements INoteRepository {
   final Future<Database> Function() _getDatabaseFn;
 
@@ -19,16 +19,14 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   @override
-  Future<void> saveToCache(Note note, {required bool isDirty}) async {
+  Future<void> saveToCache(Note note) async {
     final db = await _getDatabaseFn();
     final now = DateTime.now().toUtc();
-    // Increment version when saving dirty note
-    final newVersion = isDirty ? note.version + 1 : note.version;
-    final updatedNote = note.copyWith(updatedAt: now, version: newVersion, isDirty: isDirty);
+    // Increment version when saving
+    final newVersion = note.version + 1;
+    final updatedNote = note.copyWith(updatedAt: now, version: newVersion);
 
     final noteMap = updatedNote.toMap();
-    noteMap.forEach((key, value) {
-    });
 
     try {
       final updateMap = Map<String, dynamic>.from(noteMap);
@@ -41,13 +39,11 @@ class NoteRepositoryImpl implements INoteRepository {
         updateMap['pages_data'] = originalPagesData.toString();
       }
 
-
       final pagesDataString = updateMap['pages_data'] as String;
       final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
-      final isDirtyFlag = updateMap['is_dirty'] ?? 0;
 
       final updatedRows = await db.rawUpdate(
-        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ?, is_dirty = ? WHERE event_id = ?',
+        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ? WHERE event_id = ?',
         [
           updateMap['event_id'],
           pagesDataString,
@@ -55,15 +51,13 @@ class NoteRepositoryImpl implements INoteRepository {
           updateMap['updated_at'],
           cachedAt,
           updateMap['version'],
-          isDirtyFlag,
           note.eventId,
         ],
       );
 
-
       if (updatedRows == 0) {
         await db.rawInsert(
-          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty) VALUES (?, ?, ?, ?, ?, 0, ?, ?)',
+          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version) VALUES (?, ?, ?, ?, ?, 0, ?)',
           [
             updateMap['event_id'],
             pagesDataString,
@@ -71,13 +65,10 @@ class NoteRepositoryImpl implements INoteRepository {
             updateMap['updated_at'],
             cachedAt,
             updateMap['version'],
-            isDirtyFlag,
           ],
         );
       }
     } catch (e) {
-      noteMap.forEach((key, value) {
-      });
       rethrow;
     }
   }
@@ -86,43 +77,6 @@ class NoteRepositoryImpl implements INoteRepository {
   Future<void> deleteCache(String eventId) async {
     final db = await _getDatabaseFn();
     await db.delete('notes', where: 'event_id = ?', whereArgs: [eventId]);
-  }
-
-  @override
-  Future<List<Note>> getDirtyNotes() async {
-    final db = await _getDatabaseFn();
-    final maps = await db.query(
-      'notes',
-      where: 'is_dirty = ?',
-      whereArgs: [1],
-    );
-
-    final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    return dirtyNotes;
-  }
-
-  /// Get dirty notes for a specific book
-  Future<List<Note>> getDirtyNotesByBookId(String bookUuid) async {
-    final db = await _getDatabaseFn();
-    final maps = await db.rawQuery('''
-      SELECT notes.* FROM notes
-      INNER JOIN events ON notes.event_id = events.id
-      WHERE notes.is_dirty = ? AND events.book_uuid = ?
-    ''', [1, bookUuid]);
-
-    final dirtyNotes = maps.map((map) => Note.fromMap(map)).toList();
-    return dirtyNotes;
-  }
-
-  @override
-  Future<void> markClean(String eventId) async {
-    final db = await _getDatabaseFn();
-    await db.update(
-      'notes',
-      {'is_dirty': 0},
-      where: 'event_id = ?',
-      whereArgs: [eventId],
-    );
   }
 
   @override
@@ -180,14 +134,13 @@ class NoteRepositoryImpl implements INoteRepository {
       final noteMap = note.toMap();
 
       batch.rawInsert('''
-        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version, is_dirty)
-        VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version)
+        VALUES (?, ?, ?, ?, ?, 0, ?)
         ON CONFLICT(event_id) DO UPDATE SET
           pages_data = excluded.pages_data,
           updated_at = excluded.updated_at,
           cached_at = excluded.cached_at,
-          version = excluded.version,
-          is_dirty = excluded.is_dirty
+          version = excluded.version
       ''', [
         eventId,
         noteMap['pages_data'],
@@ -195,7 +148,6 @@ class NoteRepositoryImpl implements INoteRepository {
         noteMap['updated_at'],
         cachedAt,
         noteMap['version'] ?? 1,
-        noteMap['is_dirty'] ?? 0,
       ]);
     }
 
@@ -209,20 +161,6 @@ class NoteRepositoryImpl implements INoteRepository {
   }
 
   @override
-  Future<void> markNoteSynced(String eventId, DateTime syncedAt) async {
-    final db = await _getDatabaseFn();
-    await db.update(
-      'notes',
-      {
-        'is_dirty': 0,
-        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
-      },
-      where: 'event_id = ?',
-      whereArgs: [eventId],
-    );
-  }
-
-  @override
   Future<void> applyServerChange(Map<String, dynamic> changeData) async {
     final db = await _getDatabaseFn();
     final eventId = changeData['event_id'] as String;
@@ -231,7 +169,6 @@ class NoteRepositoryImpl implements INoteRepository {
     final existing = await getCached(eventId);
 
     final syncChangeData = Map<String, dynamic>.from(changeData);
-    syncChangeData['is_dirty'] = 0; // Server data is not dirty
 
     if (existing == null) {
       // Insert new note from server

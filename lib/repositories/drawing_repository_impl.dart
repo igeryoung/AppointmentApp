@@ -4,7 +4,7 @@ import '../models/schedule_drawing.dart';
 import 'drawing_repository.dart';
 
 /// Implementation of DrawingRepository using SQLite
-/// Handles local caching of schedule drawings with dirty flag tracking
+/// Handles local caching of schedule drawings for display
 class DrawingRepositoryImpl implements IDrawingRepository {
   final Future<Database> Function() _getDatabaseFn;
 
@@ -37,7 +37,7 @@ class DrawingRepositoryImpl implements IDrawingRepository {
   }
 
   @override
-  Future<void> saveToCache(ScheduleDrawing drawing, {required bool isDirty}) async {
+  Future<void> saveToCache(ScheduleDrawing drawing) async {
     final db = await _getDatabaseFn();
     final now = DateTime.now().toUtc();
     final normalizedDate = DateTime(drawing.date.year, drawing.date.month, drawing.date.day);
@@ -48,8 +48,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
     final drawingMap = updatedDrawing.toMap();
     drawingMap['cached_at'] = now.millisecondsSinceEpoch ~/ 1000;
-    drawingMap['is_dirty'] = isDirty ? 1 : 0;
-
 
     try {
       // Try to update existing drawing
@@ -93,42 +91,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
     await db.delete(
       'schedule_drawings',
-      where: 'book_uuid = ? AND date = ? AND view_mode = ?',
-      whereArgs: [
-        bookUuid,
-        normalizedDate.millisecondsSinceEpoch ~/ 1000,
-        viewMode,
-      ],
-    );
-  }
-
-  @override
-  Future<List<ScheduleDrawing>> getDirtyDrawings() async {
-    final db = await _getDatabaseFn();
-    final maps = await db.query(
-      'schedule_drawings',
-      where: 'is_dirty = ?',
-      whereArgs: [1],
-    );
-
-    final dirtyDrawings = maps.map((map) => ScheduleDrawing.fromMap(map)).toList();
-    return dirtyDrawings;
-  }
-
-  @override
-  Future<void> markClean(String bookUuid, DateTime date) async {
-    // Default to 3-day view (only supported mode)
-    return markCleanWithViewMode(bookUuid, date, ScheduleDrawing.VIEW_MODE_3DAY);
-  }
-
-  /// Mark drawing as clean with specific view mode
-  Future<void> markCleanWithViewMode(String bookUuid, DateTime date, int viewMode) async {
-    final db = await _getDatabaseFn();
-    final normalizedDate = DateTime(date.year, date.month, date.day);
-
-    await db.update(
-      'schedule_drawings',
-      {'is_dirty': 0},
       where: 'book_uuid = ? AND date = ? AND view_mode = ?',
       whereArgs: [
         bookUuid,
@@ -207,13 +169,12 @@ class DrawingRepositoryImpl implements IDrawingRepository {
 
       batch.rawUpdate('''
         UPDATE schedule_drawings
-        SET strokes_data = ?, updated_at = ?, cached_at = ?, is_dirty = ?
+        SET strokes_data = ?, updated_at = ?, cached_at = ?
         WHERE book_uuid = ? AND date = ? AND view_mode = ?
       ''', [
         drawingMap['strokes_data'],
         drawingMap['updated_at'],
         cachedAt,
-        drawingMap['is_dirty'] ?? 0,
         drawing.bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
         drawing.viewMode,
@@ -222,8 +183,8 @@ class DrawingRepositoryImpl implements IDrawingRepository {
       // Also attempt insert in case drawing doesn't exist
       batch.rawInsert('''
         INSERT OR IGNORE INTO schedule_drawings
-        (book_uuid, date, view_mode, strokes_data, created_at, updated_at, cached_at, cache_hit_count, is_dirty)
-        VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?)
+        (book_uuid, date, view_mode, strokes_data, created_at, updated_at, cached_at, cache_hit_count)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 0)
       ''', [
         drawing.bookUuid,
         normalizedDate.millisecondsSinceEpoch ~/ 1000,
@@ -232,7 +193,6 @@ class DrawingRepositoryImpl implements IDrawingRepository {
         drawingMap['created_at'],
         drawingMap['updated_at'],
         cachedAt,
-        drawingMap['is_dirty'] ?? 0,
       ]);
     }
 

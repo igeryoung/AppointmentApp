@@ -280,7 +280,6 @@ void main() {
           strokes: const [Stroke(points: [StrokePoint(10, 10)])],
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
-          isDirty: true,
         );
         mockCacheManager.mockNotes[1] = cachedNote;
 
@@ -290,7 +289,6 @@ void main() {
         // Assert
         expect(result, isNotNull);
         expect(result!.eventId, 1);
-        expect(result.isDirty, true);
         expect(mockApiClient.fetchNoteCalled, false,
             reason: 'getCachedNote should not call API');
       });
@@ -304,16 +302,15 @@ void main() {
         expect(mockApiClient.fetchNoteCalled, false);
       });
 
-      test('syncNote - syncs dirty note to server and marks clean', () async {
+      test('syncNote - syncs note to server', () async {
         // Arrange
-        final dirtyNote = Note(
+        final noteToSync = Note(
           eventId: 1,
           strokes: const [Stroke(points: [StrokePoint(25, 25)])],
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
-          isDirty: true,
         );
-        mockCacheManager.mockNotes[1] = dirtyNote;
+        mockCacheManager.mockNotes[1] = noteToSync;
         mockDb.mockEvent = Event(
           id: 1,
           bookId: 10,
@@ -338,16 +335,15 @@ void main() {
             reason: 'Should mark note as clean after successful sync');
       });
 
-      test('syncNote - throws error and keeps dirty flag when sync fails', () async {
+      test('syncNote - throws error when sync fails', () async {
         // Arrange
-        final dirtyNote = Note(
+        final noteToSync = Note(
           eventId: 1,
           strokes: const [Stroke(points: [StrokePoint(30, 30)])],
           createdAt: DateTime.now(),
           updatedAt: DateTime.now(),
-          isDirty: true,
         );
-        mockCacheManager.mockNotes[1] = dirtyNote;
+        mockCacheManager.mockNotes[1] = noteToSync;
         mockDb.mockEvent = Event(
           id: 1,
           bookId: 10,
@@ -605,19 +601,14 @@ class _MockCacheManager {
     return mockNotes[eventId];
   }
 
-  Future<void> saveNote(int eventId, Note note, {bool dirty = false}) async {
-    final noteToSave = dirty ? note.copyWith(isDirty: true) : note;
-    savedNotes[eventId] = noteToSave;
-    mockNotes[eventId] = noteToSave;
+  Future<void> saveNote(int eventId, Note note) async {
+    savedNotes[eventId] = note;
+    mockNotes[eventId] = note;
   }
 
-  // Phase 4-01: Mark note as clean (synced to server)
+  // Mark note as clean (no-op in server-based architecture)
   Future<void> markNoteClean(int eventId) async {
-    final note = mockNotes[eventId];
-    if (note != null) {
-      mockNotes[eventId] = note.copyWith(isDirty: false);
-      cleanedNoteIds.add(eventId);
-    }
+    cleanedNoteIds.add(eventId);
   }
 
   Future<void> deleteNote(int eventId) async {

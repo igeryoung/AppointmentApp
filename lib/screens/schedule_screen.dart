@@ -266,10 +266,12 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
       onReloadEvents: () => context.read<ScheduleCubit>().loadEvents(),
       onUpdateEvent: (event) => context.read<ScheduleCubit>().updateEvent(event),
       onDeleteEvent: (eventId, reason) async {
-        await context.read<ScheduleCubit>().deleteEvent(eventId, reason: reason);
+        final updatedEvent = await context.read<ScheduleCubit>().deleteEvent(eventId, reason: reason);
+        return updatedEvent;
       },
       onHardDeleteEvent: (eventId) async {
-        await context.read<ScheduleCubit>().hardDeleteEvent(eventId);
+        final updatedEvent = await context.read<ScheduleCubit>().hardDeleteEvent(eventId);
+        return updatedEvent;
       },
       onChangeEventTime: (event, startTime, endTime, reason) async {
         await context.read<ScheduleCubit>().changeEventTime(event, startTime, endTime, reason);

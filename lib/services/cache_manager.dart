@@ -32,13 +32,10 @@ class CacheManager {
 
   /// 保存Note到缓存（更新cached_at时间戳）
   ///
-  /// [dirty] - 标记note是否需要同步到server (默认false)
   /// Uses person sync logic - if event has record_number, syncs strokes to all events in same person group
   /// Also releases lock on the note
-  Future<void> saveNote(String eventId, Note note, {bool dirty = false}) async {
-    // 如果指定dirty参数，更新note的isDirty标记
-    final noteToSave = dirty ? note.copyWith(isDirty: true) : note;
-    await _db.saveNoteWithSync(eventId, noteToSave);
+  Future<void> saveNote(String eventId, Note note) async {
+    await _db.saveNoteWithSync(eventId, note);
 
     // 保存后检查是否需要自动清理
     final policy = await _db.getCachePolicy();
@@ -49,13 +46,9 @@ class CacheManager {
 
   /// 标记Note为clean（已同步到server）
   ///
-  /// 清除isDirty标记，表示note已成功同步到server
+  /// In server-based architecture, this is a no-op since we don't track dirty state
   Future<void> markNoteClean(String eventId) async {
-    final note = await _db.getCachedNote(eventId);
-    if (note != null && note.isDirty) {
-      final cleanNote = note.copyWith(isDirty: false);
-      await _db.saveCachedNote(cleanNote);
-    }
+    // No-op in server-based architecture - no dirty tracking
   }
 
   /// 从缓存删除Note

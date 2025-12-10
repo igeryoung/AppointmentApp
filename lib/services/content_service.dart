@@ -215,18 +215,12 @@ class ContentService {
     }
   }
 
-  /// Save note locally only (always succeeds unless disk full)
-  /// Server sync should be handled separately by caller via syncNote()
+  /// Save note locally and sync to server
   ///
-  /// **Data Safety First Principle**: Local save is guaranteed,
-  /// server sync is handled separately in background (best effort)
+  /// In server-based architecture, saves to cache for display
+  /// Server sync is handled by the caller
   Future<void> saveNote(String eventId, Note note) async {
-    // **数据安全第一原则**: 只保存到本地 (标记为dirty)
-    // Server sync由调用者通过 syncNote() 单独处理（后台best effort）
-    await _cacheManager.saveNote(eventId, note, dirty: true);
-
-    // Note: 不在这里同步到server！调用者会通过 _syncNoteInBackground() 处理
-    // 这样可以保证本地保存永远不会因为网络错误而失败
+    await _cacheManager.saveNote(eventId, note);
   }
 
   /// Force sync a note to server (clears dirty flag on success)
@@ -277,12 +271,10 @@ class ContentService {
       // Update local note with server version
       final serverVersion = serverNote['version'] as int?;
       if (serverVersion != null && serverVersion != note.version) {
-        final updatedNote = note.copyWith(version: serverVersion, isDirty: false);
-        await _cacheManager.saveNote(eventId, updatedNote, dirty: false);
-      } else {
-        // 同步成功，清除dirty标记
-        await _cacheManager.markNoteClean(eventId);
+        final updatedNote = note.copyWith(version: serverVersion);
+        await _cacheManager.saveNote(eventId, updatedNote);
       }
+      // Sync successful - cache is already updated
 
     } catch (e) {
       // Handle version conflicts with auto-retry
@@ -301,7 +293,7 @@ class ContentService {
             final mergedNote = currentNote.copyWith(version: serverVersion);
 
             // Save merged note to cache with new version
-            await _cacheManager.saveNote(eventId, mergedNote, dirty: true);
+            await _cacheManager.saveNote(eventId, mergedNote);
 
 
             // Retry with updated version
@@ -440,7 +432,7 @@ class ContentService {
             for (final noteData in serverNotes) {
               try {
                 final note = Note.fromMap(noteData);
-                await _cacheManager.saveNote(note.eventId, note, dirty: false);
+                await _cacheManager.saveNote(note.eventId, note);
                 loaded++;
               } catch (e) {
               }

@@ -68,8 +68,8 @@ void main() {
 
       // Setup: Pre-cache some notes
       mockCacheManager.setMockedCachedNotes({
-        1: Note(eventId: 1, strokes: [], createdAt: now, updatedAt: now, isDirty: false),
-        3: Note(eventId: 3, strokes: [], createdAt: now, updatedAt: now, isDirty: false),
+        1: Note(eventId: 1, strokes: [], createdAt: now, updatedAt: now),
+        3: Note(eventId: 3, strokes: [], createdAt: now, updatedAt: now),
       });
 
       final apiClient = ApiClient(baseUrl: 'http://localhost:8080');

@@ -99,93 +99,13 @@ class SyncService {
     }
   }
 
-  /// Collect dirty records from all repositories
-  /// Groups events with their related notes for atomic sync
+  /// Collect records for sync (no longer uses dirty tracking)
+  /// In server-based architecture, this is only used for full refresh scenarios
   Future<List<SyncChange>> _collectDirtyRecords() async {
-    final changes = <SyncChange>[];
-    final syncedEventIds = <String>{};
-
-    // Collect dirty events
-    try {
-      final dirtyEvents = await eventRepository.getDirtyEvents();
-      for (final event in dirtyEvents) {
-        if (event.id == null) continue;
-
-        final operation = event.isRemoved ? 'delete' : 'update';
-        changes.add(SyncChange(
-          tableName: 'events',
-          recordId: event.id!,
-          operation: operation,
-          data: event.toMap(),
-          timestamp: event.updatedAt,
-          version: event.version,
-        ));
-
-        syncedEventIds.add(event.id!);
-
-        // Atomically sync event's note along with the event (user choice QD.6)
-        // This ensures event updates and their related note content stay in sync
-        try {
-          final relatedNote = await noteRepository.getCached(event.id!);
-          if (relatedNote != null) {
-            changes.add(SyncChange(
-              tableName: 'notes',
-              recordId: relatedNote.eventId,
-              operation: 'update',
-              data: relatedNote.toMap(),
-              timestamp: relatedNote.updatedAt,
-              version: relatedNote.version,
-            ));
-            syncedEventIds.add(relatedNote.eventId);
-          }
-        } catch (e) {
-        }
-      }
-    } catch (e) {
-    }
-
-    // Collect remaining dirty notes (not already synced with their events)
-    try {
-      final dirtyNotes = await noteRepository.getDirtyNotes();
-      for (final note in dirtyNotes) {
-        // Skip if already synced with event
-        if (syncedEventIds.contains(note.eventId)) {
-          continue;
-        }
-
-        changes.add(SyncChange(
-          tableName: 'notes',
-          recordId: note.eventId,
-          operation: 'update',
-          data: note.toMap(),
-          timestamp: note.updatedAt,
-          version: note.version,
-        ));
-      }
-    } catch (e) {
-    }
-
-    // Collect dirty schedule drawings (only supported on PRD database)
-    if (_prdDatabaseService != null) {
-      try {
-        final dirtyDrawings = await _prdDatabaseService!.getDirtyDrawings();
-        for (final drawing in dirtyDrawings) {
-          if (drawing.id == null) continue;
-
-          changes.add(SyncChange(
-            tableName: 'schedule_drawings',
-            recordId: drawing.id!.toString(),
-            operation: 'update',
-            data: drawing.toMap(),
-            timestamp: drawing.updatedAt,
-            version: drawing.version,
-          ));
-        }
-      } catch (e) {
-      }
-    }
-
-    return changes;
+    // In server-based architecture, we sync immediately on each change
+    // This method is kept for backward compatibility but returns empty list
+    // Full sync scenarios should fetch from server instead
+    return <SyncChange>[];
   }
 
   /// Apply server changes to local database
@@ -261,29 +181,11 @@ class SyncService {
     return resolvedCount;
   }
 
-  /// Mark records as synced (clear dirty flag)
+  /// Mark records as synced (no longer needed in server-based architecture)
+  /// Kept for backward compatibility
   Future<void> _markRecordsSynced(List<SyncChange> changes, DateTime syncedAt) async {
-    for (final change in changes) {
-      try {
-        switch (change.tableName) {
-          case 'events':
-            await eventRepository.markEventSynced(change.recordId, syncedAt);
-            break;
-
-          case 'notes':
-            await noteRepository.markNoteSynced(change.recordId, syncedAt);
-            break;
-
-          case 'schedule_drawings':
-            final drawingId = int.tryParse(change.recordId);
-            if (_prdDatabaseService != null && drawingId != null) {
-              await _prdDatabaseService!.markDrawingSynced(drawingId, syncedAt);
-            }
-            break;
-        }
-      } catch (e) {
-      }
-    }
+    // In server-based architecture, we sync immediately on each change
+    // No dirty tracking means no need to mark records as synced
   }
 
   /// Get last sync time from sync_metadata table

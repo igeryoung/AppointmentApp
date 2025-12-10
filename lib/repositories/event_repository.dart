@@ -1,4 +1,5 @@
 import '../models/event.dart';
+import '../services/database/mixins/event_operations_mixin.dart';
 
 /// Represents a name-record number pair
 class NameRecordPair {
@@ -63,8 +64,8 @@ abstract class IEventRepository {
   Future<Event> removeEvent(String eventId, String reason);
 
   /// Change event time - creates new event and soft deletes original
-  /// Returns the newly created event with updated time
-  Future<Event> changeEventTime(
+  /// Returns both the new event and the old event (marked as removed)
+  Future<ChangeEventTimeResult> changeEventTime(
     Event originalEvent,
     DateTime newStartTime,
     DateTime? newEndTime,
@@ -91,12 +92,6 @@ abstract class IEventRepository {
   );
 
   // Sync-related methods
-
-  /// Get all events marked as dirty (need sync)
-  Future<List<Event>> getDirtyEvents();
-
-  /// Mark an event as synced (clear dirty flag)
-  Future<void> markEventSynced(String id, DateTime syncedAt);
 
   /// Apply server change to local database
   /// Used when pulling changes from server

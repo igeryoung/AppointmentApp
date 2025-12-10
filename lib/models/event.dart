@@ -32,7 +32,6 @@ class Event {
   final bool isChecked; // Marks event as completed/checked
   final bool hasNote; // Indicates if this event has a handwriting note with strokes
   final int version; // Version number for optimistic locking during server sync
-  final bool isDirty; // Marks event as needing sync to server
 
   Event({
     this.id,
@@ -54,7 +53,6 @@ class Event {
     this.isChecked = false,
     this.hasNote = false,
     this.version = 1,
-    this.isDirty = true,
   }) : eventTypes = eventTypes.isEmpty
            ? throw ArgumentError('Event must have at least one event type')
            : eventTypes,
@@ -81,7 +79,6 @@ class Event {
     bool? isChecked,
     bool? hasNote,
     int? version,
-    bool? isDirty,
   }) {
     return Event(
       id: id ?? this.id,
@@ -103,7 +100,6 @@ class Event {
       isChecked: isChecked ?? this.isChecked,
       hasNote: hasNote ?? this.hasNote,
       version: version ?? this.version,
-      isDirty: isDirty ?? this.isDirty,
     );
   }
 
@@ -133,7 +129,6 @@ class Event {
       'is_checked': isChecked ? 1 : 0,
       'has_note': hasNote ? 1 : 0,
       'version': version,
-      'is_dirty': isDirty ? 1 : 0,
     };
   }
 
@@ -201,7 +196,6 @@ class Event {
       isChecked: (map['is_checked'] ?? 0) == 1,
       hasNote: (map['has_note'] ?? 0) == 1,
       version: map['version']?.toInt() ?? 1,
-      isDirty: (map['is_dirty'] ?? 0) == 1,
     );
   }
 
@@ -232,7 +226,7 @@ class Event {
 
   @override
   String toString() {
-    return 'Event(id: $id, bookUuid: $bookUuid, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, hasChargeItems: $hasChargeItems, startTime: $startTime, endTime: $endTime, version: $version, isDirty: $isDirty)';
+    return 'Event(id: $id, bookUuid: $bookUuid, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, hasChargeItems: $hasChargeItems, startTime: $startTime, endTime: $endTime, version: $version)';
   }
 
   @override
@@ -254,8 +248,7 @@ class Event {
         other.newEventId == newEventId &&
         other.isChecked == isChecked &&
         other.hasNote == hasNote &&
-        other.version == version &&
-        other.isDirty == isDirty;
+        other.version == version;
   }
 
   @override

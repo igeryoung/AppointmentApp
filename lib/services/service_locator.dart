@@ -164,6 +164,8 @@ Future<void> registerContentServices(ApiClient apiClient) async {
         getIt<IEventRepository>(),
         getIt<DrawingContentService>(),
         getIt<TimeService>(),
+        apiClient: apiClient,
+        deviceRepository: getIt<IDeviceRepository>(),
       ),
     );
 

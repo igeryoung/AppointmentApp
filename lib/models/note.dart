@@ -15,7 +15,6 @@ class Note {
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version; // Version number for optimistic locking (incremented on each update)
-  final bool isDirty; // Indicates unsaved changes not synced to server
   final String? personNameNormalized; // Normalized person name for shared notes
   final String? recordNumberNormalized; // Normalized record number for shared notes
   final String? lockedByDeviceId; // Device ID that currently holds the lock
@@ -28,7 +27,6 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.version = 1,
-    this.isDirty = false,
     this.personNameNormalized,
     this.recordNumberNormalized,
     this.lockedByDeviceId,
@@ -42,7 +40,6 @@ class Note {
     DateTime? createdAt,
     DateTime? updatedAt,
     int? version,
-    bool? isDirty,
     String? personNameNormalized,
     String? recordNumberNormalized,
     String? lockedByDeviceId,
@@ -55,7 +52,6 @@ class Note {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
-      isDirty: isDirty ?? this.isDirty,
       personNameNormalized: personNameNormalized ?? this.personNameNormalized,
       recordNumberNormalized: recordNumberNormalized ?? this.recordNumberNormalized,
       lockedByDeviceId: lockedByDeviceId ?? this.lockedByDeviceId,
@@ -126,7 +122,6 @@ class Note {
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
       'version': version,
-      'is_dirty': isDirty ? 1 : 0,
       'person_name_normalized': personNameNormalized,
       'record_number_normalized': recordNumberNormalized,
       'locked_by_device_id': lockedByDeviceId,
@@ -196,7 +191,6 @@ class Note {
         fallback: DateTime.now(),
       ) ?? DateTime.now(),
       version: (map['version'] ?? 1) is int ? (map['version'] ?? 1) : int.tryParse(map['version'].toString()) ?? 1,
-      isDirty: (map['isDirty'] ?? map['is_dirty'] ?? 0) == 1,
       personNameNormalized: map['personNameNormalized'] ?? map['person_name_normalized'],
       recordNumberNormalized: map['recordNumberNormalized'] ?? map['record_number_normalized'],
       lockedByDeviceId: map['lockedByDeviceId'] ?? map['locked_by_device_id'],
@@ -213,7 +207,7 @@ class Note {
   @override
   String toString() {
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    return 'Note(id: $id, eventId: $eventId, pageCount: ${pages.length}, totalStrokes: $totalStrokes, version: $version, isDirty: $isDirty, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
+    return 'Note(id: $id, eventId: $eventId, pageCount: ${pages.length}, totalStrokes: $totalStrokes, version: $version, personKey: $personNameNormalized+$recordNumberNormalized, locked: ${lockedByDeviceId != null})';
   }
 
   @override

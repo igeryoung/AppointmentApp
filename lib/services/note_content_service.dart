@@ -88,7 +88,7 @@ class NoteContentService {
       if (serverNote != null) {
         // Parse and save to cache
         final note = Note.fromMap(serverNote);
-        await _noteRepository.saveToCache(note, isDirty: false);
+        await _noteRepository.saveToCache(note);
         return note;
       }
 
@@ -112,13 +112,12 @@ class NoteContentService {
   // Save Operations
   // ===================
 
-  /// Save note locally only (always succeeds unless disk full)
-  /// Server sync should be handled separately by caller via syncNote()
+  /// Save note locally and sync to server
   ///
-  /// **Data Safety First Principle**: Local save is guaranteed,
-  /// server sync is handled separately in background (best effort)
+  /// In server-based architecture, saves to cache for display
+  /// Server sync is handled by the caller
   Future<void> saveNote(String eventId, Note note) async {
-    await _noteRepository.saveToCache(note, isDirty: true);
+    await _noteRepository.saveToCache(note);
   }
 
   /// Force sync a note to server (clears dirty flag on success)
@@ -161,8 +160,7 @@ class NoteContentService {
         eventData: eventData,
       );
 
-      // Sync successful, clear dirty flag
-      await _noteRepository.markClean(eventId);
+      // Sync successful - cache is already updated
 
     } catch (e) {
       // Keep dirty flag, retry later
@@ -279,7 +277,7 @@ class NoteContentService {
             // Save to cache
             for (final noteData in notes) {
               final note = Note.fromMap(noteData);
-              await _noteRepository.saveToCache(note, isDirty: false);
+              await _noteRepository.saveToCache(note);
               loaded++;
               onProgress?.call(loaded, total);
             }

@@ -75,7 +75,7 @@ class DrawingContentService {
       if (serverDrawing != null) {
         // Parse and save to cache
         final drawing = ScheduleDrawing.fromMap(serverDrawing);
-        await _drawingRepository.saveToCache(drawing, isDirty: false);
+        await _drawingRepository.saveToCache(drawing);
         return drawing;
       }
 
@@ -150,7 +150,7 @@ class DrawingContentService {
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        await _drawingRepository.saveToCache(drawing, isDirty: true);
+        await _drawingRepository.saveToCache(drawing);
         return;
       }
 
@@ -175,7 +175,7 @@ class DrawingContentService {
       final updatedDrawing = drawing.copyWith(version: newVersion);
 
       // Save to cache with updated version
-      await _drawingRepository.saveToCache(updatedDrawing, isDirty: false);
+      await _drawingRepository.saveToCache(updatedDrawing);
 
     } catch (e) {
       // RACE CONDITION FIX: Detect version conflicts and retry with server version
@@ -223,9 +223,9 @@ class DrawingContentService {
       }
 
 
-      // Still save to cache for offline access
+      // Still save to cache for display
       try {
-        await _drawingRepository.saveToCache(drawing, isDirty: true);
+        await _drawingRepository.saveToCache(drawing);
       } catch (cacheError) {
         rethrow;
       }
@@ -296,7 +296,7 @@ class DrawingContentService {
       for (final drawingData in serverDrawings) {
         try {
           final drawing = ScheduleDrawing.fromMap(drawingData);
-          await _drawingRepository.saveToCache(drawing, isDirty: false);
+          await _drawingRepository.saveToCache(drawing);
         } catch (e) {
         }
       }

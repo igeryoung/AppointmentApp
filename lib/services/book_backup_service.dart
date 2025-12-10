@@ -159,7 +159,7 @@ class BookBackupService {
             : DateTime.parse(book['created_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000,
         'archived_at': null,  // Clear archived status when restoring
         'version': book['version'] ?? 1,
-        'is_dirty': book['is_dirty'] == true ? 1 : 0,
+        'is_dirty': 0,  // Server-based architecture: no dirty tracking
       });
       count++;
 
@@ -203,7 +203,7 @@ class BookBackupService {
           'is_checked': event['is_checked'] == true ? 1 : 0,
           'has_note': event['has_note'] == true ? 1 : 0,
           'version': event['version'] ?? 1,
-          'is_dirty': event['is_dirty'] == true ? 1 : 0,
+          'is_dirty': 0,  // Server-based architecture: no dirty tracking
         });
         count++;
       }
@@ -228,7 +228,7 @@ class BookBackupService {
           'created_at': createdAt,
           'updated_at': updatedAt,
           'version': note['version'] ?? 1,
-          'is_dirty': note['is_dirty'] == true ? 1 : 0,
+          'is_dirty': 0,  // Server-based architecture: no dirty tracking
         });
         count++;
       }
@@ -257,7 +257,7 @@ class BookBackupService {
           'created_at': createdAt,
           'updated_at': updatedAt,
           'version': drawing['version'] ?? 1,
-          'is_dirty': drawing['is_dirty'] == true ? 1 : 0,
+          'is_dirty': 0,  // Server-based architecture: no dirty tracking
         });
         count++;
       }

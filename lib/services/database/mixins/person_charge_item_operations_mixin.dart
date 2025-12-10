@@ -55,7 +55,6 @@ mixin PersonChargeItemOperationsMixin {
           'created_at': now.millisecondsSinceEpoch ~/ 1000,
           'updated_at': now.millisecondsSinceEpoch ~/ 1000,
           'version': 1,
-          'is_dirty': 1, // Mark as dirty for sync
         },
         conflictAlgorithm: ConflictAlgorithm.fail,
       );
@@ -64,7 +63,6 @@ mixin PersonChargeItemOperationsMixin {
         id: id,
         createdAt: now,
         updatedAt: now,
-        isDirty: true,
       );
 
       // Update has_charge_items flag for all events of this person
@@ -82,7 +80,6 @@ mixin PersonChargeItemOperationsMixin {
           'is_paid': item.isPaid ? 1 : 0,
           'updated_at': now.millisecondsSinceEpoch ~/ 1000,
           'version': item.version + 1,
-          'is_dirty': 1, // Mark as dirty for sync
         },
         where: 'id = ?',
         whereArgs: [item.id],
@@ -91,7 +88,6 @@ mixin PersonChargeItemOperationsMixin {
       result = item.copyWith(
         updatedAt: now,
         version: item.version + 1,
-        isDirty: true,
       );
     }
 

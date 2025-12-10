@@ -218,23 +218,20 @@ void main() {
         ],
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-        isDirty: true,  // Mark as dirty
       );
 
-      // Save dirty note
+      // Save note
       await db.saveCachedNote(note);
 
+      // Verify note was saved
+      final savedNote = await db.getCachedNote(event.id!);
+      expect(savedNote, isNotNull);
+      expect(savedNote!.eventId, event.id);
+
+      // In server-based architecture, dirty tracking is no longer used
+      // getDirtyNotes returns empty list
       final dirtyNotes = await db.getAllDirtyNotes();
-      expect(dirtyNotes.length, 1);
-      expect(dirtyNotes[0].eventId, event.id);
-      expect(dirtyNotes[0].isDirty, true);
-
-      // Save as clean
-      final cleanNote = note.copyWith(isDirty: false);
-      await db.saveCachedNote(cleanNote);
-
-      final dirtyNotesAfter = await db.getAllDirtyNotes();
-      expect(dirtyNotesAfter.length, 0);
+      expect(dirtyNotes.length, 0);
     });
 
     test('Device credentials → save and retrieve', () async {

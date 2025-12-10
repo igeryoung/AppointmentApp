@@ -4,6 +4,17 @@ import 'package:uuid/uuid.dart';
 import '../../../models/event.dart';
 import '../../../models/note.dart';
 
+/// Result of changeEventTime operation containing both old and new events
+class ChangeEventTimeResult {
+  /// The new event with updated time
+  final Event newEvent;
+
+  /// The old event marked as removed
+  final Event oldEvent;
+
+  ChangeEventTimeResult({required this.newEvent, required this.oldEvent});
+}
+
 /// Mixin providing Event CRUD operations for PRDDatabaseService
 mixin EventOperationsMixin {
   /// Subclasses must provide database access
@@ -205,7 +216,8 @@ mixin EventOperationsMixin {
   }
 
   /// Change event time while preserving metadata and notes
-  Future<Event> changeEventTime(Event originalEvent, DateTime newStartTime, DateTime? newEndTime, String reason) async {
+  /// Returns both the new event and the old event (marked as removed) for syncing
+  Future<ChangeEventTimeResult> changeEventTime(Event originalEvent, DateTime newStartTime, DateTime? newEndTime, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Time change reason cannot be empty');
     }
@@ -216,8 +228,8 @@ mixin EventOperationsMixin {
     final db = await database;
     final now = DateTime.now();
 
-    // First, soft remove the original event
-    await removeEvent(originalEvent.id!, reason.trim());
+    // First, soft remove the original event and get the updated version
+    final removedOldEvent = await removeEvent(originalEvent.id!, reason.trim());
 
     // Generate UUID for new event
     final newEventId = _uuid.v4();
@@ -231,7 +243,6 @@ mixin EventOperationsMixin {
       isRemoved: false,
       removalReason: null,
       updatedAt: now,
-      isDirty: true, // Mark as dirty to trigger server sync
     );
 
     // Insert the new event
@@ -245,6 +256,10 @@ mixin EventOperationsMixin {
       where: 'id = ?',
       whereArgs: [originalEvent.id],
     );
+
+    // Get the final state of old event (with new_event_id set)
+    final oldEventMaps = await db.query('events', where: 'id = ?', whereArgs: [originalEvent.id], limit: 1);
+    final finalOldEvent = oldEventMaps.isNotEmpty ? Event.fromMap(oldEventMaps.first) : removedOldEvent;
 
     // Copy the note from original event to new event if it exists
     final originalNote = await getCachedNote(originalEvent.id!);
@@ -279,7 +294,7 @@ mixin EventOperationsMixin {
       );
     }
 
-    return createdEvent;
+    return ChangeEventTimeResult(newEvent: createdEvent, oldEvent: finalOldEvent);
   }
 
   Future<List<Event>> searchByNameAndRecordNumber(

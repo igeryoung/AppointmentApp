@@ -167,13 +167,12 @@ void main() {
         updatedAt: DateTime.now(),
       ));
 
-      // Save dirty notes
+      // Save notes
       await db.saveCachedNote(Note(
         eventId: event1.id!,
         strokes: const [Stroke(points: [StrokePoint(10.0, 20.0)])],
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-        isDirty: true,
       ));
 
       await db.saveCachedNote(Note(
@@ -181,7 +180,6 @@ void main() {
         strokes: const [Stroke(points: [StrokePoint(30.0, 40.0)])],
         createdAt: DateTime.now(),
         updatedAt: DateTime.now(),
-        isDirty: true,
       ));
 
       final dirtyNotesForBook1 = await db.getDirtyNotesByBookId(book1.id!);

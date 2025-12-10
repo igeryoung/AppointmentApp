@@ -63,8 +63,8 @@ class EventDetailCubit extends Cubit<EventDetailState> {
     try {
       final serverNote = await _noteContentService.getNote(eventId, forceRefresh: true);
       final currentState = state;
-      if (currentState is EventDetailLoaded && !currentState.isDirty) {
-        // Only update if no local changes
+      if (currentState is EventDetailLoaded && !currentState.isSyncing) {
+        // Only update if not currently syncing
         emit(currentState.copyWith(note: serverNote));
       }
     } catch (e) {

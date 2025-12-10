@@ -136,8 +136,8 @@ mixin NoteCacheOperationsMixin {
     }
 
     final now = DateTime.now();
-    // Increment version when saving dirty note
-    final newVersion = note.isDirty ? note.version + 1 : note.version;
+    // Increment version when saving
+    final newVersion = note.version + 1;
     final updatedNote = note.copyWith(updatedAt: now, version: newVersion);
 
     // Get person key if event has record number
@@ -370,8 +370,8 @@ mixin NoteCacheOperationsMixin {
   Future<Note> saveCachedNote(Note note) async {
     final db = await database;
     final now = DateTime.now();
-    // Increment version when saving dirty note
-    final newVersion = note.isDirty ? note.version + 1 : note.version;
+    // Increment version when saving
+    final newVersion = note.version + 1;
     final updatedNote = note.copyWith(updatedAt: now, version: newVersion);
 
     // Debug the serialization

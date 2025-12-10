@@ -2,7 +2,11 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/event.dart';
 import '../models/schedule_drawing.dart';
+import '../models/sync_models.dart';
+import '../repositories/device_repository.dart';
 import '../repositories/event_repository.dart';
+import '../services/api_client.dart';
+import '../services/database/mixins/event_operations_mixin.dart';
 import '../services/drawing_content_service.dart';
 import '../services/time_service.dart';
 import 'schedule_state.dart';
@@ -22,6 +26,8 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   final IEventRepository _eventRepository;
   final DrawingContentService _drawingContentService;
   final TimeService _timeService;
+  final ApiClient? _apiClient;
+  final IDeviceRepository? _deviceRepository;
 
   // Current book UUID being viewed
   String? _currentBookUuid;
@@ -32,8 +38,12 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   ScheduleCubit(
     this._eventRepository,
     this._drawingContentService,
-    this._timeService,
-  ) : super(const ScheduleInitial());
+    this._timeService, {
+    ApiClient? apiClient,
+    IDeviceRepository? deviceRepository,
+  })  : _apiClient = apiClient,
+        _deviceRepository = deviceRepository,
+        super(const ScheduleInitial());
 
   // ===================
   // Load Operations
@@ -172,38 +182,81 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Delete an event (soft delete)
-  Future<void> deleteEvent(String eventId, {String reason = 'Deleted by user'}) async {
+  /// Returns the updated event with isRemoved=true for syncing
+  Future<Event?> deleteEvent(String eventId, {String reason = 'Deleted by user'}) async {
     try {
-      await _eventRepository.removeEvent(eventId, reason);
+      final updatedEvent = await _eventRepository.removeEvent(eventId, reason);
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
+      return updatedEvent;
     } catch (e) {
       emit(ScheduleError('Failed to delete event: $e'));
+      return null;
     }
   }
 
   /// Hard delete an event (permanent deletion)
-  Future<void> hardDeleteEvent(String eventId) async {
+  /// Syncs delete to server first, then removes from local database
+  Future<Event?> hardDeleteEvent(String eventId) async {
     try {
+      // Get event before deletion
+      final event = await _eventRepository.getById(eventId);
+      if (event == null) throw Exception('Event not found');
+
+      // Push delete to server (if connected)
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient != null && deviceRepository != null) {
+        final credentials = await deviceRepository.getCredentials();
+        if (credentials != null) {
+          final deleteChange = SyncChange(
+            tableName: 'events',
+            recordId: eventId,
+            operation: 'delete',
+            data: event.toMap(),
+            timestamp: DateTime.now(),
+            version: event.version,
+          );
+
+          final request = SyncRequest(
+            deviceId: credentials.deviceId,
+            deviceToken: credentials.deviceToken,
+            localChanges: [deleteChange],
+          );
+
+          try {
+            await apiClient.pushChanges(request);
+          } catch (e) {
+            // Log but don't fail - will be synced later
+            debugPrint('Warning: Failed to sync delete to server: $e');
+          }
+        }
+      }
+
+      // Hard delete from local database
       await _eventRepository.delete(eventId);
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
+
+      return event.copyWith(isRemoved: true, removalReason: 'Permanently deleted');
     } catch (e) {
       emit(ScheduleError('Failed to hard delete event: $e'));
+      return null;
     }
   }
 
   /// Change event time - creates new event and soft deletes original
-  Future<Event?> changeEventTime(
+  /// Returns both the new event and the old event (marked as removed)
+  Future<ChangeEventTimeResult?> changeEventTime(
     Event originalEvent,
     DateTime newStartTime,
     DateTime? newEndTime,
     String reason,
   ) async {
     try {
-      final newEvent = await _eventRepository.changeEventTime(
+      final result = await _eventRepository.changeEventTime(
         originalEvent,
         newStartTime,
         newEndTime,
@@ -212,7 +265,7 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
-      return newEvent;
+      return result;
     } catch (e) {
       emit(ScheduleError('Failed to change event time: $e'));
       return null;

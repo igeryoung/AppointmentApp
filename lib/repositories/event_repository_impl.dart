@@ -2,6 +2,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/event.dart';
 import '../models/note.dart';
+import '../services/database/mixins/event_operations_mixin.dart';
 import 'event_repository.dart';
 import 'base_repository.dart';
 
@@ -79,12 +80,11 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     final db = await getDatabaseFn();
     final now = DateTime.now().toUtc();
 
-    // Mark as dirty and set version to 1 for new events
+    // Set version to 1 for new events
     final eventToCreate = event.copyWith(
       createdAt: now,
       updatedAt: now,
       version: 1,
-      isDirty: true,
     );
     // For UUID events, id is already set before insert
     await insert(eventToCreate.toMap());
@@ -105,11 +105,10 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     if (event.id == null) throw ArgumentError('Event ID cannot be null');
 
     final now = DateTime.now();
-    // Increment version and mark as dirty for updates
+    // Increment version for updates
     final updatedEvent = event.copyWith(
       updatedAt: now,
       version: event.version + 1,
-      isDirty: true,
     );
     final updateData = toMap(updatedEvent);
     updateData.remove('id');
@@ -122,22 +121,16 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
 
   @override
   Future<void> delete(String id) async {
-    // Perform soft delete: mark as deleted and dirty for sync
+    // Hard delete from local database
+    // Server sync is handled by the caller (ScheduleCubit.hardDeleteEvent)
     final db = await getDatabaseFn();
-    final event = await getById(id);
-    if (event == null) throw Exception('Event not found');
 
-    await db.update(
-      'events',
-      {
-        'is_deleted': 1,
-        'is_dirty': 1,
-        'version': event.version + 1,
-        'updated_at': (DateTime.now().millisecondsSinceEpoch ~/ 1000),
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
+    // Delete associated note first
+    await db.delete('notes', where: 'event_id = ?', whereArgs: [id]);
+
+    // Delete the event
+    final deletedRows = await db.delete('events', where: 'id = ?', whereArgs: [id]);
+    if (deletedRows == 0) throw Exception('Event not found');
   }
 
   /// Soft remove an event with a reason
@@ -175,8 +168,9 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
   }
 
   /// Change event time - creates new event and soft deletes original
+  /// Returns both the new event and the old event (marked as removed)
   @override
-  Future<Event> changeEventTime(
+  Future<ChangeEventTimeResult> changeEventTime(
     Event originalEvent,
     DateTime newStartTime,
     DateTime? newEndTime,
@@ -192,8 +186,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     final db = await getDatabaseFn();
     final now = DateTime.now();
 
-    // First, soft remove the original event
-    await removeEvent(originalEvent.id!, reason.trim());
+    // First, soft remove the original event and get the updated version
+    final removedOldEvent = await removeEvent(originalEvent.id!, reason.trim());
 
     // Generate UUID for new event
     final newEventId = _uuid.v4();
@@ -211,7 +205,6 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
 
     // Insert the new event
     final newEventMap = toMap(newEvent);
-    newEventMap['is_dirty'] = 1; // Mark as dirty to trigger server sync
     await db.insert('events', newEventMap);
     final createdEvent = newEvent;
 
@@ -223,6 +216,10 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
       whereArgs: [originalEvent.id],
     );
 
+    // Get the final state of old event (with new_event_id set)
+    final oldEventMaps = await db.query('events', where: 'id = ?', whereArgs: [originalEvent.id], limit: 1);
+    final finalOldEvent = oldEventMaps.isNotEmpty ? Event.fromMap(oldEventMaps.first) : removedOldEvent;
+
     // Copy the note from original event to new event if it exists
     final originalNote = await _getCachedNoteFn(originalEvent.id!);
     if (originalNote != null) {
@@ -230,7 +227,6 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
       final newNoteMap = originalNote.toMap();
       newNoteMap['event_id'] = newEventId;
       newNoteMap['updated_at'] = now.millisecondsSinceEpoch ~/ 1000;
-      newNoteMap['is_dirty'] = 1; // Mark as dirty to trigger server sync
       newNoteMap.remove('id'); // Let DB auto-generate the ID
 
       await db.insert('notes', newNoteMap);
@@ -241,11 +237,10 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
         'strokes_data': '[]',
         'created_at': now.millisecondsSinceEpoch ~/ 1000,
         'updated_at': now.millisecondsSinceEpoch ~/ 1000,
-        'is_dirty': 1, // Mark as dirty to trigger server sync
       });
     }
 
-    return createdEvent;
+    return ChangeEventTimeResult(newEvent: createdEvent, oldEvent: finalOldEvent);
   }
 
   /// Get event count by book
@@ -338,29 +333,6 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
   // Sync-related methods
 
   @override
-  Future<List<Event>> getDirtyEvents() async {
-    return query(
-      where: 'is_dirty = ?',
-      whereArgs: [1],
-      orderBy: 'updated_at ASC',
-    );
-  }
-
-  @override
-  Future<void> markEventSynced(String id, DateTime syncedAt) async {
-    final db = await getDatabaseFn();
-    await db.update(
-      'events',
-      {
-        'is_dirty': 0,
-        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
-    );
-  }
-
-  @override
   Future<void> applyServerChange(Map<String, dynamic> changeData) async {
     final db = await getDatabaseFn();
     final id = changeData['id'] as String;
@@ -375,7 +347,6 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
       // Update existing event with server data
       final updateData = Map<String, dynamic>.from(changeData);
       updateData.remove('id');
-      updateData['is_dirty'] = 0; // Server data is not dirty
       await db.update(
         'events',
         updateData,

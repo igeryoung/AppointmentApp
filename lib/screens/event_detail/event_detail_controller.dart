@@ -246,7 +246,7 @@ class EventDetailController {
         _updateState(_state.copyWith(
           note: cachedNote,
           lastKnownPages: cachedNote.pages,
-          hasUnsyncedChanges: cachedNote.isDirty,
+          hasUnsyncedChanges: false,  // Server-based architecture: no dirty tracking
           isLoadingFromServer: false,
         ));
         return;
@@ -429,6 +429,11 @@ class EventDetailController {
     _updateState(_state.copyWith(isLoading: true));
     try {
       await _dbService.deleteEvent(event.id!);
+
+      // Sync deleted event state to server
+      if (event.id != null) {
+        await syncNoteInBackground(event.id!);
+      }
     } catch (e) {
       _updateState(_state.copyWith(isLoading: false));
       rethrow;
@@ -442,6 +447,11 @@ class EventDetailController {
     _updateState(_state.copyWith(isLoading: true));
     try {
       await _dbService.removeEvent(event.id!, reason);
+
+      // Sync removed event to server
+      if (event.id != null) {
+        await syncNoteInBackground(event.id!);
+      }
     } catch (e) {
       _updateState(_state.copyWith(isLoading: false));
       rethrow;
@@ -454,7 +464,16 @@ class EventDetailController {
 
     _updateState(_state.copyWith(isLoading: true));
     try {
-      await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
+      final result = await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
+
+      // Sync both old event (with isRemoved=true) and new event to server
+      // Old event must be synced first to ensure server knows it's removed
+      if (result.oldEvent.id != null) {
+        await syncNoteInBackground(result.oldEvent.id!);
+      }
+      if (result.newEvent.id != null) {
+        await syncNoteInBackground(result.newEvent.id!);
+      }
     } catch (e) {
       _updateState(_state.copyWith(isLoading: false));
       rethrow;

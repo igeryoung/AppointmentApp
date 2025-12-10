@@ -5,6 +5,7 @@ import '../models/event.dart';
 import '../models/note.dart';
 import '../models/schedule_drawing.dart';
 import 'database_service_interface.dart';
+import 'database/mixins/event_operations_mixin.dart';
 
 /// Simple in-memory database for web platform testing
 class WebPRDDatabaseService implements IDatabaseService {
@@ -263,7 +264,8 @@ class WebPRDDatabaseService implements IDatabaseService {
   }
 
   /// Change event time while preserving metadata and notes
-  Future<Event> changeEventTime(Event originalEvent, DateTime newStartTime, DateTime? newEndTime, String reason) async {
+  /// Returns both the new event and the old event (marked as removed)
+  Future<ChangeEventTimeResult> changeEventTime(Event originalEvent, DateTime newStartTime, DateTime? newEndTime, String reason) async {
     if (reason.trim().isEmpty) {
       throw ArgumentError('Time change reason cannot be empty');
     }
@@ -274,8 +276,8 @@ class WebPRDDatabaseService implements IDatabaseService {
     await Future.delayed(const Duration(milliseconds: 10));
     final now = DateTime.now();
 
-    // First, soft remove the original event
-    await removeEvent(originalEvent.id!, reason.trim());
+    // First, soft remove the original event and get the updated version
+    final removedOldEvent = await removeEvent(originalEvent.id!, reason.trim());
 
     // Create a new event with the new time but same metadata
     final newEvent = originalEvent.copyWith(
@@ -292,10 +294,12 @@ class WebPRDDatabaseService implements IDatabaseService {
 
     // Update the original event to point to the new event
     final originalEventIndex = _events.indexWhere((e) => e.id == originalEvent.id);
+    Event finalOldEvent = removedOldEvent;
     if (originalEventIndex != -1) {
       _events[originalEventIndex] = _events[originalEventIndex].copyWith(
         newEventId: newEvent.id,
       );
+      finalOldEvent = _events[originalEventIndex];
     }
 
     // Copy the note from original event to new event if it exists
@@ -320,7 +324,7 @@ class WebPRDDatabaseService implements IDatabaseService {
       _notes.add(emptyNote);
     }
 
-    return newEvent;
+    return ChangeEventTimeResult(newEvent: newEvent, oldEvent: finalOldEvent);
   }
 
   // ===================
