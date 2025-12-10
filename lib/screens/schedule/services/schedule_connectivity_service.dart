@@ -71,6 +71,7 @@ class ScheduleConnectivityService {
 
   /// Get ContentService instance (may be null if initialization failed)
   ContentService? get contentService => _contentService;
+  CacheManager? get cacheManager => _cacheManager;
 
   /// Initialize ContentService for server sync
   Future<void> initialize() async {

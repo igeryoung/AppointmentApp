@@ -194,7 +194,8 @@ class EventRoutes {
         SELECT
           n.id,
           n.event_id,
-          n.strokes_data,
+          -- Use pages_data when available (multi-page notes) and fallback to strokes_data for legacy rows.
+          COALESCE(n.pages_data, n.strokes_data) AS strokes_data,
           n.created_at,
           n.updated_at,
           n.version

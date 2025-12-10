@@ -139,32 +139,20 @@ lib/
 │   ├── schedule_state.dart        # Schedule states
 │   ├── event_detail_cubit.dart    # Event detail state management
 │   └── event_detail_state.dart    # Event detail states
-├── screens/                 # UI screens (10 files, 536 KB)
-│   ├── book_list/                 # Book list screen (refactored)
-│   │   ├── book_list_screen_bloc.dart  # BLoC version (276 lines)
-│   │   ├── book_card.dart              # Book card widget
-│   │   ├── create_book_dialog.dart     # Create dialog
-│   │   └── rename_book_dialog.dart     # Rename dialog
-│   ├── book_list_screen.dart      # Legacy version (1,074 lines)
-│   ├── schedule_screen.dart       # Schedule view (2,004 lines) - being refactored
-│   ├── schedule_screen.dart.backup     # Backup files (refactoring in progress)
-│   ├── schedule_screen.dart.bak2
-│   ├── schedule_screen.dart.bak3
-│   └── event_detail_screen.dart   # Event details (1,870 lines)
-├── widgets/                 # Reusable widgets (6 files)
+├── screens/                 # UI screens
+│   ├── book_list/                 # Book list feature (provider-based controller + dialogs/widgets)
+│   ├── schedule/                  # Schedule subcomponents and services
+│   ├── event_detail/              # Event detail feature (modularized)
+│   ├── book_list_screen.dart      # Book list entry point
+│   ├── schedule_screen.dart       # Schedule view (controller + services)
+│   └── event_detail_screen.dart   # Exports refactored event detail
+├── widgets/                 # Reusable widgets
 │   ├── handwriting_canvas.dart    # Core handwriting widget
-│   └── schedule/                  # Schedule-specific widgets (NEW)
-│       ├── event_tile.dart       # Event display tile
-│       ├── fab_menu.dart         # Floating action button menu
-│       ├── drawing_toolbar.dart  # Drawing tools UI
-│       └── test_menu.dart        # Testing menu
-├── painters/                # Custom painters (NEW)
+│   └── schedule/                  # Schedule-specific widgets
+├── painters/                # Custom painters
 │   └── schedule_painters.dart    # Custom paint operations for schedule
-├── utils/                   # Utilities (5 files)
-│   └── schedule/                 # Schedule-specific utilities
-│       ├── schedule_test_utils.dart    # Testing utilities
-│       ├── schedule_cache_utils.dart   # Cache utilities
-│       └── schedule_layout_utils.dart  # Layout calculations
+├── utils/                   # Utilities
+│   └── schedule/                 # Schedule-specific utilities (layout, cache, tests)
 ├── l10n/                    # Localization files
 ├── app.dart                 # Main app configuration
 └── main.dart                # App entry point
