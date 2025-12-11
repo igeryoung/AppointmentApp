@@ -2,43 +2,39 @@ import 'package:flutter/foundation.dart';
 import 'event_type.dart';
 import 'charge_item.dart';
 
-/// Event model - Individual appointment entry with minimal metadata as per PRD
+/// Event model - Individual appointment linked to a global record
+///
+/// - Every event has a record_uuid (link to global record)
+/// - title is the display name (typically person's name)
+/// - recordNumber is denormalized for convenience
+/// - Notes are accessed via record_uuid
 class Event {
-  /// Nullable: new events don't have ID until saved to database (UUID string)
   final String? id;
   final String bookUuid;
-  final String name;
-  /// Nullable: optional field per PRD
-  final String? recordNumber;
-  /// Nullable: optional phone number
-  final String? phone;
+  final String recordUuid;
+  final String title;
+  final String recordNumber;
   final List<EventType> eventTypes;
-  /// Legacy field - kept for detail view compatibility where charge items are loaded explicitly
   final List<ChargeItem> chargeItems;
-  /// Efficient flag to indicate if this event has charge items (loaded from person_charge_items table)
   final bool hasChargeItems;
   final DateTime startTime;
-  /// Nullable: open-ended events have no end time (as per PRD)
   final DateTime? endTime;
   final DateTime createdAt;
   final DateTime updatedAt;
-  final bool isRemoved; // Soft removal flag
-  /// Nullable: only set when event is removed
+  final bool isRemoved;
   final String? removalReason;
-  /// Nullable: only set for time-change related events
-  final String? originalEventId; // Reference to original event for time changes (UUID)
-  /// Nullable: only set for time-change related events
-  final String? newEventId; // Reference to new event if this event's time was changed (UUID)
-  final bool isChecked; // Marks event as completed/checked
-  final bool hasNote; // Indicates if this event has a handwriting note with strokes
-  final int version; // Version number for optimistic locking during server sync
+  final String? originalEventId;
+  final String? newEventId;
+  final bool isChecked;
+  final bool hasNote;
+  final int version;
 
   Event({
     this.id,
     required this.bookUuid,
-    required this.name,
-    this.recordNumber,
-    this.phone,
+    required this.recordUuid,
+    required this.title,
+    this.recordNumber = '',
     required List<EventType> eventTypes,
     List<ChargeItem>? chargeItems,
     this.hasChargeItems = false,
@@ -53,17 +49,17 @@ class Event {
     this.isChecked = false,
     this.hasNote = false,
     this.version = 1,
-  }) : eventTypes = eventTypes.isEmpty
-           ? throw ArgumentError('Event must have at least one event type')
-           : eventTypes,
-       chargeItems = chargeItems ?? [];
+  })  : eventTypes = eventTypes.isEmpty
+            ? throw ArgumentError('Event must have at least one event type')
+            : eventTypes,
+        chargeItems = chargeItems ?? [];
 
   Event copyWith({
     String? id,
     String? bookUuid,
-    String? name,
+    String? recordUuid,
+    String? title,
     String? recordNumber,
-    String? phone,
     List<EventType>? eventTypes,
     List<ChargeItem>? chargeItems,
     bool? hasChargeItems,
@@ -83,9 +79,9 @@ class Event {
     return Event(
       id: id ?? this.id,
       bookUuid: bookUuid ?? this.bookUuid,
-      name: name ?? this.name,
+      recordUuid: recordUuid ?? this.recordUuid,
+      title: title ?? this.title,
       recordNumber: recordNumber ?? this.recordNumber,
-      phone: phone ?? this.phone,
       eventTypes: eventTypes ?? this.eventTypes,
       chargeItems: chargeItems ?? this.chargeItems,
       hasChargeItems: hasChargeItems ?? this.hasChargeItems,
@@ -103,25 +99,38 @@ class Event {
     );
   }
 
-  Map<String, dynamic> toMap() {
-    // Normalize timestamps to UTC before persisting/syncing
-    final startUtc = startTime.toUtc();
-    final endUtc = endTime?.toUtc();
-    final createdUtc = createdAt.toUtc();
-    final updatedUtc = updatedAt.toUtc();
+  bool get isOpenEnded => endTime == null;
+  bool get isTimeChanged => originalEventId != null;
+  bool get hasNewTime => newEventId != null;
+  bool get hasRecordNumber => recordNumber.isNotEmpty;
 
+  int? get durationInMinutes {
+    if (endTime == null) return null;
+    return endTime!.difference(startTime).inMinutes;
+  }
+
+  String get timeRangeDisplay {
+    final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
+    if (endTime == null) return startStr;
+    final endStr = '${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}';
+    return '$startStr - $endStr';
+  }
+
+  Map<String, dynamic> toMap() {
     return {
       'id': id,
       'book_uuid': bookUuid,
-      'name': name,
+      'record_uuid': recordUuid,
+      'title': title,
       'record_number': recordNumber,
-      'phone': phone,
-      'event_types': EventType.toJsonList(eventTypes), // Convert list to JSON array string
+      'event_types': EventType.toJsonList(eventTypes),
       'has_charge_items': hasChargeItems ? 1 : 0,
-      'start_time': startUtc.millisecondsSinceEpoch ~/ 1000,
-      'end_time': endUtc != null ? endUtc.millisecondsSinceEpoch ~/ 1000 : null,
-      'created_at': createdUtc.millisecondsSinceEpoch ~/ 1000,
-      'updated_at': updatedUtc.millisecondsSinceEpoch ~/ 1000,
+      'start_time': startTime.toUtc().millisecondsSinceEpoch ~/ 1000,
+      'end_time': endTime?.toUtc().millisecondsSinceEpoch != null
+          ? endTime!.toUtc().millisecondsSinceEpoch ~/ 1000
+          : null,
+      'created_at': createdAt.toUtc().millisecondsSinceEpoch ~/ 1000,
+      'updated_at': updatedAt.toUtc().millisecondsSinceEpoch ~/ 1000,
       'is_removed': isRemoved ? 1 : 0,
       'removal_reason': removalReason,
       'original_event_id': originalEventId,
@@ -133,126 +142,59 @@ class Event {
   }
 
   factory Event.fromMap(Map<String, dynamic> map) {
-    // Backward compatibility: Check for new 'event_types' field first,
-    // then fall back to old 'event_type' field
     List<EventType> eventTypes;
     if (map['event_types'] != null && map['event_types'].toString().isNotEmpty) {
-      // New format: JSON array string
       eventTypes = EventType.fromStringList(map['event_types']);
-    } else if (map['event_type'] != null && map['event_type'].toString().isNotEmpty) {
-      // Old format: single string - wrap in list
-      eventTypes = [EventType.fromString(map['event_type'])];
     } else {
-      // Fallback to 'other' type if no type specified
       eventTypes = [EventType.other];
     }
 
-    // chargeItems is kept empty by default - loaded separately in detail view from person_charge_items table
-    // This keeps list queries lightweight
-    List<ChargeItem> chargeItems = [];
-
-    DateTime _parseToLocal(dynamic value) {
-      DateTime fromSeconds(int seconds) =>
-          DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal();
-
-      if (value == null) {
-        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
-      }
-
-      if (value is int) return fromSeconds(value);
-      if (value is num) return fromSeconds(value.toInt());
+    DateTime parseTime(dynamic value) {
+      if (value == null) return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
+      if (value is int) return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true).toLocal();
       if (value is String) {
         final seconds = int.tryParse(value);
-        if (seconds != null) return fromSeconds(seconds);
-
-        final parsed = DateTime.tryParse(value);
-        if (parsed != null) {
-          return parsed.isUtc ? parsed.toLocal() : parsed;
-        }
+        if (seconds != null) return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal();
       }
-
       return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
     }
 
     return Event(
-      id: map['id'] as String?,
-      bookUuid: map['book_uuid'] as String? ?? '',
-      name: map['name'] ?? '',
-      recordNumber: map['record_number'],
-      phone: map['phone'],
+      id: map['id'],
+      bookUuid: map['book_uuid'] ?? '',
+      recordUuid: map['record_uuid'] ?? '',
+      title: map['title'] ?? '',
+      recordNumber: map['record_number'] ?? '',
       eventTypes: eventTypes,
-      chargeItems: chargeItems,
+      chargeItems: [],
       hasChargeItems: (map['has_charge_items'] ?? 0) == 1,
-      // User-selected times: stored in UTC, displayed in local timezone (UTC+8 expected)
-      startTime: _parseToLocal(map['start_time']),
-      endTime: map['end_time'] != null ? _parseToLocal(map['end_time']) : null,
-      // System timestamps: explicitly marked as UTC
+      startTime: parseTime(map['start_time']),
+      endTime: map['end_time'] != null ? parseTime(map['end_time']) : null,
       createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000, isUtc: true),
       updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000, isUtc: true),
       isRemoved: (map['is_removed'] ?? 0) == 1,
       removalReason: map['removal_reason'],
-      originalEventId: map['original_event_id'] as String?,
-      newEventId: map['new_event_id'] as String?,
+      originalEventId: map['original_event_id'],
+      newEventId: map['new_event_id'],
       isChecked: (map['is_checked'] ?? 0) == 1,
       hasNote: (map['has_note'] ?? 0) == 1,
-      version: map['version']?.toInt() ?? 1,
+      version: map['version'] ?? 1,
     );
   }
 
-  /// Returns true if this is an open-ended event (no end time)
-  bool get isOpenEnded => endTime == null;
-
-  /// Returns true if this event is a time-changed version of another event
-  bool get isTimeChanged => originalEventId != null;
-
-  /// Returns true if this event's time was changed (moved to a new event)
-  bool get hasNewTime => newEventId != null;
-
-  /// Returns the duration in minutes, or null if open-ended
-  int? get durationInMinutes {
-    if (endTime == null) return null;
-    return endTime!.difference(startTime).inMinutes;
-  }
-
-  /// Returns a display string for the time range
-  String get timeRangeDisplay {
-    final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
-    if (endTime == null) {
-      return startStr;
-    }
-    final endStr = '${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}';
-    return '$startStr - $endStr';
-  }
+  @override
+  String toString() => 'Event(id: $id, title: $title, recordUuid: $recordUuid, startTime: $startTime)';
 
   @override
-  String toString() {
-    return 'Event(id: $id, bookUuid: $bookUuid, name: $name, recordNumber: $recordNumber, phone: $phone, eventTypes: $eventTypes, hasChargeItems: $hasChargeItems, startTime: $startTime, endTime: $endTime, version: $version)';
-  }
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is Event &&
+          other.id == id &&
+          other.bookUuid == bookUuid &&
+          other.recordUuid == recordUuid &&
+          other.title == title &&
+          listEquals(other.eventTypes, eventTypes);
 
   @override
-  bool operator ==(Object other) {
-    if (identical(this, other)) return true;
-    return other is Event &&
-        other.id == id &&
-        other.bookUuid == bookUuid &&
-        other.name == name &&
-        other.recordNumber == recordNumber &&
-        other.phone == phone &&
-        listEquals(other.eventTypes, eventTypes) &&
-        other.hasChargeItems == hasChargeItems &&
-        other.startTime == startTime &&
-        other.endTime == endTime &&
-        other.isRemoved == isRemoved &&
-        other.removalReason == removalReason &&
-        other.originalEventId == originalEventId &&
-        other.newEventId == newEventId &&
-        other.isChecked == isChecked &&
-        other.hasNote == hasNote &&
-        other.version == version;
-  }
-
-  @override
-  int get hashCode {
-    return Object.hash(id, bookUuid, name, recordNumber, phone, Object.hashAll(eventTypes), hasChargeItems, startTime, endTime, isRemoved, removalReason, originalEventId, newEventId, isChecked, hasNote, version);
-  }
+  int get hashCode => Object.hash(id, bookUuid, recordUuid, title, Object.hashAll(eventTypes));
 }
