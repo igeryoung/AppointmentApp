@@ -104,7 +104,6 @@ class NoteRoutes {
 
       final result = await noteService.createOrUpdateNoteForRecord(
         recordUuid: recordUuid,
-        deviceId: deviceId,
         pagesData: pagesData,
         expectedVersion: version != null ? version - 1 : null,
       );
@@ -194,7 +193,7 @@ class NoteRoutes {
             headers: {'Content-Type': 'application/json'});
       }
 
-      final notes = await noteService.batchGetNotesByRecordUuids(deviceId: deviceId, recordUuids: recordUuids);
+      final notes = await noteService.batchGetNotesByRecordUuids(recordUuids: recordUuids);
       return Response.ok(jsonEncode({'success': true, 'notes': notes, 'count': notes.length}),
           headers: {'Content-Type': 'application/json'});
     } catch (e) {

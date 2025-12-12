@@ -1,6 +1,5 @@
 import '../database/connection.dart';
 
-/// Result of note operation that may have version conflict
 class NoteOperationResult {
   final bool success;
   final Map<String, dynamic>? note;
@@ -38,7 +37,6 @@ class NoteOperationResult {
         serverNote = null;
 }
 
-/// Service for handling note operations (record-based architecture)
 class NoteService {
   final DatabaseConnection db;
 
@@ -67,7 +65,6 @@ class NoteService {
 
       if (row != null) return true;
 
-      // Grant access on-demand if book exists
       final bookRow = await db.querySingle(
         'SELECT device_id FROM books WHERE book_uuid = @bookUuid AND is_deleted = false',
         parameters: {'bookUuid': bookUuid},
@@ -100,7 +97,6 @@ class NoteService {
     }
   }
 
-  /// Get note by record_uuid
   Future<Map<String, dynamic>?> getNoteByRecordUuid(String recordUuid) async {
     try {
       final row = await db.querySingle('''
@@ -123,29 +119,25 @@ class NoteService {
     }
   }
 
-  /// Create or update note for a record
   Future<NoteOperationResult> createOrUpdateNoteForRecord({
     required String recordUuid,
-    required String deviceId,
     required String pagesData,
     int? expectedVersion,
   }) async {
     try {
       final result = await db.querySingle('''
-        INSERT INTO notes (record_uuid, device_id, pages_data, version, created_at, updated_at, synced_at)
-        VALUES (@recordUuid, @deviceId, @pagesData, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+        INSERT INTO notes (record_uuid, pages_data, version, created_at, updated_at, synced_at)
+        VALUES (@recordUuid, @pagesData, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
         ON CONFLICT (record_uuid) DO UPDATE
         SET pages_data = EXCLUDED.pages_data,
             updated_at = CURRENT_TIMESTAMP,
             synced_at = CURRENT_TIMESTAMP,
-            version = notes.version + 1,
-            device_id = EXCLUDED.device_id
+            version = notes.version + 1
         WHERE (CAST(@expectedVersion AS INTEGER) IS NULL OR notes.version = CAST(@expectedVersion AS INTEGER))
           AND notes.is_deleted = false
         RETURNING id, record_uuid, pages_data, created_at, updated_at, version
       ''', parameters: {
         'recordUuid': recordUuid,
-        'deviceId': deviceId,
         'pagesData': pagesData,
         'expectedVersion': expectedVersion,
       });
@@ -160,7 +152,6 @@ class NoteService {
           'version': result['version'],
         };
 
-        // Update has_note flag on all events for this record
         final hasContent = pagesData != '[[]]' && pagesData != '[]' && pagesData.trim().isNotEmpty;
         await db.query(
           'UPDATE events SET has_note = @hasNote WHERE record_uuid = @recordUuid',
@@ -170,7 +161,6 @@ class NoteService {
         return NoteOperationResult.success(note);
       }
 
-      // Check for conflict
       final currentNote = await db.querySingle(
         'SELECT id, record_uuid, pages_data, created_at, updated_at, version, is_deleted FROM notes WHERE record_uuid = @recordUuid',
         parameters: {'recordUuid': recordUuid},
@@ -198,7 +188,6 @@ class NoteService {
     }
   }
 
-  /// Delete note by record_uuid
   Future<bool> deleteNoteByRecordUuid(String recordUuid) async {
     try {
       final result = await db.querySingle('''
@@ -220,9 +209,7 @@ class NoteService {
     }
   }
 
-  /// Batch get notes by record UUIDs
   Future<List<Map<String, dynamic>>> batchGetNotesByRecordUuids({
-    required String deviceId,
     required List<String> recordUuids,
   }) async {
     if (recordUuids.isEmpty) return [];
@@ -236,7 +223,7 @@ class NoteService {
           AND n.is_deleted = false
           AND r.is_deleted = false
         ORDER BY n.record_uuid
-      ''', parameters: {'recordUuids': recordUuids, 'deviceId': deviceId});
+      ''', parameters: {'recordUuids': recordUuids});
 
       return rows.map((row) => {
         'id': row['id'],
