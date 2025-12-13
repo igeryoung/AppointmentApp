@@ -737,6 +737,42 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chargeItemsRequireRecordNumber => '请添加记录编号以追踪收费项目';
+
+  @override
+  String get serverSetupTitle => '服务器设置';
+
+  @override
+  String get serverSetupSubtitle => '请输入服务器网址以开始使用';
+
+  @override
+  String get deviceRegistrationTitle => '设备注册';
+
+  @override
+  String get deviceRegistrationSubtitle => '此设备尚未注册，请输入注册密码';
+
+  @override
+  String get serverUrlLabel => '服务器网址';
+
+  @override
+  String get serverUrlRequired => '服务器网址为必填项目';
+
+  @override
+  String get serverUrlInvalid => '网址格式无效（需以 http:// 或 https:// 开头）';
+
+  @override
+  String get registrationPasswordLabel => '注册密码';
+
+  @override
+  String get passwordRequired => '密码为必填项目';
+
+  @override
+  String get nextButton => '下一步';
+
+  @override
+  String get registerButton => '注册';
+
+  @override
+  String get backButton => '返回';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1472,4 +1508,40 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get chargeItemsRequireRecordNumber => '請新增病例號以追蹤待收款項';
+
+  @override
+  String get serverSetupTitle => '伺服器設定';
+
+  @override
+  String get serverSetupSubtitle => '請輸入伺服器網址以開始使用';
+
+  @override
+  String get deviceRegistrationTitle => '裝置註冊';
+
+  @override
+  String get deviceRegistrationSubtitle => '此裝置尚未註冊，請輸入註冊密碼';
+
+  @override
+  String get serverUrlLabel => '伺服器網址';
+
+  @override
+  String get serverUrlRequired => '伺服器網址為必填項目';
+
+  @override
+  String get serverUrlInvalid => '網址格式無效（需以 http:// 或 https:// 開頭）';
+
+  @override
+  String get registrationPasswordLabel => '註冊密碼';
+
+  @override
+  String get passwordRequired => '密碼為必填項目';
+
+  @override
+  String get nextButton => '下一步';
+
+  @override
+  String get registerButton => '註冊';
+
+  @override
+  String get backButton => '返回';
 }

@@ -184,5 +184,18 @@
   "week": "Week",
   "@week": {
     "description": "Week view tab"
-  }
+  },
+
+  "serverSetupTitle": "Server Setup",
+  "serverSetupSubtitle": "Enter the server URL to get started",
+  "deviceRegistrationTitle": "Device Registration",
+  "deviceRegistrationSubtitle": "This device is not registered. Please enter the registration password",
+  "serverUrlLabel": "Server URL",
+  "serverUrlRequired": "Server URL is required",
+  "serverUrlInvalid": "Invalid URL format (must start with http:// or https://)",
+  "registrationPasswordLabel": "Registration Password",
+  "passwordRequired": "Password is required",
+  "nextButton": "Next",
+  "registerButton": "Register",
+  "backButton": "Back"
 }

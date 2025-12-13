@@ -974,5 +974,18 @@
   "chargeItemsRequireRecordNumber": "请添加记录编号以追踪收费项目",
   "@chargeItemsRequireRecordNumber": {
     "description": "Message shown when trying to add charge items without a record number"
-  }
+  },
+
+  "serverSetupTitle": "服务器设置",
+  "serverSetupSubtitle": "请输入服务器网址以开始使用",
+  "deviceRegistrationTitle": "设备注册",
+  "deviceRegistrationSubtitle": "此设备尚未注册，请输入注册密码",
+  "serverUrlLabel": "服务器网址",
+  "serverUrlRequired": "服务器网址为必填项目",
+  "serverUrlInvalid": "网址格式无效（需以 http:// 或 https:// 开头）",
+  "registrationPasswordLabel": "注册密码",
+  "passwordRequired": "密码为必填项目",
+  "nextButton": "下一步",
+  "registerButton": "注册",
+  "backButton": "返回"
 }

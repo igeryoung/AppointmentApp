@@ -44,7 +44,7 @@ class DeviceRegistrationAdapter {
         platform: actualPlatform,
       );
 
-      // Save device credentials
+      // Save device credentials with server URL
       final deviceId = response['deviceId'] as String;
       final deviceToken = response['deviceToken'] as String;
 
@@ -52,6 +52,7 @@ class DeviceRegistrationAdapter {
         deviceId: deviceId,
         deviceToken: deviceToken,
         deviceName: actualDeviceName,
+        serverUrl: baseUrl,
         platform: actualPlatform,
       );
     } finally {
