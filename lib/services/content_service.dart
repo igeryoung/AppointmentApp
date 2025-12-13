@@ -193,8 +193,34 @@ class ContentService {
   ///
   /// In server-based architecture, saves directly to server
   Future<void> saveNote(String eventId, Note note) async {
-    // Save directly to server via syncNote
-    await syncNote(eventId);
+    // Get credentials
+    final credentials = await _db.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception('Device not registered');
+    }
+
+    // Get event for bookUuid
+    final event = await _db.getEventById(eventId);
+    if (event == null) {
+      throw Exception('Event not found');
+    }
+
+    // Prepare note data
+    final noteMap = note.toMap();
+    final noteData = {
+      'pagesData': noteMap['pages_data'],
+      'version': noteMap['version'],
+    };
+
+    // Save directly to server
+    await _apiClient.saveNote(
+      bookUuid: event.bookUuid,
+      eventId: eventId,
+      noteData: noteData,
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+      eventData: event.toMap(),
+    );
   }
 
   /// Force sync a note to server
