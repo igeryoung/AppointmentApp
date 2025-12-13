@@ -53,7 +53,7 @@ Future<void> setupServices() async {
     getIt.registerLazySingleton<IEventRepository>(
       () => EventRepositoryImpl(
         () => db.database,
-        (eventId) => db.getCachedNote(eventId),
+        (eventId) => db.getNoteByEventId(eventId),
       ),
     );
 
