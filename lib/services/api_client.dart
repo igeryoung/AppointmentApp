@@ -169,8 +169,12 @@ class ApiClient {
         requestBody['eventData'] = eventData;
       }
 
+      final url = '$baseUrl/api/books/$bookUuid/events/$eventId/note';
+      debugPrint('[ApiClient] saveNote: POST $url');
+      debugPrint('[ApiClient] saveNote: hasEventData=${eventData != null}');
+
       final response = await _client.post(
-        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
+        Uri.parse(url),
         headers: {
           'Content-Type': 'application/json',
           'X-Device-ID': deviceId,
@@ -178,6 +182,8 @@ class ApiClient {
         },
         body: jsonEncode(requestBody),
       ).timeout(timeout);
+
+      debugPrint('[ApiClient] saveNote: response=${response.statusCode}');
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -187,6 +193,13 @@ class ApiClient {
         throw ApiConflictException(
           'Note version conflict',
           statusCode: 409,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 404) {
+        debugPrint('[ApiClient] saveNote: 404 - Event not found on server. Response: ${response.body}');
+        throw ApiException(
+          'Event not found on server',
+          statusCode: 404,
           responseBody: response.body,
         );
       } else {

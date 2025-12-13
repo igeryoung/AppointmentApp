@@ -212,15 +212,24 @@ class ContentService {
       'version': noteMap['version'],
     };
 
-    // Save directly to server
-    await _apiClient.saveNote(
-      bookUuid: event.bookUuid,
-      eventId: eventId,
-      noteData: noteData,
-      deviceId: credentials.deviceId,
-      deviceToken: credentials.deviceToken,
-      eventData: event.toMap(),
-    );
+    debugPrint('[ContentService] saveNote: eventId=$eventId, bookUuid=${event.bookUuid}, recordUuid=${note.recordUuid}');
+    debugPrint('[ContentService] saveNote: noteData keys=${noteData.keys.toList()}');
+
+    try {
+      // Save directly to server
+      await _apiClient.saveNote(
+        bookUuid: event.bookUuid,
+        eventId: eventId,
+        noteData: noteData,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+        eventData: event.toMap(),
+      );
+      debugPrint('[ContentService] saveNote: success');
+    } catch (e) {
+      debugPrint('[ContentService] saveNote: failed - $e');
+      rethrow;
+    }
   }
 
   /// Force sync a note to server
