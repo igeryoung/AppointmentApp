@@ -193,22 +193,9 @@ class EventDetailController {
     _wasOfflineLastCheck = !serverReachable;
 
 
-    // Network just came back online
-    if (serverReachable && wasOfflineBefore) {
-
-      // If we have unsynced changes, automatically retry sync
-      if (_state.hasUnsyncedChanges && event.id != null) {
-
-        // Wait a bit for network to stabilize
-        await Future.delayed(const Duration(seconds: 1));
-        if (_state.hasUnsyncedChanges) {
-          await syncNoteInBackground(event.id!);
-        }
-      }
-    }
   }
 
-  /// Load note with cache-first strategy
+  /// Load note from server
   Future<void> loadNote() async {
     if (event.id == null) {
       return;
@@ -245,23 +232,11 @@ class EventDetailController {
       } else {
       }
     } catch (e) {
-      _updateState(_state.copyWith(isOffline: true));
-    }
-
-    // Fallback to cache if server fetch failed or note absent
-    final cachedNote = await _noteSyncAdapter!.getCachedNote(event.id!);
-    if (cachedNote != null) {
-      if (_noteEditGeneration != noteLoadGeneration) {
-      } else {
-        final totalStrokes = cachedNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-        _updateState(_state.copyWith(
-          note: cachedNote,
-          lastKnownPages: cachedNote.pages,
-          hasUnsyncedChanges: false,  // Server-based architecture: no dirty tracking
-          isLoadingFromServer: false,
-        ));
-        return;
-      }
+      _updateState(_state.copyWith(
+        isLoadingFromServer: false,
+        isOffline: true,
+      ));
+      throw Exception('Failed to load note: Cannot connect to server');
     }
 
     _updateState(_state.copyWith(isLoadingFromServer: false));
@@ -309,8 +284,8 @@ class EventDetailController {
               note: existingNote,
               lastKnownPages: existingNote.pages,
             ));
-            // Sync to server
-            await saveNoteWithOfflineFirst(savedEvent.id!, existingNote.pages);
+            // Save to server
+            await saveNoteToServer(savedEvent.id!, existingNote.pages);
             return savedEvent;
           }
         }
@@ -339,15 +314,15 @@ class EventDetailController {
               note: existingNote,
               lastKnownPages: existingNote.pages,
             ));
-            // Sync to server
-            await saveNoteWithOfflineFirst(savedEvent.id!, existingNote.pages);
+            // Save to server
+            await saveNoteToServer(savedEvent.id!, existingNote.pages);
             return savedEvent;
           }
         }
       }
 
-      // Save handwriting note using offline-first strategy
-      await saveNoteWithOfflineFirst(savedEvent.id!, pages);
+      // Save handwriting note to server
+      await saveNoteToServer(savedEvent.id!, pages);
 
       return savedEvent;
     } catch (e) {
@@ -356,24 +331,21 @@ class EventDetailController {
     }
   }
 
-  /// Save note with offline-first strategy
-  Future<void> saveNoteWithOfflineFirst(String eventId, List<List<Stroke>> pages) async {
-
+  /// Save note directly to server
+  Future<void> saveNoteToServer(String eventId, List<List<Stroke>> pages) async {
     if (_noteSyncAdapter == null) {
-      throw Exception('NoteSyncAdapter not initialized. Cannot save note.');
+      throw Exception('Cannot save: Services not initialized');
     }
 
     // Get the event to get its recordUuid
     if (_dbService is! PRDDatabaseService) {
-      throw Exception('PRDDatabaseService required');
+      throw Exception('Database service error');
     }
     final prdDb = _dbService as PRDDatabaseService;
     final eventData = await prdDb.getEventById(eventId);
     if (eventData == null) {
-      throw Exception('Event not found: $eventId');
+      throw Exception('Event not found');
     }
-
-    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
 
     final noteToSave = Note(
       recordUuid: eventData.recordUuid,
@@ -382,61 +354,16 @@ class EventDetailController {
       updatedAt: DateTime.now(),
     );
 
-    try {
-      await _noteSyncAdapter!.saveNote(eventId, noteToSave);
+    // Save directly to server (no local cache)
+    await _noteSyncAdapter!.saveNote(eventId, noteToSave);
 
-      // Verify local save succeeded
-      final verifyNote = await _noteSyncAdapter!.getCachedNote(eventId);
-
-      if (verifyNote == null) {
-        throw Exception('Local save verification failed: Note not found in cache after save');
-      }
-
-      final verifyTotalStrokes = verifyNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-      if (verifyTotalStrokes != totalStrokes) {
-        throw Exception('Local save verification failed: Expected $totalStrokes strokes but found $verifyTotalStrokes');
-      }
-
-
-      _updateState(_state.copyWith(
-        note: noteToSave,
-        hasChanges: false,
-        hasUnsyncedChanges: true,
-        lastKnownPages: pages,
-      ));
-
-
-      // Background sync to server
-      await syncNoteInBackground(eventId);
-    } catch (e, stackTrace) {
-      rethrow;
-    }
-  }
-
-  /// Background sync note to server
-  Future<void> syncNoteInBackground(String eventId) async {
-    if (_noteSyncAdapter == null) {
-      return;
-    }
-
-    try {
-      await _noteSyncAdapter!.syncNote(eventId);
-
-      _updateState(_state.copyWith(
-        hasUnsyncedChanges: false,
-        isOffline: false,
-      ));
-      _wasOfflineLastCheck = false;
-
-    } catch (e) {
-
-      // Verify server connectivity after failure
-      final serverReachable = await _checkServerConnectivity();
-
-      _updateState(_state.copyWith(isOffline: !serverReachable));
-      _wasOfflineLastCheck = !serverReachable;
-
-    }
+    // Update UI state on success
+    _updateState(_state.copyWith(
+      note: noteToSave,
+      hasChanges: false,
+      hasUnsyncedChanges: false,
+      lastKnownPages: pages,
+    ));
   }
 
   /// Delete event permanently
@@ -446,11 +373,6 @@ class EventDetailController {
     _updateState(_state.copyWith(isLoading: true));
     try {
       await _dbService.deleteEvent(event.id!);
-
-      // Sync deleted event state to server
-      if (event.id != null) {
-        await syncNoteInBackground(event.id!);
-      }
     } catch (e) {
       _updateState(_state.copyWith(isLoading: false));
       rethrow;
@@ -464,11 +386,6 @@ class EventDetailController {
     _updateState(_state.copyWith(isLoading: true));
     try {
       await _dbService.removeEvent(event.id!, reason);
-
-      // Sync removed event to server
-      if (event.id != null) {
-        await syncNoteInBackground(event.id!);
-      }
     } catch (e) {
       _updateState(_state.copyWith(isLoading: false));
       rethrow;
@@ -481,16 +398,7 @@ class EventDetailController {
 
     _updateState(_state.copyWith(isLoading: true));
     try {
-      final result = await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
-
-      // Sync both old event (with isRemoved=true) and new event to server
-      // Old event must be synced first to ensure server knows it's removed
-      if (result.oldEvent.id != null) {
-        await syncNoteInBackground(result.oldEvent.id!);
-      }
-      if (result.newEvent.id != null) {
-        await syncNoteInBackground(result.newEvent.id!);
-      }
+      await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
     } catch (e) {
       _updateState(_state.copyWith(isLoading: false));
       rethrow;
