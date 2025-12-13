@@ -324,12 +324,6 @@ class _ScheduleScreenState extends State<ScheduleScreen> with WidgetsBindingObse
                     dbService: _dbService,
                     bookUuid: widget.book.uuid,
                     get3DayWindowStart: (date) => ScheduleLayoutUtils.get3DayWindowStart(date),
-                    cacheManager: _controller.cacheManager,
-                    getEffectiveDate: () => ScheduleLayoutUtils.getEffectiveDate(_controller.selectedDate),
-                    preloadNotes: (events) {
-                      final generation = _controller.bumpPreloadGeneration();
-                      _controller.preloadNotesInBackground(context, events, generation);
-                    },
                     onDateChange: _controller.changeDateTo,
                   ),
                 ),

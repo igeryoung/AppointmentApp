@@ -6,6 +6,7 @@ import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
+import '../../services/database/prd_database_service.dart';
 import '../../services/time_service.dart';
 
 /// Utility class for heavy load testing in ScheduleScreen
@@ -417,19 +418,20 @@ class ScheduleTestUtils {
           final recordNumber = 'HEAVY-${createdEventsCount + 1}';
           final eventType = eventTypes[random.nextInt(eventTypes.length)];
 
-          final event = Event(
-            bookUuid: bookUuid,
-            name: name,
-            recordNumber: recordNumber,
-            eventTypes: [eventType],
-            startTime: eventStartTime,
-            endTime: null, // Open-ended
-            createdAt: now,
-            updatedAt: now,
-          );
-
           try {
-            final createdEvent = await dbService.createEvent(event);
+            Event createdEvent;
+            if (dbService is PRDDatabaseService) {
+              createdEvent = await dbService.createEventWithRecord(
+                bookUuid: bookUuid,
+                name: name,
+                recordNumber: recordNumber,
+                eventTypes: [eventType],
+                startTime: eventStartTime,
+                endTime: null, // Open-ended
+              );
+            } else {
+              throw Exception('PRDDatabaseService required for test utils');
+            }
             createdEventIds.add(createdEvent.id!);
             createdEventsCount++;
 
@@ -456,19 +458,28 @@ class ScheduleTestUtils {
       final eventId = createdEventIds[i];
 
       try {
+        if (dbService is! PRDDatabaseService) {
+          throw Exception('PRDDatabaseService required for test utils');
+        }
+        final prdDb = dbService as PRDDatabaseService;
+
+        // Get event to get its recordUuid
+        final event = await prdDb.getEventById(eventId);
+        if (event == null) continue;
+
         // Generate random strokes
         final strokes = generateRandomStrokes(strokesPerEvent);
         totalStrokes += strokes.length;
 
-        // Create note with strokes
+        // Create note with strokes (linked to record, not event)
         final note = Note(
-          eventId: eventId,
+          recordUuid: event.recordUuid,
           pages: [strokes], // Wrap strokes in array for multi-page format
           createdAt: now,
           updatedAt: now,
         );
 
-        await dbService.saveCachedNote(note);
+        await prdDb.saveNote(note);
         strokesAddedCount++;
 
         // Update progress
@@ -602,19 +613,19 @@ class ScheduleTestUtils {
             final recordNumber = 'HEAVY-${createdEventsCount + 1}';
             final eventType = eventTypes[random.nextInt(eventTypes.length)];
 
-            final event = Event(
-              bookUuid: bookUuid,
-              name: name,
-              recordNumber: recordNumber,
-              eventTypes: [eventType],
-              startTime: eventStartTime,
-              endTime: null, // Open-ended
-              createdAt: now,
-              updatedAt: now,
-            );
-
             try {
-              await dbService.createEvent(event);
+              if (dbService is PRDDatabaseService) {
+                await dbService.createEventWithRecord(
+                  bookUuid: bookUuid,
+                  name: name,
+                  recordNumber: recordNumber,
+                  eventTypes: [eventType],
+                  startTime: eventStartTime,
+                  endTime: null, // Open-ended
+                );
+              } else {
+                throw Exception('PRDDatabaseService required for test utils');
+              }
               createdEventsCount++;
 
               // Update progress
@@ -675,7 +686,7 @@ class ScheduleTestUtils {
     // Query all events in the book
     final allEvents = await dbService.getAllEventsByBook(bookUuid);
 
-    var heavyEvents = allEvents.where((e) => e.recordNumber?.startsWith('HEAVY-') ?? false).toList();
+    var heavyEvents = allEvents.where((e) => e.recordNumber.startsWith('HEAVY-')).toList();
 
     if (heavyEvents.isEmpty) {
       if (context.mounted) {
@@ -746,24 +757,29 @@ class ScheduleTestUtils {
       final event = heavyEvents[i];
 
       try {
+        if (dbService is! PRDDatabaseService) {
+          throw Exception('PRDDatabaseService required for test utils');
+        }
+        final prdDb = dbService as PRDDatabaseService;
+
         // Generate random strokes
         final strokes = generateRandomStrokes(strokesPerEvent);
         totalStrokes += strokes.length;
 
-        // Create note with strokes
+        // Create note with strokes (linked to record, not event)
         final note = Note(
-          eventId: event.id!,
+          recordUuid: event.recordUuid,
           pages: [strokes], // Wrap strokes in array for multi-page format
           createdAt: now,
           updatedAt: now,
         );
 
-        await dbService.saveCachedNote(note);
+        await prdDb.saveNote(note);
         strokesAddedCount++;
 
         // Update event recordNumber: HEAVY-xxx -> DONE-HEAVY-xxx
         final updatedEvent = event.copyWith(
-          recordNumber: event.recordNumber?.replaceFirst('HEAVY-', 'DONE-HEAVY-'),
+          recordNumber: event.recordNumber.replaceFirst('HEAVY-', 'DONE-HEAVY-'),
         );
         await dbService.updateEvent(updatedEvent);
 

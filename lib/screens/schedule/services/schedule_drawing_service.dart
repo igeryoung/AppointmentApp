@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../../models/schedule_drawing.dart';
 import '../../../services/database_service_interface.dart';
+import '../../../services/database/prd_database_service.dart';
 import '../../../services/content_service.dart';
 import '../../../services/time_service.dart';
 import '../../../utils/schedule/schedule_layout_utils.dart';
@@ -89,9 +90,10 @@ class ScheduleDrawingService {
           viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
           forceRefresh: false,
         );
-      } else {
+      } else if (_dbService is PRDDatabaseService) {
         // Fallback to direct database access
-        drawing = await _dbService.getCachedDrawing(
+        final prdDb = _dbService as PRDDatabaseService;
+        drawing = await prdDb.getDrawing(
           bookUuid,
           effectiveDate,
           ScheduleDrawing.VIEW_MODE_3DAY,
@@ -225,14 +227,20 @@ class ScheduleDrawingService {
         }
 
         // Update current drawing state
-        final savedDrawing = await _dbService.getCachedDrawing(
-          bookUuid,
-          effectiveDate,
-          ScheduleDrawing.VIEW_MODE_3DAY,
-        );
-        _currentDrawing = savedDrawing ?? drawing;
-      } else {
-        final savedDrawing = await _dbService.saveCachedDrawing(drawing);
+        if (_dbService is PRDDatabaseService) {
+          final prdDb = _dbService as PRDDatabaseService;
+          final savedDrawing = await prdDb.getDrawing(
+            bookUuid,
+            effectiveDate,
+            ScheduleDrawing.VIEW_MODE_3DAY,
+          );
+          _currentDrawing = savedDrawing ?? drawing;
+        } else {
+          _currentDrawing = drawing;
+        }
+      } else if (_dbService is PRDDatabaseService) {
+        final prdDb = _dbService as PRDDatabaseService;
+        final savedDrawing = await prdDb.saveDrawing(drawing);
 
         // RACE CONDITION FIX: Verify date hasn't changed during save
         final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);

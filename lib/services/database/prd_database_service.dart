@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
 import '../../models/event.dart';
+import '../../models/event_type.dart';
+import '../../models/note.dart';
 import '../database_service_interface.dart';
 
 import 'mixins/book_operations_mixin.dart';
@@ -295,5 +297,213 @@ class PRDDatabaseService
   static void resetInstance() {
     _instance = null;
     _database = null;
+  }
+
+  // ===================
+  // Record-based Helper Methods
+  // ===================
+
+  /// Generate title from name and record number
+  /// Format: "name(XX)" where XX is last 2 digits of record_number
+  /// If no record_number, just returns name
+  static String generateTitle(String name, String? recordNumber) {
+    if (recordNumber == null || recordNumber.isEmpty) {
+      return name;
+    }
+    final suffix = recordNumber.length >= 2
+        ? recordNumber.substring(recordNumber.length - 2)
+        : recordNumber;
+    return '$name($suffix)';
+  }
+
+  /// Get all unique names in a book (for autocomplete)
+  Future<List<String>> getAllNamesInBook(String bookUuid) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT DISTINCT r.name
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ? AND r.name IS NOT NULL AND r.name != ''
+      ORDER BY r.name ASC
+    ''', [bookUuid]);
+    return results.map((r) => r['name'] as String).toList();
+  }
+
+  /// Get all record numbers with names (for autocomplete)
+  Future<List<Map<String, String>>> getAllRecordNumbersWithNames(String bookUuid) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT DISTINCT r.record_number, r.name
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ? AND r.record_number != ''
+      ORDER BY r.record_number ASC
+    ''', [bookUuid]);
+    return results.map((r) => {
+      'recordNumber': r['record_number'] as String,
+      'name': (r['name'] as String?) ?? '',
+    }).toList();
+  }
+
+  /// Get name by record number
+  Future<String?> getNameByRecordNumber(String recordNumber) async {
+    final record = await getRecordByRecordNumber(recordNumber);
+    return record?.name;
+  }
+
+  /// Get phone by record number
+  Future<String?> getPhoneByRecordNumber(String recordNumber) async {
+    final record = await getRecordByRecordNumber(recordNumber);
+    return record?.phone;
+  }
+
+  /// Get record data (name, phone) by record number
+  Future<Map<String, String?>?> getRecordDataByRecordNumber(String recordNumber) async {
+    final record = await getRecordByRecordNumber(recordNumber);
+    if (record == null) return null;
+    return {
+      'name': record.name,
+      'phone': record.phone,
+      'recordUuid': record.recordUuid,
+    };
+  }
+
+  /// Get note by event ID (looks up event's record_uuid first)
+  Future<Note?> getNoteByEventId(String eventId) async {
+    final event = await getEventById(eventId);
+    if (event == null) return null;
+    return getNoteByRecordUuid(event.recordUuid);
+  }
+
+  /// Find existing note for a record by record_number
+  Future<Note?> findNoteByRecordNumber(String recordNumber) async {
+    if (recordNumber.isEmpty) return null;
+    final record = await getRecordByRecordNumber(recordNumber);
+    if (record == null || record.recordUuid == null) return null;
+    return getNoteByRecordUuid(record.recordUuid!);
+  }
+
+  /// Apply server drawing change
+  Future<void> applyServerDrawingChange(Map<String, dynamic> data) async {
+    final db = await database;
+    final bookUuid = data['book_uuid'] as String;
+    final date = DateTime.fromMillisecondsSinceEpoch((data['date'] as int) * 1000, isUtc: true);
+    final viewMode = data['view_mode'] as int;
+    final normalizedDate = DateTime(date.year, date.month, date.day);
+
+    // Check if drawing exists
+    final existing = await getDrawing(bookUuid, normalizedDate, viewMode);
+
+    final drawingData = {
+      'book_uuid': bookUuid,
+      'date': normalizedDate.millisecondsSinceEpoch ~/ 1000,
+      'view_mode': viewMode,
+      'strokes_data': data['strokes_data'],
+      'created_at': data['created_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'updated_at': data['updated_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'version': data['version'] ?? 1,
+      'is_dirty': 0, // Server data is clean
+    };
+
+    if (existing != null) {
+      await db.update(
+        'schedule_drawings',
+        drawingData,
+        where: 'book_uuid = ? AND date = ? AND view_mode = ?',
+        whereArgs: [bookUuid, normalizedDate.millisecondsSinceEpoch ~/ 1000, viewMode],
+      );
+    } else {
+      await db.insert('schedule_drawings', drawingData);
+    }
+  }
+
+  /// Create event with auto-generated title and record handling
+  Future<Event> createEventWithRecord({
+    required String bookUuid,
+    required String name,
+    String? recordNumber,
+    String? phone,
+    required List<EventType> eventTypes,
+    required DateTime startTime,
+    DateTime? endTime,
+  }) async {
+    // Get or create record
+    final record = await getOrCreateRecord(
+      recordNumber: recordNumber ?? '',
+      name: name,
+      phone: phone,
+    );
+
+    // Generate title
+    final title = generateTitle(name, recordNumber);
+
+    final now = DateTime.now();
+    final event = Event(
+      bookUuid: bookUuid,
+      recordUuid: record.recordUuid!,
+      title: title,
+      recordNumber: recordNumber ?? '',
+      eventTypes: eventTypes,
+      startTime: startTime,
+      endTime: endTime,
+      createdAt: now,
+      updatedAt: now,
+    );
+
+    return createEvent(event);
+  }
+
+  /// Update event with record handling
+  Future<Event> updateEventWithRecord({
+    required Event event,
+    required String name,
+    String? recordNumber,
+    String? phone,
+    List<EventType>? eventTypes,
+    DateTime? startTime,
+    DateTime? endTime,
+    bool clearEndTime = false,
+  }) async {
+    final newRecordNumber = recordNumber ?? '';
+    final oldRecordNumber = event.recordNumber;
+
+    String recordUuid = event.recordUuid;
+
+    // If record number changed, get or create new record
+    if (newRecordNumber != oldRecordNumber) {
+      final record = await getOrCreateRecord(
+        recordNumber: newRecordNumber,
+        name: name,
+        phone: phone,
+      );
+      recordUuid = record.recordUuid!;
+    } else {
+      // Update existing record's name/phone if changed
+      final existingRecord = await getRecordByUuid(event.recordUuid);
+      if (existingRecord != null) {
+        if (name != existingRecord.name || phone != existingRecord.phone) {
+          await updateRecord(
+            recordUuid: existingRecord.recordUuid!,
+            name: name,
+            phone: phone,
+          );
+        }
+      }
+    }
+
+    // Generate title
+    final title = generateTitle(name, recordNumber);
+
+    final updated = event.copyWith(
+      recordUuid: recordUuid,
+      title: title,
+      recordNumber: newRecordNumber,
+      eventTypes: eventTypes ?? event.eventTypes,
+      startTime: startTime ?? event.startTime,
+      endTime: clearEndTime ? null : (endTime ?? event.endTime),
+      clearEndTime: clearEndTime,
+    );
+
+    return updateEvent(updated);
   }
 }

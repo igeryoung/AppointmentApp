@@ -135,10 +135,23 @@ class EventDetailController {
         await _dbService.replaceEventWithServerData(refreshedEvent);
 
         await _logEventTime('after_server_fetch', refreshedEvent);
+
+        // Get record data (name, phone) from record via recordUuid
+        String name = '';
+        String phone = '';
+        if (_dbService is PRDDatabaseService) {
+          final prdDb = _dbService as PRDDatabaseService;
+          final record = await prdDb.getRecordByUuid(refreshedEvent.recordUuid);
+          if (record != null) {
+            name = record.name ?? '';
+            phone = record.phone ?? '';
+          }
+        }
+
         _updateState(_state.copyWith(
-          name: refreshedEvent.name,
-          recordNumber: refreshedEvent.recordNumber ?? '',
-          phone: refreshedEvent.phone ?? '',
+          name: name,
+          recordNumber: refreshedEvent.recordNumber,
+          phone: phone,
           selectedEventTypes: refreshedEvent.eventTypes,
           startTime: refreshedEvent.startTime,
           endTime: refreshedEvent.endTime,
@@ -258,83 +271,79 @@ class EventDetailController {
   Future<Event> saveEvent() async {
 
     final pages = _state.lastKnownPages;
-    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
 
     _updateState(_state.copyWith(isLoading: true));
 
     try {
+      final nameText = _state.name.trim();
       final recordNumberText = _state.recordNumber.trim();
       final phoneText = _state.phone.trim();
 
       // Check if user cleared the end time (converting close-end to open-end event)
       final shouldClearEndTime = event.endTime != null && _state.endTime == null;
 
-      final eventToSave = event.copyWith(
-        name: _state.name.trim(),
-        recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
-        phone: phoneText.isEmpty ? null : phoneText,
-        eventTypes: _state.selectedEventTypes,
-        // Note: chargeItems are now stored in person_charge_items table, not in events
-        startTime: _state.startTime,
-        endTime: _state.endTime,
-        clearEndTime: shouldClearEndTime,
-      );
-
-      // Detect if record_number changed from null/empty to a value
-      final oldRecordNumber = event.recordNumber?.trim() ?? '';
-      final newRecordNumber = eventToSave.recordNumber?.trim() ?? '';
-      final recordNumberAdded = oldRecordNumber.isEmpty && newRecordNumber.isNotEmpty;
+      if (_dbService is! PRDDatabaseService) {
+        throw Exception('PRDDatabaseService required');
+      }
+      final prdDb = _dbService as PRDDatabaseService;
 
       Event savedEvent;
       if (isNew) {
-        savedEvent = await _dbService.createEvent(eventToSave);
+        // Create new event with record handling
+        savedEvent = await prdDb.createEventWithRecord(
+          bookUuid: event.bookUuid,
+          name: nameText,
+          recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
+          phone: phoneText.isEmpty ? null : phoneText,
+          eventTypes: _state.selectedEventTypes,
+          startTime: _state.startTime,
+          endTime: _state.endTime,
+        );
 
-        // Safety check: If new event has record number, check for existing person note
-        // This prevents accidental overwriting if UI dialog wasn't shown
-        if (recordNumberText.isNotEmpty && _dbService is PRDDatabaseService) {
-          final prdDb = _dbService as PRDDatabaseService;
-          final existingNote = await prdDb.findExistingPersonNote(
-            _state.name.trim(),
-            recordNumberText,
-          );
-
-          if (existingNote != null) {
-            // DB has handwriting - auto-load it (safety: never lose existing patient data)
-            final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-            await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
+        // Check for existing note for this record
+        if (recordNumberText.isNotEmpty) {
+          final existingNote = await prdDb.findNoteByRecordNumber(recordNumberText);
+          if (existingNote != null && existingNote.isNotEmpty) {
+            // Load existing note (safety: never lose existing patient data)
             _updateState(_state.copyWith(
               note: existingNote,
               lastKnownPages: existingNote.pages,
             ));
-            // Still sync to server even when using existing note
+            // Sync to server
             await saveNoteWithOfflineFirst(savedEvent.id!, existingNote.pages);
             return savedEvent;
           }
         }
       } else {
-        savedEvent = await _dbService.updateEvent(eventToSave);
+        // Update existing event with record handling
+        savedEvent = await prdDb.updateEventWithRecord(
+          event: event,
+          name: nameText,
+          recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
+          phone: phoneText.isEmpty ? null : phoneText,
+          eventTypes: _state.selectedEventTypes,
+          startTime: _state.startTime,
+          endTime: _state.endTime,
+          clearEndTime: shouldClearEndTime,
+        );
 
-        // If record_number was added, handle person note sync
-        if (recordNumberAdded && savedEvent.id != null && _dbService is PRDDatabaseService) {
-          final prdDb = _dbService as PRDDatabaseService;
-          final syncedNote = await prdDb.handleRecordNumberUpdate(savedEvent.id!, savedEvent);
+        // Check if record_number was added and there's an existing note
+        final oldRecordNumber = event.recordNumber.trim();
+        final recordNumberAdded = oldRecordNumber.isEmpty && recordNumberText.isNotEmpty;
 
-          if (syncedNote != null && syncedNote.isNotEmpty) {
-            // Update state with synced note if it has content
+        if (recordNumberAdded) {
+          final existingNote = await prdDb.findNoteByRecordNumber(recordNumberText);
+          if (existingNote != null && existingNote.isNotEmpty) {
+            // Load existing note
             _updateState(_state.copyWith(
-              note: syncedNote,
-              lastKnownPages: syncedNote.pages,
+              note: existingNote,
+              lastKnownPages: existingNote.pages,
             ));
-            // Still sync to server even when using synced note
-            await saveNoteWithOfflineFirst(savedEvent.id!, syncedNote.pages);
+            // Sync to server
+            await saveNoteWithOfflineFirst(savedEvent.id!, existingNote.pages);
             return savedEvent;
           }
         }
-      }
-
-      // Save phone number to person_info table if record number is present
-      if (recordNumberText.isNotEmpty) {
-        await savePhone();
       }
 
       // Save handwriting note using offline-first strategy
@@ -354,10 +363,20 @@ class EventDetailController {
       throw Exception('NoteSyncAdapter not initialized. Cannot save note.');
     }
 
+    // Get the event to get its recordUuid
+    if (_dbService is! PRDDatabaseService) {
+      throw Exception('PRDDatabaseService required');
+    }
+    final prdDb = _dbService as PRDDatabaseService;
+    final eventData = await prdDb.getEventById(eventId);
+    if (eventData == null) {
+      throw Exception('Event not found: $eventId');
+    }
+
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
 
     final noteToSave = Note(
-      eventId: eventId,
+      recordUuid: eventData.recordUuid,
       pages: pages,
       createdAt: _state.note?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
@@ -544,14 +563,14 @@ class EventDetailController {
     }
   }
 
-  /// Save phone number to person_info table
+  /// Save phone number to record table
+  /// Note: Phone is now stored in the records table, not person_info
   Future<void> savePhone() async {
-    final name = _state.name.trim();
     final recordNumber = _state.recordNumber.trim();
     final phone = _state.phone.trim();
 
-    // Only save if we have both name and record number
-    if (name.isEmpty || recordNumber.isEmpty) {
+    // Only save if we have a record number
+    if (recordNumber.isEmpty) {
       return;
     }
 
@@ -561,16 +580,15 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
-      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
 
-      // Save person phone
-      await prdDb.setPersonPhone(
-        personNameNormalized: nameNormalized,
-        recordNumberNormalized: recordNumberNormalized,
-        phone: phone.isEmpty ? null : phone,
-      );
-
+      // Get record by record number and update phone
+      final record = await prdDb.getRecordByRecordNumber(recordNumber);
+      if (record != null && record.recordUuid != null) {
+        await prdDb.updateRecord(
+          recordUuid: record.recordUuid!,
+          phone: phone.isEmpty ? null : phone,
+        );
+      }
     } catch (e) {
     }
   }
@@ -736,16 +754,15 @@ class EventDetailController {
       return null;
     }
 
-    final name = _state.name.trim();
     final recordNumber = _state.recordNumber.trim();
 
-    if (name.isEmpty || recordNumber.isEmpty) {
+    if (recordNumber.isEmpty) {
       return null;
     }
 
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.findExistingPersonNote(name, recordNumber);
+      return await prdDb.findNoteByRecordNumber(recordNumber);
     }
 
     return null;
@@ -868,20 +885,15 @@ class EventDetailController {
 
     // Step 2: Fallback to local database if server didn't return name
     if (name == null || name.isEmpty) {
-      name = await prdDb.getNameByRecordNumber(event.bookUuid, recordNumber);
+      name = await prdDb.getNameByRecordNumber(recordNumber);
     }
 
     if (name == null || name.isEmpty) {
       return; // No person found with this record number
     }
 
-    // Step 3: Fetch phone number from local person_info table
-    final nameNorm = PersonInfoUtilitiesMixin.normalizePersonKey(name);
-    final recordNorm = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
-    final phone = await prdDb.getPersonPhone(
-      personNameNormalized: nameNorm,
-      recordNumberNormalized: recordNorm,
-    );
+    // Step 3: Fetch phone number from record
+    final phone = await prdDb.getPhoneByRecordNumber(recordNumber);
 
     // Step 4: Update state with name, record number, and phone
     _updateState(_state.copyWith(
@@ -902,7 +914,7 @@ class EventDetailController {
 
       // If no server note, try local database
       if (noteToLoad == null || noteToLoad.isEmpty) {
-        noteToLoad = await prdDb.findExistingPersonNote(name, recordNumber);
+        noteToLoad = await prdDb.findNoteByRecordNumber(recordNumber);
       }
 
       if (noteToLoad != null && noteToLoad.isNotEmpty) {
