@@ -58,13 +58,6 @@ class BookBackupAdapter {
   /// Check if backup service is available (false on web)
   bool get available => _dbService != null;
 
-  /// Upload a book to server
-  /// Returns the backup ID
-  Future<int> upload(String bookUuid) async {
-    final service = await _ensureInitialized();
-    return await service.uploadBook(bookUuid);
-  }
-
   /// List all backups from server
   Future<List<Map<String, dynamic>>> listBackups() async {
     final service = await _ensureInitialized();

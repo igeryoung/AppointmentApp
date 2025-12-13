@@ -79,26 +79,10 @@ class BookListController extends ChangeNotifier {
     required String name,
   }) async {
     _setState(_state.copyWith(isLoading: true));
-    Book? createdBook;
 
     try {
-      // Step 1: Create book on server and get UUID
+      // Create book on server and locally (server is the source of truth)
       await repo.create(name);
-
-      // Step 2: Get the newly created book
-      createdBook = await repo.getByName(name);
-
-      // Step 3: Upload book backup to server (REQUIRED - must succeed)
-      if (createdBook != null && backup.available && createdBook.uuid.isNotEmpty) {
-        try {
-          await backup.upload(createdBook.uuid);
-        } catch (uploadError) {
-          // ROLLBACK: Delete the local book since server sync failed
-          await repo.delete(createdBook.uuid);
-          throw Exception('Server sync failed: $uploadError');
-        }
-      }
-
       await _loadBooks();
     } catch (e) {
       _setState(_state.copyWith(isLoading: false));
@@ -206,61 +190,6 @@ class BookListController extends ChangeNotifier {
 
     // Save the new order
     await order.saveCurrentOrder(books);
-  }
-
-  /// Upload a book to server
-  Future<void> uploadToServer(BuildContext context, Book book) async {
-    if (!backup.available) {
-      if (context.mounted) {
-        SnackBarUtils.showWarning(
-            context, 'Book backup is not available on web');
-      }
-      return;
-    }
-
-    if (book.uuid.isEmpty) return;
-
-    _setState(_state.copyWith(isLoading: true));
-    try {
-      final backupId = await backup.upload(book.uuid);
-      _setState(_state.copyWith(isLoading: false));
-
-      if (context.mounted) {
-        SnackBarUtils.showSuccess(
-          context,
-          'Book "${book.name}" uploaded successfully (Backup ID: $backupId)',
-        );
-      }
-    } catch (e) {
-      _setState(_state.copyWith(isLoading: false));
-      if (context.mounted) {
-        SnackBarUtils.showError(context, 'Failed to upload book: $e');
-      }
-    }
-  }
-
-  /// Auto-register newly created book on server (runs in background)
-  Future<void> _autoRegister(BuildContext context, Book book) async {
-    // Skip if backup not available
-    if (!backup.available || book.uuid.isEmpty) {
-      return;
-    }
-
-    // Run upload in background without blocking UI
-    try {
-      await backup.upload(book.uuid);
-    } catch (e) {
-      // Show warning to user but don't block the flow
-      if (context.mounted) {
-        SnackBarUtils.showWarningWithAction(
-          context: context,
-          message:
-              'Book created locally but not registered on server. You can upload it manually later.',
-          actionLabel: 'Upload Now',
-          onAction: () => uploadToServer(context, book),
-        );
-      }
-    }
   }
 
   /// Show restore backup flow

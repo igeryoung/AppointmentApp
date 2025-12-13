@@ -275,7 +275,7 @@ class DashboardRoutes {
           COUNT(DISTINCT sd.id) as drawing_count
         FROM books b
         LEFT JOIN events e ON b.book_uuid = e.book_uuid AND e.is_deleted = false
-        LEFT JOIN notes n ON e.id = n.event_id AND n.is_deleted = false
+        LEFT JOIN notes n ON e.record_uuid = n.record_uuid AND n.is_deleted = false
         LEFT JOIN schedule_drawings sd ON b.book_uuid = sd.book_uuid AND sd.is_deleted = false
         WHERE b.is_deleted = false
         GROUP BY b.book_uuid
@@ -337,7 +337,7 @@ class DashboardRoutes {
 
       final recentEvents = await db.queryRows(
         '''
-        SELECT e.*, EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
+        SELECT e.*, EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
         FROM events e
         WHERE e.is_deleted = false
         ORDER BY e.created_at DESC
@@ -368,7 +368,7 @@ class DashboardRoutes {
         '''
         SELECT COUNT(DISTINCT e.id) as count
         FROM events e
-        INNER JOIN notes n ON e.id = n.event_id
+        INNER JOIN notes n ON e.record_uuid = n.record_uuid
         WHERE e.is_deleted = false AND n.is_deleted = false
         ''',
       );
@@ -545,7 +545,7 @@ class DashboardRoutes {
         SELECT
           e.*,
           b.name as book_name,
-          EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
+          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
         WHERE $whereClause
@@ -576,7 +576,7 @@ class DashboardRoutes {
         SELECT
           e.*,
           b.name as book_name,
-          EXISTS(SELECT 1 FROM notes n WHERE n.event_id = e.id AND n.is_deleted = false) as has_note
+          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
         WHERE e.id::text = @id AND e.is_deleted = false
@@ -617,10 +617,10 @@ class DashboardRoutes {
 
       final row = await db.querySingle(
         '''
-        SELECT
-          n.*
+        SELECT n.*
         FROM notes n
-        WHERE n.event_id::text = @eventId AND n.is_deleted = false
+        INNER JOIN events e ON e.record_uuid = n.record_uuid
+        WHERE e.id::text = @eventId AND n.is_deleted = false AND e.is_deleted = false
         ''',
         parameters: {'eventId': id},
       );

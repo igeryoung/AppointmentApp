@@ -61,9 +61,6 @@ class _BookListScreenState extends State<BookListScreen> {
                     onRename: (book) => controller.promptRename(context, book),
                     onArchive: (book) => controller.promptArchive(context, book),
                     onDelete: (book) => controller.promptDelete(context, book),
-                    onUploadToServer: controller.backup.available
-                        ? (book) => controller.uploadToServer(context, book)
-                        : null,
                   ),
             floatingActionButton: FloatingActionButton(
               onPressed: () => controller.promptCreate(context),
