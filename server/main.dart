@@ -61,15 +61,8 @@ void main(List<String> args) async {
   final syncRoutes = SyncRoutes(db);
   app.mount('/api/sync/', syncRoutes.router);
 
-  // Book backup routes
-  final backupDir = Platform.environment['BACKUP_DIR'] ?? 'server/backups';
-  final bookBackupRoutes = BookBackupRoutes(db, backupDir: backupDir);
-
-  // File-based backup API
-  app.mount('/api/books/', bookBackupRoutes.bookScopedRouter);
-  app.mount('/api/backups/', bookBackupRoutes.backupScopedRouter);
-
-  // Book creation API
+  // Book creation routes
+  final bookBackupRoutes = BookBackupRoutes(db);
   app.mount('/api/create-books', bookBackupRoutes.createBookRouter);
 
   // Book pull routes
