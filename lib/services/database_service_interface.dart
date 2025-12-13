@@ -1,14 +1,11 @@
 import '../models/book.dart';
 import '../models/event.dart';
-import '../models/note.dart';
-import '../models/schedule_drawing.dart';
 import 'database/mixins/event_operations_mixin.dart';
 
 /// Interface for database services
 ///
 /// Implemented by:
 /// - [PRDDatabaseService] for mobile/desktop platforms
-/// - [WebPRDDatabaseService] for web platform
 abstract class IDatabaseService {
   // ===================
   // Book Operations
@@ -76,53 +73,6 @@ abstract class IDatabaseService {
   Future<void> replaceEventWithServerData(Event event);
 
   // ===================
-  // Note Cache Operations
-  // ===================
-
-  /// Get cached note by event ID
-  Future<Note?> getCachedNote(String eventId);
-
-  /// Save note to cache (insert or update)
-  Future<Note> saveCachedNote(Note note);
-
-  /// Delete cached note by event ID
-  Future<void> deleteCachedNote(String eventId);
-
-  /// Batch get cached notes
-  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds);
-
-  /// Batch save cached notes
-  Future<void> batchSaveCachedNotes(Map<String, Note> notes);
-
-  // ===================
-  // Schedule Drawing Cache Operations
-  // ===================
-
-  /// Get cached drawing for a specific view
-  Future<ScheduleDrawing?> getCachedDrawing(
-    String bookUuid,
-    DateTime date,
-    int viewMode,
-  );
-
-  /// Save drawing to cache (insert or update)
-  Future<ScheduleDrawing> saveCachedDrawing(ScheduleDrawing drawing);
-
-  /// Delete cached drawing
-  Future<void> deleteCachedDrawing(String bookUuid, DateTime date, int viewMode);
-
-  /// Batch get cached drawings for a date range
-  Future<List<ScheduleDrawing>> batchGetCachedDrawings({
-    required String bookUuid,
-    required DateTime startDate,
-    required DateTime endDate,
-    int? viewMode,
-  });
-
-  /// Batch save cached drawings
-  Future<void> batchSaveCachedDrawings(List<ScheduleDrawing> drawings);
-
-  // ===================
   // Utility Operations
   // ===================
 
@@ -132,10 +82,10 @@ abstract class IDatabaseService {
   /// Get all unique record numbers for a book
   Future<List<String>> getAllRecordNumbers(String bookUuid);
 
-  /// Get unique record numbers filtered by exact name match (case-insensitive)
+  /// Get unique record numbers filtered by title match (case-insensitive)
   Future<List<String>> getRecordNumbersByName(String bookUuid, String name);
 
-  /// Search events by name and record number
+  /// Search events by title and record number
   Future<List<Event>> searchByNameAndRecordNumber(
     String bookUuid,
     String name,

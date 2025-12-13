@@ -10,7 +10,6 @@ import '../../models/schedule_drawing.dart';
 import '../../repositories/event_repository.dart';
 import '../../repositories/note_repository.dart';
 import '../../services/api_client.dart';
-import '../../services/cache_manager.dart';
 import '../../services/content_service.dart';
 import '../../services/database/prd_database_service.dart';
 import '../../services/database_service_interface.dart';
@@ -75,9 +74,6 @@ class ScheduleController extends ChangeNotifier {
 
   ContentService? _contentService;
   ContentService? get contentService => _contentService;
-
-  CacheManager? _cacheManager;
-  CacheManager? get cacheManager => _cacheManager;
 
   ScheduleDrawingService? _drawingService;
   ScheduleDrawingService? get drawingService => _drawingService;
@@ -247,7 +243,6 @@ class ScheduleController extends ChangeNotifier {
     _dateService?.startPeriodicCheck();
     await _connectivityService?.initialize();
     _contentService = _connectivityService?.contentService;
-    _cacheManager = _connectivityService?.cacheManager;
     _connectivityService?.setupConnectivityMonitoring();
     Future.microtask(() => ensureSyncCoordinator(context));
 

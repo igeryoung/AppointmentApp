@@ -66,7 +66,7 @@ class ScheduleEventTileHelper {
             fontWeight: fontWeight,
           ),
           children: [
-            TextSpan(text: event.name),
+            TextSpan(text: event.title),
             TextSpan(
               text: '($lastTwoDigits)',
               style: TextStyle(
@@ -79,7 +79,7 @@ class ScheduleEventTileHelper {
     }
 
     return Text(
-      event.name,
+      event.title,
       style: TextStyle(
         fontSize: fontSize,
         color: color,

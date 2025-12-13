@@ -68,11 +68,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     super.initState();
 
     // Initialize text controllers
-    _nameController = TextEditingController(text: widget.event.name);
-    _phoneController = TextEditingController(text: widget.event.phone ?? '');
+    _nameController = TextEditingController(text: widget.event.title);
+    _phoneController = TextEditingController(text: ''); // Phone is now on records table
 
     // Initialize last values for clearing behavior
-    _lastNameValue = widget.event.name;
+    _lastNameValue = widget.event.title;
 
     // Initialize focus nodes
     _nameFocusNode = FocusNode();
@@ -375,7 +375,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         context: context,
         builder: (context) => AlertDialog(
           title: const Text('提示'),
-          content: Text('此病歷號已有筆記（${existingNote.strokes.length} 筆畫），要載入現有筆記嗎？'),
+          content: Text('此病歷號已有筆記，要載入現有筆記嗎？'),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),

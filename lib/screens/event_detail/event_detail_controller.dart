@@ -11,7 +11,6 @@ import '../../services/database/prd_database_service.dart';
 import '../../services/database/mixins/person_info_utilities_mixin.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
-import '../../services/cache_manager.dart';
 import '../../services/server_config_service.dart';
 import '../../widgets/handwriting_canvas.dart';
 import 'event_detail_state.dart';
@@ -76,8 +75,7 @@ class EventDetailController {
       }
 
       final apiClient = ApiClient(baseUrl: serverUrl);
-      final cacheManager = CacheManager(prdDb);
-      _contentService = ContentService(apiClient, cacheManager, _dbService);
+      _contentService = ContentService(apiClient, _dbService);
       _noteSyncAdapter = NoteSyncAdapter(_contentService!);
       _serverHealthChecker = ServerHealthChecker(_contentService!);
 

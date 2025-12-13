@@ -6,7 +6,6 @@ import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../repositories/event_repository.dart';
-import '../../services/cache_manager.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/service_locator.dart';
 import '../../services/time_service.dart';
@@ -31,9 +30,6 @@ class ScheduleFabMenuHelper {
     required IDatabaseService dbService,
     required String bookUuid,
     required DateTime Function(DateTime) get3DayWindowStart,
-    required CacheManager? cacheManager,
-    required DateTime Function() getEffectiveDate,
-    required Function(List<Event>) preloadNotes,
     required Function(DateTime) onDateChange,
   }) {
     if (!isMenuVisible) {
@@ -177,35 +173,6 @@ class ScheduleFabMenuHelper {
           backgroundColor: isDrawingMode ? Colors.grey : Colors.deepOrange,
           child: const Icon(Icons.warning_amber),
           tooltip: isDrawingMode ? null : l10n.heavyLoadTest,
-        ),
-        const SizedBox(height: 12),
-        // Clear Cache FAB (experimental - for testing cache mechanism)
-        FloatingActionButton(
-          heroTag: 'clear_cache',
-          onPressed: isDrawingMode
-              ? null
-              : () {
-                  final cubitState = context.read<ScheduleCubit>().state;
-                  final events = cubitState is ScheduleLoaded ? cubitState.events : <Event>[];
-                  ScheduleTestMenuHelper.showClearCacheDialog(
-                    context: context,
-                    cacheManager: cacheManager,
-                    events: events,
-                    dbService: dbService,
-                    bookUuid: bookUuid,
-                    effectiveDate: getEffectiveDate(),
-                    onReloadDrawing: loadDrawing,
-                    onPreloadNotes: () {
-                      final state = context.read<ScheduleCubit>().state;
-                      if (state is ScheduleLoaded) {
-                        preloadNotes(state.events);
-                      }
-                    },
-                  );
-                },
-          backgroundColor: isDrawingMode ? Colors.grey : Colors.amber.shade700,
-          child: const Icon(Icons.cached),
-          tooltip: isDrawingMode ? null : 'Clear Cache (Test)',
         ),
         const SizedBox(height: 12),
         // Drawing mode toggle FAB

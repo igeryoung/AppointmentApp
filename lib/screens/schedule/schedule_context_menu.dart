@@ -93,7 +93,7 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                     // Event name
                     Expanded(
                       child: Text(
-                        widget.event.name.isEmpty ? l10n.eventOptions : widget.event.name,
+                        widget.event.title.isEmpty ? l10n.eventOptions : widget.event.title,
                         style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
                         overflow: TextOverflow.ellipsis,
                       ),

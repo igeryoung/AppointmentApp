@@ -127,7 +127,8 @@ class EventDetailCubit extends Cubit<EventDetailState> {
     if (currentState is! EventDetailLoaded) return;
 
     try {
-      await _noteContentService.saveNote(note.eventId, note);
+      // In record-based architecture, save via recordUuid
+      await _noteContentService.saveNote(note.recordUuid, note);
 
       emit(currentState.copyWith(
         note: note,
