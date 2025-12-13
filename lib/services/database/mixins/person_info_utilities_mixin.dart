@@ -18,14 +18,14 @@ mixin PersonInfoUtilitiesMixin {
   }
 
   /// Get normalized person key tuple from event
-  /// Returns null if recordNumber is null or empty
+  /// Returns null if recordNumber is empty
   static (String, String)? getPersonKeyFromEvent(Event event) {
-    if (event.recordNumber == null || event.recordNumber!.trim().isEmpty) {
+    if (event.recordNumber.trim().isEmpty) {
       return null;
     }
     return (
-      normalizePersonKey(event.name),
-      normalizePersonKey(event.recordNumber!),
+      normalizePersonKey(event.title),
+      normalizePersonKey(event.recordNumber),
     );
   }
 
@@ -67,12 +67,12 @@ mixin PersonInfoUtilitiesMixin {
     final db = await database;
     final nameNorm = normalizePersonKey(name);
 
-    // Query events table (using LOWER(name) since events table doesn't have person_name_normalized)
+    // Query events table (using LOWER(title) since events table doesn't have person_name_normalized)
     final eventsResult = await db.rawQuery('''
       SELECT DISTINCT record_number
       FROM events
       WHERE book_uuid = ?
-        AND LOWER(TRIM(name)) = ?
+        AND LOWER(TRIM(title)) = ?
         AND record_number IS NOT NULL
         AND TRIM(record_number) != ''
         AND is_removed = 0
@@ -83,7 +83,7 @@ mixin PersonInfoUtilitiesMixin {
     final notesResult = await db.rawQuery('''
       SELECT DISTINCT n.record_number_normalized
       FROM notes n
-      INNER JOIN events e ON n.event_id = e.id
+      INNER JOIN events e ON n.record_uuid = e.record_uuid
       WHERE e.book_uuid = ?
         AND n.person_name_normalized = ?
         AND n.record_number_normalized IS NOT NULL
@@ -119,18 +119,18 @@ mixin PersonInfoUtilitiesMixin {
     final db = await database;
 
     final result = await db.rawQuery('''
-      SELECT DISTINCT name
+      SELECT DISTINCT title
       FROM events
       WHERE book_uuid = ?
-        AND name IS NOT NULL
-        AND TRIM(name) != ''
+        AND title IS NOT NULL
+        AND TRIM(title) != ''
         AND is_removed = 0
-      ORDER BY name
+      ORDER BY title
     ''', [bookUuid]);
 
     return result
-        .map((row) => row['name'] as String)
-        .where((name) => name.trim().isNotEmpty)
+        .map((row) => row['title'] as String)
+        .where((title) => title.trim().isNotEmpty)
         .toList();
   }
 
@@ -141,18 +141,18 @@ mixin PersonInfoUtilitiesMixin {
       String bookUuid) async {
     final db = await database;
 
-    // Get record numbers with their most recent associated name
+    // Get record numbers with their most recent associated name (title)
     // Since record number is unique per name, we get the most recent event for each record number
     final result = await db.rawQuery('''
-      SELECT record_number, name
+      SELECT record_number, title
       FROM (
-        SELECT record_number, name, MAX(updated_at) as latest_update
+        SELECT record_number, title, MAX(updated_at) as latest_update
         FROM events
         WHERE book_uuid = ?
           AND record_number IS NOT NULL
           AND TRIM(record_number) != ''
-          AND name IS NOT NULL
-          AND TRIM(name) != ''
+          AND title IS NOT NULL
+          AND TRIM(title) != ''
           AND is_removed = 0
         GROUP BY record_number
       )
@@ -162,7 +162,7 @@ mixin PersonInfoUtilitiesMixin {
     return result
         .map((row) => {
               'recordNumber': (row['record_number'] as String).trim(),
-              'name': (row['name'] as String).trim(),
+              'name': (row['title'] as String).trim(),
             })
         .toList();
   }
@@ -179,7 +179,7 @@ mixin PersonInfoUtilitiesMixin {
     final db = await database;
 
     final result = await db.rawQuery('''
-      SELECT name
+      SELECT title
       FROM events
       WHERE book_uuid = ?
         AND record_number = ?
@@ -192,6 +192,6 @@ mixin PersonInfoUtilitiesMixin {
       return null;
     }
 
-    return (result.first['name'] as String?)?.trim();
+    return (result.first['title'] as String?)?.trim();
   }
 }

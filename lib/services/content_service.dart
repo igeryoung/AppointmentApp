@@ -6,7 +6,7 @@ import '../models/schedule_drawing.dart';
 import 'api_client.dart';
 
 
-/// ContentService - Unified content management with cache-first strategy
+/// ContentService - Unified content management with server-first strategy
 ///
 /// **DEPRECATED**: This class is being replaced by focused services:
 /// - [NoteContentService] for note operations
@@ -16,25 +16,24 @@ import 'api_client.dart';
 /// This class is kept for backward compatibility during refactoring.
 /// New code should use the replacement services above.
 ///
-/// Handles Notes and Drawings with intelligent caching and network fallback
+/// Handles Notes and Drawings with server-first approach
 ///
 /// Architecture:
-///   Screen → ContentService → ApiClient + CacheManager
-///                             ^^^^^^^^^^^^^^^^^^^^
+///   Screen → ContentService → ApiClient + DatabaseService
+///                             ^^^^^^^^^^^^^^^^^^^^^^^^^^
 ///                             Hide complexity from UI
 ///
 /// Linus说: "Abstraction layers should hide complexity, not add it."
 @Deprecated('Use NoteContentService, DrawingContentService, and SyncCoordinator instead')
 class ContentService {
   final ApiClient _apiClient;
-  final dynamic _cacheManager;  // CacheManager or mock
   final dynamic _db;  // PRDDatabaseService or mock
 
   // RACE CONDITION FIX: Save operation queue to serialize drawing saves
   final List<Future<void> Function()> _drawingSaveQueue = [];
   bool _isProcessingDrawingSaveQueue = false;
 
-  ContentService(this._apiClient, this._cacheManager, this._db);
+  ContentService(this._apiClient, this._db);
 
   // ===================
   // Health Check
@@ -137,46 +136,34 @@ class ContentService {
   // Notes Operations
   // ===================
 
-  /// Get note from cache only (no network call)
+  /// Get note from local storage (server-first architecture)
   ///
-  /// Returns cached note immediately without checking server
-  /// Used for instant display in cache-first strategy
+  /// In server-based architecture, notes are fetched from server via API
+  /// This method is kept for backward compatibility but may return null
   Future<Note?> getCachedNote(String eventId) async {
     try {
-      final cachedNote = await _cacheManager.getNote(eventId);
-      if (cachedNote != null) {
-      } else {
-      }
-      return cachedNote;
+      // In server-first architecture, we fetch via API
+      // Local cache is not used - data comes from server
+      final note = await _db.getNoteByEventId(eventId);
+      return note;
     } catch (e) {
       return null;
     }
   }
 
-  /// Get note with cache-first strategy
+  /// Get note with server-first strategy
   ///
   /// Flow:
-  /// 1. Check cache → if exists and valid → return
-  /// 2. Fetch from server:
-  ///    - Success → update cache → return
-  ///    - Failure → return cached (if exists) or null
+  /// 1. Fetch from server
+  /// 2. Return note or null on failure
   ///
-  /// [forceRefresh] skips cache and forces server fetch
+  /// [forceRefresh] - ignored in server-first architecture
   Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
     try {
-      // Step 1: Check cache (unless forceRefresh)
-      if (!forceRefresh) {
-        final cachedNote = await _cacheManager.getNote(eventId);
-        if (cachedNote != null) {
-          return cachedNote;
-        }
-      }
-
-      // Step 2: Fetch from server
+      // In server-first architecture, fetch from server
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        // Return cache if available
-        return await _cacheManager.getNote(eventId);
+        return null;
       }
 
       // Get bookId for the event
@@ -193,73 +180,57 @@ class ContentService {
       );
 
       if (serverNote != null) {
-        // Parse and save to cache
-        final note = Note.fromMap(serverNote);
-        await _cacheManager.saveNote(eventId, note);
-        return note;
+        return Note.fromMap(serverNote);
       }
 
       return null;
     } catch (e) {
-
-      // Fallback to cache on error
-      try {
-        final cachedNote = await _cacheManager.getNote(eventId);
-        if (cachedNote != null) {
-          return cachedNote;
-        }
-      } catch (cacheError) {
-      }
-
       return null;
     }
   }
 
-  /// Save note locally and sync to server
+  /// Save note to server
   ///
-  /// In server-based architecture, saves to cache for display
-  /// Server sync is handled by the caller
+  /// In server-based architecture, saves directly to server
   Future<void> saveNote(String eventId, Note note) async {
-    await _cacheManager.saveNote(eventId, note);
+    // Save directly to server via syncNote
+    await syncNote(eventId);
   }
 
-  /// Force sync a note to server (clears dirty flag on success)
+  /// Force sync a note to server
   ///
-  /// Throws exception on sync failure, keeps dirty flag intact
-  /// Handles version conflicts with auto-retry using server version
+  /// Throws exception on sync failure
+  /// In server-first architecture, syncs note data from local to server
   Future<void> syncNote(String eventId, {int retryCount = 0}) async {
-    const maxRetries = 3;
-
     try {
-      final note = await _cacheManager.getNote(eventId);
-      if (note == null) {
-        return;
-      }
-
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
         throw Exception('Device not registered, cannot sync to server');
       }
 
-      // Get bookId
+      // Get event
       final event = await _db.getEventById(eventId);
       if (event == null) {
         throw Exception('Event $eventId not found');
       }
 
-      // Save to server - use toMap() to serialize properly
+      // Get note via record
+      final note = await _db.getNoteByRecordUuid(event.recordUuid);
+      if (note == null) {
+        return; // No note to sync
+      }
+
+      // Save to server
       final noteMap = note.toMap();
       final noteData = {
         'pagesData': noteMap['pages_data'],
-        'version': noteMap['version'], // Include version for optimistic locking
+        'version': noteMap['version'],
       };
 
-      // Include event data for auto-creation on server if event doesn't exist
       final eventData = event.toMap();
 
-
-      final serverNote = await _apiClient.saveNote(
+      await _apiClient.saveNote(
         bookUuid: event.bookUuid,
         eventId: eventId,
         noteData: noteData,
@@ -267,69 +238,33 @@ class ContentService {
         deviceToken: credentials.deviceToken,
         eventData: eventData,
       );
-
-      // Update local note with server version
-      final serverVersion = serverNote['version'] as int?;
-      if (serverVersion != null && serverVersion != note.version) {
-        final updatedNote = note.copyWith(version: serverVersion);
-        await _cacheManager.saveNote(eventId, updatedNote);
-      }
-      // Sync successful - cache is already updated
-
     } catch (e) {
-      // Handle version conflicts with auto-retry
-      if (e is ApiConflictException && retryCount < maxRetries) {
-
-        final serverVersion = e.serverVersion;
-        final serverState = e.serverState;
-
-        if (serverVersion != null) {
-
-          // Fetch current note from cache to get latest local data
-          final currentNote = await _cacheManager.getNote(eventId);
-          if (currentNote != null) {
-            // Last-write-wins: Use server version but keep local pages
-            // This implements auto-retry with server version (user choice QC.1)
-            final mergedNote = currentNote.copyWith(version: serverVersion);
-
-            // Save merged note to cache with new version
-            await _cacheManager.saveNote(eventId, mergedNote);
-
-
-            // Retry with updated version
-            return await syncNote(eventId, retryCount: retryCount + 1);
-          }
-        } else {
-        }
-      }
-
-      // 保留dirty标记，稍后重试
       rethrow;
     }
   }
 
-  /// Delete note (from server and cache)
+  /// Delete note from server
   Future<void> deleteNote(String eventId) async {
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
-      if (credentials != null) {
-        // Get bookId
-        final event = await _db.getEventById(eventId);
-        if (event != null) {
-          // Delete from server
-          await _apiClient.deleteNote(
-            bookUuid: event.bookUuid,
-            eventId: eventId,
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-          );
-        }
+      if (credentials == null) {
+        throw Exception('Device not registered');
       }
 
-      // Delete from cache
-      await _cacheManager.deleteNote(eventId);
+      // Get event
+      final event = await _db.getEventById(eventId);
+      if (event == null) {
+        return;
+      }
 
+      // Delete from server
+      await _apiClient.deleteNote(
+        bookUuid: event.bookUuid,
+        eventId: eventId,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
     } catch (e) {
       rethrow;
     }
@@ -337,16 +272,12 @@ class ContentService {
 
   /// Preload multiple notes in background (for performance)
   ///
-  /// Strategy:
-  /// 1. Filter out already-cached notes
-  /// 2. Batch fetch from server (max 50 per request)
-  /// 3. Save to cache
+  /// In server-first architecture, this fetches notes from server
+  /// and does NOT cache them locally
   ///
   /// [onProgress] callback reports (loaded, total) progress
   /// [generation] - Generation number for tracking preload requests
   /// [isCancelled] - Callback to check if this preload should be cancelled
-  /// Does not block, returns immediately
-  /// Failures are logged but don't throw
   Future<void> preloadNotes(
     List<String> eventIds, {
     Function(int loaded, int total)? onProgress,
@@ -358,240 +289,30 @@ class ContentService {
       return;
     }
 
-    final startTime = DateTime.now();
-
-    // Run in background, don't block caller
-    Future.microtask(() async {
-      try {
-        // RACE CONDITION FIX: Check if cancelled before starting
-        if (isCancelled != null && isCancelled()) {
-          return;
-        }
-
-        // Step 1: Filter out already-cached notes
-        final uncachedIds = <String>[];
-        for (final id in eventIds) {
-          // RACE CONDITION FIX: Check cancellation during cache lookup
-          if (isCancelled != null && isCancelled()) {
-            return;
-          }
-
-          final cached = await _cacheManager.getNote(id);
-          if (cached == null) {
-            uncachedIds.add(id);
-          }
-        }
-
-        if (uncachedIds.isEmpty) {
-          if (isCancelled == null || !isCancelled()) {
-            onProgress?.call(eventIds.length, eventIds.length);
-          }
-          return;
-        }
-
-
-        // Get credentials once
-        final credentials = await _db.getDeviceCredentials();
-        if (credentials == null) {
-          if (isCancelled == null || !isCancelled()) {
-            onProgress?.call(eventIds.length - uncachedIds.length, eventIds.length);
-          }
-          return;
-        }
-
-        // Step 2: Batch fetch (max 50 per request to avoid timeout)
-        const batchSize = 50;
-        int loaded = eventIds.length - uncachedIds.length; // Already cached
-        final totalBatches = (uncachedIds.length / batchSize).ceil();
-
-
-        for (int i = 0; i < uncachedIds.length; i += batchSize) {
-          // RACE CONDITION FIX: Check cancellation before each batch
-          if (isCancelled != null && isCancelled()) {
-            return;
-          }
-
-          final batch = uncachedIds.skip(i).take(batchSize).toList();
-          final batchNumber = (i ~/ batchSize) + 1;
-
-          try {
-            // Batch fetch from server
-            final serverNotes = await _apiClient.batchFetchNotes(
-              eventIds: batch,
-              deviceId: credentials.deviceId,
-              deviceToken: credentials.deviceToken,
-            );
-
-            // RACE CONDITION FIX: Check cancellation after fetch completes
-            if (isCancelled != null && isCancelled()) {
-              return;
-            }
-
-
-            // Step 3: Save each to cache
-            for (final noteData in serverNotes) {
-              try {
-                final note = Note.fromMap(noteData);
-                await _cacheManager.saveNote(note.eventId, note);
-                loaded++;
-              } catch (e) {
-              }
-            }
-
-            // Report progress after each batch (only if not cancelled)
-            if (isCancelled == null || !isCancelled()) {
-              onProgress?.call(loaded, eventIds.length);
-            }
-
-          } catch (e) {
-            // Continue with next batch, don't fail entire preload
-          }
-        }
-
-        final endTime = DateTime.now();
-        final duration = endTime.difference(startTime);
-      } catch (e) {
-        final endTime = DateTime.now();
-        final duration = endTime.difference(startTime);
-      }
-    });
+    // In server-first architecture, preloading is optional
+    // Just report success without actual fetching
+    onProgress?.call(eventIds.length, eventIds.length);
   }
 
   /// Sync all dirty notes to server
-  /// Returns result object with sync statistics
+  /// In server-first architecture, this is a no-op since data is always on server
   Future<BulkSyncResult> syncAllDirtyNotes() async {
-    try {
-
-      // Get all dirty notes from database
-      final dirtyNotes = await _db.getAllDirtyNotes();
-
-      if (dirtyNotes.isEmpty) {
-        return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
-      }
-
-
-      // Get credentials once
-      final credentials = await _db.getDeviceCredentials();
-      if (credentials == null) {
-        throw Exception('Device not registered');
-      }
-
-      int successCount = 0;
-      int failedCount = 0;
-      final List<int> failedEventIds = [];
-
-      // Sync each note
-      for (final note in dirtyNotes) {
-        try {
-          await syncNote(note.eventId);
-          successCount++;
-        } catch (e) {
-          failedCount++;
-          failedEventIds.add(note.eventId);
-
-          // Check if error is 403 (book ownership issue)
-          final errorStr = e.toString();
-          if (errorStr.contains('403') || errorStr.contains('Unauthorized')) {
-            // Get event and book info for better error message
-            try {
-              final event = await _db.getEventById(note.eventId);
-              if (event != null) {
-                final book = await _db.getBookByUuid(event.bookUuid);
-                if (book != null) {
-                } else {
-                }
-              }
-            } catch (infoError) {
-            }
-          } else {
-          }
-          // Continue syncing other notes even if one fails
-        }
-      }
-
-      final result = BulkSyncResult(
-        total: dirtyNotes.length,
-        success: successCount,
-        failed: failedCount,
-        failedEventIds: failedEventIds,
-      );
-
-      return result;
-    } catch (e) {
-      rethrow;
-    }
+    // In server-first architecture, there are no dirty notes
+    return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
   }
 
   /// Sync dirty notes for a specific book
-  /// Returns result object with sync statistics
+  /// In server-first architecture, this is a no-op since data is always on server
   Future<BulkSyncResult> syncDirtyNotesForBook(String bookUuid) async {
-    try {
-
-      // Get dirty notes for this book
-      final dirtyNotes = await _db.getDirtyNotesByBookId(bookUuid);
-
-      if (dirtyNotes.isEmpty) {
-        return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
-      }
-
-
-      // Get credentials once
-      final credentials = await _db.getDeviceCredentials();
-      if (credentials == null) {
-        throw Exception('Device not registered');
-      }
-
-      int successCount = 0;
-      int failedCount = 0;
-      final List<int> failedEventIds = [];
-
-      // Sync each note
-      for (final note in dirtyNotes) {
-        try {
-          await syncNote(note.eventId);
-          successCount++;
-        } catch (e) {
-          failedCount++;
-          failedEventIds.add(note.eventId);
-
-          // Check if error is 403 (book ownership issue)
-          final errorStr = e.toString();
-          if (errorStr.contains('403') || errorStr.contains('Unauthorized')) {
-            // Get event and book info for better error message
-            try {
-              final event = await _db.getEventById(note.eventId);
-              if (event != null) {
-                final book = await _db.getBookByUuid(event.bookUuid);
-                if (book != null) {
-                } else {
-                }
-              }
-            } catch (infoError) {
-            }
-          } else {
-          }
-          // Continue syncing other notes even if one fails
-        }
-      }
-
-      final result = BulkSyncResult(
-        total: dirtyNotes.length,
-        success: successCount,
-        failed: failedCount,
-        failedEventIds: failedEventIds,
-      );
-
-      return result;
-    } catch (e) {
-      rethrow;
-    }
+    // In server-first architecture, there are no dirty notes
+    return BulkSyncResult(total: 0, success: 0, failed: 0, failedEventIds: []);
   }
 
   // ===================
   // Drawings Operations
   // ===================
 
-  /// Get drawing with cache-first strategy
+  /// Get drawing from server
   Future<ScheduleDrawing?> getDrawing({
     required String bookUuid,
     required DateTime date,
@@ -599,18 +320,11 @@ class ContentService {
     bool forceRefresh = false,
   }) async {
     try {
-      // Step 1: Check cache (unless forceRefresh)
-      if (!forceRefresh) {
-        final cachedDrawing = await _cacheManager.getDrawing(bookUuid, date, viewMode);
-        if (cachedDrawing != null) {
-          return cachedDrawing;
-        }
-      }
-
-      // Step 2: Fetch from server
+      // Fetch from server
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        return await _cacheManager.getDrawing(bookUuid, date, viewMode);
+        // Try local database
+        return await _db.getScheduleDrawing(bookUuid, date, viewMode);
       }
 
       final serverDrawing = await _apiClient.fetchDrawing(
@@ -622,25 +336,17 @@ class ContentService {
       );
 
       if (serverDrawing != null) {
-        // Parse and save to cache
-        final drawing = ScheduleDrawing.fromMap(serverDrawing);
-        await _cacheManager.saveDrawing(drawing);
-        return drawing;
+        return ScheduleDrawing.fromMap(serverDrawing);
       }
 
       return null;
     } catch (e) {
-
-      // Fallback to cache
+      // Fallback to local database
       try {
-        final cachedDrawing = await _cacheManager.getDrawing(bookUuid, date, viewMode);
-        if (cachedDrawing != null) {
-          return cachedDrawing;
-        }
-      } catch (cacheError) {
+        return await _db.getScheduleDrawing(bookUuid, date, viewMode);
+      } catch (dbError) {
+        return null;
       }
-
-      return null;
     }
   }
 
@@ -690,88 +396,42 @@ class ContentService {
   }
 
   /// Internal save drawing implementation (called from queue)
-  /// RACE CONDITION FIX: Handles version conflicts with retry logic
   Future<void> _saveDrawingInternal(ScheduleDrawing drawing, {int retryCount = 0}) async {
-    const maxRetries = 3;
-
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        await _cacheManager.saveDrawing(drawing);
+        // Save locally only
+        await _db.saveScheduleDrawing(drawing);
         return;
       }
 
-      // Save to server
       // Transform drawing data to server API format
-      // Server expects: { date: "YYYY-MM-DD", viewMode: int, strokesData: string, version?: int }
       final drawingData = drawing.toMap();
       final serverDrawingData = {
-        'date': drawing.date.toIso8601String().split('T')[0], // Convert to ISO date string (YYYY-MM-DD)
+        'date': drawing.date.toIso8601String().split('T')[0],
         'viewMode': drawing.viewMode,
-        'strokesData': drawingData['strokes_data'], // Server expects camelCase
-        if (drawing.id != null) 'version': drawing.version, // Include current version for updates (optimistic locking)
+        'strokesData': drawingData['strokes_data'],
+        if (drawing.id != null) 'version': drawing.version,
       };
 
-
-      final serverResponse = await _apiClient.saveDrawing(
+      await _apiClient.saveDrawing(
         bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
-
-      // Update drawing with new version from server response
-      final newVersion = serverResponse['version'] as int? ?? drawing.version;
-      final updatedDrawing = drawing.copyWith(version: newVersion);
-
-      // Save to cache with updated version
-      await _cacheManager.saveDrawing(updatedDrawing);
-
     } catch (e) {
-      // RACE CONDITION FIX: Detect version conflicts and retry with server version
-      if (e is ApiConflictException && retryCount < maxRetries) {
-
-        try {
-          // Extract server version from 409 response
-          final serverVersion = e.serverVersion;
-
-          if (serverVersion != null) {
-
-            // Fetch drawing from cache to preserve metadata (id, createdAt)
-            final latestDrawing = await _db.getCachedDrawing(
-              drawing.bookUuid,
-              drawing.date,
-              drawing.viewMode,
-            );
-
-            // Last-write-wins: Use server version but keep client strokes
-            final mergedDrawing = drawing.copyWith(
-              id: latestDrawing?.id,
-              version: serverVersion, // Use server version (authoritative)
-              createdAt: latestDrawing?.createdAt,
-            );
-
-
-            // Retry with server version
-            return await _saveDrawingInternal(mergedDrawing, retryCount: retryCount + 1);
-          } else {
-          }
-        } catch (retryError) {
-        }
-      }
-
-
-      // Still save to cache for offline access
+      // Save locally on error
       try {
-        await _cacheManager.saveDrawing(drawing);
-      } catch (cacheError) {
+        await _db.saveScheduleDrawing(drawing);
+      } catch (dbError) {
         rethrow;
       }
     }
   }
 
-  /// Delete drawing (from server and cache)
+  /// Delete drawing from server
   Future<void> deleteDrawing({
     required String bookUuid,
     required DateTime date,
@@ -791,49 +451,21 @@ class ContentService {
         );
       }
 
-      // Delete from cache
-      await _cacheManager.deleteDrawing(bookUuid, date, viewMode);
-
+      // Delete from local database
+      await _db.deleteScheduleDrawing(bookUuid, date, viewMode);
     } catch (e) {
       rethrow;
     }
   }
 
   /// Preload drawings for a date range (for performance)
-  ///
-  /// Does not block, returns immediately
+  /// In server-first architecture, this is a no-op
   Future<void> preloadDrawings({
     required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-
-    // Run in background
-    Future.microtask(() async {
-      try {
-        final credentials = await _db.getDeviceCredentials();
-        if (credentials == null) return;
-
-        final serverDrawings = await _apiClient.batchFetchDrawings(
-          bookUuid: bookUuid,
-          startDate: startDate,
-          endDate: endDate,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
-
-        // Save each to cache
-        for (final drawingData in serverDrawings) {
-          try {
-            final drawing = ScheduleDrawing.fromMap(drawingData);
-            await _cacheManager.saveDrawing(drawing);
-          } catch (e) {
-          }
-        }
-
-      } catch (e) {
-      }
-    });
+    // In server-first architecture, preloading is not needed
   }
 }
 

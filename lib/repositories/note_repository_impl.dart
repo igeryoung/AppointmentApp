@@ -1,10 +1,9 @@
-import 'package:flutter/foundation.dart';
 import 'package:sqflite/sqflite.dart';
 import '../models/note.dart';
 import 'note_repository.dart';
 
 /// Implementation of NoteRepository using SQLite
-/// Handles local caching of notes for display
+/// Notes are now linked to records via record_uuid (not events)
 class NoteRepositoryImpl implements INoteRepository {
   final Future<Database> Function() _getDatabaseFn;
 
@@ -12,8 +11,16 @@ class NoteRepositoryImpl implements INoteRepository {
 
   @override
   Future<Note?> getCached(String eventId) async {
+    // In record-based architecture, we look up via event's record_uuid
     final db = await _getDatabaseFn();
-    final maps = await db.query('notes', where: 'event_id = ?', whereArgs: [eventId], limit: 1);
+    // First get the event to find its record_uuid
+    final eventMaps = await db.query('events', where: 'id = ?', whereArgs: [eventId], limit: 1);
+    if (eventMaps.isEmpty) return null;
+
+    final recordUuid = eventMaps.first['record_uuid'] as String?;
+    if (recordUuid == null || recordUuid.isEmpty) return null;
+
+    final maps = await db.query('notes', where: 'record_uuid = ?', whereArgs: [recordUuid], limit: 1);
     if (maps.isEmpty) return null;
     return Note.fromMap(maps.first);
   }
@@ -22,49 +29,33 @@ class NoteRepositoryImpl implements INoteRepository {
   Future<void> saveToCache(Note note) async {
     final db = await _getDatabaseFn();
     final now = DateTime.now().toUtc();
-    // Increment version when saving
     final newVersion = note.version + 1;
     final updatedNote = note.copyWith(updatedAt: now, version: newVersion);
 
     final noteMap = updatedNote.toMap();
 
     try {
-      final updateMap = Map<String, dynamic>.from(noteMap);
-      final originalPagesData = updateMap['pages_data'];
-
-      // Force string conversion to prevent SQLite parameter binding corruption
-      if (originalPagesData is String) {
-        updateMap['pages_data'] = originalPagesData.toString();
-      } else {
-        updateMap['pages_data'] = originalPagesData.toString();
-      }
-
-      final pagesDataString = updateMap['pages_data'] as String;
-      final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
+      final pagesDataString = noteMap['pages_data'] as String;
 
       final updatedRows = await db.rawUpdate(
-        'UPDATE notes SET event_id = ?, pages_data = ?, created_at = ?, updated_at = ?, cached_at = ?, version = ? WHERE event_id = ?',
+        'UPDATE notes SET pages_data = ?, updated_at = ?, version = ? WHERE record_uuid = ?',
         [
-          updateMap['event_id'],
           pagesDataString,
-          updateMap['created_at'],
-          updateMap['updated_at'],
-          cachedAt,
-          updateMap['version'],
-          note.eventId,
+          noteMap['updated_at'],
+          noteMap['version'],
+          note.recordUuid,
         ],
       );
 
       if (updatedRows == 0) {
         await db.rawInsert(
-          'INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version) VALUES (?, ?, ?, ?, ?, 0, ?)',
+          'INSERT INTO notes (record_uuid, pages_data, created_at, updated_at, version) VALUES (?, ?, ?, ?, ?)',
           [
-            updateMap['event_id'],
+            noteMap['record_uuid'],
             pagesDataString,
-            updateMap['created_at'],
-            updateMap['updated_at'],
-            cachedAt,
-            updateMap['version'],
+            noteMap['created_at'],
+            noteMap['updated_at'],
+            noteMap['version'],
           ],
         );
       }
@@ -76,15 +67,22 @@ class NoteRepositoryImpl implements INoteRepository {
   @override
   Future<void> deleteCache(String eventId) async {
     final db = await _getDatabaseFn();
-    await db.delete('notes', where: 'event_id = ?', whereArgs: [eventId]);
+    // First get the event to find its record_uuid
+    final eventMaps = await db.query('events', where: 'id = ?', whereArgs: [eventId], limit: 1);
+    if (eventMaps.isEmpty) return;
+
+    final recordUuid = eventMaps.first['record_uuid'] as String?;
+    if (recordUuid == null || recordUuid.isEmpty) return;
+
+    await db.delete('notes', where: 'record_uuid = ?', whereArgs: [recordUuid]);
   }
 
   @override
   Future<List<Note>> getAllCachedForBook(String bookUuid) async {
     final db = await _getDatabaseFn();
     final maps = await db.rawQuery('''
-      SELECT notes.* FROM notes
-      INNER JOIN events ON notes.event_id = events.id
+      SELECT DISTINCT notes.* FROM notes
+      INNER JOIN events ON notes.record_uuid = events.record_uuid
       WHERE events.book_uuid = ?
     ''', [bookUuid]);
 
@@ -98,22 +96,22 @@ class NoteRepositoryImpl implements INoteRepository {
     return maps.map((map) => Note.fromMap(map)).toList();
   }
 
-  /// Batch get cached notes
-  Future<Map<String, Note>> batchGetCachedNotes(List<String> eventIds) async {
-    if (eventIds.isEmpty) return {};
+  /// Batch get cached notes by record UUIDs
+  Future<Map<String, Note>> batchGetCachedNotes(List<String> recordUuids) async {
+    if (recordUuids.isEmpty) return {};
 
     final db = await _getDatabaseFn();
-    final placeholders = eventIds.map((_) => '?').join(',');
+    final placeholders = recordUuids.map((_) => '?').join(',');
     final maps = await db.query(
       'notes',
-      where: 'event_id IN ($placeholders)',
-      whereArgs: eventIds,
+      where: 'record_uuid IN ($placeholders)',
+      whereArgs: recordUuids,
     );
 
     final result = <String, Note>{};
     for (final map in maps) {
       final note = Note.fromMap(map);
-      result[note.eventId] = note;
+      result[note.recordUuid] = note;
     }
 
     return result;
@@ -126,27 +124,24 @@ class NoteRepositoryImpl implements INoteRepository {
     final db = await _getDatabaseFn();
     final batch = db.batch();
     final now = DateTime.now();
-    final cachedAt = now.millisecondsSinceEpoch ~/ 1000;
 
     for (final entry in notes.entries) {
-      final eventId = entry.key;
+      final recordUuid = entry.key;
       final note = entry.value;
       final noteMap = note.toMap();
 
       batch.rawInsert('''
-        INSERT INTO notes (event_id, pages_data, created_at, updated_at, cached_at, cache_hit_count, version)
-        VALUES (?, ?, ?, ?, ?, 0, ?)
-        ON CONFLICT(event_id) DO UPDATE SET
+        INSERT INTO notes (record_uuid, pages_data, created_at, updated_at, version)
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(record_uuid) DO UPDATE SET
           pages_data = excluded.pages_data,
           updated_at = excluded.updated_at,
-          cached_at = excluded.cached_at,
           version = excluded.version
       ''', [
-        eventId,
+        recordUuid,
         noteMap['pages_data'],
         noteMap['created_at'],
         noteMap['updated_at'],
-        cachedAt,
         noteMap['version'] ?? 1,
       ]);
     }
@@ -163,25 +158,24 @@ class NoteRepositoryImpl implements INoteRepository {
   @override
   Future<void> applyServerChange(Map<String, dynamic> changeData) async {
     final db = await _getDatabaseFn();
-    final eventId = changeData['event_id'] as String;
+    final recordUuid = changeData['record_uuid'] as String?;
+    if (recordUuid == null) return;
 
     // Check if note exists locally
-    final existing = await getCached(eventId);
+    final existing = await db.query('notes', where: 'record_uuid = ?', whereArgs: [recordUuid], limit: 1);
 
-    final syncChangeData = Map<String, dynamic>.from(changeData);
-
-    if (existing == null) {
+    if (existing.isEmpty) {
       // Insert new note from server
-      await db.insert('notes', syncChangeData);
+      await db.insert('notes', changeData);
     } else {
       // Update existing note with server data
-      final updateData = Map<String, dynamic>.from(syncChangeData);
+      final updateData = Map<String, dynamic>.from(changeData);
       updateData.remove('id');
       await db.update(
         'notes',
         updateData,
-        where: 'event_id = ?',
-        whereArgs: [eventId],
+        where: 'record_uuid = ?',
+        whereArgs: [recordUuid],
       );
     }
   }

@@ -1,8 +1,6 @@
 import 'package:get_it/get_it.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'database_service_interface.dart';
 import 'database/prd_database_service.dart';
-import 'web_prd_database_service.dart';
 import 'time_service.dart';
 import 'api_client.dart';
 import 'server_config_service.dart';
@@ -28,13 +26,8 @@ final getIt = GetIt.instance;
 /// Sets up all service dependencies for dependency injection
 /// Call this once during app initialization
 Future<void> setupServices() async {
-  // Database Service - Platform specific
-  // Register as singleton since database should only be initialized once
-  if (kIsWeb) {
-    getIt.registerSingleton<IDatabaseService>(WebPRDDatabaseService());
-  } else {
-    getIt.registerSingleton<IDatabaseService>(PRDDatabaseService());
-  }
+  // Database Service - Register as singleton since database should only be initialized once
+  getIt.registerSingleton<IDatabaseService>(PRDDatabaseService());
 
   // Time Service - Singleton (uses its own singleton instance)
   getIt.registerSingleton<TimeService>(TimeService.instance);
@@ -98,24 +91,21 @@ Future<void> setupServices() async {
     ),
   );
 
-  // Register content services and cubits immediately for non-web platforms
-  if (!kIsWeb) {
-    // Get server URL from config (or use default)
-    final serverConfig = getIt<ServerConfigService>();
-    final serverUrl = await serverConfig.getServerUrl() ?? 'http://localhost:8080';
+  // Get server URL from config (or use default)
+  final serverConfig = getIt<ServerConfigService>();
+  final serverUrl = await serverConfig.getServerUrl() ?? 'http://localhost:8080';
 
-    // Create ApiClient
-    final apiClient = ApiClient(baseUrl: serverUrl);
+  // Create ApiClient
+  final apiClient = ApiClient(baseUrl: serverUrl);
 
-    // Register content services immediately
-    await registerContentServices(apiClient);
-  }
+  // Register content services immediately
+  await registerContentServices(apiClient);
 }
 
 /// Register content services after ApiClient is initialized
 /// Call this after server configuration is loaded
 Future<void> registerContentServices(ApiClient apiClient) async {
-  if (!kIsWeb) {
+  {
     // Re-register BookRepository with ApiClient
     final db = getIt<IDatabaseService>();
     if (db is PRDDatabaseService) {

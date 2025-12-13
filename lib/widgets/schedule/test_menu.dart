@@ -9,11 +9,8 @@ import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
-import '../../models/note.dart';
-import '../../services/cache_manager.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/time_service.dart';
-import '../../utils/schedule/schedule_cache_utils.dart';
 import '../../utils/schedule/schedule_test_utils.dart';
 
 /// Helper class for schedule test menu functionality
@@ -217,7 +214,8 @@ class ScheduleTestMenuHelper {
 
       final event = Event(
         bookUuid: bookUuid,
-        name: name,
+        recordUuid: '', // Will be assigned when creating event
+        title: name,
         recordNumber: recordNumber,
         eventTypes: [eventType],
         startTime: startTime,
@@ -229,24 +227,10 @@ class ScheduleTestMenuHelper {
       try {
         final createdEvent = await dbService.createEvent(event);
         created++;
-
-        // Generate and save random handwriting note for this event
-        if (createdEvent.id != null) {
-          try {
-            // Generate 3-15 random strokes for the note
-            final strokeCount = 3 + random.nextInt(13);
-            final strokes = ScheduleTestUtils.generateRandomStrokes(strokeCount);
-            final note = Note(
-              eventId: createdEvent.id!,
-              pages: [strokes], // Wrap strokes in array for multi-page format
-              createdAt: now,
-              updatedAt: now,
-            );
-            await dbService.saveCachedNote(note);
-          } catch (e) {
-          }
-        }
+        // Note: Notes are now created automatically when events are created
+        // They are linked via recordUuid, not eventId
       } catch (e) {
+        // Event creation failed
       }
     }
 
@@ -339,29 +323,6 @@ class ScheduleTestMenuHelper {
       context,
       dbService,
       bookUuid,
-    );
-  }
-
-  /// Show clear cache dialog
-  static Future<void> showClearCacheDialog({
-    required BuildContext context,
-    required CacheManager? cacheManager,
-    required List<Event> events,
-    required IDatabaseService dbService,
-    required String bookUuid,
-    required DateTime effectiveDate,
-    required VoidCallback onReloadDrawing,
-    required VoidCallback onPreloadNotes,
-  }) async {
-    await ScheduleCacheUtils.showClearCacheDialog(
-      context: context,
-      cacheManager: cacheManager,
-      events: events,
-      dbService: dbService,
-      bookUuid: bookUuid,
-      effectiveDate: effectiveDate,
-      onReloadDrawing: onReloadDrawing,
-      onPreloadNotes: onPreloadNotes,
     );
   }
 

@@ -388,7 +388,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    event.name,
+                    event.title,
                     style: const TextStyle(
                       fontWeight: FontWeight.bold,
                       fontSize: 16,
@@ -405,7 +405,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                 Icon(Icons.badge, size: 16, color: Colors.grey.shade600),
                 const SizedBox(width: 8),
                 Text(
-                  '${l10n.recordNumber}: ${event.recordNumber ?? '-'}',
+                  '${l10n.recordNumber}: ${event.recordNumber.isEmpty ? '-' : event.recordNumber}',
                   style: TextStyle(color: Colors.grey.shade700),
                 ),
               ],

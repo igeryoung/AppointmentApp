@@ -109,9 +109,9 @@ class EventManagementService {
 
     final newEvent = Event(
       bookUuid: _bookUuid,
-      name: name ?? '',
+      recordUuid: '', // Will be assigned by server
+      title: name ?? '',
       recordNumber: recordNumber ?? '',
-      phone: phone,
       eventTypes: eventTypes ?? [EventType.consultation], // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
@@ -156,9 +156,9 @@ class EventManagementService {
     // Store pending appointment data
     onSetPendingNextAppointment(
       PendingNextAppointment(
-        name: originalEvent.name,
-        recordNumber: originalEvent.recordNumber ?? '',
-        phone: originalEvent.phone,
+        name: originalEvent.title,
+        recordNumber: originalEvent.recordNumber,
+        phone: null, // Phone is now on records table
         eventTypes: result.eventTypes,
       ),
     );
@@ -446,7 +446,7 @@ class EventManagementService {
       context: context,
       builder: (context) => AlertDialog(
         title: Text(l10n.deleteEvent),
-        content: Text(l10n.confirmDeleteEvent(event.name)),
+        content: Text(l10n.confirmDeleteEvent(event.title)),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context, false),

@@ -56,11 +56,11 @@ class EventDetailState {
 
   /// Create initial state from event
   factory EventDetailState.fromEvent(Event event) {
-    final hasRecordNumber = event.recordNumber != null && event.recordNumber!.trim().isNotEmpty;
+    final hasRecordNumber = event.recordNumber.trim().isNotEmpty;
     return EventDetailState(
-      name: event.name,
-      recordNumber: event.recordNumber ?? '',
-      phone: event.phone ?? '',
+      name: event.title,
+      recordNumber: event.recordNumber,
+      phone: '', // Phone is now on records table, fetched separately
       selectedEventTypes: event.eventTypes,
       chargeItems: event.chargeItems,
       startTime: event.startTime,

@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import '../../../services/database_service_interface.dart';
 import '../../../services/database/prd_database_service.dart';
 import '../../../services/content_service.dart';
-import '../../../services/cache_manager.dart';
 import '../../../services/api_client.dart';
 import '../../../services/server_config_service.dart';
 import '../../../models/event.dart';
@@ -15,9 +14,6 @@ import '../../../models/event.dart';
 class ScheduleConnectivityService {
   /// ContentService for server sync operations
   ContentService? _contentService;
-
-  /// Cache manager for offline data
-  CacheManager? _cacheManager;
 
   /// Database service reference
   final IDatabaseService _dbService;
@@ -71,7 +67,6 @@ class ScheduleConnectivityService {
 
   /// Get ContentService instance (may be null if initialization failed)
   ContentService? get contentService => _contentService;
-  CacheManager? get cacheManager => _cacheManager;
 
   /// Initialize ContentService for server sync
   Future<void> initialize() async {
@@ -82,8 +77,7 @@ class ScheduleConnectivityService {
         defaultUrl: 'http://localhost:8080',
       );
       final apiClient = ApiClient(baseUrl: serverUrl);
-      _cacheManager = CacheManager(prdDb);
-      _contentService = ContentService(apiClient, _cacheManager!, _dbService);
+      _contentService = ContentService(apiClient, _dbService);
 
       // Update drawing service with ContentService
       onUpdateDrawingServiceContentService(_contentService);

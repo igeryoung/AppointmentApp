@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:path/path.dart';
 import 'package:sqflite/sqflite.dart';
+import '../../models/event.dart';
 import '../database_service_interface.dart';
 
 import 'mixins/book_operations_mixin.dart';
@@ -210,6 +211,7 @@ class PRDDatabaseService
     await db.execute('CREATE INDEX idx_charge_items_person ON person_charge_items(person_name_normalized, record_number_normalized)');
   }
 
+  @override
   Future<void> clearAllData() async {
     final db = await database;
     await db.delete('person_charge_items');
@@ -220,6 +222,68 @@ class PRDDatabaseService
     await db.delete('books');
   }
 
+  @override
+  Future<void> replaceEventWithServerData(Event event) async {
+    if (event.id == null) throw ArgumentError('Event ID cannot be null');
+    final db = await database;
+    final data = event.toMap();
+    data['is_dirty'] = 0; // Mark as clean since it's from server
+    await db.update('events', data, where: 'id = ?', whereArgs: [event.id]);
+  }
+
+  @override
+  Future<int> getEventCountByBook(String bookUuid) async {
+    final db = await database;
+    final result = await db.rawQuery(
+      'SELECT COUNT(*) as count FROM events WHERE book_uuid = ?',
+      [bookUuid],
+    );
+    return Sqflite.firstIntValue(result) ?? 0;
+  }
+
+  @override
+  Future<List<String>> getAllRecordNumbers(String bookUuid) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT DISTINCT e.record_number
+      FROM events e
+      WHERE e.book_uuid = ? AND e.record_number != ''
+      ORDER BY e.record_number ASC
+    ''', [bookUuid]);
+    return results.map((r) => r['record_number'] as String).toList();
+  }
+
+  @override
+  Future<List<String>> getRecordNumbersByName(String bookUuid, String name) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT DISTINCT e.record_number
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ? AND LOWER(r.name) = LOWER(?) AND e.record_number != ''
+      ORDER BY e.record_number ASC
+    ''', [bookUuid, name]);
+    return results.map((r) => r['record_number'] as String).toList();
+  }
+
+  @override
+  Future<List<Event>> searchByNameAndRecordNumber(
+    String bookUuid,
+    String name,
+    String recordNumber,
+  ) async {
+    final db = await database;
+    final results = await db.rawQuery('''
+      SELECT e.*
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ? AND LOWER(r.name) = LOWER(?) AND e.record_number = ?
+      ORDER BY e.start_time ASC
+    ''', [bookUuid, name, recordNumber]);
+    return results.map((r) => Event.fromMap(r)).toList();
+  }
+
+  @override
   Future<void> close() async {
     final db = _database;
     if (db != null) {
