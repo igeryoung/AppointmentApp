@@ -18,64 +18,6 @@ class BookBackupService {
     _serverConfigService = ServerConfigService(dbService);
   }
 
-  /// Gather complete book data (book + events + notes + drawings)
-  Future<Map<String, dynamic>> _gatherBookData(String bookUuid) async {
-    final db = await dbService.database;
-
-    // Get book
-    final bookMaps = await db.query('books', where: 'book_uuid = ?', whereArgs: [bookUuid]);
-    if (bookMaps.isEmpty) {
-      throw Exception('Book not found');
-    }
-    final book = bookMaps.first;
-
-    // Get all events for this book
-    final events = await db.query('events', where: 'book_uuid = ?', whereArgs: [bookUuid]);
-
-    // Get all notes for these events
-    final eventIds = events.map((e) => e['id']).toList();
-    final notes = eventIds.isNotEmpty
-        ? await db.query('notes', where: 'event_id IN (${eventIds.join(',')})')
-        : <Map<String, dynamic>>[];
-
-    // Get all schedule drawings for this book
-    final drawings = await db.query('schedule_drawings', where: 'book_uuid = ?', whereArgs: [bookUuid]);
-
-    return {
-      'book': book,
-      'events': events,
-      'notes': notes,
-      'drawings': drawings,
-    };
-  }
-
-  /// Upload a book to server
-  Future<int> uploadBook(String bookUuid, {String? customName}) async {
-
-    // Get device info directly from database
-    final db = await dbService.database;
-    final deviceRows = await db.query('device_info', limit: 1);
-    if (deviceRows.isEmpty) {
-      throw Exception('Device not registered. Please register device first.');
-    }
-    final deviceRow = deviceRows.first;
-    final deviceId = deviceRow['device_id'] as String;
-    final deviceToken = deviceRow['device_token'] as String;
-
-    // Gather book data
-    final backupData = await _gatherBookData(bookUuid);
-    final bookName = customName ?? backupData['book']['name'] as String;
-
-    // Use ApiClient to upload
-    return await apiClient.uploadBookBackup(
-      bookUuid: bookUuid,
-      backupName: bookName,
-      backupData: backupData,
-      deviceId: deviceId,
-      deviceToken: deviceToken,
-    );
-  }
-
   /// List all backups for this device
   Future<List<Map<String, dynamic>>> listBackups() async {
 

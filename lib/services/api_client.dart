@@ -634,55 +634,6 @@ class ApiClient {
   }
 
   // ===================
-  // Book Backup API (Local → Server Upload)
-  // ===================
-
-  /// Upload book backup to server
-  /// Used to backup a complete book (book + events + notes + drawings)
-  Future<int> uploadBookBackup({
-    required String bookUuid,
-    required String backupName,
-    required Map<String, dynamic> backupData,
-    required String deviceId,
-    required String deviceToken,
-  }) async {
-    try {
-
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/books/$bookUuid/backup'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode({
-          'backupName': backupName,
-        }),
-      ).timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final backupId = json['backupId'] as int;
-        return backupId;
-      } else if (response.statusCode == 401) {
-        throw ApiException(
-          'Unauthorized: Invalid device credentials',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      } else {
-        throw ApiException(
-          'Upload book backup failed: ${response.statusCode}',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  // ===================
   // Device Registration API
   // ===================
 

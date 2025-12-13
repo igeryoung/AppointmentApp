@@ -11,7 +11,6 @@ class BookCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
-  final VoidCallback? onUploadToServer;
 
   const BookCard({
     super.key,
@@ -20,7 +19,6 @@ class BookCard extends StatelessWidget {
     required this.onRename,
     required this.onArchive,
     required this.onDelete,
-    this.onUploadToServer,
   });
 
   @override
@@ -101,9 +99,6 @@ class BookCard extends StatelessWidget {
           case 'archive':
             onArchive();
             break;
-          case 'upload':
-            if (onUploadToServer != null) onUploadToServer!();
-            break;
           case 'delete':
             onDelete();
             break;
@@ -125,15 +120,6 @@ class BookCard extends StatelessWidget {
             child: ListTile(
               leading: const Icon(Icons.archive),
               title: Text(l10n.archive),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        if (!book.isArchived && onUploadToServer != null)
-          const PopupMenuItem(
-            value: 'upload',
-            child: ListTile(
-              leading: Icon(Icons.cloud_upload),
-              title: Text('Upload to Server'),
               contentPadding: EdgeInsets.zero,
             ),
           ),

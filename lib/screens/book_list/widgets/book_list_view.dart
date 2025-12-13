@@ -13,7 +13,6 @@ class BookListView extends StatelessWidget {
   final void Function(Book) onRename;
   final void Function(Book) onArchive;
   final void Function(Book) onDelete;
-  final void Function(Book)? onUploadToServer;
 
   const BookListView({
     super.key,
@@ -24,7 +23,6 @@ class BookListView extends StatelessWidget {
     required this.onRename,
     required this.onArchive,
     required this.onDelete,
-    this.onUploadToServer,
   });
 
   @override
@@ -49,8 +47,6 @@ class BookListView extends StatelessWidget {
             onRename: () => onRename(book),
             onArchive: () => onArchive(book),
             onDelete: () => onDelete(book),
-            onUploadToServer:
-                onUploadToServer == null ? null : () => onUploadToServer!(book),
           );
         },
       ),
