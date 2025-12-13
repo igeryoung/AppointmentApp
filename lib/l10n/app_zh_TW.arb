@@ -1359,5 +1359,65 @@
   "chargeItemsRequireRecordNumber": "請新增病例號以追蹤待收款項",
   "@chargeItemsRequireRecordNumber": {
     "description": "Message shown when trying to add charge items without a record number"
+  },
+
+  "serverSetupTitle": "伺服器設定",
+  "@serverSetupTitle": {
+    "description": "Title for server setup screen"
+  },
+
+  "serverSetupSubtitle": "請輸入伺服器網址以開始使用",
+  "@serverSetupSubtitle": {
+    "description": "Subtitle for server setup screen"
+  },
+
+  "deviceRegistrationTitle": "裝置註冊",
+  "@deviceRegistrationTitle": {
+    "description": "Title for device registration step"
+  },
+
+  "deviceRegistrationSubtitle": "此裝置尚未註冊，請輸入註冊密碼",
+  "@deviceRegistrationSubtitle": {
+    "description": "Subtitle for device registration step"
+  },
+
+  "serverUrlLabel": "伺服器網址",
+  "@serverUrlLabel": {
+    "description": "Label for server URL field"
+  },
+
+  "serverUrlRequired": "伺服器網址為必填項目",
+  "@serverUrlRequired": {
+    "description": "Error when server URL is required"
+  },
+
+  "serverUrlInvalid": "網址格式無效（需以 http:// 或 https:// 開頭）",
+  "@serverUrlInvalid": {
+    "description": "Error when server URL format is invalid"
+  },
+
+  "registrationPasswordLabel": "註冊密碼",
+  "@registrationPasswordLabel": {
+    "description": "Label for registration password field"
+  },
+
+  "passwordRequired": "密碼為必填項目",
+  "@passwordRequired": {
+    "description": "Error when password is required"
+  },
+
+  "nextButton": "下一步",
+  "@nextButton": {
+    "description": "Next button text"
+  },
+
+  "registerButton": "註冊",
+  "@registerButton": {
+    "description": "Register button text"
+  },
+
+  "backButton": "返回",
+  "@backButton": {
+    "description": "Back button text"
   }
 }
