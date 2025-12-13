@@ -1376,6 +1376,78 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'請新增病例號以追蹤待收款項'**
   String get chargeItemsRequireRecordNumber;
+
+  /// Title for server setup screen
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'伺服器設定'**
+  String get serverSetupTitle;
+
+  /// Subtitle for server setup screen
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請輸入伺服器網址以開始使用'**
+  String get serverSetupSubtitle;
+
+  /// Title for device registration step
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'裝置註冊'**
+  String get deviceRegistrationTitle;
+
+  /// Subtitle for device registration step
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'此裝置尚未註冊，請輸入註冊密碼'**
+  String get deviceRegistrationSubtitle;
+
+  /// Label for server URL field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'伺服器網址'**
+  String get serverUrlLabel;
+
+  /// Error when server URL is required
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'伺服器網址為必填項目'**
+  String get serverUrlRequired;
+
+  /// Error when server URL format is invalid
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'網址格式無效（需以 http:// 或 https:// 開頭）'**
+  String get serverUrlInvalid;
+
+  /// Label for registration password field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'註冊密碼'**
+  String get registrationPasswordLabel;
+
+  /// Error when password is required
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'密碼為必填項目'**
+  String get passwordRequired;
+
+  /// Next button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'下一步'**
+  String get nextButton;
+
+  /// Register button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'註冊'**
+  String get registerButton;
+
+  /// Back button text
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'返回'**
+  String get backButton;
 }
 
 class _AppLocalizationsDelegate

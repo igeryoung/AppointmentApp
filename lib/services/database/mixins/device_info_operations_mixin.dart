@@ -43,6 +43,7 @@ mixin DeviceInfoOperationsMixin {
     required String deviceId,
     required String deviceToken,
     required String deviceName,
+    required String serverUrl,
     String? platform,
   }) async {
     final db = await database;
@@ -53,6 +54,7 @@ mixin DeviceInfoOperationsMixin {
         'device_id': deviceId,
         'device_token': deviceToken,
         'device_name': deviceName,
+        'server_url': serverUrl,
         'platform': platform,
         'registered_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
       },

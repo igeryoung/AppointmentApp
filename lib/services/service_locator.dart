@@ -25,7 +25,8 @@ final getIt = GetIt.instance;
 
 /// Sets up all service dependencies for dependency injection
 /// Call this once during app initialization
-Future<void> setupServices() async {
+/// [serverUrl] - Required server URL (must be configured before calling this)
+Future<void> setupServices({required String serverUrl}) async {
   // Database Service - Register as singleton since database should only be initialized once
   getIt.registerSingleton<IDatabaseService>(PRDDatabaseService());
 
@@ -37,15 +38,17 @@ Future<void> setupServices() async {
     () => ServerConfigService(getIt<IDatabaseService>() as PRDDatabaseService),
   );
 
+  // Create ApiClient with the provided server URL
+  final apiClient = ApiClient(baseUrl: serverUrl);
+
   // Repositories - Lazy singletons
   final db = getIt<IDatabaseService>();
   if (db is PRDDatabaseService) {
-    // Note: BookRepository will be re-registered with ApiClient after server config loads
-    // For now, register without ApiClient (book creation will fail until API is configured)
+    // BookRepository is initialized with ApiClient from the start
     getIt.registerLazySingleton<IBookRepository>(
       () => BookRepositoryImpl(
         () => db.database,
-        apiClient: null, // Will be updated after server config loads
+        apiClient: apiClient,
         dbService: db,
       ),
     );
@@ -70,15 +73,6 @@ Future<void> setupServices() async {
     );
   }
 
-  // Note: ApiClient, CacheManager, and ContentService are initialized
-  // dynamically in screens after server configuration is loaded.
-  // For now, we register the new content services once API client is available.
-
-  // Phase 3 Services - Lazy singletons
-  // Note: These require ApiClient which is initialized after server config
-  // For now, we'll defer registration until ApiClient is available
-  // TODO: Refactor to make ApiClient available during setupServices
-
   // Book Order Service - Lazy singleton
   getIt.registerLazySingleton<BookOrderService>(() => BookOrderService());
 
@@ -91,14 +85,7 @@ Future<void> setupServices() async {
     ),
   );
 
-  // Get server URL from config (or use default)
-  final serverConfig = getIt<ServerConfigService>();
-  final serverUrl = await serverConfig.getServerUrl() ?? 'http://localhost:8080';
-
-  // Create ApiClient
-  final apiClient = ApiClient(baseUrl: serverUrl);
-
-  // Register content services immediately
+  // Register content services with the ApiClient
   await registerContentServices(apiClient);
 }
 

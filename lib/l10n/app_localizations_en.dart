@@ -739,4 +739,42 @@ class AppLocalizationsEn extends AppLocalizations {
   @override
   String get chargeItemsRequireRecordNumber =>
       'Please add a record number to track charge items';
+
+  @override
+  String get serverSetupTitle => 'Server Setup';
+
+  @override
+  String get serverSetupSubtitle => 'Enter the server URL to get started';
+
+  @override
+  String get deviceRegistrationTitle => 'Device Registration';
+
+  @override
+  String get deviceRegistrationSubtitle =>
+      'This device is not registered. Please enter the registration password';
+
+  @override
+  String get serverUrlLabel => 'Server URL';
+
+  @override
+  String get serverUrlRequired => 'Server URL is required';
+
+  @override
+  String get serverUrlInvalid =>
+      'Invalid URL format (must start with http:// or https://)';
+
+  @override
+  String get registrationPasswordLabel => 'Registration Password';
+
+  @override
+  String get passwordRequired => 'Password is required';
+
+  @override
+  String get nextButton => 'Next';
+
+  @override
+  String get registerButton => 'Register';
+
+  @override
+  String get backButton => 'Back';
 }
