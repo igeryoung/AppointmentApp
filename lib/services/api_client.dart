@@ -214,6 +214,68 @@ class ApiClient {
     }
   }
 
+  /// Save note with event - creates record on server if needed
+  /// POST /api/books/{bookUuid}/notes/save
+  /// This is the preferred method for saving notes as it handles record creation
+  Future<Map<String, dynamic>> saveNoteWithEvent({
+    required String bookUuid,
+    required String recordNumber,
+    required String name,
+    required String phone,
+    required String pagesData,
+    required Map<String, dynamic> eventData,
+    required String deviceId,
+    required String deviceToken,
+    int? noteVersion,
+  }) async {
+    try {
+      final url = '$baseUrl/api/books/$bookUuid/notes/save';
+      debugPrint('[ApiClient] saveNoteWithEvent: POST $url');
+
+      final requestBody = {
+        'record_number': recordNumber,
+        'name': name,
+        'phone': phone,
+        'pages_data': pagesData,
+        'event': eventData,
+      };
+      if (noteVersion != null) {
+        requestBody['version'] = noteVersion;
+      }
+
+      final response = await _client.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode(requestBody),
+      ).timeout(timeout);
+
+      debugPrint('[ApiClient] saveNoteWithEvent: response=${response.statusCode}');
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json;
+      } else if (response.statusCode == 409) {
+        throw ApiConflictException(
+          'Note version conflict',
+          statusCode: 409,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Save note with event failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Delete a note from server
   Future<void> deleteNote({
     required String bookUuid,

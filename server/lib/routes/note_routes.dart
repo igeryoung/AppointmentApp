@@ -24,6 +24,7 @@ class NoteRoutes {
     router.get('/<bookUuid>/records/<recordUuid>/note', _getNote);
     router.post('/<bookUuid>/records/<recordUuid>/note', _createOrUpdateNote);
     router.delete('/<bookUuid>/records/<recordUuid>/note', _deleteNote);
+    router.post('/<bookUuid>/notes/save', _saveNoteWithEvent);
     return router;
   }
 
@@ -198,6 +199,92 @@ class NoteRoutes {
           headers: {'Content-Type': 'application/json'});
     } catch (e) {
       return Response.internalServerError(body: jsonEncode({'success': false, 'message': 'Failed to batch get notes: $e'}),
+          headers: {'Content-Type': 'application/json'});
+    }
+  }
+
+  /// Save note with event - creates record if needed
+  /// POST /api/books/{bookUuid}/notes/save
+  /// Body: { record_number, name, phone, pages_data, version, event: {...} }
+  Future<Response> _saveNoteWithEvent(Request request) async {
+    try {
+      final bookUuid = request.params['bookUuid'] ?? '';
+
+      if (bookUuid.isEmpty) {
+        return Response.badRequest(body: jsonEncode({'success': false, 'message': 'Invalid bookUuid'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
+
+      if (deviceId == null || deviceToken == null) {
+        return Response(401, body: jsonEncode({'success': false, 'message': 'Missing device credentials'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (!await noteService.verifyDeviceAccess(deviceId, deviceToken)) {
+        return Response.forbidden(jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (!await noteService.verifyBookOwnership(deviceId, bookUuid)) {
+        return Response.forbidden(jsonEncode({'success': false, 'message': 'Unauthorized access to book'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      final body = await request.readAsString();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+
+      final recordNumber = json['record_number'] as String? ?? '';
+      final name = json['name'] as String? ?? '';
+      final phone = json['phone'] as String? ?? '';
+      final pagesData = json['pages_data'] as String?;
+      final noteVersion = json['version'] as int?;
+      final eventData = json['event'] as Map<String, dynamic>?;
+
+      if (pagesData == null) {
+        return Response.badRequest(body: jsonEncode({'success': false, 'message': 'Missing pages_data'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (eventData == null || eventData['id'] == null) {
+        return Response.badRequest(body: jsonEncode({'success': false, 'message': 'Missing event data or event.id'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      final result = await noteService.saveNoteWithEvent(
+        bookUuid: bookUuid,
+        recordNumber: recordNumber,
+        name: name,
+        phone: phone,
+        pagesData: pagesData,
+        noteVersion: noteVersion,
+        eventData: eventData,
+      );
+
+      if (result.success) {
+        return Response.ok(jsonEncode({
+          'success': true,
+          'record': result.record,
+          'event': result.event,
+          'note': result.note,
+        }), headers: {'Content-Type': 'application/json'});
+      }
+
+      if (result.hasConflict) {
+        return Response(409, body: jsonEncode({
+          'success': false,
+          'conflict': true,
+          'serverVersion': result.serverVersion,
+          'serverNote': result.serverNote,
+        }), headers: {'Content-Type': 'application/json'});
+      }
+
+      return Response.internalServerError(body: jsonEncode({'success': false, 'message': 'Unknown error'}),
+          headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'success': false, 'message': 'Failed to save note: $e'}),
           headers: {'Content-Type': 'application/json'});
     }
   }

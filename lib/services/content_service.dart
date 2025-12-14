@@ -192,6 +192,7 @@ class ContentService {
   /// Save note to server
   ///
   /// In server-based architecture, saves directly to server
+  /// Uses the new saveNoteWithEvent API which handles record creation
   Future<void> saveNote(String eventId, Note note) async {
     // Get credentials
     final credentials = await _db.getDeviceCredentials();
@@ -199,31 +200,58 @@ class ContentService {
       throw Exception('Device not registered');
     }
 
-    // Get event for bookUuid
+    // Get event for bookUuid and other data
     final event = await _db.getEventById(eventId);
     if (event == null) {
       throw Exception('Event not found');
     }
 
-    // Prepare note data
-    final noteMap = note.toMap();
-    final noteData = {
-      'pagesData': noteMap['pages_data'],
-      'version': noteMap['version'],
-    };
-
-    debugPrint('[ContentService] saveNote: eventId=$eventId, bookUuid=${event.bookUuid}, recordUuid=${note.recordUuid}');
-    debugPrint('[ContentService] saveNote: noteData keys=${noteData.keys.toList()}');
+    // Get record data (name, phone) from record table
+    String recordNumber = event.recordNumber;
+    String name = '';
+    String phone = '';
 
     try {
-      // Save directly to server
-      await _apiClient.saveNote(
+      final record = await _db.getRecordByUuid(event.recordUuid);
+      if (record != null) {
+        recordNumber = record.recordNumber ?? '';
+        name = record.name ?? '';
+        phone = record.phone ?? '';
+      }
+    } catch (e) {
+      debugPrint('[ContentService] saveNote: Failed to get record data: $e');
+    }
+
+    // Prepare note data
+    final noteMap = note.toMap();
+    final pagesData = noteMap['pages_data'] as String;
+
+    // Prepare event data for server
+    final eventData = {
+      'id': event.id,
+      'title': event.title,
+      'event_types': event.eventTypesJson,
+      'start_time': event.startTime.millisecondsSinceEpoch ~/ 1000,
+      'end_time': event.endTime != null ? event.endTime!.millisecondsSinceEpoch ~/ 1000 : null,
+      'has_charge_items': event.hasChargeItems,
+      'is_checked': event.isChecked,
+    };
+
+    debugPrint('[ContentService] saveNote: eventId=$eventId, bookUuid=${event.bookUuid}, recordNumber=$recordNumber');
+    debugPrint('[ContentService] saveNote: using saveNoteWithEvent API');
+
+    try {
+      // Save using the new saveNoteWithEvent API
+      await _apiClient.saveNoteWithEvent(
         bookUuid: event.bookUuid,
-        eventId: eventId,
-        noteData: noteData,
+        recordNumber: recordNumber,
+        name: name,
+        phone: phone,
+        pagesData: pagesData,
+        eventData: eventData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
-        eventData: event.toMap(),
+        noteVersion: note.version,
       );
       debugPrint('[ContentService] saveNote: success');
     } catch (e) {
@@ -236,6 +264,7 @@ class ContentService {
   ///
   /// Throws exception on sync failure
   /// In server-first architecture, syncs note data from local to server
+  /// Uses the new saveNoteWithEvent API which handles record creation
   Future<void> syncNote(String eventId, {int retryCount = 0}) async {
     try {
       // Get credentials
@@ -256,22 +285,48 @@ class ContentService {
         return; // No note to sync
       }
 
-      // Save to server
+      // Get record data (name, phone) from record table
+      String recordNumber = event.recordNumber;
+      String name = '';
+      String phone = '';
+
+      try {
+        final record = await _db.getRecordByUuid(event.recordUuid);
+        if (record != null) {
+          recordNumber = record.recordNumber ?? '';
+          name = record.name ?? '';
+          phone = record.phone ?? '';
+        }
+      } catch (e) {
+        debugPrint('[ContentService] syncNote: Failed to get record data: $e');
+      }
+
+      // Prepare note data
       final noteMap = note.toMap();
-      final noteData = {
-        'pagesData': noteMap['pages_data'],
-        'version': noteMap['version'],
+      final pagesData = noteMap['pages_data'] as String;
+
+      // Prepare event data for server
+      final eventData = {
+        'id': event.id,
+        'title': event.title,
+        'event_types': event.eventTypesJson,
+        'start_time': event.startTime.millisecondsSinceEpoch ~/ 1000,
+        'end_time': event.endTime != null ? event.endTime!.millisecondsSinceEpoch ~/ 1000 : null,
+        'has_charge_items': event.hasChargeItems,
+        'is_checked': event.isChecked,
       };
 
-      final eventData = event.toMap();
-
-      await _apiClient.saveNote(
+      // Save using the new saveNoteWithEvent API
+      await _apiClient.saveNoteWithEvent(
         bookUuid: event.bookUuid,
-        eventId: eventId,
-        noteData: noteData,
+        recordNumber: recordNumber,
+        name: name,
+        phone: phone,
+        pagesData: pagesData,
+        eventData: eventData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
-        eventData: eventData,
+        noteVersion: note.version,
       );
     } catch (e) {
       rethrow;

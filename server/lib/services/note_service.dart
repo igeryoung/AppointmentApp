@@ -237,4 +237,264 @@ class NoteService {
       rethrow;
     }
   }
+
+  /// Save note with event - handles record creation if needed
+  /// Pipeline:
+  /// 1. If record_number exists → use existing record_uuid
+  /// 2. If record_number doesn't exist → create new record
+  /// 3. If record_number is empty → create new record with empty record_number
+  /// 4. Create/update event with the record_uuid
+  /// 5. Create/update note with the record_uuid
+  Future<SaveNoteWithEventResult> saveNoteWithEvent({
+    required String bookUuid,
+    required String recordNumber,
+    required String name,
+    required String phone,
+    required String pagesData,
+    int? noteVersion,
+    required Map<String, dynamic> eventData,
+  }) async {
+    try {
+      // Step 1: Ensure record exists or create new one
+      final recordResult = await _ensureRecordExists(
+        recordNumber: recordNumber,
+        name: name,
+        phone: phone,
+      );
+      final recordUuid = recordResult['record_uuid'] as String;
+      final recordCreated = recordResult['created'] as bool;
+
+      // Step 2: Create or update event
+      final eventResult = await _createOrUpdateEvent(
+        bookUuid: bookUuid,
+        recordUuid: recordUuid,
+        recordNumber: recordNumber,
+        eventData: eventData,
+      );
+
+      // Step 3: Create or update note
+      final noteResult = await createOrUpdateNoteForRecord(
+        recordUuid: recordUuid,
+        pagesData: pagesData,
+        expectedVersion: noteVersion != null ? noteVersion - 1 : null,
+      );
+
+      if (noteResult.hasConflict) {
+        return SaveNoteWithEventResult.conflict(
+          serverVersion: noteResult.serverVersion!,
+          serverNote: noteResult.serverNote!,
+        );
+      }
+
+      return SaveNoteWithEventResult.success(
+        record: {
+          'record_uuid': recordUuid,
+          'record_number': recordNumber,
+          'name': name,
+          'phone': phone,
+          'created': recordCreated,
+        },
+        event: eventResult,
+        note: noteResult.note!,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Ensure record exists by record_number, or create new one
+  Future<Map<String, dynamic>> _ensureRecordExists({
+    required String recordNumber,
+    required String name,
+    required String phone,
+  }) async {
+    // If record_number is non-empty, try to find existing record
+    if (recordNumber.isNotEmpty) {
+      final existing = await db.querySingle('''
+        SELECT record_uuid, record_number, name, phone
+        FROM records
+        WHERE record_number = @recordNumber AND is_deleted = false
+      ''', parameters: {'recordNumber': recordNumber});
+
+      if (existing != null) {
+        // Update name/phone if provided
+        if (name.isNotEmpty || phone.isNotEmpty) {
+          await db.query('''
+            UPDATE records
+            SET name = COALESCE(NULLIF(@name, ''), name),
+                phone = COALESCE(NULLIF(@phone, ''), phone),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE record_uuid = @recordUuid
+          ''', parameters: {
+            'recordUuid': existing['record_uuid'],
+            'name': name,
+            'phone': phone,
+          });
+        }
+        return {
+          'record_uuid': existing['record_uuid'],
+          'created': false,
+        };
+      }
+    }
+
+    // Create new record (either record_number not found, or empty record_number)
+    final newRecord = await db.querySingle('''
+      INSERT INTO records (record_number, name, phone, created_at, updated_at, version)
+      VALUES (@recordNumber, @name, @phone, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1)
+      RETURNING record_uuid
+    ''', parameters: {
+      'recordNumber': recordNumber,
+      'name': name,
+      'phone': phone,
+    });
+
+    return {
+      'record_uuid': newRecord!['record_uuid'],
+      'created': true,
+    };
+  }
+
+  /// Create or update event with the given record_uuid
+  Future<Map<String, dynamic>> _createOrUpdateEvent({
+    required String bookUuid,
+    required String recordUuid,
+    required String recordNumber,
+    required Map<String, dynamic> eventData,
+  }) async {
+    final eventId = eventData['id'] as String;
+    final title = eventData['title'] as String? ?? '';
+    final eventTypes = eventData['event_types'] as String? ?? '[]';
+    final startTime = eventData['start_time'];
+    final endTime = eventData['end_time'];
+    final hasChargeItems = eventData['has_charge_items'] == true;
+    final isChecked = eventData['is_checked'] == true;
+
+    // Convert timestamps
+    DateTime? startDateTime;
+    DateTime? endDateTime;
+    if (startTime != null) {
+      startDateTime = startTime is int
+          ? DateTime.fromMillisecondsSinceEpoch(startTime * 1000)
+          : DateTime.tryParse(startTime.toString());
+    }
+    if (endTime != null) {
+      endDateTime = endTime is int
+          ? DateTime.fromMillisecondsSinceEpoch(endTime * 1000)
+          : DateTime.tryParse(endTime.toString());
+    }
+
+    // Try to update existing event first
+    final updated = await db.querySingle('''
+      UPDATE events
+      SET record_uuid = @recordUuid,
+          record_number = @recordNumber,
+          title = @title,
+          event_types = @eventTypes,
+          start_time = @startTime,
+          end_time = @endTime,
+          has_charge_items = @hasChargeItems,
+          is_checked = @isChecked,
+          updated_at = CURRENT_TIMESTAMP,
+          version = version + 1
+      WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false
+      RETURNING id, record_uuid, version
+    ''', parameters: {
+      'eventId': eventId,
+      'bookUuid': bookUuid,
+      'recordUuid': recordUuid,
+      'recordNumber': recordNumber,
+      'title': title,
+      'eventTypes': eventTypes,
+      'startTime': startDateTime,
+      'endTime': endDateTime,
+      'hasChargeItems': hasChargeItems,
+      'isChecked': isChecked,
+    });
+
+    if (updated != null) {
+      return {
+        'id': updated['id'],
+        'record_uuid': updated['record_uuid'],
+        'version': updated['version'],
+        'created': false,
+      };
+    }
+
+    // Create new event
+    final created = await db.querySingle('''
+      INSERT INTO events (
+        id, book_uuid, record_uuid, record_number, title, event_types,
+        start_time, end_time, has_charge_items, is_checked,
+        created_at, updated_at, version
+      ) VALUES (
+        @eventId, @bookUuid, @recordUuid, @recordNumber, @title, @eventTypes,
+        @startTime, @endTime, @hasChargeItems, @isChecked,
+        CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1
+      )
+      RETURNING id, record_uuid, version
+    ''', parameters: {
+      'eventId': eventId,
+      'bookUuid': bookUuid,
+      'recordUuid': recordUuid,
+      'recordNumber': recordNumber,
+      'title': title,
+      'eventTypes': eventTypes,
+      'startTime': startDateTime,
+      'endTime': endDateTime,
+      'hasChargeItems': hasChargeItems,
+      'isChecked': isChecked,
+    });
+
+    return {
+      'id': created!['id'],
+      'record_uuid': created['record_uuid'],
+      'version': created['version'],
+      'created': true,
+    };
+  }
+}
+
+/// Result class for saveNoteWithEvent operation
+class SaveNoteWithEventResult {
+  final bool success;
+  final Map<String, dynamic>? record;
+  final Map<String, dynamic>? event;
+  final Map<String, dynamic>? note;
+  final bool hasConflict;
+  final int? serverVersion;
+  final Map<String, dynamic>? serverNote;
+
+  const SaveNoteWithEventResult({
+    required this.success,
+    this.record,
+    this.event,
+    this.note,
+    this.hasConflict = false,
+    this.serverVersion,
+    this.serverNote,
+  });
+
+  SaveNoteWithEventResult.success({
+    required Map<String, dynamic> record,
+    required Map<String, dynamic> event,
+    required Map<String, dynamic> note,
+  })  : success = true,
+        record = record,
+        event = event,
+        note = note,
+        hasConflict = false,
+        serverVersion = null,
+        serverNote = null;
+
+  SaveNoteWithEventResult.conflict({
+    required int serverVersion,
+    required Map<String, dynamic> serverNote,
+  })  : success = false,
+        record = null,
+        event = null,
+        note = null,
+        hasConflict = true,
+        serverVersion = serverVersion,
+        serverNote = serverNote;
 }
