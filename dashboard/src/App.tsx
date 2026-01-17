@@ -4,6 +4,7 @@ import { Login } from './pages/Login';
 import { Overview } from './pages/Overview';
 import { TodayOverview } from './pages/TodayOverview';
 import { Books } from './pages/Books';
+import { Records } from './pages/Records';
 import { EventsAndNotes } from './pages/EventsAndNotes';
 import { EventDetail } from './pages/EventDetail';
 import { Devices } from './pages/Devices';
@@ -84,6 +85,16 @@ function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Books />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/records"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <Records />
               </DashboardLayout>
             </ProtectedRoute>
           }

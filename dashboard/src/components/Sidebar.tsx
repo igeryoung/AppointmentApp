@@ -8,6 +8,7 @@ import {
   Database,
   RefreshCw,
   Users,
+  FileText,
   LogOut,
 } from 'lucide-react';
 import { dashboardAPI } from '../services/api';
@@ -17,6 +18,7 @@ const navItems = [
   { path: '/today', label: 'Today', icon: CalendarDays },
   { path: '/devices', label: 'Devices', icon: Users },
   { path: '/books', label: 'Books', icon: BookOpen },
+  { path: '/records', label: 'Records', icon: FileText },
   { path: '/events', label: 'Events & Notes', icon: Calendar },
   { path: '/drawings', label: 'Drawings', icon: Palette },
   { path: '/backups', label: 'Backups', icon: Database },
