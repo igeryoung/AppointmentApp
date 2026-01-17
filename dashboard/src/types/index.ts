@@ -46,6 +46,18 @@ export interface Book {
   drawingCount: number;
 }
 
+export interface RecordSummary {
+  recordUuid: string;
+  recordNumber: string;
+  name: string | null;
+  phone: string | null;
+  createdAt: string;
+  updatedAt: string;
+  version: number;
+  eventCount: number;
+  hasNote: boolean;
+}
+
 export interface EventStats {
   total: number;
   active: number;
@@ -204,4 +216,10 @@ export interface EventFilters {
   bookUuid?: string;
   name?: string;
   recordNumber?: string;
+}
+
+export interface RecordFilters {
+  name?: string;
+  recordNumber?: string;
+  phone?: string;
 }

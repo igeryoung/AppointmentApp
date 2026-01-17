@@ -29,6 +29,7 @@ class DashboardRoutes {
     router.get('/stats', _authMiddleware(_getStats));
     router.get('/devices', _authMiddleware(_getDevices));
     router.get('/books', _authMiddleware(_getBooks));
+    router.get('/records', _authMiddleware(_getRecords));
     router.get('/events', _authMiddleware(_getEvents));
     router.get('/events/<eventId>', (Request request, String eventId) async {
       return _authMiddleware((Request req) => _getEventDetail(req, eventId))(request);
@@ -510,6 +511,71 @@ class DashboardRoutes {
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch sync stats', error: e, stackTrace: stackTrace);
       rethrow;
+    }
+  }
+
+  /// Get list of records with optional name/record number/phone filters
+  Future<Response> _getRecords(Request request) async {
+    try {
+      final params = request.url.queryParameters;
+      final name = params['name'];
+      final recordNumber = params['recordNumber'];
+      final phone = params['phone'];
+
+      final conditions = <String>['r.is_deleted = false'];
+      final queryParams = <String, dynamic>{};
+
+      if (name != null && name.isNotEmpty) {
+        conditions.add('LOWER(r.name) LIKE @name');
+        queryParams['name'] = '%${name.toLowerCase()}%';
+      }
+
+      if (recordNumber != null && recordNumber.isNotEmpty) {
+        conditions.add('LOWER(r.record_number) LIKE @recordNumber');
+        queryParams['recordNumber'] = '%${recordNumber.toLowerCase()}%';
+      }
+
+      if (phone != null && phone.isNotEmpty) {
+        conditions.add('LOWER(r.phone) LIKE @phone');
+        queryParams['phone'] = '%${phone.toLowerCase()}%';
+      }
+
+      final whereClause = conditions.join(' AND ');
+
+      final rows = await db.queryRows(
+        '''
+        SELECT
+          r.record_uuid,
+          r.record_number,
+          r.name,
+          r.phone,
+          r.created_at,
+          r.updated_at,
+          r.version,
+          COUNT(e.id)::int as event_count,
+          EXISTS(
+            SELECT 1 FROM notes n
+            WHERE n.record_uuid = r.record_uuid AND n.is_deleted = false
+          ) as has_note
+        FROM records r
+        LEFT JOIN events e ON e.record_uuid = r.record_uuid AND e.is_deleted = false
+        WHERE $whereClause
+        GROUP BY r.record_uuid, r.record_number, r.name, r.phone, r.created_at, r.updated_at, r.version
+        ORDER BY r.updated_at DESC
+        ''',
+        parameters: queryParams,
+      );
+
+      return Response.ok(
+        jsonEncode({'records': _serializeRows(rows)}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e, stackTrace) {
+      _logger.error('Failed to fetch records', error: e, stackTrace: stackTrace);
+      return Response.internalServerError(
+        body: jsonEncode({'error': '$e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
     }
   }
 

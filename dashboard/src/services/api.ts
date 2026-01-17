@@ -4,9 +4,11 @@ import type {
   AuthResponse,
   LoginCredentials,
   DashboardFilters,
+  RecordSummary,
   Event,
   Note,
   EventFilters,
+  RecordFilters,
 } from '../types';
 import { parseEventTypes } from '../utils/event';
 
@@ -98,6 +100,11 @@ class DashboardAPI {
 
   async getBooks(filters?: DashboardFilters) {
     const response = await this.client.get('/books', { params: filters });
+    return response.data;
+  }
+
+  async getRecords(filters?: RecordFilters): Promise<{ records: RecordSummary[] }> {
+    const response = await this.client.get<{ records: RecordSummary[] }>('/records', { params: filters });
     return response.data;
   }
 
