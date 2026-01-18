@@ -263,6 +263,47 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         reason,
       );
 
+      // Push changes to server (similar to hardDeleteEvent)
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient != null && deviceRepository != null) {
+        final credentials = await deviceRepository.getCredentials();
+        if (credentials != null) {
+          // Sync old event (soft deleted with isRemoved=true)
+          final oldEventChange = SyncChange(
+            tableName: 'events',
+            recordId: result.oldEvent.id!,
+            operation: 'update',
+            data: result.oldEvent.toMap(),
+            timestamp: DateTime.now(),
+            version: result.oldEvent.version,
+          );
+
+          // Sync new event (created)
+          final newEventChange = SyncChange(
+            tableName: 'events',
+            recordId: result.newEvent.id!,
+            operation: 'create',
+            data: result.newEvent.toMap(),
+            timestamp: DateTime.now(),
+            version: result.newEvent.version,
+          );
+
+          final request = SyncRequest(
+            deviceId: credentials.deviceId,
+            deviceToken: credentials.deviceToken,
+            localChanges: [oldEventChange, newEventChange],
+          );
+
+          try {
+            await apiClient.pushChanges(request);
+          } catch (e) {
+            // Log but don't fail - will be synced later
+            debugPrint('Warning: Failed to sync time change to server: $e');
+          }
+        }
+      }
+
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
       return result;

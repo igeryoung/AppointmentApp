@@ -54,10 +54,8 @@ class SyncService {
     'events': {
       'id',
       'book_uuid',
-      'name',
-      'record_number',
-      'phone',
-      'event_type',
+      'record_uuid',
+      'title',
       'event_types',
       'has_charge_items',
       'start_time',
@@ -75,10 +73,12 @@ class SyncService {
     },
     'notes': {
       'id',
-      'event_id',
+      'record_uuid',
       'pages_data',
       'created_at',
       'updated_at',
+      'locked_by_device_id',
+      'locked_at',
       'version',
       'is_deleted',
     },
@@ -99,12 +99,16 @@ class SyncService {
   static const Map<String, String> _primaryKeyColumns = {
     'books': 'book_uuid',
     'events': 'id',
-    'notes': 'event_id',
+    'notes': 'id',
     'schedule_drawings': 'id',
   };
 
   static const Set<String> _numericPrimaryKeyTables = {
     'schedule_drawings',
+  };
+
+  static const Set<String> _tablesWithDeviceId = {
+    'books',
   };
 
   /// Public accessor for whitelist (for testing purposes)
@@ -148,9 +152,20 @@ class SyncService {
     // Validate table name to prevent SQL injection
     final validTable = _validateTableName(tableName);
 
+    final hasDeviceId = _tablesWithDeviceId.contains(validTable);
     final whereClause = lastSyncAt != null
-        ? 'synced_at > @lastSync AND device_id != @deviceId'
-        : 'device_id != @deviceId';
+        ? (hasDeviceId
+            ? 'synced_at > @lastSync AND device_id != @deviceId'
+            : 'synced_at > @lastSync')
+        : (hasDeviceId ? 'device_id != @deviceId' : '1=1');
+
+    final parameters = <String, dynamic>{};
+    if (lastSyncAt != null) {
+      parameters['lastSync'] = lastSyncAt;
+    }
+    if (hasDeviceId) {
+      parameters['deviceId'] = deviceId;
+    }
 
     final rows = await db.queryRows(
       '''
@@ -158,10 +173,7 @@ class SyncService {
       WHERE $whereClause
       ORDER BY synced_at ASC
       ''',
-      parameters: {
-        if (lastSyncAt != null) 'lastSync': lastSyncAt,
-        'deviceId': deviceId,
-      },
+      parameters: parameters,
     );
 
     final pkColumn = _getPrimaryKeyColumn(validTable);
@@ -264,6 +276,10 @@ class SyncService {
 
       await _softDelete(tableName, recordId, session);
       return null;
+    }
+
+    if (tableName == 'events' || tableName == 'notes') {
+      await _ensureRecordExists(change.data);
     }
 
     if (existing == null) {
@@ -392,7 +408,9 @@ class SyncService {
       throw ArgumentError('Missing $pkColumn for $validTable insert');
     }
 
-    sanitizedData['device_id'] = deviceId;
+    if (_tablesWithDeviceId.contains(validTable)) {
+      sanitizedData['device_id'] = deviceId;
+    }
     sanitizedData['synced_at'] = DateTime.now();
     sanitizedData['version'] = sanitizedData['version'] ?? 1;
     sanitizedData['is_deleted'] = sanitizedData['is_deleted'] ?? false;
@@ -424,7 +442,9 @@ class SyncService {
     }
 
     _removePrimaryKey(sanitizedData, validTable);
-    sanitizedData['device_id'] = deviceId;
+    if (_tablesWithDeviceId.contains(validTable)) {
+      sanitizedData['device_id'] = deviceId;
+    }
     sanitizedData['synced_at'] = DateTime.now();
     sanitizedData['updated_at'] = sanitizedData['updated_at'] ?? DateTime.now();
 
@@ -468,6 +488,47 @@ class SyncService {
         'recordId': logId,
         'status': status,
         'errorMessage': errorMessage,
+      },
+    );
+  }
+
+  Future<void> _ensureRecordExists(Map<String, dynamic> data) async {
+    final recordUuidRaw = data['record_uuid'];
+    if (recordUuidRaw == null) {
+      return;
+    }
+
+    final recordUuid = recordUuidRaw.toString();
+    if (recordUuid.isEmpty) {
+      return;
+    }
+
+    final existing = await db.querySingle(
+      'SELECT record_uuid FROM records WHERE record_uuid = @recordUuid',
+      parameters: {'recordUuid': recordUuid},
+    );
+
+    if (existing != null) {
+      return;
+    }
+
+    final recordNumber = data['record_number']?.toString() ?? '';
+    final nameValue = data['title'] ?? data['name'];
+    final name = nameValue?.toString() ?? '';
+    final phoneValue = data['phone']?.toString() ?? '';
+    final phone = phoneValue.trim();
+
+    await db.query(
+      '''
+      INSERT INTO records (record_uuid, record_number, name, phone)
+      VALUES (@recordUuid, @recordNumber, @name, @phone)
+      ON CONFLICT (record_uuid) DO NOTHING
+      ''',
+      parameters: {
+        'recordUuid': recordUuid,
+        'recordNumber': recordNumber,
+        'name': name.isEmpty ? null : name,
+        'phone': phone.isEmpty ? null : phone,
       },
     );
   }
@@ -551,10 +612,9 @@ class SyncService {
       return null;
     }
 
-    String _normalizePhone(dynamic value) {
+    String _normalizeTitle(dynamic value) {
       if (value == null) return '';
-      final trimmed = value.toString().trim();
-      return trimmed;
+      return value.toString().trim();
     }
 
     String _normalizeEventTypes(dynamic rawValue) {
@@ -616,18 +676,25 @@ class SyncService {
       data['updated_at'] = parseSystemTimestamp(data['updated_at']);
     }
 
-    if (data.containsKey('phone')) {
-      final phone = _normalizePhone(data['phone']);
-      data['phone'] = phone.isEmpty ? null : phone;
+    if (data.containsKey('record_uuid')) {
+      final recordUuid = data['record_uuid'];
+      if (recordUuid != null) {
+        data['record_uuid'] = recordUuid.toString();
+      }
+    }
+
+    if (data.containsKey('title')) {
+      data['title'] = _normalizeTitle(data['title']);
+    } else if (data.containsKey('name')) {
+      data['title'] = _normalizeTitle(data['name']);
+    }
+    if (!data.containsKey('title') || data['title'] == null) {
+      data['title'] = '';
     }
 
     if (data.containsKey('event_types')) {
       final normalized = _normalizeEventTypes(data['event_types']);
       data['event_types'] = normalized;
-      final decoded = jsonDecode(normalized) as List<dynamic>;
-      if (decoded.isNotEmpty) {
-        data['event_type'] = decoded.first.toString();
-      }
     } else if (data.containsKey('event_type')) {
       final primary = data['event_type']?.toString().trim();
       final normalized = (primary != null && primary.isNotEmpty)
@@ -636,8 +703,11 @@ class SyncService {
       data['event_types'] = normalized;
     } else {
       data['event_types'] = '["other"]';
-      data['event_type'] = 'other';
     }
+    data.remove('event_type');
+    data.remove('name');
+    data.remove('phone');
+    data.remove('record_number');
 
     final hasChargeItems = _normalizeBool(data['has_charge_items']);
     if (hasChargeItems != null) {
@@ -668,11 +738,20 @@ class SyncService {
       return null;
     }
 
+    if (data.containsKey('record_uuid')) {
+      final recordUuid = data['record_uuid'];
+      if (recordUuid != null) {
+        data['record_uuid'] = recordUuid.toString();
+      }
+    }
     if (data.containsKey('created_at')) {
       data['created_at'] = parseTimestamp(data['created_at']);
     }
     if (data.containsKey('updated_at')) {
       data['updated_at'] = parseTimestamp(data['updated_at']);
+    }
+    if (data.containsKey('locked_at')) {
+      data['locked_at'] = parseTimestamp(data['locked_at']);
     }
 
     final isDeleted = data['is_deleted'];

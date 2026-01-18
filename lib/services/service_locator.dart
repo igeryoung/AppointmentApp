@@ -54,10 +54,7 @@ Future<void> setupServices({required String serverUrl}) async {
     );
 
     getIt.registerLazySingleton<IEventRepository>(
-      () => EventRepositoryImpl(
-        () => db.database,
-        (eventId) => db.getNoteByEventId(eventId),
-      ),
+      () => EventRepositoryImpl(() => db.database),
     );
 
     getIt.registerLazySingleton<INoteRepository>(

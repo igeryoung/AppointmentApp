@@ -1,17 +1,15 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/event.dart';
-import '../models/note.dart';
 import '../services/database/mixins/event_operations_mixin.dart';
 import 'event_repository.dart';
 import 'base_repository.dart';
 
 /// Implementation of EventRepository using SQLite
 class EventRepositoryImpl extends BaseRepository<Event, String> implements IEventRepository {
-  final Future<Note?> Function(String eventId) _getCachedNoteFn;
   final _uuid = const Uuid();
 
-  EventRepositoryImpl(Future<Database> Function() getDatabaseFn, this._getCachedNoteFn)
+  EventRepositoryImpl(Future<Database> Function() getDatabaseFn)
       : super(getDatabaseFn);
 
   @override
@@ -77,7 +75,6 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
 
   @override
   Future<Event> create(Event event) async {
-    final db = await getDatabaseFn();
     final now = DateTime.now().toUtc();
 
     // Set version to 1 for new events
@@ -89,13 +86,7 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     // For UUID events, id is already set before insert
     await insert(eventToCreate.toMap());
 
-    // Create associated empty note
-    await db.insert('notes', {
-      'event_id': eventToCreate.id!,
-      'strokes_data': '[]',
-      'created_at': now.millisecondsSinceEpoch ~/ 1000,
-      'updated_at': now.millisecondsSinceEpoch ~/ 1000,
-    });
+    // Note: Notes are managed separately via records, not created with events
 
     return eventToCreate;
   }
@@ -220,25 +211,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     final oldEventMaps = await db.query('events', where: 'id = ?', whereArgs: [originalEvent.id], limit: 1);
     final finalOldEvent = oldEventMaps.isNotEmpty ? Event.fromMap(oldEventMaps.first) : removedOldEvent;
 
-    // Copy the note from original event to new event if it exists
-    final originalNote = await _getCachedNoteFn(originalEvent.id!);
-    if (originalNote != null) {
-      // Directly insert a new note for the new event
-      final newNoteMap = originalNote.toMap();
-      newNoteMap['event_id'] = newEventId;
-      newNoteMap['updated_at'] = now.millisecondsSinceEpoch ~/ 1000;
-      newNoteMap.remove('id'); // Let DB auto-generate the ID
-
-      await db.insert('notes', newNoteMap);
-    } else {
-      // If no original note exists, create an empty one for the new event
-      await db.insert('notes', {
-        'event_id': newEventId,
-        'strokes_data': '[]',
-        'created_at': now.millisecondsSinceEpoch ~/ 1000,
-        'updated_at': now.millisecondsSinceEpoch ~/ 1000,
-      });
-    }
+    // Note: Notes are managed separately via records, not copied with events.
+    // The new event shares the same record_uuid, so it accesses the same note.
 
     return ChangeEventTimeResult(newEvent: createdEvent, oldEvent: finalOldEvent);
   }

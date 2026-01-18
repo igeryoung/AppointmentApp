@@ -644,15 +644,9 @@ class EventManagementService {
           newEndTime = newStartTime.add(duration);
         }
 
-        final result = await _dbService.changeEventTime(event, newStartTime, newEndTime, reason);
+        // Use cubit's changeEventTime which handles DB update, sync to server, and UI reload
+        await onChangeEventTime(event, newStartTime, newEndTime, reason);
         closeEventMenu();
-
-        onReloadEvents();
-
-        // Sync both old event (with isRemoved=true) and new event to server
-        // Old event must be synced first to ensure server knows it's removed
-        await onSyncEvent(result.oldEvent);
-        await onSyncEvent(result.newEvent);
 
         if (isMounted()) {
           onShowSnackbar(
