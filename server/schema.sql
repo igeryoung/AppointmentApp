@@ -32,6 +32,31 @@ CREATE TABLE IF NOT EXISTS public.books
 COMMENT ON TABLE public.books
     IS 'Top-level schedule/record book, keyed by UUID.';
 
+CREATE TABLE IF NOT EXISTS public.charge_items
+(
+    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+    record_uuid uuid NOT NULL,
+    event_id uuid,
+    item_name text COLLATE pg_catalog."default" NOT NULL,
+    item_price integer NOT NULL DEFAULT 0,
+    received_amount integer NOT NULL DEFAULT 0,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    updated_at timestamp with time zone NOT NULL DEFAULT now(),
+    synced_at timestamp with time zone,
+    version integer NOT NULL DEFAULT 1,
+    is_deleted boolean NOT NULL DEFAULT false,
+    CONSTRAINT charge_items_pkey PRIMARY KEY (id)
+);
+
+COMMENT ON TABLE public.charge_items
+    IS 'Charge items linked to a record (person), optionally associated with an event.';
+
+COMMENT ON COLUMN public.charge_items.record_uuid
+    IS 'The person/global record this charge item belongs to.';
+
+COMMENT ON COLUMN public.charge_items.event_id
+    IS 'Optional event (visit) associated with this charge item.';
+
 CREATE TABLE IF NOT EXISTS public.devices
 (
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -68,6 +93,7 @@ CREATE TABLE IF NOT EXISTS public.events
     has_charge_items boolean NOT NULL DEFAULT false,
     original_event_id uuid,
     new_event_id uuid,
+    has_note boolean NOT NULL DEFAULT false,
     CONSTRAINT events_pkey PRIMARY KEY (id)
 );
 
@@ -82,6 +108,9 @@ COMMENT ON COLUMN public.events.title
 
 COMMENT ON COLUMN public.events.event_types
     IS 'JSON array of event types, e.g. ["consultation","treatment"].';
+
+COMMENT ON COLUMN public.events.has_note
+    IS 'Indicates whether this event has an associated note (for quick lookup without JOIN).';
 
 CREATE TABLE IF NOT EXISTS public.notes
 (
@@ -122,7 +151,7 @@ COMMENT ON TABLE public.records
     IS 'Global logical record/person/case, shared across all books and events.';
 
 COMMENT ON COLUMN public.records.record_number
-    IS 'Global record number. Unique when non-empty; empty strings are allowed to duplicate for standalone records.';
+    IS 'Global record number. Combined with name, unique when non-empty; empty strings are allowed to duplicate for standalone records.';
 
 CREATE TABLE IF NOT EXISTS public.schedule_drawings
 (
@@ -183,6 +212,24 @@ ALTER TABLE IF EXISTS public.books
     ON DELETE CASCADE;
 CREATE INDEX IF NOT EXISTS idx_books_device_id
     ON public.books(device_id);
+
+
+ALTER TABLE IF EXISTS public.charge_items
+    ADD CONSTRAINT charge_items_event_id_fkey FOREIGN KEY (event_id)
+    REFERENCES public.events (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_charge_items_event_id
+    ON public.charge_items(event_id);
+
+
+ALTER TABLE IF EXISTS public.charge_items
+    ADD CONSTRAINT charge_items_record_uuid_fkey FOREIGN KEY (record_uuid)
+    REFERENCES public.records (record_uuid) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_charge_items_record_uuid
+    ON public.charge_items(record_uuid);
 
 
 ALTER TABLE IF EXISTS public.events

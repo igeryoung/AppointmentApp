@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
+import 'package:sqflite/sqflite.dart';
 import 'database/prd_database_service.dart';
 import 'server_config_service.dart';
 import 'api_client.dart';
@@ -105,8 +106,28 @@ class BookBackupService {
       });
       count++;
 
-      // Insert events
+      // Insert records + events
       for (final event in events) {
+        final recordUuid = event['record_uuid'] as String?;
+        final recordName = (event['name'] as String?) ?? (event['title'] as String?) ?? '';
+        final recordNumber = event['record_number'] as String? ?? '';
+        if (recordUuid == null || recordUuid.isEmpty) {
+          throw Exception('Invalid event payload: missing record_uuid for event ${event['id']}');
+        }
+        await txn.insert(
+          'records',
+          {
+            'record_uuid': recordUuid,
+            'record_number': recordNumber,
+            'name': recordName.isEmpty ? null : recordName,
+            'phone': event['phone'],
+            'version': 1,
+            'is_dirty': 0,
+            'is_deleted': 0,
+          },
+          conflictAlgorithm: ConflictAlgorithm.ignore,
+        );
+
         // Parse timestamps (handle both int and string formats)
         final startTime = event['start_time'] is int
             ? event['start_time']
@@ -128,10 +149,9 @@ class BookBackupService {
         await txn.insert('events', {
           'id': event['id'],
           'book_uuid': event['book_uuid'],
-          'name': event['name'],
-          'record_number': event['record_number'],
-          'phone': event['phone'],
-          'event_type': event['event_type'],
+          'record_uuid': recordUuid,
+          'title': (event['title'] as String?) ?? recordName,
+          'record_number': recordNumber,
           'event_types': event['event_types'] ?? '[]',
           'has_charge_items': event['has_charge_items'] == true ? 1 : 0,
           'start_time': startTime,
@@ -162,16 +182,18 @@ class BookBackupService {
                 : DateTime.parse(note['updated_at'] as String).toUtc().millisecondsSinceEpoch ~/ 1000)
             : createdAt;
 
-        await txn.insert('notes', {
-          'id': note['id'],
-          'event_id': note['event_id'],
-          'strokes_data': note['strokes_data'],
-          'pages_data': note['pages_data'],
-          'created_at': createdAt,
-          'updated_at': updatedAt,
-          'version': note['version'] ?? 1,
-          'is_dirty': 0,  // Server-based architecture: no dirty tracking
-        });
+        await txn.insert(
+          'notes',
+          {
+            'record_uuid': note['record_uuid'],
+            'pages_data': note['pages_data'],
+            'created_at': createdAt,
+            'updated_at': updatedAt,
+            'version': note['version'] ?? 1,
+            'is_dirty': 0,  // Server-based architecture: no dirty tracking
+          },
+          conflictAlgorithm: ConflictAlgorithm.replace,
+        );
         count++;
       }
 

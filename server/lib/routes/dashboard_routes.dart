@@ -338,8 +338,14 @@ class DashboardRoutes {
 
       final recentEvents = await db.queryRows(
         '''
-        SELECT e.*, EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+        SELECT
+          e.*,
+          r.name,
+          r.phone,
+          r.record_number,
+          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
         FROM events e
+        LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE e.is_deleted = false
         ORDER BY e.created_at DESC
         LIMIT 50
@@ -596,12 +602,12 @@ class DashboardRoutes {
       }
 
       if (name != null && name.isNotEmpty) {
-        conditions.add('LOWER(e.name) LIKE @name');
+        conditions.add('LOWER(r.name) LIKE @name');
         params['name'] = '%${name.toLowerCase()}%';
       }
 
       if (recordNumber != null && recordNumber.isNotEmpty) {
-        conditions.add('LOWER(e.record_number) LIKE @recordNumber');
+        conditions.add('LOWER(r.record_number) LIKE @recordNumber');
         params['recordNumber'] = '%${recordNumber.toLowerCase()}%';
       }
 
@@ -611,9 +617,13 @@ class DashboardRoutes {
         SELECT
           e.*,
           b.name as book_name,
+          r.name,
+          r.phone,
+          r.record_number,
           EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
+        LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE $whereClause
         ORDER BY e.created_at DESC
       ''';
@@ -642,9 +652,13 @@ class DashboardRoutes {
         SELECT
           e.*,
           b.name as book_name,
+          r.name,
+          r.phone,
+          r.record_number,
           EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
+        LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE e.id::text = @id AND e.is_deleted = false
         ''',
         parameters: {'id': id},
