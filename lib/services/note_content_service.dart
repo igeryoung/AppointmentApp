@@ -87,9 +87,8 @@ class NoteContentService {
 
       if (serverNote != null) {
         // Parse and save to cache
-        final note = Note.fromMap(serverNote);
-        await _noteRepository.saveToCache(note);
-        return note;
+        await _noteRepository.saveToCache(serverNote);
+        return serverNote;
       }
 
       return null;

@@ -14,7 +14,7 @@ class NoteSyncAdapter {
   }
 
   /// Save note to server
-  Future<void> saveNote(String eventId, Note note) async {
-    await _contentService.saveNote(eventId, note);
+  Future<Note> saveNote(String eventId, Note note) async {
+    return _contentService.saveNote(eventId, note);
   }
 }

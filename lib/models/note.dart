@@ -8,7 +8,7 @@ enum StrokeType { pen, highlighter }
 /// - All events for the same record share one note
 /// - One note per record
 class Note {
-  final int? id;
+  final String? id;
   final String recordUuid;
   final List<List<Stroke>> pages;
   final DateTime createdAt;
@@ -29,7 +29,7 @@ class Note {
   });
 
   Note copyWith({
-    int? id,
+    String? id,
     String? recordUuid,
     List<List<Stroke>>? pages,
     DateTime? createdAt,
@@ -93,31 +93,73 @@ class Note {
     };
   }
 
-  factory Note.fromMap(Map<String, dynamic> map) {
-    List<List<Stroke>> pages = [];
+  static List<List<Stroke>> _parsePagesData(dynamic pagesDataRaw) {
+    if (pagesDataRaw == null) return [];
+    final pagesJson = pagesDataRaw is String ? jsonDecode(pagesDataRaw) as List : pagesDataRaw as List;
+    return pagesJson.map((pageJson) {
+      final pageList = pageJson as List;
+      return pageList.map((s) => Stroke.fromMap(s)).toList();
+    }).toList();
+  }
 
-    final pagesDataRaw = map['pages_data'];
-    if (pagesDataRaw != null) {
-      final pagesJson = pagesDataRaw is String ? jsonDecode(pagesDataRaw) as List : pagesDataRaw as List;
-      pages = pagesJson.map((pageJson) {
-        final pageList = pageJson as List;
-        return pageList.map((s) => Stroke.fromMap(s)).toList();
-      }).toList();
+  factory Note.fromMap(Map<String, dynamic> map) {
+    DateTime _parseTimestamp(dynamic value) {
+      if (value == null) return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      if (value is int || value is num) {
+        final numVal = value as num;
+        final millis = numVal > 1000000000000 ? numVal.toInt() : (numVal * 1000).toInt();
+        return DateTime.fromMillisecondsSinceEpoch(millis, isUtc: true);
+      }
+      if (value is String) {
+        final parsed = DateTime.tryParse(value);
+        return parsed?.toUtc() ?? DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+      return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
+
+    int _parseInt(dynamic value, {int fallback = 1}) {
+      if (value == null) return fallback;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value.toString()) ?? fallback;
+    }
+
+    List<List<Stroke>> pages = _parsePagesData(map['pages_data']);
 
     if (pages.isEmpty) pages = [[]];
 
     return Note(
-      id: map['id'],
+      id: map['id']?.toString(),
       recordUuid: map['record_uuid'] ?? '',
       pages: pages,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000, isUtc: true),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000, isUtc: true),
-      version: map['version'] ?? 1,
+      createdAt: _parseTimestamp(map['created_at']),
+      updatedAt: _parseTimestamp(map['updated_at']),
+      version: _parseInt(map['version'], fallback: 1),
       lockedByDeviceId: map['locked_by_device_id'],
-      lockedAt: map['locked_at'] != null
-          ? DateTime.fromMillisecondsSinceEpoch(map['locked_at'] * 1000, isUtc: true)
-          : null,
+      lockedAt: map['locked_at'] != null ? _parseTimestamp(map['locked_at']) : null,
+    );
+  }
+
+  factory Note.fromServer(Map<String, dynamic> map) {
+    DateTime _parseServerTimestamp(dynamic value) {
+      if (value is String && value.isNotEmpty) {
+        return DateTime.parse(value).toUtc();
+      }
+      return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    }
+
+    List<List<Stroke>> pages = _parsePagesData(map['pages_data']);
+    if (pages.isEmpty) pages = [[]];
+
+    return Note(
+      id: map['id'] as String?,
+      recordUuid: map['record_uuid'] as String? ?? '',
+      pages: pages,
+      createdAt: _parseServerTimestamp(map['created_at']),
+      updatedAt: _parseServerTimestamp(map['updated_at']),
+      version: map['version'] as int? ?? 1,
+      lockedByDeviceId: map['locked_by_device_id'] as String?,
+      lockedAt: map['locked_at'] != null ? _parseServerTimestamp(map['locked_at']) : null,
     );
   }
 
@@ -163,11 +205,25 @@ class Stroke {
 
   factory Stroke.fromMap(Map<String, dynamic> map) {
     final pointsList = map['points'] as List? ?? [];
-    final strokeTypeIndex = map['stroke_type'] ?? 0;
+    int _parseInt(dynamic value, {int fallback = 0}) {
+      if (value == null) return fallback;
+      if (value is int) return value;
+      if (value is num) return value.toInt();
+      return int.tryParse(value.toString()) ?? fallback;
+    }
+
+    double _parseDouble(dynamic value, {double fallback = 0.0}) {
+      if (value == null) return fallback;
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? fallback;
+    }
+
+    final strokeTypeIndex = _parseInt(map['stroke_type'], fallback: 0);
     return Stroke(
       points: pointsList.map((p) => StrokePoint.fromMap(p)).toList(),
-      strokeWidth: (map['stroke_width'] ?? 2.0).toDouble(),
-      color: map['color'] ?? 0xFF000000,
+      strokeWidth: _parseDouble(map['stroke_width'], fallback: 2.0),
+      color: _parseInt(map['color'], fallback: 0xFF000000),
       strokeType: strokeTypeIndex < StrokeType.values.length ? StrokeType.values[strokeTypeIndex] : StrokeType.pen,
     );
   }
@@ -191,10 +247,17 @@ class StrokePoint {
   Map<String, dynamic> toMap() => {'dx': dx, 'dy': dy, 'pressure': pressure};
 
   factory StrokePoint.fromMap(Map<String, dynamic> map) {
+    double _parseDouble(dynamic value, {double fallback = 0.0}) {
+      if (value == null) return fallback;
+      if (value is double) return value;
+      if (value is num) return value.toDouble();
+      return double.tryParse(value.toString()) ?? fallback;
+    }
+
     return StrokePoint(
-      (map['dx'] ?? 0.0).toDouble(),
-      (map['dy'] ?? 0.0).toDouble(),
-      pressure: (map['pressure'] ?? 1.0).toDouble(),
+      _parseDouble(map['dx']),
+      _parseDouble(map['dy']),
+      pressure: _parseDouble(map['pressure'], fallback: 1.0),
     );
   }
 

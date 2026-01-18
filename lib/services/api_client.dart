@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'http_client_factory.dart';
+import '../models/note.dart';
 import '../models/sync_models.dart';
 
 /// HTTP API client for communicating with sync server
@@ -120,7 +121,7 @@ class ApiClient {
   // ===================
 
   /// Fetch a single note from server
-  Future<Map<String, dynamic>?> fetchNote({
+  Future<Note?> fetchNote({
     required String bookUuid,
     required String eventId,
     required String deviceId,
@@ -139,7 +140,8 @@ class ApiClient {
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         // Server returns { success: true, note: null } when note doesn't exist
-        return json['note'] as Map<String, dynamic>?;
+        final noteJson = json['note'] as Map<String, dynamic>?;
+        return noteJson == null ? null : Note.fromServer(noteJson);
       } else {
         throw ApiException(
           'Fetch note failed: ${response.statusCode}',
@@ -192,8 +194,15 @@ class ApiClient {
         return json['note'] as Map<String, dynamic>;
       } else if (response.statusCode == 409) {
         // Version conflict
+        String message = 'Note version conflict';
+        try {
+          final body = jsonDecode(response.body) as Map<String, dynamic>;
+          message = body['message'] as String? ?? message;
+        } catch (e) {
+          // Keep fallback message if response body isn't JSON.
+        }
         throw ApiConflictException(
-          'Note version conflict',
+          message,
           statusCode: 409,
           responseBody: response.body,
         );

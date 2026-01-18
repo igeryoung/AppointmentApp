@@ -347,22 +347,27 @@ class EventDetailController {
       throw Exception('Event not found');
     }
 
+    final baseNote = await _noteSyncAdapter!.getNote(eventId, forceRefresh: true);
+
+    final nextVersion = (baseNote?.version ?? 0) + 1;
     final noteToSave = Note(
       recordUuid: eventData.recordUuid,
       pages: pages,
-      createdAt: _state.note?.createdAt ?? DateTime.now(),
+      createdAt: baseNote?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
+      version: nextVersion,
     );
+    debugPrint('[EventDetail] saveNoteToServer: eventId=$eventId baseVersion=${baseNote?.version} nextVersion=$nextVersion');
 
     // Save directly to server (no local cache)
-    await _noteSyncAdapter!.saveNote(eventId, noteToSave);
+    final savedNote = await _noteSyncAdapter!.saveNote(eventId, noteToSave);
 
     // Update UI state on success
     _updateState(_state.copyWith(
-      note: noteToSave,
+      note: savedNote,
       hasChanges: false,
       hasUnsyncedChanges: false,
-      lastKnownPages: pages,
+      lastKnownPages: savedNote.pages,
     ));
   }
 

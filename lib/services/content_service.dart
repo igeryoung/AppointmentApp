@@ -163,12 +163,14 @@ class ContentService {
       // In server-first architecture, fetch from server
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
+        debugPrint('[ContentService] getNote: missing credentials');
         return null;
       }
 
       // Get bookId for the event
       final event = await _db.getEventById(eventId);
       if (event == null) {
+        debugPrint('[ContentService] getNote: event not found: eventId=$eventId');
         return null;
       }
 
@@ -180,11 +182,14 @@ class ContentService {
       );
 
       if (serverNote != null) {
-        return Note.fromMap(serverNote);
+        debugPrint('[ContentService] getNote: fetched note version=${serverNote.version}');
+        return serverNote;
       }
 
+      debugPrint('[ContentService] getNote: no note on server');
       return null;
     } catch (e) {
+      debugPrint('[ContentService] getNote: failed - $e');
       return null;
     }
   }
@@ -192,7 +197,7 @@ class ContentService {
   /// Save note to server
   ///
   /// In server-based architecture, saves directly to server
-  Future<void> saveNote(String eventId, Note note) async {
+  Future<Note> saveNote(String eventId, Note note) async {
     // Get credentials
     final credentials = await _db.getDeviceCredentials();
     if (credentials == null) {
@@ -213,11 +218,11 @@ class ContentService {
     };
 
     debugPrint('[ContentService] saveNote: eventId=$eventId, bookUuid=${event.bookUuid}, recordUuid=${note.recordUuid}');
-    debugPrint('[ContentService] saveNote: noteData keys=${noteData.keys.toList()}');
+    debugPrint('[ContentService] saveNote: noteData version=${noteData['version']}');
 
     try {
       // Save directly to server
-      await _apiClient.saveNote(
+      final serverNote = await _apiClient.saveNote(
         bookUuid: event.bookUuid,
         eventId: eventId,
         noteData: noteData,
@@ -226,6 +231,7 @@ class ContentService {
         eventData: event.toMap(),
       );
       debugPrint('[ContentService] saveNote: success');
+      return Note.fromServer(serverNote);
     } catch (e) {
       debugPrint('[ContentService] saveNote: failed - $e');
       rethrow;
