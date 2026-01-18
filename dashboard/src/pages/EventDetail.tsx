@@ -73,7 +73,16 @@ export const EventDetail: React.FC = () => {
   const parseNotePages = (noteData: Note): NotePages => {
     try {
       if (noteData.pagesData) {
-        return JSON.parse(noteData.pagesData);
+        const parsed = JSON.parse(noteData.pagesData);
+        // Handle new format (formatVersion 2): { formatVersion, pages, erasedStrokesByEvent }
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.pages) {
+          return parsed.pages;
+        }
+        // Handle old format: direct array of pages [[strokes...], [page2...]]
+        if (Array.isArray(parsed)) {
+          return parsed;
+        }
+        return [];
       }
       if (noteData.strokesData) {
         const strokes = JSON.parse(noteData.strokesData);
