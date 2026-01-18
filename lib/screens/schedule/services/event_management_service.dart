@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import '../../../models/event.dart';
 import '../../../models/event_type.dart';
 import '../../../services/database_service_interface.dart';
@@ -108,6 +109,7 @@ class EventManagementService {
         DateTime(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
 
     final newEvent = Event(
+      id: const Uuid().v4(), // Generate UUID upfront for stroke tracking
       bookUuid: _bookUuid,
       recordUuid: '', // Will be assigned by server
       title: name ?? '',

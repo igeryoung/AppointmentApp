@@ -1,19 +1,28 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
+import 'package:uuid/uuid.dart';
 import '../models/note.dart';
 import 'handwriting/handwriting_operations.dart';
 
 export 'handwriting/handwriting_operations.dart';
 
+const _uuid = Uuid();
+
 /// Handwriting Canvas Widget for PRD-compliant handwriting-only notes
 class HandwritingCanvas extends StatefulWidget {
   final List<Stroke> initialStrokes;
   final VoidCallback? onStrokesChanged;
+  final String? currentEventUuid; // Event UUID for tracking stroke origin
+  final bool showOnlyCurrentEvent; // Filter to show only current event's strokes
+  final void Function(List<String> erasedStrokeIds)? onStrokesErased; // Callback for erased stroke IDs
 
   const HandwritingCanvas({
     super.key,
     this.initialStrokes = const [],
     this.onStrokesChanged,
+    this.currentEventUuid,
+    this.showOnlyCurrentEvent = false,
+    this.onStrokesErased,
   });
 
   @override
@@ -28,6 +37,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
   // Track erase operation state
   List<Stroke>? _strokesBeforeErase;
+  List<String> _erasedStrokeIdsInSession = []; // Track erased stroke IDs in current erase session
 
   // Drawing settings
   DrawingTool _currentTool = DrawingTool.pen;
@@ -237,6 +247,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     if (_currentTool == DrawingTool.eraser) {
       // For eraser mode, save state before erasing
       _strokesBeforeErase = List<Stroke>.from(_strokes);
+      _erasedStrokeIdsInSession = []; // Reset erased stroke IDs for new session
       _eraseStrokesAtPoint(clippedPoint);
       _currentStroke = null; // No stroke to create in eraser mode
 
@@ -308,11 +319,17 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     if (_activePointers.isEmpty) {
       if (_currentStroke != null && _currentStroke!.points.isNotEmpty) {
 
+        // Assign ID and event UUID to the new stroke
+        final strokeWithId = _currentStroke!.copyWith(
+          id: _uuid.v4(),
+          eventUuid: widget.currentEventUuid,
+        );
+
         // Add stroke to canvas
-        _strokes.add(_currentStroke!);
+        _strokes.add(strokeWithId);
 
         // Create and record DrawOperation for undo/redo
-        final operation = DrawOperation(_currentStroke!);
+        final operation = DrawOperation(strokeWithId);
         _operationHistory.add(operation);
 
         // Increment canvas version to track state changes
@@ -338,8 +355,14 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
             _operationHistory.add(operation);
             // Increment canvas version to track state changes
             _canvasVersion++;
+
+            // Report erased stroke IDs if any were erased
+            if (_erasedStrokeIdsInSession.isNotEmpty) {
+              widget.onStrokesErased?.call(List.from(_erasedStrokeIdsInSession));
+            }
           }
           _strokesBeforeErase = null;
+          _erasedStrokeIdsInSession = [];
           widget.onStrokesChanged?.call();
         }
       }
@@ -381,10 +404,16 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
     for (final stroke in _strokes) {
       final splitStrokes = _splitStrokeByEraser(stroke, point, eraserRadiusSquared);
+      // If the stroke was modified (split or removed), track its ID as erased
+      if (splitStrokes.length != 1 || (splitStrokes.isEmpty || splitStrokes.first.points.length != stroke.points.length)) {
+        if (stroke.id != null && !_erasedStrokeIdsInSession.contains(stroke.id)) {
+          _erasedStrokeIdsInSession.add(stroke.id!);
+        }
+      }
       newStrokes.addAll(splitStrokes);
     }
 
-    if (newStrokes.length != _strokes.length) {
+    if (newStrokes.length != _strokes.length || _erasedStrokeIdsInSession.isNotEmpty) {
       _strokes = newStrokes;
     }
   }
@@ -425,11 +454,14 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       } else {
         // Point or segment is inside eraser - this breaks the stroke
         if (currentSegment.isNotEmpty) {
-          // Save the current segment as a new stroke
+          // Save the current segment as a new stroke with new ID but same eventUuid
           resultStrokes.add(Stroke(
+            id: _uuid.v4(), // New ID for split segment
+            eventUuid: stroke.eventUuid, // Preserve original event
             points: currentSegment,
             strokeWidth: stroke.strokeWidth,
             color: stroke.color,
+            strokeType: stroke.strokeType,
           ));
           currentSegment = [];
         }
@@ -439,9 +471,12 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     // Add any remaining segment
     if (currentSegment.isNotEmpty) {
       resultStrokes.add(Stroke(
+        id: _uuid.v4(), // New ID for split segment
+        eventUuid: stroke.eventUuid, // Preserve original event
         points: currentSegment,
         strokeWidth: stroke.strokeWidth,
         color: stroke.color,
+        strokeType: stroke.strokeType,
       ));
     }
 
@@ -652,6 +687,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
                   currentTool: _currentTool,
                   eraserRadius: _eraserRadius,
                   pointerPosition: _currentPointerPosition,
+                  showOnlyCurrentEvent: widget.showOnlyCurrentEvent,
+                  currentEventUuid: widget.currentEventUuid,
                 ),
                 size: Size.infinite,
               ),
@@ -670,6 +707,8 @@ class HandwritingPainter extends CustomPainter {
   final DrawingTool currentTool;
   final double eraserRadius;
   final Offset? pointerPosition; // Position in screen space for eraser indicator
+  final bool showOnlyCurrentEvent;
+  final String? currentEventUuid;
 
   HandwritingPainter({
     required this.strokes,
@@ -677,15 +716,22 @@ class HandwritingPainter extends CustomPainter {
     this.currentTool = DrawingTool.pen,
     this.eraserRadius = 20.0,
     this.pointerPosition,
+    this.showOnlyCurrentEvent = false,
+    this.currentEventUuid,
   });
 
   @override
   void paint(Canvas canvas, Size size) {
+    // Filter strokes if showing only current event
+    final strokesToRender = showOnlyCurrentEvent && currentEventUuid != null
+        ? strokes.where((s) => s.eventUuid == currentEventUuid).toList()
+        : strokes;
+
     // Separate strokes by type for proper z-ordering
     final highlighterStrokes = <Stroke>[];
     final penStrokes = <Stroke>[];
 
-    for (final stroke in strokes) {
+    for (final stroke in strokesToRender) {
       if (stroke.strokeType == StrokeType.highlighter) {
         highlighterStrokes.add(stroke);
       } else {
@@ -779,7 +825,9 @@ class HandwritingPainter extends CustomPainter {
            oldDelegate.currentStroke != currentStroke ||
            oldDelegate.pointerPosition != pointerPosition ||
            oldDelegate.currentTool != currentTool ||
-           oldDelegate.eraserRadius != eraserRadius;
+           oldDelegate.eraserRadius != eraserRadius ||
+           oldDelegate.showOnlyCurrentEvent != showOnlyCurrentEvent ||
+           oldDelegate.currentEventUuid != currentEventUuid;
   }
 }
 

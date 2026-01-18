@@ -224,6 +224,7 @@ class EventDetailController {
         _updateState(_state.copyWith(
           note: serverNote,
           lastKnownPages: serverNote.pages,
+          erasedStrokesByEvent: serverNote.erasedStrokesByEvent,
           hasUnsyncedChanges: false,
           isLoadingFromServer: false,
           isOffline: false,
@@ -362,9 +363,24 @@ class EventDetailController {
     }
 
     final nextVersion = (baseNote?.version ?? 0) + 1;
+
+    // Merge erased strokes from base note and current state
+    final mergedErasedStrokes = Map<String, List<String>>.from(baseNote?.erasedStrokesByEvent ?? {});
+    for (final entry in _state.erasedStrokesByEvent.entries) {
+      final existingList = mergedErasedStrokes[entry.key] ?? [];
+      final newList = [...existingList];
+      for (final id in entry.value) {
+        if (!newList.contains(id)) {
+          newList.add(id);
+        }
+      }
+      mergedErasedStrokes[entry.key] = newList;
+    }
+
     final noteToSave = Note(
       recordUuid: eventData.recordUuid,
       pages: pages,
+      erasedStrokesByEvent: mergedErasedStrokes,
       createdAt: baseNote?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       version: nextVersion,
@@ -886,6 +902,28 @@ class EventDetailController {
       hasChanges: true,
     ));
     _incrementNoteGeneration();
+  }
+
+  /// Track erased strokes for the current event
+  void onStrokesErased(List<String> erasedStrokeIds) {
+    if (erasedStrokeIds.isEmpty || event.id == null) return;
+
+    final currentEventId = event.id!;
+    final updatedMap = Map<String, List<String>>.from(_state.erasedStrokesByEvent);
+    final existingList = updatedMap[currentEventId] ?? [];
+    // Add new erased stroke IDs (avoiding duplicates)
+    final newList = [...existingList];
+    for (final id in erasedStrokeIds) {
+      if (!newList.contains(id)) {
+        newList.add(id);
+      }
+    }
+    updatedMap[currentEventId] = newList;
+
+    _updateState(_state.copyWith(
+      erasedStrokesByEvent: updatedMap,
+      hasChanges: true,
+    ));
   }
 
   void _incrementNoteGeneration() {

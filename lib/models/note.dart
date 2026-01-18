@@ -11,6 +11,7 @@ class Note {
   final String? id;
   final String recordUuid;
   final List<List<Stroke>> pages;
+  final Map<String, List<String>> erasedStrokesByEvent; // eventUuid -> list of erased stroke IDs
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version;
@@ -21,6 +22,7 @@ class Note {
     this.id,
     required this.recordUuid,
     required this.pages,
+    this.erasedStrokesByEvent = const {},
     required this.createdAt,
     required this.updatedAt,
     this.version = 1,
@@ -32,6 +34,7 @@ class Note {
     String? id,
     String? recordUuid,
     List<List<Stroke>>? pages,
+    Map<String, List<String>>? erasedStrokesByEvent,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? version,
@@ -43,6 +46,7 @@ class Note {
       id: id ?? this.id,
       recordUuid: recordUuid ?? this.recordUuid,
       pages: pages ?? this.pages,
+      erasedStrokesByEvent: erasedStrokesByEvent ?? this.erasedStrokesByEvent,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
@@ -77,12 +81,32 @@ class Note {
 
   Note clearPage(int pageIndex) => updatePageStrokes(pageIndex, []);
 
+  /// Add erased stroke IDs for a specific event
+  Note addErasedStrokes(String eventUuid, List<String> strokeIds) {
+    if (strokeIds.isEmpty) return this;
+    final updatedMap = Map<String, List<String>>.from(erasedStrokesByEvent);
+    final existingList = updatedMap[eventUuid] ?? [];
+    updatedMap[eventUuid] = [...existingList, ...strokeIds];
+    return copyWith(erasedStrokesByEvent: updatedMap, updatedAt: DateTime.now().toUtc());
+  }
+
+  /// Get erased stroke IDs for a specific event
+  List<String> getErasedStrokesForEvent(String eventUuid) {
+    return erasedStrokesByEvent[eventUuid] ?? [];
+  }
+
   Map<String, dynamic> toMap() {
     final pagesData = pages.map((page) => page.map((s) => s.toMap()).toList()).toList();
+    // New format with version and erased strokes tracking
+    final pagesDataJson = {
+      'formatVersion': 2,
+      'pages': pagesData,
+      'erasedStrokesByEvent': erasedStrokesByEvent,
+    };
     return {
       'id': id,
       'record_uuid': recordUuid,
-      'pages_data': jsonEncode(pagesData),
+      'pages_data': jsonEncode(pagesDataJson),
       'created_at': createdAt.millisecondsSinceEpoch ~/ 1000,
       'updated_at': updatedAt.millisecondsSinceEpoch ~/ 1000,
       'version': version,
@@ -93,13 +117,43 @@ class Note {
     };
   }
 
-  static List<List<Stroke>> _parsePagesData(dynamic pagesDataRaw) {
-    if (pagesDataRaw == null) return [];
-    final pagesJson = pagesDataRaw is String ? jsonDecode(pagesDataRaw) as List : pagesDataRaw as List;
-    return pagesJson.map((pageJson) {
-      final pageList = pageJson as List;
-      return pageList.map((s) => Stroke.fromMap(s)).toList();
-    }).toList();
+  /// Parse result containing both pages and erasedStrokesByEvent
+  static ({List<List<Stroke>> pages, Map<String, List<String>> erasedStrokesByEvent}) _parsePagesDataV2(
+      dynamic pagesDataRaw) {
+    if (pagesDataRaw == null) {
+      return (pages: [], erasedStrokesByEvent: {});
+    }
+
+    final decoded = pagesDataRaw is String ? jsonDecode(pagesDataRaw) : pagesDataRaw;
+
+    // Check if it's the new format (object with formatVersion) or old format (array)
+    if (decoded is Map<String, dynamic>) {
+      // New format v2
+      final pagesJson = decoded['pages'] as List? ?? [];
+      final erasedMap = decoded['erasedStrokesByEvent'] as Map<String, dynamic>? ?? {};
+
+      final pages = pagesJson.map((pageJson) {
+        final pageList = pageJson as List;
+        return pageList.map((s) => Stroke.fromMap(s as Map<String, dynamic>)).toList();
+      }).toList();
+
+      final erasedStrokesByEvent = erasedMap.map((key, value) {
+        final list = (value as List).map((e) => e as String).toList();
+        return MapEntry(key, list);
+      });
+
+      return (pages: pages, erasedStrokesByEvent: erasedStrokesByEvent);
+    } else if (decoded is List) {
+      // Old format (just array of pages)
+      final pages = decoded.map((pageJson) {
+        final pageList = pageJson as List;
+        return pageList.map((s) => Stroke.fromMap(s as Map<String, dynamic>)).toList();
+      }).toList();
+
+      return (pages: pages, erasedStrokesByEvent: {});
+    }
+
+    return (pages: [], erasedStrokesByEvent: {});
   }
 
   factory Note.fromMap(Map<String, dynamic> map) {
@@ -124,7 +178,9 @@ class Note {
       return int.tryParse(value.toString()) ?? fallback;
     }
 
-    List<List<Stroke>> pages = _parsePagesData(map['pages_data']);
+    final parsed = _parsePagesDataV2(map['pages_data']);
+    var pages = parsed.pages;
+    final erasedStrokesByEvent = parsed.erasedStrokesByEvent;
 
     if (pages.isEmpty) pages = [[]];
 
@@ -132,6 +188,7 @@ class Note {
       id: map['id']?.toString(),
       recordUuid: map['record_uuid'] ?? '',
       pages: pages,
+      erasedStrokesByEvent: erasedStrokesByEvent,
       createdAt: _parseTimestamp(map['created_at']),
       updatedAt: _parseTimestamp(map['updated_at']),
       version: _parseInt(map['version'], fallback: 1),
@@ -148,13 +205,16 @@ class Note {
       return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     }
 
-    List<List<Stroke>> pages = _parsePagesData(map['pages_data']);
+    final parsed = _parsePagesDataV2(map['pages_data']);
+    var pages = parsed.pages;
+    final erasedStrokesByEvent = parsed.erasedStrokesByEvent;
     if (pages.isEmpty) pages = [[]];
 
     return Note(
       id: map['id'] as String?,
       recordUuid: map['record_uuid'] as String? ?? '',
       pages: pages,
+      erasedStrokesByEvent: erasedStrokesByEvent,
       createdAt: _parseServerTimestamp(map['created_at']),
       updatedAt: _parseServerTimestamp(map['updated_at']),
       version: map['version'] as int? ?? 1,
@@ -178,12 +238,16 @@ class Note {
 }
 
 class Stroke {
+  final String? id; // Unique stroke ID for tracking
+  final String? eventUuid; // Event that created this stroke
   final List<StrokePoint> points;
   final double strokeWidth;
   final int color;
   final StrokeType strokeType;
 
   const Stroke({
+    this.id,
+    this.eventUuid,
     required this.points,
     this.strokeWidth = 2.0,
     this.color = 0xFF000000,
@@ -191,11 +255,38 @@ class Stroke {
   });
 
   Stroke addPoint(StrokePoint point) {
-    return Stroke(points: [...points, point], strokeWidth: strokeWidth, color: color, strokeType: strokeType);
+    return Stroke(
+      id: id,
+      eventUuid: eventUuid,
+      points: [...points, point],
+      strokeWidth: strokeWidth,
+      color: color,
+      strokeType: strokeType,
+    );
+  }
+
+  Stroke copyWith({
+    String? id,
+    String? eventUuid,
+    List<StrokePoint>? points,
+    double? strokeWidth,
+    int? color,
+    StrokeType? strokeType,
+  }) {
+    return Stroke(
+      id: id ?? this.id,
+      eventUuid: eventUuid ?? this.eventUuid,
+      points: points ?? this.points,
+      strokeWidth: strokeWidth ?? this.strokeWidth,
+      color: color ?? this.color,
+      strokeType: strokeType ?? this.strokeType,
+    );
   }
 
   Map<String, dynamic> toMap() {
     return {
+      if (id != null) 'id': id,
+      if (eventUuid != null) 'event_uuid': eventUuid,
       'points': points.map((p) => p.toMap()).toList(),
       'stroke_width': strokeWidth,
       'color': color,
@@ -221,6 +312,8 @@ class Stroke {
 
     final strokeTypeIndex = _parseInt(map['stroke_type'], fallback: 0);
     return Stroke(
+      id: map['id'] as String?,
+      eventUuid: map['event_uuid'] as String?,
       points: pointsList.map((p) => StrokePoint.fromMap(p)).toList(),
       strokeWidth: _parseDouble(map['stroke_width'], fallback: 2.0),
       color: _parseInt(map['color'], fallback: 0xFF000000),
@@ -231,10 +324,15 @@ class Stroke {
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
-      other is Stroke && other.strokeWidth == strokeWidth && other.color == color && other.points.length == points.length;
+      other is Stroke &&
+          other.id == id &&
+          other.eventUuid == eventUuid &&
+          other.strokeWidth == strokeWidth &&
+          other.color == color &&
+          other.points.length == points.length;
 
   @override
-  int get hashCode => Object.hash(strokeWidth, color, points.length);
+  int get hashCode => Object.hash(id, eventUuid, strokeWidth, color, points.length);
 }
 
 class StrokePoint {

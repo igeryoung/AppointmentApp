@@ -10,6 +10,8 @@ class HandwritingSection extends StatefulWidget {
   final List<List<Stroke>> initialPages;
   final Function(List<List<Stroke>>) onPagesChanged;
   final void Function(VoidCallback)? onSaveCurrentPageCallbackSet;
+  final String? currentEventUuid; // Current event UUID for stroke tracking
+  final void Function(List<String> erasedStrokeIds)? onStrokesErased; // Callback for erased strokes
 
   const HandwritingSection({
     super.key,
@@ -17,6 +19,8 @@ class HandwritingSection extends StatefulWidget {
     required this.initialPages,
     required this.onPagesChanged,
     this.onSaveCurrentPageCallbackSet,
+    this.currentEventUuid,
+    this.onStrokesErased,
   });
 
   @override
@@ -25,6 +29,7 @@ class HandwritingSection extends StatefulWidget {
 
 class _HandwritingSectionState extends State<HandwritingSection> {
   bool _isControlPanelExpanded = false;
+  bool _showOnlyCurrentEvent = false; // View mode toggle state
 
   // Multi-page state
   late List<List<Stroke>> _allPages;
@@ -221,6 +226,15 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                     onUndo: () => widget.canvasKey.currentState?.undo(),
                     onRedo: () => widget.canvasKey.currentState?.redo(),
                     onClear: () => widget.canvasKey.currentState?.clear(),
+                    // View mode toggle
+                    showOnlyCurrentEvent: _showOnlyCurrentEvent,
+                    onToggleViewMode: widget.currentEventUuid != null
+                        ? () {
+                            setState(() {
+                              _showOnlyCurrentEvent = !_showOnlyCurrentEvent;
+                            });
+                          }
+                        : null,
                   ),
                   // Canvas takes remaining space
                   Expanded(
@@ -228,6 +242,9 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                       key: widget.canvasKey,
                       initialStrokes: _allPages.isNotEmpty ? _allPages[_currentPageIndex] : [],
                       onStrokesChanged: _onCanvasStrokesChanged,
+                      currentEventUuid: widget.currentEventUuid,
+                      showOnlyCurrentEvent: _showOnlyCurrentEvent,
+                      onStrokesErased: widget.onStrokesErased,
                     ),
                   ),
                 ],

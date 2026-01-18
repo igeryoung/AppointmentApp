@@ -20,6 +20,9 @@ class HandwritingToolbar extends StatelessWidget {
   final VoidCallback onUndo;
   final VoidCallback onRedo;
   final VoidCallback onClear;
+  // View mode toggle
+  final bool showOnlyCurrentEvent;
+  final VoidCallback? onToggleViewMode;
 
   const HandwritingToolbar({
     super.key,
@@ -37,6 +40,8 @@ class HandwritingToolbar extends StatelessWidget {
     required this.onUndo,
     required this.onRedo,
     required this.onClear,
+    this.showOnlyCurrentEvent = false,
+    this.onToggleViewMode,
   });
 
   @override
@@ -116,6 +121,42 @@ class HandwritingToolbar extends StatelessWidget {
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             tooltip: '下一頁',
           ),
+          const SizedBox(width: 8),
+          // View mode toggle button
+          if (onToggleViewMode != null)
+            InkWell(
+              onTap: onToggleViewMode,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: showOnlyCurrentEvent ? Colors.purple.shade100 : Colors.grey.shade100,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(
+                    color: showOnlyCurrentEvent ? Colors.purple.shade300 : Colors.grey.shade300,
+                  ),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(
+                      showOnlyCurrentEvent ? Icons.visibility : Icons.visibility_off,
+                      size: 16,
+                      color: showOnlyCurrentEvent ? Colors.purple.shade700 : Colors.grey.shade600,
+                    ),
+                    const SizedBox(width: 4),
+                    Text(
+                      showOnlyCurrentEvent ? '本次' : '全部',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: showOnlyCurrentEvent ? FontWeight.bold : FontWeight.normal,
+                        color: showOnlyCurrentEvent ? Colors.purple.shade700 : Colors.grey.shade600,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
           const SizedBox(width: 12),
           Container(width: 1, height: 32, color: Colors.grey.shade300),
           const SizedBox(width: 12),

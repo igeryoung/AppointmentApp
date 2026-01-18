@@ -19,6 +19,7 @@ class EventDetailState {
   // Note data
   final Note? note;
   final List<List<Stroke>> lastKnownPages;
+  final Map<String, List<String>> erasedStrokesByEvent; // Track erased strokes per event
 
   // Loading and sync state
   final bool isLoading;
@@ -44,6 +45,7 @@ class EventDetailState {
     this.endTime,
     this.note,
     this.lastKnownPages = const [[]],
+    this.erasedStrokesByEvent = const {},
     this.isLoading = false,
     this.isLoadingFromServer = false,
     this.hasChanges = false,
@@ -80,6 +82,7 @@ class EventDetailState {
     DateTime? endTime,
     Note? note,
     List<List<Stroke>>? lastKnownPages,
+    Map<String, List<String>>? erasedStrokesByEvent,
     bool? isLoading,
     bool? isLoadingFromServer,
     bool? hasChanges,
@@ -101,6 +104,7 @@ class EventDetailState {
       endTime: clearEndTime ? null : (endTime ?? this.endTime),
       note: note ?? this.note,
       lastKnownPages: lastKnownPages ?? this.lastKnownPages,
+      erasedStrokesByEvent: erasedStrokesByEvent ?? this.erasedStrokesByEvent,
       isLoading: isLoading ?? this.isLoading,
       isLoadingFromServer: isLoadingFromServer ?? this.isLoadingFromServer,
       hasChanges: hasChanges ?? this.hasChanges,

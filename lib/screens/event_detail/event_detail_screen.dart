@@ -812,6 +812,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               onSaveCurrentPageCallbackSet: (callback) {
                                 _saveCurrentPageCallback = callback;
                               },
+                              currentEventUuid: widget.event.id,
+                              onStrokesErased: (erasedStrokeIds) {
+                                _controller.onStrokesErased(erasedStrokeIds);
+                              },
                             );
                           },
                         ),
