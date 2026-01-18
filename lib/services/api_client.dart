@@ -154,6 +154,41 @@ class ApiClient {
     }
   }
 
+  /// Fetch a single note by record UUID from server
+  Future<Note?> fetchNoteByRecordUuid({
+    required String bookUuid,
+    required String recordUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/books/$bookUuid/records/$recordUuid/note'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final noteJson = json['note'] as Map<String, dynamic>?;
+        return noteJson == null ? null : Note.fromServer(noteJson);
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw ApiException(
+          'Fetch note by record failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Save (create or update) a note to server
   ///
   /// If eventData is provided and the event doesn't exist on the server,

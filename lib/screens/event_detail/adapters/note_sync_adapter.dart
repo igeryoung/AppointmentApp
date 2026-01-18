@@ -17,4 +17,12 @@ class NoteSyncAdapter {
   Future<Note> saveNote(String eventId, Note note) async {
     return _contentService.saveNote(eventId, note);
   }
+
+  /// Get note by record UUID from server
+  Future<Note?> getNoteByRecordUuid(String bookUuid, String recordUuid) async {
+    return _contentService.getNoteByRecordUuid(
+      bookUuid: bookUuid,
+      recordUuid: recordUuid,
+    );
+  }
 }

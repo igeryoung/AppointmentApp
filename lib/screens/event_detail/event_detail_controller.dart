@@ -277,7 +277,10 @@ class EventDetailController {
 
         // Check for existing note for this record
         if (recordNumberText.isNotEmpty) {
-          final existingNote = await prdDb.findNoteByRecordNumber(recordNumberText);
+          final existingNote = await _fetchExistingNoteForRecordNumber(
+            recordNumber: recordNumberText,
+            name: nameText,
+          );
           if (existingNote != null && existingNote.isNotEmpty) {
             // Load existing note (safety: never lose existing patient data)
             _updateState(_state.copyWith(
@@ -307,7 +310,10 @@ class EventDetailController {
         final recordNumberAdded = oldRecordNumber.isEmpty && recordNumberText.isNotEmpty;
 
         if (recordNumberAdded) {
-          final existingNote = await prdDb.findNoteByRecordNumber(recordNumberText);
+          final existingNote = await _fetchExistingNoteForRecordNumber(
+            recordNumber: recordNumberText,
+            name: nameText,
+          );
           if (existingNote != null && existingNote.isNotEmpty) {
             // Load existing note
             _updateState(_state.copyWith(
@@ -347,7 +353,13 @@ class EventDetailController {
       throw Exception('Event not found');
     }
 
-    final baseNote = await _noteSyncAdapter!.getNote(eventId, forceRefresh: true);
+    Note? baseNote = await _noteSyncAdapter!.getNote(eventId, forceRefresh: true);
+    if (baseNote == null && eventData.recordUuid.isNotEmpty) {
+      baseNote = await _noteSyncAdapter!.getNoteByRecordUuid(
+        eventData.bookUuid,
+        eventData.recordUuid,
+      );
+    }
 
     final nextVersion = (baseNote?.version ?? 0) + 1;
     final noteToSave = Note(
@@ -659,6 +671,46 @@ class EventDetailController {
     _updateState(_state.copyWith(chargeItems: chargeItems, hasChanges: true));
   }
 
+  Future<Note?> _fetchExistingNoteForRecordNumber({
+    required String recordNumber,
+    String? name,
+  }) async {
+    final trimmedRecordNumber = recordNumber.trim();
+    if (trimmedRecordNumber.isEmpty) {
+      return null;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return null;
+    }
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final nameText = (name ?? _state.name).trim();
+
+    var record = nameText.isNotEmpty
+        ? await prdDb.getRecordByNameAndRecordNumber(nameText, trimmedRecordNumber)
+        : null;
+    record ??= await prdDb.getRecordByRecordNumber(trimmedRecordNumber);
+
+    final recordUuid = record?.recordUuid ?? '';
+    if (recordUuid.isEmpty) {
+      return null;
+    }
+
+    if (_noteSyncAdapter != null) {
+      try {
+        final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(event.bookUuid, recordUuid);
+        if (serverNote != null) {
+          return serverNote;
+        }
+      } catch (e) {
+        // Ignore server errors and fall back to local cache.
+      }
+    }
+
+    return await prdDb.getNoteByRecordUuid(recordUuid);
+  }
+
   /// Check for existing person note when record number is set (for NEW events only)
   /// Returns the existing note if found, null otherwise
   /// This is called when user finishes typing record number
@@ -674,12 +726,7 @@ class EventDetailController {
       return null;
     }
 
-    if (_dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.findNoteByRecordNumber(recordNumber);
-    }
-
-    return null;
+    return await _fetchExistingNoteForRecordNumber(recordNumber: recordNumber);
   }
 
   /// Load existing person note (when user chooses "載入現有")
@@ -759,57 +806,19 @@ class EventDetailController {
   }
 
   /// Handle record number selected - auto-fill name, phone, and note
-  /// Tries to fetch from server first, falls back to local database
   Future<void> onRecordNumberSelected(String recordNumber) async {
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    String? name;
-    Note? serverNote;
-
-    // Step 1: Try to fetch person data from server (name + note)
-    if (_contentService != null) {
-      try {
-        final credentials = await prdDb.getDeviceCredentials();
-        if (credentials != null) {
-          final apiClient = ApiClient(baseUrl: await _getServerUrl());
-          final personData = await apiClient.fetchPersonByRecordNumber(
-            bookUuid: event.bookUuid,
-            recordNumber: recordNumber,
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-          );
-
-          if (personData != null) {
-            name = personData['name'] as String?;
-
-            // Parse server note if available
-            final latestNote = personData['latestNote'] as Map<String, dynamic>?;
-            if (latestNote != null && latestNote['strokes_data'] != null) {
-              serverNote = Note.fromMap(latestNote);
-            }
-          }
-        }
-      } catch (e) {
-        // Server fetch failed, will fallback to local database
-      }
-    }
-
-    // Step 2: Fallback to local database if server didn't return name
+    final name = await prdDb.getNameByRecordNumber(recordNumber);
     if (name == null || name.isEmpty) {
-      name = await prdDb.getNameByRecordNumber(recordNumber);
+      return;
     }
 
-    if (name == null || name.isEmpty) {
-      return; // No person found with this record number
-    }
-
-    // Step 3: Fetch phone number from record
     final phone = await prdDb.getPhoneByRecordNumber(recordNumber);
 
-    // Step 4: Update state with name, record number, and phone
     _updateState(_state.copyWith(
       name: name,
       recordNumber: recordNumber,
@@ -818,33 +827,22 @@ class EventDetailController {
       hasChanges: true,
     ));
 
-    // Step 5: Load associated charge items
+    // Load associated charge items
     loadChargeItems().catchError((e) {
     });
 
-    // Step 6: Load person note (prefer server version, fallback to local)
+    // Load person note (prefer server version, fallback to local)
     try {
-      Note? noteToLoad = serverNote;
-
-      // If no server note, try local database
-      if (noteToLoad == null || noteToLoad.isEmpty) {
-        noteToLoad = await prdDb.findNoteByRecordNumber(recordNumber);
-      }
+      final noteToLoad = await _fetchExistingNoteForRecordNumber(
+        recordNumber: recordNumber,
+        name: name,
+      );
 
       if (noteToLoad != null && noteToLoad.isNotEmpty) {
         loadExistingPersonNote(noteToLoad);
       }
     } catch (e) {
     }
-  }
-
-  /// Get server URL from config
-  Future<String> _getServerUrl() async {
-    final prdDb = _dbService as PRDDatabaseService;
-    final serverConfig = ServerConfigService(prdDb);
-    return await serverConfig.getServerUrlOrDefault(
-      defaultUrl: 'http://localhost:8080',
-    );
   }
 
   /// Handle name selected from autocomplete - set editable mode

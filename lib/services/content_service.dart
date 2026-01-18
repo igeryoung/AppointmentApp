@@ -194,6 +194,38 @@ class ContentService {
     }
   }
 
+  /// Get note by record UUID with server-first strategy
+  Future<Note?> getNoteByRecordUuid({
+    required String bookUuid,
+    required String recordUuid,
+  }) async {
+    try {
+      final credentials = await _db.getDeviceCredentials();
+      if (credentials == null) {
+        debugPrint('[ContentService] getNoteByRecordUuid: missing credentials');
+        return null;
+      }
+
+      final serverNote = await _apiClient.fetchNoteByRecordUuid(
+        bookUuid: bookUuid,
+        recordUuid: recordUuid,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+
+      if (serverNote != null) {
+        debugPrint('[ContentService] getNoteByRecordUuid: fetched note version=${serverNote.version}');
+        return serverNote;
+      }
+
+      debugPrint('[ContentService] getNoteByRecordUuid: no note on server');
+      return null;
+    } catch (e) {
+      debugPrint('[ContentService] getNoteByRecordUuid: failed - $e');
+      return null;
+    }
+  }
+
   /// Save note to server
   ///
   /// In server-based architecture, saves directly to server
