@@ -54,32 +54,45 @@ mixin RecordOperationsMixin {
     return Record.fromMap(results.first);
   }
 
+  /// Find record by BOTH name AND record_number
+  /// Returns null if either is empty or no match found
+  Future<Record?> getRecordByNameAndRecordNumber(String name, String recordNumber) async {
+    if (recordNumber.isEmpty || name.isEmpty) return null;
+    final db = await database;
+    final results = await db.query(
+      'records',
+      where: 'name = ? AND record_number = ? AND is_deleted = 0',
+      whereArgs: [name, recordNumber],
+      limit: 1,
+    );
+    if (results.isEmpty) return null;
+    return Record.fromMap(results.first);
+  }
+
   /// Get existing record or create new one
-  /// - Non-empty recordNumber: find existing or create new
-  /// - Empty recordNumber: always create new standalone record
+  /// - Non-empty recordNumber + non-empty name: match by BOTH, return existing record_uuid
+  /// - Empty recordNumber or empty name: always create new standalone record
   Future<Record> getOrCreateRecord({
     required String recordNumber,
     String? name,
     String? phone,
     bool updateExisting = true,
   }) async {
-    if (recordNumber.isNotEmpty) {
-      final existing = await getRecordByRecordNumber(recordNumber);
+    // Match by BOTH name AND record_number when both are non-empty
+    if (recordNumber.isNotEmpty && name != null && name.isNotEmpty) {
+      final existing = await getRecordByNameAndRecordNumber(name, recordNumber);
       if (existing != null) {
-        if (updateExisting && (name != null || phone != null)) {
-          final newName = name ?? existing.name;
-          final newPhone = phone ?? existing.phone;
-          if (newName != existing.name || newPhone != existing.phone) {
-            return await updateRecord(
-              recordUuid: existing.recordUuid!,
-              name: newName,
-              phone: newPhone,
-            );
-          }
+        // Only update phone if different (name already matches)
+        if (updateExisting && phone != null && phone != existing.phone) {
+          return await updateRecord(
+            recordUuid: existing.recordUuid!,
+            phone: phone,
+          );
         }
         return existing;
       }
     }
+    // Create new record (either empty recordNumber, empty name, or no match found)
     return await createRecord(recordNumber: recordNumber, name: name, phone: phone);
   }
 

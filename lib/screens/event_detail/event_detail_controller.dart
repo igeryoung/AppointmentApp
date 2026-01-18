@@ -474,11 +474,12 @@ class EventDetailController {
   /// Save phone number to record table
   /// Note: Phone is now stored in the records table, not person_info
   Future<void> savePhone() async {
+    final name = _state.name.trim();
     final recordNumber = _state.recordNumber.trim();
     final phone = _state.phone.trim();
 
-    // Only save if we have a record number
-    if (recordNumber.isEmpty) {
+    // Only save if we have both name and record number
+    if (name.isEmpty || recordNumber.isEmpty) {
       return;
     }
 
@@ -489,8 +490,8 @@ class EventDetailController {
     try {
       final prdDb = _dbService as PRDDatabaseService;
 
-      // Get record by record number and update phone
-      final record = await prdDb.getRecordByRecordNumber(recordNumber);
+      // Get record by name AND record number and update phone
+      final record = await prdDb.getRecordByNameAndRecordNumber(name, recordNumber);
       if (record != null && record.recordUuid != null) {
         await prdDb.updateRecord(
           recordUuid: record.recordUuid!,

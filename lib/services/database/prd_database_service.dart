@@ -19,9 +19,10 @@ export 'mixins/device_info_operations_mixin.dart' show DeviceCredentials;
 
 /// Database service with record-based architecture
 ///
-/// - Records are first-class entities with global identity (record_number)
-/// - All events with same record_number share the same record_uuid
+/// - Records are first-class entities with global identity (name + record_number)
+/// - All events with same {name, record_number} pair share the same record_uuid
 /// - Notes are tied to record_uuid (shared across all events for same record)
+/// - Empty record_number always creates a new standalone record
 class PRDDatabaseService
     with
         BookOperationsMixin,
@@ -54,7 +55,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 23,
+      version: 24,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -64,6 +65,14 @@ class PRDDatabaseService
           final dbName = kDebugMode ? 'prd_schedule_test.db' : 'prd_schedule.db';
           await deleteDatabase(join(databasesPath, dbName));
           throw Exception('Database reset for v23 migration. Please restart the app.');
+        }
+        // v24: Change unique index from record_number to (name, record_number)
+        if (oldVersion == 23 && newVersion == 24) {
+          await db.execute('DROP INDEX IF EXISTS idx_records_record_number_unique');
+          await db.execute('''
+            CREATE UNIQUE INDEX idx_records_name_record_number_unique
+            ON records(name, record_number) WHERE record_number <> ''
+          ''');
         }
       },
     );
@@ -97,10 +106,11 @@ class PRDDatabaseService
       )
     ''');
 
-    // Unique constraint only for non-empty record_number
+    // Unique constraint on (name, record_number) for non-empty record_number
+    // This allows same record_number with different names to be separate records
     await db.execute('''
-      CREATE UNIQUE INDEX idx_records_record_number_unique
-      ON records(record_number) WHERE record_number <> ''
+      CREATE UNIQUE INDEX idx_records_name_record_number_unique
+      ON records(name, record_number) WHERE record_number <> ''
     ''');
 
     // Events - linked to records
@@ -346,18 +356,21 @@ class PRDDatabaseService
   }
 
   /// Get name by record number
+  /// @deprecated Use getRecordByNameAndRecordNumber instead for accurate matching
   Future<String?> getNameByRecordNumber(String recordNumber) async {
     final record = await getRecordByRecordNumber(recordNumber);
     return record?.name;
   }
 
   /// Get phone by record number
+  /// @deprecated Use getRecordByNameAndRecordNumber instead for accurate matching
   Future<String?> getPhoneByRecordNumber(String recordNumber) async {
     final record = await getRecordByRecordNumber(recordNumber);
     return record?.phone;
   }
 
   /// Get record data (name, phone) by record number
+  /// @deprecated Use getRecordByNameAndRecordNumber instead for accurate matching
   Future<Map<String, String?>?> getRecordDataByRecordNumber(String recordNumber) async {
     final record = await getRecordByRecordNumber(recordNumber);
     if (record == null) return null;
@@ -376,9 +389,18 @@ class PRDDatabaseService
   }
 
   /// Find existing note for a record by record_number
+  /// @deprecated Use findNoteByNameAndRecordNumber instead for accurate matching
   Future<Note?> findNoteByRecordNumber(String recordNumber) async {
     if (recordNumber.isEmpty) return null;
     final record = await getRecordByRecordNumber(recordNumber);
+    if (record == null || record.recordUuid == null) return null;
+    return getNoteByRecordUuid(record.recordUuid!);
+  }
+
+  /// Find existing note for a record by name AND record_number
+  Future<Note?> findNoteByNameAndRecordNumber(String name, String recordNumber) async {
+    if (recordNumber.isEmpty || name.isEmpty) return null;
+    final record = await getRecordByNameAndRecordNumber(name, recordNumber);
     if (record == null || record.recordUuid == null) return null;
     return getNoteByRecordUuid(record.recordUuid!);
   }

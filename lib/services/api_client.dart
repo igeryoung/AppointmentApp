@@ -44,6 +44,8 @@ class ApiClient {
 
   /// Fetch person data by record number from server
   /// Returns person info including name and latest note
+  /// Note: With the new record-based architecture, same record_number can have
+  /// different names. This method returns the first match for backward compatibility.
   Future<Map<String, dynamic>?> fetchPersonByRecordNumber({
     required String bookUuid,
     required String recordNumber,

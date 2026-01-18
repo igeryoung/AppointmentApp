@@ -13,16 +13,16 @@ Router recordRoutes() {
       final data = jsonDecode(body) as Map<String, dynamic>;
 
       final recordNumber = data['record_number'] ?? '';
-      final name = data['name'];
+      final name = data['name'] as String?;
       final phone = data['phone'];
 
       final conn = await DatabaseConnection().connection;
 
-      // Check if record_number already exists (if non-empty)
-      if (recordNumber.isNotEmpty) {
+      // Check if (name, record_number) already exists (when both are non-empty)
+      if (recordNumber.isNotEmpty && name != null && name.isNotEmpty) {
         final existing = await conn.execute(
-          'SELECT record_uuid FROM records WHERE record_number = \$1 AND is_deleted = false',
-          parameters: [recordNumber],
+          'SELECT record_uuid FROM records WHERE name = \$1 AND record_number = \$2 AND is_deleted = false',
+          parameters: [name, recordNumber],
         );
         if (existing.isNotEmpty) {
           return Response.ok(
@@ -191,22 +191,23 @@ Router recordRoutes() {
   });
 
   // Get or create record
+  // Match by BOTH name AND record_number when both are non-empty
   router.post('/get-or-create', (Request request) async {
     try {
       final body = await request.readAsString();
       final data = jsonDecode(body) as Map<String, dynamic>;
 
       final recordNumber = data['record_number'] ?? '';
-      final name = data['name'];
+      final name = data['name'] as String?;
       final phone = data['phone'];
 
       final conn = await DatabaseConnection().connection;
 
-      // For non-empty record_number, try to find existing
-      if (recordNumber.isNotEmpty) {
+      // Match by BOTH name AND record_number when both are non-empty
+      if (recordNumber.isNotEmpty && name != null && name.isNotEmpty) {
         final existing = await conn.execute(
-          'SELECT * FROM records WHERE record_number = \$1 AND is_deleted = false',
-          parameters: [recordNumber],
+          'SELECT * FROM records WHERE name = \$1 AND record_number = \$2 AND is_deleted = false',
+          parameters: [name, recordNumber],
         );
         if (existing.isNotEmpty) {
           final row = existing.first;
@@ -226,7 +227,7 @@ Router recordRoutes() {
         }
       }
 
-      // Create new record
+      // Create new record (either empty recordNumber, empty name, or no match found)
       final result = await conn.execute(
         '''INSERT INTO records (record_number, name, phone)
            VALUES (\$1, \$2, \$3)

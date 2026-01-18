@@ -52,6 +52,18 @@ class BookPullService {
     }
   }
 
+  String _primaryEventType(String eventTypes) {
+    try {
+      final decoded = jsonDecode(eventTypes);
+      if (decoded is List && decoded.isNotEmpty) {
+        return decoded.first.toString();
+      }
+    } catch (_) {
+      // Fall through to default.
+    }
+    return 'other';
+  }
+
   /// List all books with optional search by name
   ///
   /// Returns all books (including archived) from the entire server store
@@ -139,42 +151,47 @@ class BookPullService {
     final eventsResults = await db.queryRows(
       '''
       SELECT
-        id,
-        book_uuid,
-        name,
-        record_number,
-        phone,
-        event_type,
-        event_types,
-        has_charge_items,
-        is_checked,
-        has_note,
-        start_time,
-        end_time,
-        created_at,
-        updated_at,
-        is_removed,
-        removal_reason,
-        original_event_id,
-        new_event_id,
-        version,
-        is_deleted
-      FROM events
-      WHERE book_uuid = @bookUuid
-      ORDER BY start_time ASC
+        e.id,
+        e.book_uuid,
+        e.record_uuid,
+        e.title,
+        r.name,
+        r.record_number,
+        r.phone,
+        e.event_types,
+        e.has_charge_items,
+        e.is_checked,
+        e.has_note,
+        e.start_time,
+        e.end_time,
+        e.created_at,
+        e.updated_at,
+        e.is_removed,
+        e.removal_reason,
+        e.original_event_id,
+        e.new_event_id,
+        e.version,
+        e.is_deleted
+      FROM events e
+      LEFT JOIN records r ON r.record_uuid = e.record_uuid
+      WHERE e.book_uuid = @bookUuid
+      ORDER BY e.start_time ASC
       ''',
       parameters: {'bookUuid': bookUuid},
     );
 
     final events = eventsResults.map((row) {
+      final eventTypes = _normalizeEventTypes(row['event_types']);
       return {
         'id': row['id'] as String,
         'book_uuid': row['book_uuid'] as String,
-        'name': row['name'] as String,
+        'record_uuid': row['record_uuid'] as String,
+        'title': row['title'] as String,
+        'name': (row['name'] as String?) ?? (row['title'] as String),
         'record_number': row['record_number'] as String?,
         'phone': row['phone'] as String?,
-        'event_type': row['event_type'] as String?,
-        'event_types': _normalizeEventTypes(row['event_types']),
+        'event_type': _primaryEventType(eventTypes),
+        'event_types': eventTypes,
         'has_charge_items': _toBool(row['has_charge_items']),
         'is_checked': _toBool(row['is_checked']),
         'has_note': _toBool(row['has_note']),
@@ -196,16 +213,16 @@ class BookPullService {
     // 3. Get all notes for events in this book
     final notesResults = await db.queryRows(
       '''
-      SELECT
+      SELECT DISTINCT
         n.id,
-        n.event_id,
+        n.record_uuid,
         n.pages_data,
         n.created_at,
         n.updated_at,
         n.version,
         n.is_deleted
       FROM notes n
-      INNER JOIN events e ON n.event_id = e.id
+      INNER JOIN events e ON n.record_uuid = e.record_uuid
       WHERE e.book_uuid = @bookUuid
       ORDER BY n.created_at ASC
       ''',
@@ -214,8 +231,8 @@ class BookPullService {
 
     final notes = notesResults.map((row) {
       return {
-        'id': row['id'] as int,
-        'event_id': row['event_id'] as String,
+        'id': row['id'] as String,
+        'record_uuid': row['record_uuid'] as String,
         'pages_data': row['pages_data'] as String?,
         'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
         'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
