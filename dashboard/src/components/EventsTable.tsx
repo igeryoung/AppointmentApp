@@ -9,13 +9,20 @@ import { parseEventTypes } from '../utils/event';
 interface EventsTableProps {
   events: Event[];
   loading?: boolean;
+  title?: string;
+  emptyMessage?: string;
 }
 
 /**
  * Table component for displaying events list
  * Shows event details with sortable columns and clickable rows
  */
-export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = false }) => {
+export const EventsTable: React.FC<EventsTableProps> = ({
+  events,
+  loading = false,
+  title = 'All Events',
+  emptyMessage = 'No events found',
+}) => {
   const navigate = useNavigate();
 
   const handleViewDetails = (eventId: string) => {
@@ -50,7 +57,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = fals
     return (
       <div className="card">
         <div className="card-body" style={{ textAlign: 'center', padding: '3rem' }}>
-          <p style={{ color: '#6b7280' }}>No events found</p>
+          <p style={{ color: '#6b7280' }}>{emptyMessage}</p>
         </div>
       </div>
     );
@@ -59,7 +66,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({ events, loading = fals
   return (
     <div className="card">
       <div className="card-header">
-        <h2 className="card-title">All Events ({events.length})</h2>
+        <h2 className="card-title">{title} ({events.length})</h2>
       </div>
       <div className="card-body">
         <div className="table-container">

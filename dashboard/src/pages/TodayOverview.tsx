@@ -85,10 +85,7 @@ export const TodayOverview: React.FC = () => {
         const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
         const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
 
-        // Get selected book names for matching
-        const selectedBookNames = books
-          .filter((book: Book) => selectedBookUuids.includes(book.bookUuid))
-          .map((book: Book) => book.name);
+        const selectedBookSet = new Set(selectedBookUuids);
 
         // Fetch all events
         const response = await dashboardAPI.getFilteredEvents({});
@@ -106,8 +103,8 @@ export const TodayOverview: React.FC = () => {
             eventStart >= startOfDay &&
             eventStart <= endOfDay;
 
-          // Check if event belongs to selected book (match by book name)
-          const isSelectedBook = event.bookName && selectedBookNames.includes(event.bookName);
+          // Check if event belongs to selected book (match by book UUID)
+          const isSelectedBook = selectedBookSet.has(event.bookUuid);
 
           return isToday && isSelectedBook;
         });
@@ -147,9 +144,7 @@ export const TodayOverview: React.FC = () => {
       const book = books.find((b: Book) => b.bookUuid === bookUuid);
       if (!book) return null;
 
-      const bookEvents = events.filter(
-        (event: Event) => event.bookName === book.name
-      );
+      const bookEvents = events.filter((event: Event) => event.bookUuid === book.bookUuid);
 
       return {
         bookUuid: book.bookUuid,

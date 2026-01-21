@@ -43,10 +43,11 @@ export function Sidebar() {
       <nav className="sidebar-nav">
         {navItems.map((item) => {
           const Icon = item.icon;
-          // Highlight Events & Notes for both /events and /events/:id paths
           const isActive = item.path === '/events'
             ? location.pathname === item.path || location.pathname.startsWith('/events/')
-            : location.pathname === item.path;
+            : item.path === '/records'
+              ? location.pathname === item.path || location.pathname.startsWith('/records/')
+              : location.pathname === item.path;
 
           return (
             <Link

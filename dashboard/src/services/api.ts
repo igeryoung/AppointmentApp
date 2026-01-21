@@ -9,6 +9,7 @@ import type {
   Note,
   EventFilters,
   RecordFilters,
+  RecordDetailResponse,
 } from '../types';
 import { parseEventTypes } from '../utils/event';
 
@@ -106,6 +107,14 @@ class DashboardAPI {
   async getRecords(filters?: RecordFilters): Promise<{ records: RecordSummary[] }> {
     const response = await this.client.get<{ records: RecordSummary[] }>('/records', { params: filters });
     return response.data;
+  }
+
+  async getRecordDetail(recordUuid: string): Promise<RecordDetailResponse> {
+    const response = await this.client.get<RecordDetailResponse>(`/records/${recordUuid}`);
+    return {
+      ...response.data,
+      events: this.normalizeEvents(response.data.events),
+    };
   }
 
   async getEvents(filters?: DashboardFilters) {

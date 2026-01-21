@@ -169,25 +169,64 @@ class ScheduleBody extends StatelessWidget {
 
   /// Build date headers for multi-day view
   Widget _buildDateHeaders(BuildContext context, double height) {
+    final theme = Theme.of(context);
+    final todayLabel = MaterialLocalizations.of(context).todayLabel;
+
     return SizedBox(
       height: height,
       child: Row(
         children: [
           const SizedBox(width: 60), // Time column width
-          ...dates.map((date) => Expanded(
-                child: Container(
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(color: Colors.grey.shade300),
-                  ),
-                  child: Text(
-                    DateFormat('M / d (EEE)', Localizations.localeOf(context).toString()).format(date),
-                    style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                      fontSize: (Theme.of(context).textTheme.titleSmall?.fontSize ?? 14) * 1.2,
-                    ),
+          ...dates.map((date) {
+            final isToday = ScheduleLayoutUtils.isViewingToday(date);
+            final headerTextStyle = theme.textTheme.titleSmall?.copyWith(
+              fontSize: (theme.textTheme.titleSmall?.fontSize ?? 14) * 1.2,
+              fontWeight: isToday ? FontWeight.w600 : FontWeight.normal,
+              color: isToday ? theme.colorScheme.primary : null,
+            );
+
+            return Expanded(
+              child: Container(
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: isToday ? theme.colorScheme.primary.withOpacity(0.06) : null,
+                  border: Border.all(
+                    color: isToday ? theme.colorScheme.primary.withOpacity(0.3) : Colors.grey.shade300,
                   ),
                 ),
-              )),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Text(
+                      DateFormat('M / d (EEE)', Localizations.localeOf(context).toString()).format(date),
+                      style: headerTextStyle,
+                    ),
+                    if (isToday)
+                      Container(
+                        margin: const EdgeInsets.only(top: 2),
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.primary.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          todayLabel,
+                          style: theme.textTheme.labelSmall?.copyWith(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                              ) ??
+                              TextStyle(
+                                color: theme.colorScheme.primary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 10,
+                              ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            );
+          }),
         ],
       ),
     );

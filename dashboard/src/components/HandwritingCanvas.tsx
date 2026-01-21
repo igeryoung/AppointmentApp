@@ -5,6 +5,8 @@ interface HandwritingCanvasProps {
   page: NotePage;
   width?: number;
   height?: number;
+  sourceWidth?: number;
+  sourceHeight?: number;
   className?: string;
 }
 
@@ -16,9 +18,13 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   page,
   width = 800,
   height = 600,
+  sourceWidth,
+  sourceHeight,
   className = '',
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasWidth = sourceWidth ?? width;
+  const canvasHeight = sourceHeight ?? height;
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -28,11 +34,11 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
     if (!ctx) return;
 
     // Clear canvas
-    ctx.clearRect(0, 0, width, height);
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
     // Set canvas background to white
     ctx.fillStyle = '#ffffff';
-    ctx.fillRect(0, 0, width, height);
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight);
 
     // Separate strokes by type for proper z-ordering
     const highlighters: Stroke[] = [];
@@ -51,7 +57,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
 
     // Draw pens on top (foreground layer)
     pens.forEach((stroke) => drawStroke(ctx, stroke));
-  }, [page, width, height]);
+  }, [page, canvasWidth, canvasHeight]);
 
   /**
    * Draw a single stroke on the canvas
@@ -113,8 +119,8 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
   return (
     <canvas
       ref={canvasRef}
-      width={width}
-      height={height}
+      width={canvasWidth}
+      height={canvasHeight}
       className={className}
       style={{
         border: '1px solid #e5e7eb',

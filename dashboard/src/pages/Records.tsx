@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { dashboardAPI } from '../services/api';
 import type { RecordSummary } from '../types';
@@ -6,6 +7,7 @@ import { parseServerDate } from '../utils/date';
 import { formatShortId } from '../utils/id';
 
 export function Records() {
+  const navigate = useNavigate();
   const [records, setRecords] = useState<RecordSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -142,7 +144,11 @@ export function Records() {
                 </thead>
                 <tbody>
                   {filteredRecords.map((record) => (
-                    <tr key={record.recordUuid}>
+                    <tr
+                      key={record.recordUuid}
+                      onClick={() => navigate(`/records/${record.recordUuid}`)}
+                      style={{ cursor: 'pointer' }}
+                    >
                       <td style={{ fontFamily: 'monospace', fontSize: '0.75rem' }}>
                         {formatShortId(record.recordUuid)}
                       </td>

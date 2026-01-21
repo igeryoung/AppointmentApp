@@ -9,6 +9,7 @@ import { parseServerDate } from '../utils/date';
 import { getBookDisplayName } from '../utils/book';
 import { formatShortId } from '../utils/id';
 import { parseEventTypes } from '../utils/event';
+import { parseNotePagesData } from '../utils/handwriting';
 
 /**
  * Event Detail Page
@@ -21,6 +22,7 @@ export const EventDetail: React.FC = () => {
   const [event, setEvent] = useState<Event | null>(null);
   const [note, setNote] = useState<Note | null>(null);
   const [notePages, setNotePages] = useState<NotePages>([]);
+  const [noteCanvasSize, setNoteCanvasSize] = useState<{ width: number; height: number } | null>(null);
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -47,14 +49,20 @@ export const EventDetail: React.FC = () => {
           setNote(noteData);
 
           // Parse pages data
-          const pages = parseNotePages(noteData);
-          setNotePages(pages);
+          const parsedNote = parseNotePagesData(noteData);
+          setNotePages(parsedNote.pages);
+          setNoteCanvasSize(parsedNote.canvasSize);
           setCurrentPageIndex(0);
         } catch (noteErr) {
           console.error('Failed to load note:', noteErr);
           setNote(null);
           setNotePages([]);
+          setNoteCanvasSize(null);
         }
+      } else {
+        setNote(null);
+        setNotePages([]);
+        setNoteCanvasSize(null);
       }
     } catch (err) {
       console.error('Failed to load event:', err);
@@ -67,31 +75,6 @@ export const EventDetail: React.FC = () => {
       }
     } finally {
       setLoading(false);
-    }
-  };
-
-  const parseNotePages = (noteData: Note): NotePages => {
-    try {
-      if (noteData.pagesData) {
-        const parsed = JSON.parse(noteData.pagesData);
-        // Handle new format (formatVersion 2): { formatVersion, pages, erasedStrokesByEvent }
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed) && parsed.pages) {
-          return parsed.pages;
-        }
-        // Handle old format: direct array of pages [[strokes...], [page2...]]
-        if (Array.isArray(parsed)) {
-          return parsed;
-        }
-        return [];
-      }
-      if (noteData.strokesData) {
-        const strokes = JSON.parse(noteData.strokesData);
-        return [strokes];
-      }
-      return [];
-    } catch (err) {
-      console.error('Failed to parse note data:', err);
-      return [];
     }
   };
 
@@ -285,6 +268,8 @@ export const EventDetail: React.FC = () => {
                     page={notePages[currentPageIndex]}
                     width={600}
                     height={800}
+                    sourceWidth={noteCanvasSize?.width}
+                    sourceHeight={noteCanvasSize?.height}
                   />
                 </div>
 

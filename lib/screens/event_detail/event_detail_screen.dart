@@ -203,6 +203,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
   }
 
+  Size? _getCanvasSize() => _canvasKey.currentState?.canvasSize;
+
   Future<void> _saveEvent() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -217,7 +219,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
       // Save is handled by the controller which already has the latest pages
       // from onPagesChanged callbacks
-      await _controller.saveEvent();
+      await _controller.saveEvent(canvasSize: _getCanvasSize());
 
       if (mounted) {
         // Show success feedback
@@ -483,7 +485,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _saveCurrentPageCallback?.call();
 
         // Save the event
-        await _controller.saveEvent();
+        await _controller.saveEvent(canvasSize: _getCanvasSize());
 
         if (mounted) {
           // Show success feedback
@@ -559,7 +561,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _saveCurrentPageCallback?.call();
 
       // Save the event
-      await _controller.saveEvent();
+      await _controller.saveEvent(canvasSize: _getCanvasSize());
 
       if (mounted) {
         // Show success feedback

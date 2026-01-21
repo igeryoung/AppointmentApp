@@ -183,6 +183,9 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   /// Get current canvas version
   int get canvasVersion => _canvasVersion;
 
+  /// Get current canvas size (logical pixels)
+  Size get canvasSize => _canvasSize;
+
   /// Validate canvas internal state
   void validateState() {
 

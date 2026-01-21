@@ -5,6 +5,7 @@ import { Overview } from './pages/Overview';
 import { TodayOverview } from './pages/TodayOverview';
 import { Books } from './pages/Books';
 import { Records } from './pages/Records';
+import { RecordDetail } from './pages/RecordDetail';
 import { EventsAndNotes } from './pages/EventsAndNotes';
 import { EventDetail } from './pages/EventDetail';
 import { Devices } from './pages/Devices';
@@ -95,6 +96,16 @@ function App() {
             <ProtectedRoute>
               <DashboardLayout>
                 <Records />
+              </DashboardLayout>
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/records/:recordUuid"
+          element={
+            <ProtectedRoute>
+              <DashboardLayout>
+                <RecordDetail />
               </DashboardLayout>
             </ProtectedRoute>
           }

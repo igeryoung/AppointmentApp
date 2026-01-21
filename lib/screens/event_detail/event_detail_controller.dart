@@ -244,7 +244,7 @@ class EventDetailController {
   }
 
   /// Save event with handwriting note
-  Future<Event> saveEvent() async {
+  Future<Event> saveEvent({Size? canvasSize}) async {
 
     final pages = _state.lastKnownPages;
 
@@ -289,7 +289,7 @@ class EventDetailController {
               lastKnownPages: existingNote.pages,
             ));
             // Save to server
-            await saveNoteToServer(savedEvent.id!, existingNote.pages);
+            await saveNoteToServer(savedEvent.id!, existingNote.pages, canvasSize: canvasSize);
             return savedEvent;
           }
         }
@@ -322,14 +322,14 @@ class EventDetailController {
               lastKnownPages: existingNote.pages,
             ));
             // Save to server
-            await saveNoteToServer(savedEvent.id!, existingNote.pages);
+            await saveNoteToServer(savedEvent.id!, existingNote.pages, canvasSize: canvasSize);
             return savedEvent;
           }
         }
       }
 
       // Save handwriting note to server
-      await saveNoteToServer(savedEvent.id!, pages);
+      await saveNoteToServer(savedEvent.id!, pages, canvasSize: canvasSize);
 
       return savedEvent;
     } catch (e) {
@@ -339,7 +339,11 @@ class EventDetailController {
   }
 
   /// Save note directly to server
-  Future<void> saveNoteToServer(String eventId, List<List<Stroke>> pages) async {
+  Future<void> saveNoteToServer(
+    String eventId,
+    List<List<Stroke>> pages, {
+    Size? canvasSize,
+  }) async {
     if (_noteSyncAdapter == null) {
       throw Exception('Cannot save: Services not initialized');
     }
@@ -363,6 +367,8 @@ class EventDetailController {
     }
 
     final nextVersion = (baseNote?.version ?? 0) + 1;
+    final canvasWidth = canvasSize?.width ?? baseNote?.canvasWidth;
+    final canvasHeight = canvasSize?.height ?? baseNote?.canvasHeight;
 
     // Merge erased strokes from base note and current state
     final mergedErasedStrokes = Map<String, List<String>>.from(baseNote?.erasedStrokesByEvent ?? {});
@@ -381,6 +387,8 @@ class EventDetailController {
       recordUuid: eventData.recordUuid,
       pages: pages,
       erasedStrokesByEvent: mergedErasedStrokes,
+      canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight,
       createdAt: baseNote?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       version: nextVersion,

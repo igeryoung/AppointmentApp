@@ -30,6 +30,9 @@ class DashboardRoutes {
     router.get('/devices', _authMiddleware(_getDevices));
     router.get('/books', _authMiddleware(_getBooks));
     router.get('/records', _authMiddleware(_getRecords));
+    router.get('/records/<recordUuid>', (Request request, String recordUuid) async {
+      return _authMiddleware((Request req) => _getRecordDetail(req, recordUuid))(request);
+    });
     router.get('/events', _authMiddleware(_getEvents));
     router.get('/events/<eventId>', (Request request, String eventId) async {
       return _authMiddleware((Request req) => _getEventDetail(req, eventId))(request);
@@ -578,6 +581,88 @@ class DashboardRoutes {
       );
     } catch (e, stackTrace) {
       _logger.error('Failed to fetch records', error: e, stackTrace: stackTrace);
+      return Response.internalServerError(
+        body: jsonEncode({'error': '$e'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  /// Get record details with events and note
+  Future<Response> _getRecordDetail(Request request, String recordUuid) async {
+    try {
+      final id = recordUuid.trim();
+      if (id.isEmpty) {
+        return Response.badRequest(
+          body: jsonEncode({'error': 'Invalid record ID'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final recordRow = await db.querySingle(
+        '''
+        SELECT
+          r.record_uuid,
+          r.record_number,
+          r.name,
+          r.phone,
+          r.created_at,
+          r.updated_at,
+          r.version
+        FROM records r
+        WHERE r.record_uuid::text = @recordUuid AND r.is_deleted = false
+        ''',
+        parameters: {'recordUuid': id},
+      );
+
+      if (recordRow == null) {
+        return Response.notFound(
+          jsonEncode({'error': 'Record not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final eventRows = await db.queryRows(
+        '''
+        SELECT
+          e.*,
+          b.name as book_name,
+          r.name,
+          r.phone,
+          r.record_number,
+          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+        FROM events e
+        LEFT JOIN books b ON e.book_uuid = b.book_uuid
+        LEFT JOIN records r ON e.record_uuid = r.record_uuid
+        WHERE e.record_uuid::text = @recordUuid AND e.is_deleted = false
+        ORDER BY e.created_at DESC
+        ''',
+        parameters: {'recordUuid': id},
+      );
+
+      final noteRow = await db.querySingle(
+        '''
+        SELECT n.*
+        FROM notes n
+        WHERE n.record_uuid::text = @recordUuid AND n.is_deleted = false
+        ''',
+        parameters: {'recordUuid': id},
+      );
+
+      final record = _serializeRow(recordRow);
+      record['eventCount'] = eventRows.length;
+      record['hasNote'] = noteRow != null;
+
+      return Response.ok(
+        jsonEncode({
+          'record': record,
+          'events': _serializeRows(eventRows),
+          'note': noteRow != null ? _serializeRow(noteRow) : null,
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e, stackTrace) {
+      _logger.error('Failed to fetch record detail', error: e, stackTrace: stackTrace);
       return Response.internalServerError(
         body: jsonEncode({'error': '$e'}),
         headers: {'Content-Type': 'application/json'},

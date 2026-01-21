@@ -12,6 +12,8 @@ class Note {
   final String recordUuid;
   final List<List<Stroke>> pages;
   final Map<String, List<String>> erasedStrokesByEvent; // eventUuid -> list of erased stroke IDs
+  final double? canvasWidth;
+  final double? canvasHeight;
   final DateTime createdAt;
   final DateTime updatedAt;
   final int version;
@@ -23,6 +25,8 @@ class Note {
     required this.recordUuid,
     required this.pages,
     this.erasedStrokesByEvent = const {},
+    this.canvasWidth,
+    this.canvasHeight,
     required this.createdAt,
     required this.updatedAt,
     this.version = 1,
@@ -35,6 +39,8 @@ class Note {
     String? recordUuid,
     List<List<Stroke>>? pages,
     Map<String, List<String>>? erasedStrokesByEvent,
+    double? canvasWidth,
+    double? canvasHeight,
     DateTime? createdAt,
     DateTime? updatedAt,
     int? version,
@@ -47,6 +53,8 @@ class Note {
       recordUuid: recordUuid ?? this.recordUuid,
       pages: pages ?? this.pages,
       erasedStrokesByEvent: erasedStrokesByEvent ?? this.erasedStrokesByEvent,
+      canvasWidth: canvasWidth ?? this.canvasWidth,
+      canvasHeight: canvasHeight ?? this.canvasHeight,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       version: version ?? this.version,
@@ -102,6 +110,8 @@ class Note {
       'formatVersion': 2,
       'pages': pagesData,
       'erasedStrokesByEvent': erasedStrokesByEvent,
+      if (canvasWidth != null) 'canvasWidth': canvasWidth,
+      if (canvasHeight != null) 'canvasHeight': canvasHeight,
     };
     return {
       'id': id,
@@ -118,10 +128,15 @@ class Note {
   }
 
   /// Parse result containing both pages and erasedStrokesByEvent
-  static ({List<List<Stroke>> pages, Map<String, List<String>> erasedStrokesByEvent}) _parsePagesDataV2(
+  static ({
+    List<List<Stroke>> pages,
+    Map<String, List<String>> erasedStrokesByEvent,
+    double? canvasWidth,
+    double? canvasHeight,
+  }) _parsePagesDataV2(
       dynamic pagesDataRaw) {
     if (pagesDataRaw == null) {
-      return (pages: [], erasedStrokesByEvent: {});
+      return (pages: [], erasedStrokesByEvent: {}, canvasWidth: null, canvasHeight: null);
     }
 
     final decoded = pagesDataRaw is String ? jsonDecode(pagesDataRaw) : pagesDataRaw;
@@ -131,6 +146,13 @@ class Note {
       // New format v2
       final pagesJson = decoded['pages'] as List? ?? [];
       final erasedMap = decoded['erasedStrokesByEvent'] as Map<String, dynamic>? ?? {};
+      double? _parseCanvasDimension(dynamic value) {
+        if (value == null) return null;
+        if (value is double) return value;
+        if (value is int) return value.toDouble();
+        if (value is num) return value.toDouble();
+        return double.tryParse(value.toString());
+      }
 
       final pages = pagesJson.map((pageJson) {
         final pageList = pageJson as List;
@@ -142,7 +164,15 @@ class Note {
         return MapEntry(key, list);
       });
 
-      return (pages: pages, erasedStrokesByEvent: erasedStrokesByEvent);
+      final canvasWidth = _parseCanvasDimension(decoded['canvasWidth'] ?? decoded['canvas_width']);
+      final canvasHeight = _parseCanvasDimension(decoded['canvasHeight'] ?? decoded['canvas_height']);
+
+      return (
+        pages: pages,
+        erasedStrokesByEvent: erasedStrokesByEvent,
+        canvasWidth: canvasWidth,
+        canvasHeight: canvasHeight,
+      );
     } else if (decoded is List) {
       // Old format (just array of pages)
       final pages = decoded.map((pageJson) {
@@ -150,10 +180,10 @@ class Note {
         return pageList.map((s) => Stroke.fromMap(s as Map<String, dynamic>)).toList();
       }).toList();
 
-      return (pages: pages, erasedStrokesByEvent: {});
+      return (pages: pages, erasedStrokesByEvent: {}, canvasWidth: null, canvasHeight: null);
     }
 
-    return (pages: [], erasedStrokesByEvent: {});
+    return (pages: [], erasedStrokesByEvent: {}, canvasWidth: null, canvasHeight: null);
   }
 
   factory Note.fromMap(Map<String, dynamic> map) {
@@ -181,6 +211,8 @@ class Note {
     final parsed = _parsePagesDataV2(map['pages_data']);
     var pages = parsed.pages;
     final erasedStrokesByEvent = parsed.erasedStrokesByEvent;
+    final canvasWidth = parsed.canvasWidth;
+    final canvasHeight = parsed.canvasHeight;
 
     if (pages.isEmpty) pages = [[]];
 
@@ -189,6 +221,8 @@ class Note {
       recordUuid: map['record_uuid'] ?? '',
       pages: pages,
       erasedStrokesByEvent: erasedStrokesByEvent,
+      canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight,
       createdAt: _parseTimestamp(map['created_at']),
       updatedAt: _parseTimestamp(map['updated_at']),
       version: _parseInt(map['version'], fallback: 1),
@@ -208,6 +242,8 @@ class Note {
     final parsed = _parsePagesDataV2(map['pages_data']);
     var pages = parsed.pages;
     final erasedStrokesByEvent = parsed.erasedStrokesByEvent;
+    final canvasWidth = parsed.canvasWidth;
+    final canvasHeight = parsed.canvasHeight;
     if (pages.isEmpty) pages = [[]];
 
     return Note(
@@ -215,6 +251,8 @@ class Note {
       recordUuid: map['record_uuid'] as String? ?? '',
       pages: pages,
       erasedStrokesByEvent: erasedStrokesByEvent,
+      canvasWidth: canvasWidth,
+      canvasHeight: canvasHeight,
       createdAt: _parseServerTimestamp(map['created_at']),
       updatedAt: _parseServerTimestamp(map['updated_at']),
       version: map['version'] as int? ?? 1,

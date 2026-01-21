@@ -28,23 +28,26 @@ class ScheduleTimeGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final now = TimeService.instance.now();
+    final today = DateTime(now.year, now.month, now.day);
+
     return Stack(
       children: [
         // Time slot grid
         Column(
           children: List.generate(
             ScheduleLayoutUtils.totalSlots,
-            (index) => _buildTimeSlot(context, index),
+            (index) => _buildTimeSlot(context, index, today),
           ),
         ),
         // Current time indicator
-        _buildCurrentTimeIndicator(),
+        _buildCurrentTimeIndicator(context, now),
       ],
     );
   }
 
   /// Build individual time slot with label and grid cells
-  Widget _buildTimeSlot(BuildContext context, int index) {
+  Widget _buildTimeSlot(BuildContext context, int index, DateTime today) {
     final hour = ScheduleLayoutUtils.startHour + (index ~/ 4);
     final minute = (index % 4) * 15;
     final timeStr = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
@@ -66,14 +69,24 @@ class ScheduleTimeGrid extends StatelessWidget {
             ),
           ),
           // Grid cells for each date
-          ...dates.map((date) => _buildGridCell(date, hour, minute)),
+          ...dates.map((date) {
+            final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
+            return _buildGridCell(context, date, hour, minute, isToday);
+          }),
         ],
       ),
     );
   }
 
   /// Build grid cell with drag target and tap handling
-  Widget _buildGridCell(DateTime date, int hour, int minute) {
+  Widget _buildGridCell(BuildContext context, DateTime date, int hour, int minute, bool isToday) {
+    final theme = Theme.of(context);
+    final baseBorderColor = Colors.grey.shade400;
+    final todayBorderColor = theme.colorScheme.primary.withOpacity(0.25);
+    final hoverBorderColor = theme.colorScheme.primary.withOpacity(0.6);
+    final todayFillColor = theme.colorScheme.primary.withOpacity(0.04);
+    final hoverFillColor = theme.colorScheme.primary.withOpacity(0.08);
+
     return Expanded(
       child: DragTarget<Event>(
         onWillAcceptWithDetails: (details) => !isDrawingMode,
@@ -96,10 +109,18 @@ class ScheduleTimeGrid extends StatelessWidget {
               height: slotHeight,
               decoration: BoxDecoration(
                 border: Border.all(
-                  color: isHovering ? Colors.blue.shade300 : Colors.grey.shade400,
-                  width: isHovering ? 2.0 : 0.5,
+                  color: isHovering
+                      ? hoverBorderColor
+                      : isToday
+                          ? todayBorderColor
+                          : baseBorderColor,
+                  width: isHovering ? 1.5 : isToday ? 0.8 : 0.5,
                 ),
-                color: isHovering ? Colors.blue.shade50.withValues(alpha: 0.3) : null,
+                color: isHovering
+                    ? hoverFillColor
+                    : isToday
+                        ? todayFillColor
+                        : null,
               ),
             ),
           );
@@ -109,9 +130,7 @@ class ScheduleTimeGrid extends StatelessWidget {
   }
 
   /// Build current time indicator
-  Widget _buildCurrentTimeIndicator() {
-    final now = TimeService.instance.now();
-
+  Widget _buildCurrentTimeIndicator(BuildContext context, DateTime now) {
     // Only show indicator if current time is within visible range
     if (now.hour < ScheduleLayoutUtils.startHour ||
         now.hour >= ScheduleLayoutUtils.endHour) {
@@ -120,6 +139,7 @@ class ScheduleTimeGrid extends StatelessWidget {
 
     // Calculate position based on current time
     final yPosition = ScheduleLayoutUtils.calculateEventTopPosition(now, slotHeight);
+    final lineColor = Theme.of(context).colorScheme.primary.withOpacity(0.9);
 
     return Positioned(
       top: yPosition,
@@ -136,8 +156,11 @@ class ScheduleTimeGrid extends StatelessWidget {
 
               return Expanded(
                 child: isToday
-                    ? const CustomPaint(
-                        painter: CurrentTimeLinePainter(),
+                    ? CustomPaint(
+                        painter: CurrentTimeLinePainter(
+                          color: lineColor,
+                          strokeWidth: 1.8,
+                        ),
                         size: Size(double.infinity, 2),
                       )
                     : const SizedBox.shrink(),

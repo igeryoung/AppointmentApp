@@ -97,9 +97,8 @@ export interface NoteStats {
 }
 
 export interface Note {
-  id: number;
-  eventId: string;
-  deviceId: string;
+  id: string;
+  recordUuid: string;
   pagesData: string; // JSON string: array of pages, each page is array of strokes
   strokesData?: string; // Legacy single-page data
   createdAt: string;
@@ -222,4 +221,10 @@ export interface RecordFilters {
   name?: string;
   recordNumber?: string;
   phone?: string;
+}
+
+export interface RecordDetailResponse {
+  record: RecordSummary;
+  events: Event[];
+  note: Note | null;
 }
