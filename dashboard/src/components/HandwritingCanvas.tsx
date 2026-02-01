@@ -122,11 +122,7 @@ export const HandwritingCanvas: React.FC<HandwritingCanvasProps> = ({
       width={canvasWidth}
       height={canvasHeight}
       className={className}
-      style={{
-        border: '1px solid #e5e7eb',
-        borderRadius: '0.375rem',
-        backgroundColor: '#ffffff',
-      }}
+      style={{ backgroundColor: '#ffffff' }}
     />
   );
 };

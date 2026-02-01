@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
 import { ArrowLeft } from 'lucide-react';
@@ -10,6 +10,10 @@ import { getBookDisplayName } from '../utils/book';
 import { formatShortId } from '../utils/id';
 import { parseEventTypes } from '../utils/event';
 import { parseNotePagesData } from '../utils/handwriting';
+
+const CANVAS_ASPECT_RATIO = 3 / 4; // width / height
+const CANVAS_MAX_WIDTH = 600;
+const CANVAS_DEFAULT_HEIGHT = 800;
 
 /**
  * Event Detail Page
@@ -26,6 +30,36 @@ export const EventDetail: React.FC = () => {
   const [currentPageIndex, setCurrentPageIndex] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // Responsive canvas sizing
+  const canvasContainerRef = useRef<HTMLDivElement>(null);
+  const [canvasDimensions, setCanvasDimensions] = useState({ width: CANVAS_MAX_WIDTH, height: CANVAS_DEFAULT_HEIGHT });
+
+  const calculateCanvasDimensions = useCallback(() => {
+    if (!canvasContainerRef.current) return;
+
+    const containerWidth = canvasContainerRef.current.clientWidth;
+    const width = Math.min(containerWidth, CANVAS_MAX_WIDTH);
+    const height = Math.round(width / CANVAS_ASPECT_RATIO);
+
+    setCanvasDimensions({ width, height });
+  }, []);
+
+  useEffect(() => {
+    calculateCanvasDimensions();
+
+    let timeoutId: ReturnType<typeof setTimeout>;
+    const handleResize = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(calculateCanvasDimensions, 100);
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      clearTimeout(timeoutId);
+    };
+  }, [calculateCanvasDimensions]);
 
   useEffect(() => {
     if (eventId) {
@@ -107,8 +141,8 @@ export const EventDetail: React.FC = () => {
   if (loading) {
     return (
       <div className="card">
-        <div className="card-body" style={{ textAlign: 'center', padding: '3rem' }}>
-          <p style={{ color: '#6b7280', fontSize: '1.125rem' }}>Loading event details...</p>
+        <div className="card-body loading-state">
+          <p>Loading event details...</p>
         </div>
       </div>
     );
@@ -117,8 +151,8 @@ export const EventDetail: React.FC = () => {
   if (error || !event) {
     return (
       <div>
-        <div className="card" style={{ marginBottom: '1.5rem', backgroundColor: '#fef2f2', borderLeft: '4px solid #ef4444' }}>
-          <div className="card-body" style={{ color: '#dc2626' }}>
+        <div className="card alert-error">
+          <div className="card-body">
             {error || 'Event not found'}
           </div>
         </div>
@@ -146,49 +180,39 @@ export const EventDetail: React.FC = () => {
         <p className="page-subtitle">Event ID: {formatShortId(event.id)}</p>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))', gap: '1.5rem' }}>
+      <div className="event-detail-grid">
         {/* Event Information Card */}
         <div className="card">
           <div className="card-header">
             <h2 className="card-title">Event Information</h2>
           </div>
           <div className="card-body">
-            <div style={{ display: 'grid', gap: '1rem' }}>
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Book
-                </label>
-                <p style={{ marginTop: '0.25rem' }}>
+            <div className="detail-fields-grid">
+              <div className="detail-field">
+                <label className="detail-field-label">Book</label>
+                <p className="detail-field-value">
                   {getBookDisplayName(event.bookName, event.bookUuid)}
                 </p>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Patient Name
-                </label>
-                <p style={{ marginTop: '0.25rem', fontWeight: '500', fontSize: '1.125rem' }}>{event.name}</p>
+              <div className="detail-field">
+                <label className="detail-field-label">Patient Name</label>
+                <p className="detail-field-value detail-field-value--emphasis">{event.name}</p>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Record Number
-                </label>
-                <p style={{ marginTop: '0.25rem', fontFamily: 'monospace' }}>{event.recordNumber || '-'}</p>
+              <div className="detail-field">
+                <label className="detail-field-label">Record Number</label>
+                <p className="detail-field-value detail-field-value--mono">{event.recordNumber || '-'}</p>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Phone
-                </label>
-                <p style={{ marginTop: '0.25rem', fontFamily: 'monospace' }}>{event.phone || '-'}</p>
+              <div className="detail-field">
+                <label className="detail-field-label">Phone</label>
+                <p className="detail-field-value detail-field-value--mono">{event.phone || '-'}</p>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Event Types
-                </label>
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <div className="detail-field">
+                <label className="detail-field-label">Event Types</label>
+                <div className="detail-badges">
                   {parseEventTypes(event.eventTypes).map((type, index) => (
                     <span key={index} className="badge badge-info">
                       {type}
@@ -197,27 +221,21 @@ export const EventDetail: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Start Time
-                </label>
-                <p style={{ marginTop: '0.25rem' }}>{formatDateTime(event.startTime)}</p>
+              <div className="detail-field">
+                <label className="detail-field-label">Start Time</label>
+                <p className="detail-field-value">{formatDateTime(event.startTime)}</p>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  End Time
-                </label>
-                <p style={{ marginTop: '0.25rem' }}>
+              <div className="detail-field">
+                <label className="detail-field-label">End Time</label>
+                <p className="detail-field-value">
                   {event.endTime ? formatDateTime(event.endTime) : 'Open-ended'}
                 </p>
               </div>
 
-              <div>
-                <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                  Status
-                </label>
-                <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.5rem' }}>
+              <div className="detail-field">
+                <label className="detail-field-label">Status</label>
+                <div className="detail-badges">
                   {event.isRemoved && <span className="badge badge-danger">Removed</span>}
                   {event.isChecked && <span className="badge badge-info">Checked</span>}
                   {!event.isRemoved && !event.isChecked && <span className="badge badge-success">Active</span>}
@@ -225,24 +243,22 @@ export const EventDetail: React.FC = () => {
               </div>
 
               {event.removalReason && (
-                <div>
-                  <label style={{ fontSize: '0.75rem', fontWeight: '600', color: '#6b7280', textTransform: 'uppercase' }}>
-                    Removal Reason
-                  </label>
-                  <p style={{ marginTop: '0.25rem' }}>{event.removalReason}</p>
+                <div className="detail-field">
+                  <label className="detail-field-label">Removal Reason</label>
+                  <p className="detail-field-value">{event.removalReason}</p>
                 </div>
               )}
 
-              <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem' }}>
-                <div style={{ display: 'grid', gap: '0.5rem', fontSize: '0.813rem', color: '#6b7280' }}>
-                  <div>
-                    <span style={{ fontWeight: '500' }}>Created:</span> {formatDateTime(event.createdAt)}
+              <div className="detail-meta-section">
+                <div className="detail-meta-grid">
+                  <div className="detail-meta-item">
+                    <span className="detail-meta-label">Created:</span> {formatDateTime(event.createdAt)}
                   </div>
-                  <div>
-                    <span style={{ fontWeight: '500' }}>Updated:</span> {formatDateTime(event.updatedAt)}
+                  <div className="detail-meta-item">
+                    <span className="detail-meta-label">Updated:</span> {formatDateTime(event.updatedAt)}
                   </div>
-                  <div>
-                    <span style={{ fontWeight: '500' }}>Version:</span> {event.version}
+                  <div className="detail-meta-item">
+                    <span className="detail-meta-label">Version:</span> {event.version}
                   </div>
                 </div>
               </div>
@@ -257,19 +273,20 @@ export const EventDetail: React.FC = () => {
           </div>
           <div className="card-body">
             {!event.hasNote || notePages.length === 0 ? (
-              <div style={{ textAlign: 'center', padding: '3rem', backgroundColor: '#f9fafb', borderRadius: '0.5rem', border: '1px solid #e5e7eb' }}>
-                <p style={{ color: '#6b7280' }}>No handwritten notes available</p>
+              <div className="note-empty-state">
+                <p>No handwritten notes available</p>
               </div>
             ) : (
               <div>
                 {/* Canvas */}
-                <div style={{ display: 'flex', justifyContent: 'center', marginBottom: '1rem' }}>
+                <div ref={canvasContainerRef} className="canvas-container">
                   <HandwritingCanvas
                     page={notePages[currentPageIndex]}
-                    width={600}
-                    height={800}
+                    width={canvasDimensions.width}
+                    height={canvasDimensions.height}
                     sourceWidth={noteCanvasSize?.width}
                     sourceHeight={noteCanvasSize?.height}
+                    className="canvas-responsive"
                   />
                 </div>
 
@@ -285,19 +302,19 @@ export const EventDetail: React.FC = () => {
 
                 {/* Note Metadata */}
                 {note && (
-                  <div style={{ borderTop: '1px solid #e5e7eb', paddingTop: '1rem', marginTop: '1rem', fontSize: '0.813rem', color: '#6b7280' }}>
-                    <div style={{ display: 'grid', gap: '0.5rem' }}>
-                      <div>
-                        <span style={{ fontWeight: '500' }}>Note ID:</span> {note.id}
+                  <div className="detail-meta-section">
+                    <div className="detail-meta-grid">
+                      <div className="detail-meta-item">
+                        <span className="detail-meta-label">Note ID:</span> {note.id}
                       </div>
-                      <div>
-                        <span style={{ fontWeight: '500' }}>Last Updated:</span> {formatDateTime(note.updatedAt)}
+                      <div className="detail-meta-item">
+                        <span className="detail-meta-label">Last Updated:</span> {formatDateTime(note.updatedAt)}
                       </div>
-                      <div>
-                        <span style={{ fontWeight: '500' }}>Version:</span> {note.version}
+                      <div className="detail-meta-item">
+                        <span className="detail-meta-label">Version:</span> {note.version}
                       </div>
-                      <div>
-                        <span style={{ fontWeight: '500' }}>Total Pages:</span> {notePages.length}
+                      <div className="detail-meta-item">
+                        <span className="detail-meta-label">Total Pages:</span> {notePages.length}
                       </div>
                     </div>
                   </div>

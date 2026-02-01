@@ -696,3 +696,152 @@ tr:hover {
     grid-template-columns: 1fr;
   }
 }
+
+/* Event Detail Layout */
+.event-detail-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 1.5rem;
+}
+
+@media (min-width: 768px) {
+  .event-detail-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (min-width: 1200px) {
+  .event-detail-grid {
+    grid-template-columns: minmax(400px, 1fr) minmax(450px, 1.2fr);
+  }
+}
+
+/* Detail Fields */
+.detail-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.detail-field-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.detail-field-value {
+  font-size: 1rem;
+  color: var(--text-primary);
+}
+
+.detail-field-value--emphasis {
+  font-weight: 500;
+  font-size: 1.125rem;
+}
+
+.detail-field-value--mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.detail-fields-grid {
+  display: grid;
+  gap: 1rem;
+}
+
+.detail-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.25rem;
+}
+
+/* Metadata Section */
+.detail-meta-section {
+  border-top: 1px solid var(--border-color);
+  padding-top: 1rem;
+  margin-top: 1rem;
+}
+
+.detail-meta-grid {
+  display: grid;
+  gap: 0.5rem;
+  font-size: 0.813rem;
+  color: var(--text-secondary);
+}
+
+.detail-meta-item {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.detail-meta-label {
+  font-weight: 500;
+}
+
+/* Responsive Canvas */
+.canvas-container {
+  display: flex;
+  justify-content: center;
+  margin-bottom: 1rem;
+  width: 100%;
+}
+
+.canvas-responsive {
+  max-width: 100%;
+  height: auto;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+}
+
+.note-empty-state {
+  text-align: center;
+  padding: 2rem;
+  background-color: var(--bg-color);
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* Page Navigation */
+.page-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 0;
+  flex-wrap: wrap;
+}
+
+.page-nav-indicator {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  min-width: 100px;
+  text-align: center;
+}
+
+.page-nav .btn {
+  min-height: 44px;
+  min-width: 44px;
+}
+
+/* Loading/Error States */
+.loading-state {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-secondary);
+  font-size: 1rem;
+}
+
+.alert-error {
+  margin-bottom: 1.5rem;
+  background-color: #fef2f2;
+  border-left: 4px solid var(--danger-color);
+}
+
+.alert-error .card-body {
+  color: #dc2626;
+}
