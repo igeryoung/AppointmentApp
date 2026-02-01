@@ -24,8 +24,11 @@ class EventMetadataSection extends StatelessWidget {
   final VoidCallback onClearEndTime;
   final ValueChanged<List<EventType>> onEventTypesChanged;
   final ValueChanged<String> onRecordNumberChanged;
-  final Future<String?> Function() onNewRecordNumberRequested;
   final Color Function(BuildContext, EventType)? getEventTypeColor;
+  // Record number validation
+  final String? recordNumberError;
+  final bool isValidatingRecordNumber;
+  final VoidCallback? onRecordNumberBlur;
 
   // New parameters for autocomplete functionality
   final FocusNode? nameFocusNode;
@@ -55,8 +58,11 @@ class EventMetadataSection extends StatelessWidget {
     required this.onClearEndTime,
     required this.onEventTypesChanged,
     required this.onRecordNumberChanged,
-    required this.onNewRecordNumberRequested,
     this.getEventTypeColor,
+    // Record number validation
+    this.recordNumberError,
+    this.isValidatingRecordNumber = false,
+    this.onRecordNumberBlur,
     // Autocomplete parameters
     this.nameFocusNode,
     this.recordNumberFocusNode,
@@ -222,10 +228,11 @@ class EventMetadataSection extends StatelessWidget {
                     onRecordNumberCleared: () {
                       onRecordNumberChanged('');
                     },
-                    onNewRecordNumberRequested: onNewRecordNumberRequested,
                     focusNode: recordNumberFocusNode,
                     onFocused: onRecordNumberFieldFocused,
-                    // Removed onTextChanged callback to fix race condition bug
+                    errorText: recordNumberError,
+                    isValidating: isValidatingRecordNumber,
+                    onBlur: onRecordNumberBlur,
                   ),
                   const SizedBox(height: 8),
                   // Event Type field
@@ -406,7 +413,7 @@ class EventMetadataSection extends StatelessWidget {
   }
 }
 
-/// Record number autocomplete widget with "留空" and "新病例號" options
+/// Record number autocomplete widget with dropdown list
 class _RecordNumberAutocomplete extends StatefulWidget {
   final String value;
   final List<RecordNumberOption> allRecordNumberOptions;
@@ -415,9 +422,11 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   final ValueChanged<String>? onRecordNumberSelected;
   final ValueChanged<String>? onRecordNumberChanged;
   final VoidCallback? onRecordNumberCleared;
-  final Future<String?> Function() onNewRecordNumberRequested;
   final FocusNode? focusNode;
   final VoidCallback? onFocused;
+  final String? errorText;
+  final bool isValidating;
+  final VoidCallback? onBlur;
 
   const _RecordNumberAutocomplete({
     required this.value,
@@ -427,9 +436,11 @@ class _RecordNumberAutocomplete extends StatefulWidget {
     this.onRecordNumberSelected,
     this.onRecordNumberChanged,
     this.onRecordNumberCleared,
-    required this.onNewRecordNumberRequested,
     this.focusNode,
     this.onFocused,
+    this.errorText,
+    this.isValidating = false,
+    this.onBlur,
   });
 
   @override
@@ -437,9 +448,6 @@ class _RecordNumberAutocomplete extends StatefulWidget {
 }
 
 class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
-  static const String _emptyOption = '__EMPTY__';
-  static const String _newOption = '__NEW__';
-  bool _isProcessing = false;
   final TextEditingController _controller = TextEditingController();
   final FocusNode _focusNode = FocusNode();
   OverlayEntry? _overlayEntry;
@@ -478,6 +486,8 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
       _showOverlay();
     } else {
       _removeOverlay();
+      // Trigger onBlur validation when focus is lost
+      widget.onBlur?.call();
     }
   }
 
@@ -489,9 +499,6 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
 
   List<_RecordNumberOptionItem> _getFilteredOptions() {
     final options = <_RecordNumberOptionItem>[];
-    // Always add special options first
-    options.add(_RecordNumberOptionItem(displayText: '留空', value: _emptyOption, isSpecial: true));
-    options.add(_RecordNumberOptionItem(displayText: '新病例號', value: _newOption, isSpecial: true));
 
     final query = _controller.text.toLowerCase();
     if (query.isEmpty) {
@@ -559,19 +566,10 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
                   itemBuilder: (context, index) {
                     final option = options[index];
                     return InkWell(
-                      onTap: () async {
-                        if (option.value == _emptyOption) {
-                          _controller.text = '';
-                          if (widget.onRecordNumberCleared != null) {
-                            widget.onRecordNumberCleared!();
-                          }
-                        } else if (option.value == _newOption) {
-                          await _handleNewRecordNumber();
-                        } else {
-                          _controller.text = option.value;
-                          if (widget.onRecordNumberSelected != null) {
-                            widget.onRecordNumberSelected!(option.value);
-                          }
+                      onTap: () {
+                        _controller.text = option.value;
+                        if (widget.onRecordNumberSelected != null) {
+                          widget.onRecordNumberSelected!(option.value);
                         }
                         _removeOverlay();
                         _focusNode.unfocus();
@@ -605,32 +603,6 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
     );
   }
 
-  Future<void> _handleNewRecordNumber() async {
-    if (_isProcessing) return;
-
-    setState(() {
-      _isProcessing = true;
-    });
-
-    try {
-      final result = await widget.onNewRecordNumberRequested();
-      if (result != null && result.trim().isNotEmpty && mounted) {
-        _controller.text = result.trim();
-        // For NEW record numbers, use onRecordNumberChanged to directly update state
-        // (not onRecordNumberSelected which tries to look up existing records in DB)
-        if (widget.onRecordNumberChanged != null) {
-          widget.onRecordNumberChanged!(result.trim());
-        }
-      }
-    } finally {
-      if (mounted) {
-        setState(() {
-          _isProcessing = false;
-        });
-      }
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
     return CompositedTransformTarget(
@@ -638,11 +610,26 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
       child: TextField(
         controller: _controller,
         focusNode: _focusNode,
-        enabled: widget.isEnabled && !_isProcessing,
+        enabled: widget.isEnabled && !widget.isValidating,
+        onChanged: (value) {
+          // Notify parent when text changes (for new record numbers typed by user)
+          widget.onRecordNumberChanged?.call(value);
+        },
         decoration: InputDecoration(
           labelText: widget.labelText,
           border: const OutlineInputBorder(),
           contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          errorText: widget.errorText,
+          suffixIcon: widget.isValidating
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : null,
         ),
       ),
     );

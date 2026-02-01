@@ -47,9 +47,30 @@ mixin NoteOperationsMixin {
       await db.insert('notes', data);
     }
 
-    // Update has_note flag on all events for this record
-    final hasStrokes = updated.isNotEmpty;
-    await db.update('events', {'has_note': hasStrokes ? 1 : 0}, where: 'record_uuid = ?', whereArgs: [note.recordUuid]);
+    // Update has_note flag per event based on strokes created by that event
+    final strokesByEvent = <String, Set<String>>{};
+    for (final page in updated.pages) {
+      for (final stroke in page) {
+        if (stroke.eventUuid != null && stroke.id != null) {
+          strokesByEvent.putIfAbsent(stroke.eventUuid!, () => {}).add(stroke.id!);
+        }
+      }
+    }
+
+    // Get all events for this record
+    final events = await db.query('events', columns: ['id'], where: 'record_uuid = ?', whereArgs: [note.recordUuid]);
+
+    // Update has_note for each event
+    for (final event in events) {
+      final eventId = event['id'] as String;
+      final eventStrokes = strokesByEvent[eventId] ?? {};
+      final erasedStrokes = updated.getErasedStrokesForEvent(eventId).toSet();
+
+      // Event has note if any stroke from it is NOT erased
+      final hasNote = eventStrokes.any((strokeId) => !erasedStrokes.contains(strokeId));
+
+      await db.update('events', {'has_note': hasNote ? 1 : 0}, where: 'id = ?', whereArgs: [eventId]);
+    }
 
     return updated;
   }

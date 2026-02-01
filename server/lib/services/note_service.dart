@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import '../database/connection.dart';
 
 class NoteOperationResult {
@@ -152,11 +154,42 @@ class NoteService {
           'version': result['version'],
         };
 
-        final hasContent = pagesData != '[[]]' && pagesData != '[]' && pagesData.trim().isNotEmpty;
-        await db.query(
-          'UPDATE events SET has_note = @hasNote WHERE record_uuid = @recordUuid',
-          parameters: {'hasNote': hasContent, 'recordUuid': recordUuid},
+        // Update has_note flag per event based on strokes created by that event
+        final decoded = jsonDecode(pagesData);
+        final pages = (decoded is Map ? decoded['pages'] : decoded) as List? ?? [];
+        final erasedByEvent = decoded is Map ? (decoded['erasedStrokesByEvent'] as Map<String, dynamic>? ?? {}) : <String, dynamic>{};
+
+        // Build map of stroke IDs by eventUuid
+        final strokesByEvent = <String, Set<String>>{};
+        for (final page in pages) {
+          for (final stroke in page as List) {
+            final eventUuid = stroke['event_uuid'] as String?;
+            final strokeId = stroke['id'] as String?;
+            if (eventUuid != null && strokeId != null) {
+              strokesByEvent.putIfAbsent(eventUuid, () => <String>{}).add(strokeId);
+            }
+          }
+        }
+
+        // Get all events for this record
+        final events = await db.queryRows(
+          'SELECT id FROM events WHERE record_uuid = @recordUuid AND is_deleted = false',
+          parameters: {'recordUuid': recordUuid},
         );
+
+        // Update has_note for each event
+        for (final event in events) {
+          final eventId = event['id'].toString();
+          final eventStrokes = strokesByEvent[eventId] ?? <String>{};
+          final erasedStrokes = Set<String>.from((erasedByEvent[eventId] as List?)?.map((e) => e.toString()) ?? []);
+
+          final hasNote = eventStrokes.any((strokeId) => !erasedStrokes.contains(strokeId));
+
+          await db.query(
+            'UPDATE events SET has_note = @hasNote WHERE id = @eventId',
+            parameters: {'hasNote': hasNote, 'eventId': eventId},
+          );
+        }
 
         return NoteOperationResult.success(note);
       }

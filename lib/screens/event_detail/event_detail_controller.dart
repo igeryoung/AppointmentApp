@@ -456,13 +456,112 @@ class EventDetailController {
     final oldRecordNumber = _state.recordNumber.trim();
     final newRecordNumber = recordNumber.trim();
 
-    _updateState(_state.copyWith(recordNumber: recordNumber, hasChanges: true));
+    _updateState(_state.copyWith(
+      recordNumber: recordNumber,
+      hasChanges: true,
+      clearRecordNumberError: true, // Clear error when user types
+    ));
 
     // Reload charge items and phone if record number changed (debounced)
     if (oldRecordNumber != newRecordNumber) {
       // Load charge items asynchronously (don't wait for it)
       loadChargeItems().catchError((e) {
       });
+    }
+  }
+
+  /// Validate record number on blur (when user leaves the field)
+  /// Returns true if valid, false if there's a conflict
+  Future<bool> validateRecordNumberOnBlur() async {
+    final recordNumber = _state.recordNumber.trim();
+    final name = _state.name.trim();
+
+    // Empty record number is always valid (treated as "留空")
+    if (recordNumber.isEmpty) {
+      _updateState(_state.copyWith(clearRecordNumberError: true));
+      return true;
+    }
+
+    _updateState(_state.copyWith(isValidatingRecordNumber: true));
+
+    try {
+      // Check if we have PRD database service
+      if (_dbService is! PRDDatabaseService) {
+        _updateState(_state.copyWith(
+          isValidatingRecordNumber: false,
+          clearRecordNumberError: true,
+        ));
+        return true;
+      }
+
+      final prdDb = _dbService as PRDDatabaseService;
+      final credentials = await prdDb.getDeviceCredentials();
+
+      if (credentials == null) {
+        // Truly offline - no credentials - fall back to local validation only
+        final localRecord = await prdDb.getRecordByRecordNumber(recordNumber);
+        if (localRecord != null && localRecord.name != null && localRecord.name != name) {
+          _updateState(_state.copyWith(
+            isValidatingRecordNumber: false,
+            recordNumberError: '病例號已存在',
+            recordNumber: '',  // Clear the record number field
+          ));
+          return false;
+        }
+        _updateState(_state.copyWith(
+          isValidatingRecordNumber: false,
+          clearRecordNumberError: true,
+        ));
+        return true;
+      }
+
+      if (_contentService == null) {
+        // Online but not initialized yet - cannot validate properly
+        // Return false to prevent proceeding without validation
+        _updateState(_state.copyWith(
+          isValidatingRecordNumber: false,
+          recordNumberError: '服務初始化中，請稍後再試',
+        ));
+        return false;
+      }
+
+      // Call server validation API
+      final result = await _contentService!.apiClient.validateRecordNumber(
+        recordNumber: recordNumber,
+        name: name,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+
+      if (result.hasConflict) {
+        _updateState(_state.copyWith(
+          isValidatingRecordNumber: false,
+          recordNumberError: '病例號已存在',
+          recordNumber: '',  // Clear the record number field
+        ));
+        return false;
+      }
+
+      _updateState(_state.copyWith(
+        isValidatingRecordNumber: false,
+        clearRecordNumberError: true,
+      ));
+      return true;
+    } catch (e) {
+      // On error, do NOT allow user to continue - validation failed
+      debugPrint('[EventDetailController] validateRecordNumberOnBlur error: $e');
+      _updateState(_state.copyWith(
+        isValidatingRecordNumber: false,
+        recordNumberError: '驗證失敗，請稍後再試',
+      ));
+      return false;
+    }
+  }
+
+  /// Clear record number validation error
+  void clearRecordNumberError() {
+    if (_state.recordNumberError != null) {
+      _updateState(_state.copyWith(clearRecordNumberError: true));
     }
   }
 

@@ -32,6 +32,10 @@ class EventDetailState {
   // Name field state (for autocomplete behavior)
   final bool isNameReadOnly;
 
+  // Record number validation state
+  final String? recordNumberError;
+  final bool isValidatingRecordNumber;
+
   // New event reference (for time changes)
   final Event? newEvent;
 
@@ -53,6 +57,8 @@ class EventDetailState {
     this.isOffline = false,
     this.isServicesReady = false,
     this.isNameReadOnly = false,
+    this.recordNumberError,
+    this.isValidatingRecordNumber = false,
     this.newEvent,
   });
 
@@ -90,6 +96,9 @@ class EventDetailState {
     bool? isOffline,
     bool? isServicesReady,
     bool? isNameReadOnly,
+    String? recordNumberError,
+    bool clearRecordNumberError = false,
+    bool? isValidatingRecordNumber,
     Event? newEvent,
     bool clearEndTime = false,
     bool clearNewEvent = false,
@@ -112,6 +121,8 @@ class EventDetailState {
       isOffline: isOffline ?? this.isOffline,
       isServicesReady: isServicesReady ?? this.isServicesReady,
       isNameReadOnly: isNameReadOnly ?? this.isNameReadOnly,
+      recordNumberError: clearRecordNumberError ? null : (recordNumberError ?? this.recordNumberError),
+      isValidatingRecordNumber: isValidatingRecordNumber ?? this.isValidatingRecordNumber,
       newEvent: clearNewEvent ? null : (newEvent ?? this.newEvent),
     );
   }

@@ -191,9 +191,16 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _lastCheckedRecordNumber = null;
       });
     }
+    // Note: Don't call _checkAndShowPersonNoteDialog() here
+    // It should only be called on blur (after validation) or when selecting from dropdown
+  }
 
-    // Check for existing person note after selection
-    _checkAndShowPersonNoteDialog();
+  Future<void> _handleRecordNumberBlur() async {
+    final isValid = await _controller.validateRecordNumberOnBlur();
+    if (isValid) {
+      // Only check for existing notes if validation passed
+      await _checkAndShowPersonNoteDialog();
+    }
   }
 
   void _onPagesChanged(List<List<Stroke>> pages) {
@@ -209,6 +216,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(AppLocalizations.of(context)!.eventNameRequired)),
+      );
+      return;
+    }
+
+    // Check for record number validation error
+    if (_controller.state.recordNumberError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('請修正病例號錯誤後再儲存'),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -404,18 +422,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  Future<String?> _showNewRecordNumberDialog() async {
-    // Fetch latest available record numbers before showing dialog
-    await _fetchAvailableRecordNumbers();
-
-    return await showDialog<String>(
-      context: context,
-      builder: (context) => _NewRecordNumberDialog(
-        existingRecordNumbers: _availableRecordNumbers,
-      ),
-    );
-  }
-
   Future<void> _selectStartTime() async {
     final result = await DateTimePickerUtils.pickDateTime(
       context,
@@ -476,6 +482,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<bool> _onWillPop() async {
     final hasName = _nameController.text.trim().isNotEmpty;
+
+    // Block auto-save if there's a record number validation error
+    if (_controller.state.recordNumberError != null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('請修正病例號錯誤後再儲存'),
+          backgroundColor: Colors.red,
+        ),
+      );
+      return false; // Don't pop, stay on screen to fix error
+    }
 
     // For NEW events with a name (even without changes), auto-save
     // This handles the case where data is pre-filled from "schedule next appointment"
@@ -777,7 +794,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                                 _controller.updateEventTypes(eventTypes);
                               },
                               onRecordNumberChanged: _handleRecordNumberChanged,
-                              onNewRecordNumberRequested: _showNewRecordNumberDialog,
                               // New autocomplete parameters
                               nameFocusNode: _nameFocusNode,
                               recordNumberFocusNode: _recordNumberFocusNode,
@@ -785,9 +801,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               allRecordNumberOptions: _allRecordNumberOptions,
                               onNameSelected: (name) => _controller.onNameSelected(name),
                               onRecordNumberSelected: (recordNumber) => _controller.onRecordNumberSelected(recordNumber),
-                              // Removed onRecordNumberTextChanged to fix race condition bug
-                              // Only name field typing clears record number, not vice versa
                               isNameReadOnly: state.isNameReadOnly,
+                              // Record number validation
+                              recordNumberError: state.recordNumberError,
+                              isValidatingRecordNumber: state.isValidatingRecordNumber,
+                              onRecordNumberBlur: _handleRecordNumberBlur,
                             ),
                           ),
                         ),
@@ -827,103 +845,6 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                 },
               ),
       ),
-    );
-  }
-}
-
-/// Dialog for entering a new record number with duplicate validation
-class _NewRecordNumberDialog extends StatefulWidget {
-  final List<String> existingRecordNumbers;
-
-  const _NewRecordNumberDialog({
-    required this.existingRecordNumbers,
-  });
-
-  @override
-  State<_NewRecordNumberDialog> createState() => _NewRecordNumberDialogState();
-}
-
-class _NewRecordNumberDialogState extends State<_NewRecordNumberDialog> {
-  late TextEditingController _controller;
-  String? _errorText;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  bool _validateAndSubmit() {
-    final value = _controller.text.trim();
-
-
-    if (value.isEmpty) {
-      setState(() {
-        _errorText = '請輸入病例號';
-      });
-      return false;
-    }
-
-    // Check for duplicates (case-insensitive)
-    final isDuplicate = widget.existingRecordNumbers.any(
-      (existing) => existing.toLowerCase() == value.toLowerCase(),
-    );
-
-
-    if (isDuplicate) {
-      setState(() {
-        _errorText = '此病例號已存在，請輸入不同的病例號';
-      });
-      return false;
-    }
-
-    return true;
-  }
-
-  void _handleSubmit() {
-    if (_validateAndSubmit()) {
-      Navigator.pop(context, _controller.text.trim());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      title: const Text('新病例號'),
-      content: TextField(
-        controller: _controller,
-        autofocus: true,
-        decoration: InputDecoration(
-          labelText: '病例號',
-          hintText: '請輸入新的病例號',
-          errorText: _errorText,
-        ),
-        onChanged: (_) {
-          // Clear error when user types
-          if (_errorText != null) {
-            setState(() {
-              _errorText = null;
-            });
-          }
-        },
-        onSubmitted: (_) => _handleSubmit(),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, null),
-          child: const Text('取消'),
-        ),
-        TextButton(
-          onPressed: _handleSubmit,
-          child: const Text('確定'),
-        ),
-      ],
     );
   }
 }

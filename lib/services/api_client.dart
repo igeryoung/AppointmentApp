@@ -82,6 +82,44 @@ class ApiClient {
     }
   }
 
+  /// Validate record number against name
+  /// Checks if record number exists and whether it matches the provided name
+  /// Returns validation result with conflict information if applicable
+  Future<RecordValidationResult> validateRecordNumber({
+    required String recordNumber,
+    required String name,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/records/validate'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode({
+          'record_number': recordNumber,
+          'name': name,
+        }),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return RecordValidationResult.fromJson(json);
+      } else {
+        throw ApiException(
+          'Validate record number failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Fetch event metadata from server
   Future<Map<String, dynamic>?> fetchEvent({
     required String bookUuid,
@@ -938,4 +976,27 @@ class ApiConflictException extends ApiException {
     if (state == null) return null;
     return state['serverNote'] as Map<String, dynamic>?;
   }
+}
+
+/// Result of record number validation
+class RecordValidationResult {
+  final bool exists;
+  final bool valid;
+  final Map<String, dynamic>? record;
+
+  RecordValidationResult({
+    required this.exists,
+    required this.valid,
+    this.record,
+  });
+
+  factory RecordValidationResult.fromJson(Map<String, dynamic> json) {
+    return RecordValidationResult(
+      exists: json['exists'] as bool,
+      valid: json['valid'] as bool,
+      record: json['record'] as Map<String, dynamic>?,
+    );
+  }
+
+  bool get hasConflict => exists && !valid;
 }

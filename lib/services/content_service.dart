@@ -35,6 +35,9 @@ class ContentService {
 
   ContentService(this._apiClient, this._db);
 
+  /// Expose ApiClient for direct access to API methods
+  ApiClient get apiClient => _apiClient;
+
   // ===================
   // Health Check
   // ===================

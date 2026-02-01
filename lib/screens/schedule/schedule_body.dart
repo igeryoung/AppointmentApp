@@ -170,7 +170,7 @@ class ScheduleBody extends StatelessWidget {
   /// Build date headers for multi-day view
   Widget _buildDateHeaders(BuildContext context, double height) {
     final theme = Theme.of(context);
-    final todayLabel = MaterialLocalizations.of(context).todayLabel;
+    const todayLabel = 'Today';
 
     return SizedBox(
       height: height,

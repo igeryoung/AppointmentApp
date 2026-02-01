@@ -15,6 +15,7 @@ import 'lib/routes/drawing_routes.dart';
 import 'lib/routes/batch_routes.dart';
 import 'lib/routes/dashboard_routes.dart';
 import 'lib/routes/event_routes.dart';
+import 'lib/routes/record_routes.dart';
 
 void main(List<String> args) async {
   // Load environment variables from .env file
@@ -56,6 +57,10 @@ void main(List<String> args) async {
   // Device routes
   final deviceRoutes = DeviceRoutes(db);
   app.mount('/api/devices/', deviceRoutes.router);
+
+  // Record routes (validation)
+  final recordRoutes = RecordRoutes(db);
+  app.mount('/api/records/', recordRoutes.router);
 
   // Sync routes
   final syncRoutes = SyncRoutes(db);
