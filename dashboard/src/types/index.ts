@@ -215,6 +215,8 @@ export interface EventFilters {
   bookUuid?: string;
   name?: string;
   recordNumber?: string;
+  startDate?: string;  // ISO8601 format
+  endDate?: string;    // ISO8601 format
 }
 
 export interface RecordFilters {

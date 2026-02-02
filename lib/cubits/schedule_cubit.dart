@@ -96,12 +96,48 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       final windowSize = _getWindowSize(viewMode);
       final windowEnd = windowStart.add(Duration(days: windowSize));
 
+      List<Event> events;
 
-      final events = await _eventRepository.getByDateRange(
-        _currentBookUuid!,
-        windowStart,
-        windowEnd,
-      );
+      // Server-based fetching (server-only mode)
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient != null && deviceRepository != null) {
+        final credentials = await deviceRepository.getCredentials();
+        if (credentials != null) {
+          try {
+            final serverEvents = await apiClient.fetchEventsByDateRange(
+              bookUuid: _currentBookUuid!,
+              startDate: windowStart,
+              endDate: windowEnd,
+              deviceId: credentials.deviceId,
+              deviceToken: credentials.deviceToken,
+            );
+            events = serverEvents.map((e) => Event.fromServerResponse(e)).toList();
+          } catch (e) {
+            // Fallback to local repository on server error
+            debugPrint('Server fetch failed, falling back to local: $e');
+            events = await _eventRepository.getByDateRange(
+              _currentBookUuid!,
+              windowStart,
+              windowEnd,
+            );
+          }
+        } else {
+          // No credentials, use local repository
+          events = await _eventRepository.getByDateRange(
+            _currentBookUuid!,
+            windowStart,
+            windowEnd,
+          );
+        }
+      } else {
+        // No API client configured, use local repository
+        events = await _eventRepository.getByDateRange(
+          _currentBookUuid!,
+          windowStart,
+          windowEnd,
+        );
+      }
 
       // RACE CONDITION FIX: Check if this request is still valid
       if (generation != null && generation != _currentRequestGeneration) {

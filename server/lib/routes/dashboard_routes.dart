@@ -670,13 +670,15 @@ class DashboardRoutes {
     }
   }
 
-  /// Get filtered list of events with optional book, name, and record number filters
-  /// Returns all events sorted by created_at DESC (newest first)
+  /// Get filtered list of events with optional book, name, record number, and date range filters
+  /// Returns all events sorted by start_time ASC when date range is provided, otherwise created_at DESC
   Future<List<Map<String, dynamic>>> _getFilteredEvents(
     String? bookUuid,
     String? name,
-    String? recordNumber,
-  ) async {
+    String? recordNumber, {
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
     try {
       final conditions = <String>['e.is_deleted = false'];
       final params = <String, dynamic>{};
@@ -696,7 +698,18 @@ class DashboardRoutes {
         params['recordNumber'] = '%${recordNumber.toLowerCase()}%';
       }
 
+      if (startDate != null) {
+        conditions.add('e.start_time >= @startDate');
+        params['startDate'] = startDate.toUtc();
+      }
+
+      if (endDate != null) {
+        conditions.add('e.start_time < @endDate');
+        params['endDate'] = endDate.toUtc();
+      }
+
       final whereClause = conditions.join(' AND ');
+      final orderBy = (startDate != null || endDate != null) ? 'e.start_time ASC' : 'e.created_at DESC';
 
       final query = '''
         SELECT
@@ -710,7 +723,7 @@ class DashboardRoutes {
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE $whereClause
-        ORDER BY e.created_at DESC
+        ORDER BY $orderBy
       ''';
 
       final rows = await db.queryRows(query, parameters: params);
@@ -848,16 +861,36 @@ class DashboardRoutes {
       final bookUuid = params['bookUuid'];
       final name = params['name'];
       final recordNumber = params['recordNumber'];
+      final startDateStr = params['startDate'];
+      final endDateStr = params['endDate'];
+
+      // Parse date parameters if provided
+      DateTime? startDate;
+      DateTime? endDate;
+      if (startDateStr != null) {
+        startDate = DateTime.tryParse(startDateStr);
+      }
+      if (endDateStr != null) {
+        endDate = DateTime.tryParse(endDateStr);
+      }
 
       // Check if this is a request for the events list (not stats)
       final wantsList = params.containsKey('bookUuid') ||
                         params.containsKey('name') ||
                         params.containsKey('recordNumber') ||
+                        params.containsKey('startDate') ||
+                        params.containsKey('endDate') ||
                         params.containsKey('list');
 
       // If requesting list or any filters are provided, return filtered list
       if (wantsList) {
-        final events = await _getFilteredEvents(bookUuid, name, recordNumber);
+        final events = await _getFilteredEvents(
+          bookUuid,
+          name,
+          recordNumber,
+          startDate: startDate,
+          endDate: endDate,
+        );
         return Response.ok(
           jsonEncode({'events': events}),
           headers: {'Content-Type': 'application/json'},

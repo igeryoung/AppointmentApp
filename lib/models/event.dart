@@ -182,6 +182,43 @@ class Event {
     );
   }
 
+  /// Factory to parse server API response format
+  /// Server returns timestamps as Unix seconds
+  factory Event.fromServerResponse(Map<String, dynamic> map) {
+    DateTime fromSeconds(int? seconds) => seconds != null
+        ? DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal()
+        : DateTime.now();
+
+    List<EventType> eventTypes;
+    if (map['event_types'] != null && map['event_types'].toString().isNotEmpty) {
+      eventTypes = EventType.fromStringList(map['event_types']);
+    } else {
+      eventTypes = [EventType.other];
+    }
+
+    return Event(
+      id: map['id'],
+      bookUuid: map['book_uuid'] ?? '',
+      recordUuid: map['record_uuid'] ?? '',
+      title: map['record_name'] ?? map['title'] ?? '',
+      recordNumber: map['record_number'] ?? '',
+      eventTypes: eventTypes,
+      chargeItems: [],
+      hasChargeItems: map['has_charge_items'] == true,
+      startTime: fromSeconds(map['start_time']),
+      endTime: map['end_time'] != null ? fromSeconds(map['end_time']) : null,
+      createdAt: fromSeconds(map['created_at']),
+      updatedAt: fromSeconds(map['updated_at']),
+      isRemoved: map['is_removed'] == true,
+      removalReason: map['removal_reason'],
+      originalEventId: map['original_event_id'],
+      newEventId: map['new_event_id'],
+      isChecked: map['is_checked'] == true,
+      hasNote: map['has_note'] == true,
+      version: map['version'] ?? 1,
+    );
+  }
+
   @override
   String toString() => 'Event(id: $id, title: $title, recordUuid: $recordUuid, startTime: $startTime)';
 

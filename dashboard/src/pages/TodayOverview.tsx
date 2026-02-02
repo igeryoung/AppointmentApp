@@ -5,7 +5,6 @@ import { ScheduleGrid } from '../components/TodaySchedule/ScheduleGrid';
 import { BookWithEvents, TOTAL_SLOTS } from '../components/TodaySchedule/types';
 import { Book, Event } from '../types';
 import { dashboardAPI } from '../services/api';
-import { parseServerDate } from '../utils/date';
 
 const SESSION_STORAGE_KEY = 'todayOverview_selectedBooks';
 const COLUMN_WIDTH = 250; // pixels
@@ -80,36 +79,23 @@ export const TodayOverview: React.FC = () => {
       setError(null);
 
       try {
-        // Get today's date range (00:00 to 23:59 in local time)
+        // Get today's date range (00:00 to 24:00 in local time)
         const today = new Date();
         const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 0, 0, 0);
-        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate(), 23, 59, 59);
+        const endOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1, 0, 0, 0);
 
-        const selectedBookSet = new Set(selectedBookUuids);
+        // Fetch events with server-side date filtering (one call per book)
+        const allEvents: Event[] = [];
+        for (const bookUuid of selectedBookUuids) {
+          const response = await dashboardAPI.getFilteredEvents({
+            bookUuid,
+            startDate: startOfDay.toISOString(),
+            endDate: endOfDay.toISOString(),
+          });
+          allEvents.push(...response.events);
+        }
 
-        // Fetch all events
-        const response = await dashboardAPI.getFilteredEvents({});
-        const allEvents = response.events;
-
-        // Filter for today and selected books
-        const todayEvents = allEvents.filter((event) => {
-          const eventStart = parseServerDate(event.startTime);
-          if (!eventStart) {
-            return false;
-          }
-
-          // Check if event starts today
-          const isToday =
-            eventStart >= startOfDay &&
-            eventStart <= endOfDay;
-
-          // Check if event belongs to selected book (match by book UUID)
-          const isSelectedBook = selectedBookSet.has(event.bookUuid);
-
-          return isToday && isSelectedBook;
-        });
-
-        setEvents(todayEvents);
+        setEvents(allEvents);
       } catch (err) {
         console.error('Failed to fetch events:', err);
         setError('Failed to load today\'s events');

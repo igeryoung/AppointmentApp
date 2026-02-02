@@ -12,8 +12,84 @@ class EventRoutes {
 
   EventRoutes(this.db) : _noteService = NoteService(db) {
     bookScopedRouter = Router()
+      ..get('/<bookUuid>/events', _getEventsByDateRange)
       ..get('/<bookUuid>/events/<eventId>', _getEventDetail)
       ..get('/<bookUuid>/records/<recordUuid>', _getRecordDetails);
+  }
+
+  /// Get events by date range
+  /// GET /api/books/<bookUuid>/events?startDate=<ISO8601>&endDate=<ISO8601>
+  Future<Response> _getEventsByDateRange(Request request, String bookUuid) async {
+    try {
+      final deviceId = request.headers['x-device-id'];
+      final deviceToken = request.headers['x-device-token'];
+
+      if (deviceId == null || deviceToken == null) {
+        return Response(401, body: jsonEncode({'success': false, 'message': 'Missing device credentials'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (!await _noteService.verifyDeviceAccess(deviceId, deviceToken)) {
+        return Response.forbidden(jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      if (!await _noteService.verifyBookOwnership(deviceId, bookUuid)) {
+        return Response.forbidden(jsonEncode({'success': false, 'message': 'Unauthorized access to book'}),
+            headers: {'Content-Type': 'application/json'});
+      }
+
+      // Parse date range parameters
+      final params = request.url.queryParameters;
+      final startDateStr = params['startDate'];
+      final endDateStr = params['endDate'];
+
+      if (startDateStr == null || endDateStr == null) {
+        return Response.badRequest(
+          body: jsonEncode({'success': false, 'message': 'Missing startDate or endDate parameters'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final startDate = DateTime.tryParse(startDateStr);
+      final endDate = DateTime.tryParse(endDateStr);
+
+      if (startDate == null || endDate == null) {
+        return Response.badRequest(
+          body: jsonEncode({'success': false, 'message': 'Invalid date format. Use ISO8601 format.'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final eventRows = await db.queryRows('''
+        SELECT
+          e.id, e.book_uuid, e.record_uuid, e.title, e.event_types,
+          e.has_charge_items, e.start_time, e.end_time, e.created_at, e.updated_at,
+          e.is_removed, e.removal_reason, e.original_event_id, e.new_event_id,
+          e.is_checked, e.version,
+          r.name as record_name, r.phone as record_phone, r.record_number,
+          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+        FROM events e
+        LEFT JOIN records r ON e.record_uuid = r.record_uuid
+        WHERE e.book_uuid = @bookUuid
+          AND e.is_deleted = false
+          AND e.start_time >= @startDate
+          AND e.start_time < @endDate
+        ORDER BY e.start_time ASC
+      ''', parameters: {
+        'bookUuid': bookUuid,
+        'startDate': startDate.toUtc(),
+        'endDate': endDate.toUtc(),
+      });
+
+      final events = eventRows.map((row) => _serializeEvent(row)).toList();
+
+      return Response.ok(jsonEncode({'success': true, 'events': events}),
+          headers: {'Content-Type': 'application/json'});
+    } catch (e) {
+      return Response.internalServerError(body: jsonEncode({'success': false, 'message': 'Failed to load events: $e'}),
+          headers: {'Content-Type': 'application/json'});
+    }
   }
 
   Future<Response> _getEventDetail(Request request, String bookUuid, String eventId) async {

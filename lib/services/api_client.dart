@@ -154,6 +154,46 @@ class ApiClient {
     }
   }
 
+  /// Fetch events by date range from server
+  /// Returns list of events within the specified date range
+  Future<List<Map<String, dynamic>>> fetchEventsByDateRange({
+    required String bookUuid,
+    required DateTime startDate,
+    required DateTime endDate,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/events')
+          .replace(queryParameters: {
+        'startDate': startDate.toUtc().toIso8601String(),
+        'endDate': endDate.toUtc().toIso8601String(),
+      });
+
+      final response = await _client.get(
+        uri,
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return (json['events'] as List).cast<Map<String, dynamic>>();
+      } else {
+        throw ApiException(
+          'Fetch events by date range failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   // ===================
   // Server-Store API: Notes
   // ===================
