@@ -568,6 +568,111 @@ class ApiClient {
   }
 
   // ===================
+  // Server-Store API: Charge Items
+  // ===================
+
+  /// Fetch charge items for a record from server
+  Future<List<Map<String, dynamic>>> fetchChargeItems({
+    required String recordUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.get(
+        Uri.parse('$baseUrl/api/records/$recordUuid/charge-items'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        final items = json['chargeItems'] as List<dynamic>;
+        return items.cast<Map<String, dynamic>>();
+      } else if (response.statusCode == 404) {
+        return [];
+      } else {
+        throw ApiException(
+          'Fetch charge items failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Save (create or update) a charge item to server
+  Future<Map<String, dynamic>> saveChargeItem({
+    required String recordUuid,
+    required Map<String, dynamic> chargeItemData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.post(
+        Uri.parse('$baseUrl/api/records/$recordUuid/charge-items'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode(chargeItemData),
+      ).timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['chargeItem'] as Map<String, dynamic>;
+      } else if (response.statusCode == 409) {
+        throw ApiConflictException(
+          'Charge item version conflict',
+          statusCode: 409,
+          responseBody: response.body,
+        );
+      } else {
+        throw ApiException(
+          'Save charge item failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Delete a charge item from server
+  Future<void> deleteChargeItem({
+    required String chargeItemId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client.delete(
+        Uri.parse('$baseUrl/api/charge-items/$chargeItemId'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+      ).timeout(timeout);
+
+      if (response.statusCode != 200) {
+        throw ApiException(
+          'Delete charge item failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  // ===================
   // Book Creation API
   // ===================
 

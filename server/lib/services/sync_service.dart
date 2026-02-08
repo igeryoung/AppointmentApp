@@ -36,6 +36,7 @@ class SyncService {
     'events',
     'notes',
     'schedule_drawings',
+    'charge_items',
   };
 
   /// Allowed columns per table (used to sanitize inbound sync payloads)
@@ -94,6 +95,19 @@ class SyncService {
       'version',
       'is_deleted',
     },
+    'charge_items': {
+      'id',
+      'record_uuid',
+      'event_id',
+      'item_name',
+      'item_price',
+      'received_amount',
+      'created_at',
+      'updated_at',
+      'synced_at',
+      'version',
+      'is_deleted',
+    },
   };
 
   static const Map<String, String> _primaryKeyColumns = {
@@ -101,6 +115,7 @@ class SyncService {
     'events': 'id',
     'notes': 'id',
     'schedule_drawings': 'id',
+    'charge_items': 'id',
   };
 
   static const Set<String> _numericPrimaryKeyTables = {
@@ -133,7 +148,7 @@ class SyncService {
     DateTime? lastSyncAt,
   ) async {
     final changes = <SyncChange>[];
-    final tables = ['books', 'events', 'notes', 'schedule_drawings'];
+    final tables = ['books', 'events', 'notes', 'schedule_drawings', 'charge_items'];
 
     for (final table in tables) {
       final rows = await _getTableChanges(table, deviceId, lastSyncAt);
@@ -582,6 +597,8 @@ class SyncService {
         return _normalizeDrawingData(data);
       case 'books':
         return _normalizeBookData(data);
+      case 'charge_items':
+        return _normalizeChargeItemData(data);
       default:
         return data;
     }
@@ -833,6 +850,53 @@ class SyncService {
     }
     if (data.containsKey('archived_at')) {
       data['archived_at'] = parseTimestamp(data['archived_at']);
+    }
+
+    if (data.containsKey('is_deleted')) {
+      final value = data['is_deleted'];
+      data['is_deleted'] = (value is bool)
+          ? value
+          : (value is num ? value != 0 : false);
+    }
+
+    return data;
+  }
+
+  Map<String, dynamic> _normalizeChargeItemData(Map<String, dynamic> data) {
+    DateTime? parseTimestamp(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value;
+      if (value is int) {
+        return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+      }
+      if (value is String && value.isNotEmpty) {
+        return DateTime.parse(value).toUtc();
+      }
+      return null;
+    }
+
+    if (data.containsKey('record_uuid')) {
+      final recordUuid = data['record_uuid'];
+      if (recordUuid != null) {
+        data['record_uuid'] = recordUuid.toString();
+      }
+    }
+
+    if (data.containsKey('event_id')) {
+      final eventId = data['event_id'];
+      if (eventId != null) {
+        data['event_id'] = eventId.toString();
+      }
+    }
+
+    if (data.containsKey('created_at')) {
+      data['created_at'] = parseTimestamp(data['created_at']);
+    }
+    if (data.containsKey('updated_at')) {
+      data['updated_at'] = parseTimestamp(data['updated_at']);
+    }
+    if (data.containsKey('synced_at')) {
+      data['synced_at'] = parseTimestamp(data['synced_at']);
     }
 
     if (data.containsKey('is_deleted')) {

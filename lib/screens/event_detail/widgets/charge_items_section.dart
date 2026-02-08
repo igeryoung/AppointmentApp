@@ -6,17 +6,19 @@ import '../event_detail_controller.dart';
 
 /// Floating overlay section for managing charge items
 /// Displays as a collapsed header that expands into an overlay panel
-/// Charge items are synced across all events with the same name + record number
+/// Charge items are linked to records (person-level), optionally filtered by event
 class ChargeItemsSection extends StatefulWidget {
   final List<ChargeItem> chargeItems;
   final EventDetailController controller;
-  final bool hasRecordNumber; // Whether the event has a record number set
+  final bool hasRecordUuid; // Whether the event has a record_uuid set
+  final bool showOnlyThisEventItems; // Filter toggle state
 
   const ChargeItemsSection({
     super.key,
     required this.chargeItems,
     required this.controller,
-    required this.hasRecordNumber,
+    required this.hasRecordUuid,
+    required this.showOnlyThisEventItems,
   });
 
   @override
@@ -29,10 +31,8 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
   final LayerLink _layerLink = LayerLink();
   OverlayEntry? _overlayEntry;
 
-  int get _totalAmount => widget.chargeItems.fold(0, (sum, item) => sum + item.cost);
-  int get _paidAmount => widget.chargeItems
-      .where((item) => item.isPaid)
-      .fold(0, (sum, item) => sum + item.cost);
+  int get _totalAmount => widget.chargeItems.fold(0, (sum, item) => sum + item.itemPrice);
+  int get _receivedAmount => widget.chargeItems.fold(0, (sum, item) => sum + item.receivedAmount);
 
   void _toggleExpanded() {
     if (_isExpanded) {
@@ -123,7 +123,7 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
                                 ),
                                 const Spacer(),
                                 Text(
-                                  'NT\$${_paidAmount.toString()} / NT\$${_totalAmount.toString()}',
+                                  'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
                                   style: theme.textTheme.titleMedium?.copyWith(
                                     color: theme.colorScheme.secondary,
                                     fontWeight: FontWeight.w500,
@@ -131,6 +131,28 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
                                 ),
                               ],
                             ),
+                          ),
+                        ),
+
+                        const Divider(height: 1),
+
+                        // Filter toggle row
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                          child: Row(
+                            children: [
+                              Text(
+                                widget.showOnlyThisEventItems
+                                    ? 'This event only'
+                                    : 'All items',
+                                style: theme.textTheme.bodyMedium,
+                              ),
+                              const Spacer(),
+                              Switch(
+                                value: widget.showOnlyThisEventItems,
+                                onChanged: (_) => widget.controller.toggleChargeItemsFilter(),
+                              ),
+                            ],
                           ),
                         ),
 
@@ -165,9 +187,11 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
                                   ),
                                   title: Text(item.itemName),
                                   subtitle: Text(
-                                    'NT\$${item.cost.toString()}',
+                                    'NT\$${item.receivedAmount} / NT\$${item.itemPrice}',
                                     style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: theme.colorScheme.secondary,
+                                      color: item.isPaid
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.secondary,
                                     ),
                                   ),
                                   trailing: Row(
@@ -219,11 +243,11 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
   }
 
   void _addChargeItem() async {
-    // Check if record number is set
-    if (!widget.hasRecordNumber) {
+    // Check if record_uuid is set (event must be saved first)
+    if (!widget.hasRecordUuid) {
       final l10n = AppLocalizations.of(context)!;
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber ?? 'Please add a record number to track charge items')),
+        SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber ?? 'Please save the event first to track charge items')),
       );
       return;
     }
@@ -236,7 +260,8 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
     );
 
     if (result != null) {
-      await widget.controller.addChargeItem(result);
+      // Associate with this event if filter is set to show only this event's items
+      await widget.controller.addChargeItem(result, associateWithEvent: widget.showOnlyThisEventItems);
     }
   }
 
@@ -323,7 +348,7 @@ class _ChargeItemsSectionState extends State<ChargeItemsSection> {
                 ),
                 const Spacer(),
                 Text(
-                  'NT\$${_paidAmount.toString()} / NT\$${_totalAmount.toString()}',
+                  'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: theme.colorScheme.secondary,
                     fontWeight: FontWeight.w500,

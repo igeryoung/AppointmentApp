@@ -26,7 +26,7 @@ class _ChargeItemDialogState extends State<ChargeItemDialog> {
     super.initState();
     _nameController = TextEditingController(text: widget.existingItem?.itemName ?? '');
     _costController = TextEditingController(
-      text: widget.existingItem != null ? widget.existingItem!.cost.toString() : '',
+      text: widget.existingItem != null ? widget.existingItem!.itemPrice.toString() : '',
     );
   }
 
@@ -40,9 +40,12 @@ class _ChargeItemDialogState extends State<ChargeItemDialog> {
   void _handleSave() {
     if (_formKey.currentState!.validate()) {
       final chargeItem = ChargeItem(
+        id: widget.existingItem?.id,
+        recordUuid: widget.existingItem?.recordUuid ?? '',
+        eventId: widget.existingItem?.eventId,
         itemName: _nameController.text.trim(),
-        cost: int.parse(_costController.text.trim()),
-        isPaid: widget.existingItem?.isPaid ?? false,
+        itemPrice: int.parse(_costController.text.trim()),
+        receivedAmount: widget.existingItem?.receivedAmount ?? 0,
       );
       Navigator.of(context).pop(chargeItem);
     }

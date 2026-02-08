@@ -133,6 +133,13 @@ class SyncService {
             }
             break;
 
+          case 'charge_items':
+            if (_prdDatabaseService != null) {
+              await _prdDatabaseService!.applyServerChargeItemChange(change.data);
+              appliedCount++;
+            }
+            break;
+
           default:
         }
       } catch (e) {
@@ -165,6 +172,11 @@ class SyncService {
             case 'schedule_drawings':
               if (_prdDatabaseService != null) {
                 await _prdDatabaseService!.applyServerDrawingChange(winningData);
+              }
+              break;
+            case 'charge_items':
+              if (_prdDatabaseService != null) {
+                await _prdDatabaseService!.applyServerChargeItemChange(winningData);
               }
               break;
           }

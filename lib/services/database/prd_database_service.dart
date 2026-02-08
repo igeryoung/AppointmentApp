@@ -13,7 +13,7 @@ import 'mixins/event_operations_mixin.dart';
 import 'mixins/note_operations_mixin.dart';
 import 'mixins/schedule_drawing_operations_mixin.dart';
 import 'mixins/device_info_operations_mixin.dart';
-import 'mixins/person_charge_item_operations_mixin.dart';
+import 'mixins/charge_item_operations_mixin.dart';
 
 export 'mixins/device_info_operations_mixin.dart' show DeviceCredentials;
 
@@ -31,7 +31,7 @@ class PRDDatabaseService
         NoteOperationsMixin,
         ScheduleDrawingOperationsMixin,
         DeviceInfoOperationsMixin,
-        PersonChargeItemOperationsMixin
+        ChargeItemOperationsMixin
     implements IDatabaseService {
   static PRDDatabaseService? _instance;
   static Database? _database;
@@ -55,7 +55,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 24,
+      version: 25,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -67,12 +67,40 @@ class PRDDatabaseService
           throw Exception('Database reset for v23 migration. Please restart the app.');
         }
         // v24: Change unique index from record_number to (name, record_number)
-        if (oldVersion == 23 && newVersion == 24) {
+        if (oldVersion == 23 && newVersion >= 24) {
           await db.execute('DROP INDEX IF EXISTS idx_records_record_number_unique');
           await db.execute('''
             CREATE UNIQUE INDEX idx_records_name_record_number_unique
             ON records(name, record_number) WHERE record_number <> ''
           ''');
+        }
+        // v25: Drop old person_charge_items table and create new charge_items table
+        if (oldVersion < 25) {
+          // Drop old table and index
+          await db.execute('DROP INDEX IF EXISTS idx_charge_items_person');
+          await db.execute('DROP TABLE IF EXISTS person_charge_items');
+
+          // Create new charge_items table
+          await db.execute('''
+            CREATE TABLE charge_items (
+              id TEXT PRIMARY KEY,
+              record_uuid TEXT NOT NULL,
+              event_id TEXT,
+              item_name TEXT NOT NULL,
+              item_price INTEGER NOT NULL DEFAULT 0,
+              received_amount INTEGER NOT NULL DEFAULT 0,
+              created_at INTEGER NOT NULL,
+              updated_at INTEGER NOT NULL,
+              synced_at INTEGER,
+              version INTEGER DEFAULT 1,
+              is_dirty INTEGER DEFAULT 0,
+              is_deleted INTEGER DEFAULT 0
+            )
+          ''');
+
+          // Create indexes
+          await db.execute('CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)');
+          await db.execute('CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)');
         }
       },
     );
@@ -173,20 +201,21 @@ class PRDDatabaseService
       )
     ''');
 
-    // Person Charge Items
+    // Charge Items (linked to records, optionally to events)
     await db.execute('''
-      CREATE TABLE person_charge_items (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        person_name_normalized TEXT NOT NULL,
-        record_number_normalized TEXT NOT NULL,
+      CREATE TABLE charge_items (
+        id TEXT PRIMARY KEY,
+        record_uuid TEXT NOT NULL,
+        event_id TEXT,
         item_name TEXT NOT NULL,
-        cost INTEGER NOT NULL,
-        is_paid INTEGER DEFAULT 0,
-        created_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
-        updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
+        item_price INTEGER NOT NULL DEFAULT 0,
+        received_amount INTEGER NOT NULL DEFAULT 0,
+        created_at INTEGER NOT NULL,
+        updated_at INTEGER NOT NULL,
+        synced_at INTEGER,
         version INTEGER DEFAULT 1,
         is_dirty INTEGER DEFAULT 0,
-        UNIQUE(person_name_normalized, record_number_normalized, item_name)
+        is_deleted INTEGER DEFAULT 0
       )
     ''');
 
@@ -220,13 +249,14 @@ class PRDDatabaseService
     await db.execute('CREATE INDEX idx_events_start_time ON events(book_uuid, start_time)');
     await db.execute('CREATE INDEX idx_notes_record ON notes(record_uuid)');
     await db.execute('CREATE INDEX idx_drawings_book ON schedule_drawings(book_uuid, date, view_mode)');
-    await db.execute('CREATE INDEX idx_charge_items_person ON person_charge_items(person_name_normalized, record_number_normalized)');
+    await db.execute('CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)');
+    await db.execute('CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)');
   }
 
   @override
   Future<void> clearAllData() async {
     final db = await database;
-    await db.delete('person_charge_items');
+    await db.delete('charge_items');
     await db.delete('schedule_drawings');
     await db.delete('notes');
     await db.delete('events');

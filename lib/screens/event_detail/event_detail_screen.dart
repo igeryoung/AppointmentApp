@@ -816,7 +816,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                         child: ChargeItemsSection(
                           chargeItems: state.chargeItems,
                           controller: _controller,
-                          hasRecordNumber: state.recordNumber.trim().isNotEmpty,
+                          hasRecordUuid: widget.event.recordUuid.isNotEmpty,
+                          showOnlyThisEventItems: state.showOnlyThisEventItems,
                         ),
                       ),
                       // Handwriting section

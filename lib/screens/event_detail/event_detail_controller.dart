@@ -5,10 +5,8 @@ import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';
 import '../../models/note.dart';
-import '../../models/person_charge_item.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/database/prd_database_service.dart';
-import '../../services/database/mixins/person_info_utilities_mixin.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
 import '../../services/server_config_service.dart';
@@ -95,7 +93,7 @@ class EventDetailController {
         await _logLocalEventSnapshot();
         await _refreshEventFromServer();
         await loadNote();
-        await loadChargeItems(); // Load charge items from person_charge_items table
+        await loadChargeItems(); // Load charge items from charge_items table
         if (event.hasNewTime) {
           await _loadNewEvent();
         }
@@ -453,21 +451,15 @@ class EventDetailController {
 
   /// Update record number
   void updateRecordNumber(String recordNumber) {
-    final oldRecordNumber = _state.recordNumber.trim();
-    final newRecordNumber = recordNumber.trim();
-
     _updateState(_state.copyWith(
       recordNumber: recordNumber,
       hasChanges: true,
       clearRecordNumberError: true, // Clear error when user types
     ));
 
-    // Reload charge items and phone if record number changed (debounced)
-    if (oldRecordNumber != newRecordNumber) {
-      // Load charge items asynchronously (don't wait for it)
-      loadChargeItems().catchError((e) {
-      });
-    }
+    // Note: Charge items are now loaded based on recordUuid from the event,
+    // not from name/recordNumber. They will be reloaded when the event is saved
+    // and the recordUuid is updated.
   }
 
   /// Validate record number on blur (when user leaves the field)
@@ -575,13 +567,11 @@ class EventDetailController {
     _updateState(_state.copyWith(selectedEventTypes: eventTypes, hasChanges: true));
   }
 
-  /// Load charge items for the current event (based on name + record number)
+  /// Load charge items for the current event (based on record_uuid)
+  /// If showOnlyThisEventItems is true, only show items associated with this event
   Future<void> loadChargeItems() async {
-    final name = _state.name.trim();
-    final recordNumber = _state.recordNumber.trim();
-
-    // Only load if we have both name and record number
-    if (name.isEmpty || recordNumber.isEmpty) {
+    // Need recordUuid to load charge items
+    if (event.recordUuid.isEmpty) {
       _updateState(_state.copyWith(chargeItems: []));
       return;
     }
@@ -592,23 +582,30 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
-      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
 
-      // Get person charge items
-      final personChargeItems = await prdDb.getPersonChargeItems(
-        personNameNormalized: nameNormalized,
-        recordNumberNormalized: recordNumberNormalized,
-      );
-
-      // Convert to ChargeItem list
-      final chargeItems = personChargeItems
-          .map((item) => ChargeItem.fromPersonChargeItem(item))
-          .toList();
+      List<ChargeItem> chargeItems;
+      if (_state.showOnlyThisEventItems && event.id != null) {
+        // Get only items associated with this event
+        chargeItems = await prdDb.getChargeItemsByRecordAndEvent(
+          event.recordUuid,
+          eventId: event.id,
+        );
+      } else {
+        // Get all items for the record
+        chargeItems = await prdDb.getChargeItemsByRecordUuid(event.recordUuid);
+      }
 
       _updateState(_state.copyWith(chargeItems: chargeItems));
     } catch (e) {
     }
+  }
+
+  /// Toggle the filter to show all items or only this event's items
+  Future<void> toggleChargeItemsFilter() async {
+    _updateState(_state.copyWith(
+      showOnlyThisEventItems: !_state.showOnlyThisEventItems,
+    ));
+    await loadChargeItems();
   }
 
   /// Save phone number to record table
@@ -643,11 +640,9 @@ class EventDetailController {
   }
 
   /// Add a new charge item
-  Future<void> addChargeItem(ChargeItem item) async {
-    final name = _state.name.trim();
-    final recordNumber = _state.recordNumber.trim();
-
-    if (name.isEmpty || recordNumber.isEmpty) {
+  /// If associateWithEvent is true, the item will be linked to this event
+  Future<void> addChargeItem(ChargeItem item, {bool associateWithEvent = false}) async {
+    if (event.recordUuid.isEmpty) {
       return;
     }
 
@@ -657,13 +652,11 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(name);
-      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(recordNumber);
 
       // Check if item already exists
-      final exists = await prdDb.personChargeItemExists(
-        personNameNormalized: nameNormalized,
-        recordNumberNormalized: recordNumberNormalized,
+      final exists = await prdDb.chargeItemExists(
+        recordUuid: event.recordUuid,
+        eventId: associateWithEvent ? event.id : null,
         itemName: item.itemName,
       );
 
@@ -672,19 +665,14 @@ class EventDetailController {
         return;
       }
 
-      // Create PersonChargeItem
-      final personItem = PersonChargeItem(
-        personNameNormalized: nameNormalized,
-        recordNumberNormalized: recordNumberNormalized,
-        itemName: item.itemName,
-        cost: item.cost,
-        isPaid: item.isPaid,
-        createdAt: DateTime.now(),
-        updatedAt: DateTime.now(),
+      // Create charge item with recordUuid from event
+      final newItem = item.copyWith(
+        recordUuid: event.recordUuid,
+        eventId: associateWithEvent ? event.id : null,
       );
 
       // Save to database
-      final savedItem = await prdDb.savePersonChargeItem(personItem);
+      await prdDb.saveChargeItem(newItem);
 
       // Reload all charge items
       await loadChargeItems();
@@ -695,23 +683,17 @@ class EventDetailController {
 
   /// Edit an existing charge item
   Future<void> editChargeItem(ChargeItem item) async {
-    if (item.id == null) {
-      return;
-    }
-
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      final nameNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(_state.name.trim());
-      final recordNumberNormalized = PersonInfoUtilitiesMixin.normalizePersonKey(_state.recordNumber.trim());
 
       // Check if new name conflicts with existing item
-      final exists = await prdDb.personChargeItemExists(
-        personNameNormalized: nameNormalized,
-        recordNumberNormalized: recordNumberNormalized,
+      final exists = await prdDb.chargeItemExists(
+        recordUuid: item.recordUuid,
+        eventId: item.eventId,
         itemName: item.itemName,
         excludeId: item.id,
       );
@@ -722,19 +704,19 @@ class EventDetailController {
       }
 
       // Get existing item
-      final existingItem = await prdDb.getPersonChargeItemById(item.id!);
+      final existingItem = await prdDb.getChargeItemById(item.id);
       if (existingItem == null) {
         return;
       }
 
-      // Update item
+      // Update item - preserve recordUuid and eventId
       final updatedItem = existingItem.copyWith(
         itemName: item.itemName,
-        cost: item.cost,
-        isPaid: item.isPaid,
+        itemPrice: item.itemPrice,
+        receivedAmount: item.receivedAmount,
       );
 
-      await prdDb.savePersonChargeItem(updatedItem);
+      await prdDb.saveChargeItem(updatedItem);
 
       // Reload all charge items
       await loadChargeItems();
@@ -745,17 +727,13 @@ class EventDetailController {
 
   /// Delete a charge item
   Future<void> deleteChargeItem(ChargeItem item) async {
-    if (item.id == null) {
-      return;
-    }
-
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      await prdDb.deletePersonChargeItem(item.id!);
+      await prdDb.deleteChargeItem(item.id);
 
       // Reload all charge items
       await loadChargeItems();
@@ -765,20 +743,39 @@ class EventDetailController {
   }
 
   /// Toggle paid status of a charge item
+  /// Sets receivedAmount to itemPrice if not paid, or 0 if paid
   Future<void> toggleChargeItemPaidStatus(ChargeItem item) async {
-    if (item.id == null) {
-      return;
-    }
-
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
-      await prdDb.updatePersonChargeItemPaidStatus(
-        id: item.id!,
-        isPaid: !item.isPaid,
+      // Toggle: if not fully paid, set to full price; if fully paid, set to 0
+      final newReceivedAmount = item.isPaid ? 0 : item.itemPrice;
+      await prdDb.updateChargeItemReceivedAmount(
+        id: item.id,
+        receivedAmount: newReceivedAmount,
+      );
+
+      // Reload all charge items
+      await loadChargeItems();
+
+    } catch (e) {
+    }
+  }
+
+  /// Update the received amount of a charge item
+  Future<void> updateChargeItemReceivedAmount(ChargeItem item, int receivedAmount) async {
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    try {
+      final prdDb = _dbService as PRDDatabaseService;
+      await prdDb.updateChargeItemReceivedAmount(
+        id: item.id,
+        receivedAmount: receivedAmount,
       );
 
       // Reload all charge items
@@ -950,9 +947,9 @@ class EventDetailController {
       hasChanges: true,
     ));
 
-    // Load associated charge items
-    loadChargeItems().catchError((e) {
-    });
+    // Note: Charge items are loaded based on recordUuid from the event.
+    // For existing events, they're already loaded. For new events, they'll be
+    // loaded after the event is saved and the recordUuid is established.
 
     // Load person note (prefer server version, fallback to local)
     try {

@@ -36,6 +36,9 @@ class EventDetailState {
   final String? recordNumberError;
   final bool isValidatingRecordNumber;
 
+  // Charge items filter state
+  final bool showOnlyThisEventItems;
+
   // New event reference (for time changes)
   final Event? newEvent;
 
@@ -59,6 +62,7 @@ class EventDetailState {
     this.isNameReadOnly = false,
     this.recordNumberError,
     this.isValidatingRecordNumber = false,
+    this.showOnlyThisEventItems = false,
     this.newEvent,
   });
 
@@ -99,6 +103,7 @@ class EventDetailState {
     String? recordNumberError,
     bool clearRecordNumberError = false,
     bool? isValidatingRecordNumber,
+    bool? showOnlyThisEventItems,
     Event? newEvent,
     bool clearEndTime = false,
     bool clearNewEvent = false,
@@ -123,6 +128,7 @@ class EventDetailState {
       isNameReadOnly: isNameReadOnly ?? this.isNameReadOnly,
       recordNumberError: clearRecordNumberError ? null : (recordNumberError ?? this.recordNumberError),
       isValidatingRecordNumber: isValidatingRecordNumber ?? this.isValidatingRecordNumber,
+      showOnlyThisEventItems: showOnlyThisEventItems ?? this.showOnlyThisEventItems,
       newEvent: clearNewEvent ? null : (newEvent ?? this.newEvent),
     );
   }

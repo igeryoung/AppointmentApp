@@ -1,9 +1,33 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:mockito/mockito.dart';
 
 import 'package:schedule_note_app/l10n/app_localizations.dart';
 import 'package:schedule_note_app/models/charge_item.dart';
+import 'package:schedule_note_app/models/event.dart';
+import 'package:schedule_note_app/models/event_type.dart';
+import 'package:schedule_note_app/screens/event_detail/event_detail_controller.dart';
+import 'package:schedule_note_app/screens/event_detail/event_detail_state.dart';
 import 'package:schedule_note_app/screens/event_detail/widgets/charge_items_section.dart';
+import 'package:schedule_note_app/services/database_service_interface.dart';
+
+// Mock controller for testing
+class MockEventDetailController extends Mock implements EventDetailController {
+  @override
+  Future<void> addChargeItem(ChargeItem item, {bool associateWithEvent = false}) async {}
+
+  @override
+  Future<void> editChargeItem(ChargeItem item) async {}
+
+  @override
+  Future<void> deleteChargeItem(ChargeItem item) async {}
+
+  @override
+  Future<void> toggleChargeItemPaidStatus(ChargeItem item) async {}
+
+  @override
+  Future<void> toggleChargeItemsFilter() async {}
+}
 
 void main() {
   testWidgets('add dialog can be opened and closed without crashing', (tester) async {
@@ -36,7 +60,8 @@ class _ChargeItemsSectionHarness extends StatefulWidget {
 }
 
 class _ChargeItemsSectionHarnessState extends State<_ChargeItemsSectionHarness> {
-  List<ChargeItem> _items = const [];
+  final List<ChargeItem> _items = const [];
+  final MockEventDetailController _controller = MockEventDetailController();
 
   @override
   Widget build(BuildContext context) {
@@ -48,11 +73,9 @@ class _ChargeItemsSectionHarnessState extends State<_ChargeItemsSectionHarness> 
           padding: const EdgeInsets.all(8),
           child: ChargeItemsSection(
             chargeItems: _items,
-            onChargeItemsChanged: (updatedItems) {
-              setState(() {
-                _items = updatedItems;
-              });
-            },
+            controller: _controller,
+            hasRecordUuid: true,
+            showOnlyThisEventItems: false,
           ),
         ),
       ),
