@@ -6,11 +6,12 @@ import 'event_repository.dart';
 import 'base_repository.dart';
 
 /// Implementation of EventRepository using SQLite
-class EventRepositoryImpl extends BaseRepository<Event, String> implements IEventRepository {
+class EventRepositoryImpl extends BaseRepository<Event, String>
+    implements IEventRepository {
   final _uuid = const Uuid();
 
   EventRepositoryImpl(Future<Database> Function() getDatabaseFn)
-      : super(getDatabaseFn);
+    : super(getDatabaseFn);
 
   @override
   String get tableName => 'events';
@@ -61,14 +62,20 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
   }
 
   /// Get events for 3-Day view
-  Future<List<Event>> getEventsBy3Days(String bookUuid, DateTime startDate) async {
+  Future<List<Event>> getEventsBy3Days(
+    String bookUuid,
+    DateTime startDate,
+  ) async {
     final startOfDay = DateTime(startDate.year, startDate.month, startDate.day);
     final endOfPeriod = startOfDay.add(const Duration(days: 3));
     return getByDateRange(bookUuid, startOfDay, endOfPeriod);
   }
 
   /// Get events for Week view
-  Future<List<Event>> getEventsByWeek(String bookUuid, DateTime weekStart) async {
+  Future<List<Event>> getEventsByWeek(
+    String bookUuid,
+    DateTime weekStart,
+  ) async {
     final weekEnd = weekStart.add(const Duration(days: 7));
     return getByDateRange(bookUuid, weekStart, weekEnd);
   }
@@ -83,8 +90,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
       updatedAt: now,
       version: 1,
     );
-    // For UUID events, id is already set before insert
-    await insert(eventToCreate.toMap());
+    final db = await getDatabaseFn();
+    await db.insert('events', eventToCreate.toMap());
 
     // Note: Notes are managed separately via records, not created with events
 
@@ -112,15 +119,12 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
 
   @override
   Future<void> delete(String id) async {
-    // Hard delete from local database
-    // Server sync is handled by the caller (ScheduleCubit.hardDeleteEvent)
     final db = await getDatabaseFn();
-
-    // Delete associated note first
-    await db.delete('notes', where: 'event_id = ?', whereArgs: [id]);
-
-    // Delete the event
-    final deletedRows = await db.delete('events', where: 'id = ?', whereArgs: [id]);
+    final deletedRows = await db.delete(
+      'events',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
     if (deletedRows == 0) throw Exception('Event not found');
   }
 
@@ -208,13 +212,23 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     );
 
     // Get the final state of old event (with new_event_id set)
-    final oldEventMaps = await db.query('events', where: 'id = ?', whereArgs: [originalEvent.id], limit: 1);
-    final finalOldEvent = oldEventMaps.isNotEmpty ? Event.fromMap(oldEventMaps.first) : removedOldEvent;
+    final oldEventMaps = await db.query(
+      'events',
+      where: 'id = ?',
+      whereArgs: [originalEvent.id],
+      limit: 1,
+    );
+    final finalOldEvent = oldEventMaps.isNotEmpty
+        ? Event.fromMap(oldEventMaps.first)
+        : removedOldEvent;
 
     // Note: Notes are managed separately via records, not copied with events.
     // The new event shares the same record_uuid, so it accesses the same note.
 
-    return ChangeEventTimeResult(newEvent: createdEvent, oldEvent: finalOldEvent);
+    return ChangeEventTimeResult(
+      newEvent: createdEvent,
+      oldEvent: finalOldEvent,
+    );
   }
 
   /// Get event count by book
@@ -230,16 +244,17 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
   @override
   Future<List<String>> getAllNames(String bookUuid) async {
     final db = await getDatabaseFn();
-    final result = await db.query(
-      'events',
-      columns: ['DISTINCT name'],
-      where: 'book_uuid = ? AND name IS NOT NULL AND name != ""',
-      whereArgs: [bookUuid],
-      orderBy: 'name ASC',
+    final result = await db.rawQuery(
+      '''
+      SELECT DISTINCT r.name
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ? AND r.name IS NOT NULL AND r.name != ''
+      ORDER BY r.name ASC
+    ''',
+      [bookUuid],
     );
-    return result
-        .map((row) => row['name'] as String)
-        .toList();
+    return result.map((row) => row['name'] as String).toList();
   }
 
   @override
@@ -248,47 +263,58 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     final result = await db.query(
       'events',
       columns: ['DISTINCT record_number'],
-      where: 'book_uuid = ? AND record_number IS NOT NULL AND record_number != ""',
+      where:
+          'book_uuid = ? AND record_number IS NOT NULL AND record_number != ""',
       whereArgs: [bookUuid],
       orderBy: 'record_number ASC',
     );
-    return result
-        .map((row) => row['record_number'] as String)
-        .toList();
+    return result.map((row) => row['record_number'] as String).toList();
   }
 
   @override
   Future<List<NameRecordPair>> getAllNameRecordPairs(String bookUuid) async {
     final db = await getDatabaseFn();
-    final result = await db.query(
-      'events',
-      distinct: true,
-      columns: ['name', 'record_number'],
-      where: 'book_uuid = ? AND name IS NOT NULL AND name != "" AND record_number IS NOT NULL AND record_number != ""',
-      whereArgs: [bookUuid],
-      orderBy: 'name ASC, record_number ASC',
+    final result = await db.rawQuery(
+      '''
+      SELECT DISTINCT r.name AS name, e.record_number AS record_number
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ?
+        AND r.name IS NOT NULL AND r.name != ''
+        AND e.record_number IS NOT NULL AND e.record_number != ''
+      ORDER BY r.name ASC, e.record_number ASC
+    ''',
+      [bookUuid],
     );
     return result
-        .map((row) => NameRecordPair(
-              name: row['name'] as String,
-              recordNumber: row['record_number'] as String,
-            ))
+        .map(
+          (row) => NameRecordPair(
+            name: row['name'] as String,
+            recordNumber: row['record_number'] as String,
+          ),
+        )
         .toList();
   }
 
   @override
-  Future<List<String>> getRecordNumbersByName(String bookUuid, String name) async {
+  Future<List<String>> getRecordNumbersByName(
+    String bookUuid,
+    String name,
+  ) async {
     final db = await getDatabaseFn();
-    final result = await db.query(
-      'events',
-      columns: ['DISTINCT record_number'],
-      where: 'book_uuid = ? AND LOWER(name) = LOWER(?) AND record_number IS NOT NULL AND record_number != ""',
-      whereArgs: [bookUuid, name],
-      orderBy: 'record_number ASC',
+    final result = await db.rawQuery(
+      '''
+      SELECT DISTINCT e.record_number
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ?
+        AND LOWER(r.name) = LOWER(?)
+        AND e.record_number IS NOT NULL AND e.record_number != ''
+      ORDER BY e.record_number ASC
+    ''',
+      [bookUuid, name],
     );
-    return result
-        .map((row) => row['record_number'] as String)
-        .toList();
+    return result.map((row) => row['record_number'] as String).toList();
   }
 
   @override
@@ -297,11 +323,18 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
     String name,
     String recordNumber,
   ) async {
-    return query(
-      where: 'book_uuid = ? AND name = ? AND record_number = ?',
-      whereArgs: [bookUuid, name, recordNumber],
-      orderBy: 'start_time DESC',
+    final db = await getDatabaseFn();
+    final result = await db.rawQuery(
+      '''
+      SELECT e.*
+      FROM events e
+      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ? AND LOWER(r.name) = LOWER(?) AND e.record_number = ?
+      ORDER BY e.start_time DESC
+    ''',
+      [bookUuid, name, recordNumber],
     );
+    return result.map((row) => Event.fromMap(row)).toList();
   }
 
   // Sync-related methods
@@ -321,12 +354,7 @@ class EventRepositoryImpl extends BaseRepository<Event, String> implements IEven
       // Update existing event with server data
       final updateData = Map<String, dynamic>.from(changeData);
       updateData.remove('id');
-      await db.update(
-        'events',
-        updateData,
-        where: 'id = ?',
-        whereArgs: [id],
-      );
+      await db.update('events', updateData, where: 'id = ?', whereArgs: [id]);
     }
   }
 
