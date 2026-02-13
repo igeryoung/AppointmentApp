@@ -16,7 +16,7 @@ This is a cross-platform appointment scheduling app built with Flutter that allo
 
 ## Features
 
-- **Multi-platform support**: Android, iOS, Web, macOS
+- **Multi-platform support**: Web
 - **Appointment Books**: Create and organize multiple appointment books
 - **Schedule Views**: Day, 3-Day, and Week calendar views
 - **Event Management**: Create, edit, and delete appointments
@@ -27,9 +27,6 @@ This is a cross-platform appointment scheduling app built with Flutter that allo
 
 - Flutter SDK (>=3.0.0)
 - Dart SDK (>=3.0.0)
-- For mobile development:
-  - Android Studio with Android SDK
-  - Xcode (for iOS development on macOS)
 
 ## Installation
 
@@ -46,41 +43,7 @@ flutter pub get
 
 ## Running the App
 
-### Mobile Platforms
-
-**Android:**
-```bash
-flutter run -d android
-```
-
-**iOS (macOS only):**
-```bash
-flutter run -d ios
-```
-
-**iOS Simulator:**
-```bash
-flutter run -d apple_ios_simulator
-```
-
-### Desktop Platforms
-
-**macOS:**
-```bash
-flutter run -d macos
-```
-
-**Windows:**
-```bash
-flutter run -d windows
-```
-
-**Linux:**
-```bash
-flutter run -d linux
-```
-
-### Web Platform
+### Web
 
 **Default web port (auto-assigned):**
 ```bash
