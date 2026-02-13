@@ -55,7 +55,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 25,
+      version: 26,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -101,6 +101,12 @@ class PRDDatabaseService
           // Create indexes
           await db.execute('CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)');
           await db.execute('CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)');
+        }
+        // v26: Add missing columns to schedule_drawings table for caching
+        if (oldVersion < 26) {
+          await db.execute('ALTER TABLE schedule_drawings ADD COLUMN synced_at INTEGER');
+          await db.execute('ALTER TABLE schedule_drawings ADD COLUMN cached_at INTEGER');
+          await db.execute('ALTER TABLE schedule_drawings ADD COLUMN cache_hit_count INTEGER DEFAULT 0');
         }
       },
     );
@@ -196,6 +202,9 @@ class PRDDatabaseService
         updated_at INTEGER NOT NULL DEFAULT (strftime('%s', 'now')),
         version INTEGER DEFAULT 1,
         is_dirty INTEGER DEFAULT 0,
+        synced_at INTEGER,
+        cached_at INTEGER,
+        cache_hit_count INTEGER DEFAULT 0,
         FOREIGN KEY (book_uuid) REFERENCES books (book_uuid) ON DELETE CASCADE,
         UNIQUE(book_uuid, date, view_mode)
       )

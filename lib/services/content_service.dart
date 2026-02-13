@@ -478,7 +478,7 @@ class ContentService {
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
         // Save locally only
-        await _db.saveScheduleDrawing(drawing);
+        await _db.saveDrawing(drawing);
         return;
       }
 
@@ -500,7 +500,7 @@ class ContentService {
     } catch (e) {
       // Save locally on error
       try {
-        await _db.saveScheduleDrawing(drawing);
+        await _db.saveDrawing(drawing);
       } catch (dbError) {
         rethrow;
       }

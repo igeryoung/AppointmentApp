@@ -59,15 +59,15 @@ class DrawingRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _getDrawing(Request request) async {
     try {
-      // Extract path parameters
-      final bookId = int.tryParse(request.params['bookId'] ?? '');
+      // Extract path parameters - bookId is actually a UUID string
+      final bookUuid = request.params['bookId'] ?? '';
 
       // Extract query parameters
       final date = request.url.queryParameters['date'];
       final viewModeStr = request.url.queryParameters['viewMode'];
       final viewMode = int.tryParse(viewModeStr ?? '');
 
-      if (bookId == null || date == null || viewMode == null) {
+      if (bookUuid.isEmpty || date == null || viewMode == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
@@ -94,7 +94,7 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] GET /api/books/$bookId/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId');
+        print('❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -105,8 +105,8 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] GET /api/books/$bookId/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId');
+      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -117,7 +117,7 @@ class DrawingRoutes {
       }
 
       // Get the drawing
-      final drawing = await drawingService.getDrawing(bookId, date, viewMode);
+      final drawing = await drawingService.getDrawing(bookUuid, date, viewMode);
 
       // Return 200 with null if drawing doesn't exist (not an error)
       return Response.ok(
@@ -161,10 +161,10 @@ class DrawingRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _createOrUpdateDrawing(Request request) async {
     try {
-      // Extract path parameters
-      final bookId = int.tryParse(request.params['bookId'] ?? '');
+      // Extract path parameters - bookId is actually a UUID string
+      final bookUuid = request.params['bookId'] ?? '';
 
-      if (bookId == null) {
+      if (bookUuid.isEmpty) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
@@ -209,7 +209,7 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] POST /api/books/$bookId/drawings - Invalid device credentials: deviceId=$deviceId');
+        print('❌ [403] POST /api/books/$bookUuid/drawings - Invalid device credentials: deviceId=$deviceId');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -220,8 +220,8 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] POST /api/books/$bookId/drawings - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId, date=$date, viewMode=$viewMode');
+      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] POST /api/books/$bookUuid/drawings - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid, date=$date, viewMode=$viewMode');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -236,7 +236,7 @@ class DrawingRoutes {
       // So expectedVersion = client version - 1 (or null for first sync)
       final expectedVersion = version != null ? version - 1 : null;
       final result = await drawingService.createOrUpdateDrawing(
-        bookId: bookId,
+        bookUuid: bookUuid,
         deviceId: deviceId,
         date: date,
         viewMode: viewMode,
@@ -306,15 +306,15 @@ class DrawingRoutes {
   ///   403: { success: false, message: "Unauthorized" }
   Future<Response> _deleteDrawing(Request request) async {
     try {
-      // Extract path parameters
-      final bookId = int.tryParse(request.params['bookId'] ?? '');
+      // Extract path parameters - bookId is actually a UUID string
+      final bookUuid = request.params['bookId'] ?? '';
 
       // Extract query parameters
       final date = request.url.queryParameters['date'];
       final viewModeStr = request.url.queryParameters['viewMode'];
       final viewMode = int.tryParse(viewModeStr ?? '');
 
-      if (bookId == null || date == null || viewMode == null) {
+      if (bookUuid.isEmpty || date == null || viewMode == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
@@ -341,7 +341,7 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] DELETE /api/books/$bookId/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId');
+        print('❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -352,8 +352,8 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] DELETE /api/books/$bookId/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId');
+      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -364,7 +364,7 @@ class DrawingRoutes {
       }
 
       // Delete the drawing
-      final deleted = await drawingService.deleteDrawing(bookId, date, viewMode);
+      final deleted = await drawingService.deleteDrawing(bookUuid, date, viewMode);
 
       if (deleted) {
         return Response.ok(
@@ -397,7 +397,7 @@ class DrawingRoutes {
 
   /// POST /api/drawings/batch
   ///
-  /// Batch get drawings for a date range and view mode
+  /// Batch get drawings for a date range
   ///
   /// Headers:
   ///   X-Device-ID: UUID of the device
@@ -405,12 +405,9 @@ class DrawingRoutes {
   ///
   /// Body:
   ///   {
-  ///     "bookId": 1,
-  ///     "dateRange": {
-  ///       "start": "2025-10-23",
-  ///       "end": "2025-10-30"
-  ///     },
-  ///     "viewMode": 1
+  ///     "bookUuid": "uuid-string",
+  ///     "startDate": "2025-10-23",
+  ///     "endDate": "2025-10-30"
   ///   }
   ///
   /// Response:
@@ -441,28 +438,15 @@ class DrawingRoutes {
       // Parse request body
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
-      final bookId = json['bookId'] as int?;
-      final dateRange = json['dateRange'] as Map<String, dynamic>?;
-      final viewMode = json['viewMode'] as int?;
+      final bookUuid = json['bookUuid'] as String?;
+      final startDate = json['startDate'] as String?;
+      final endDate = json['endDate'] as String?;
 
-      if (bookId == null || dateRange == null || viewMode == null) {
+      if (bookUuid == null || bookUuid.isEmpty || startDate == null || endDate == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
-            'message': 'Missing bookId, dateRange, or viewMode',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
-
-      final startDate = dateRange['start'] as String?;
-      final endDate = dateRange['end'] as String?;
-
-      if (startDate == null || endDate == null) {
-        return Response.badRequest(
-          body: jsonEncode({
-            'success': false,
-            'message': 'Missing start or end date in dateRange',
+            'message': 'Missing bookUuid, startDate, or endDate',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -481,8 +465,8 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookId)) {
-        print('❌ [403] POST /api/drawings/batch - Unauthorized access to book: deviceId=$deviceId, bookId=$bookId');
+      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+        print('❌ [403] POST /api/drawings/batch - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -495,10 +479,9 @@ class DrawingRoutes {
       // Batch get drawings (authorization handled in query)
       final drawings = await drawingService.batchGetDrawings(
         deviceId: deviceId,
-        bookId: bookId,
+        bookUuid: bookUuid,
         startDate: startDate,
         endDate: endDate,
-        viewMode: viewMode,
       );
 
       return Response.ok(

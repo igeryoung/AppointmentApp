@@ -110,9 +110,13 @@ class EventMetadataSection extends StatelessWidget {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: event.isRemoved ? Colors.red.shade50 : Colors.orange.shade50,
+              color: event.isRemoved
+                  ? Colors.red.shade50
+                  : Colors.orange.shade50,
               border: Border.all(
-                color: event.isRemoved ? Colors.red.shade300 : Colors.orange.shade300,
+                color: event.isRemoved
+                    ? Colors.red.shade300
+                    : Colors.orange.shade300,
                 style: BorderStyle.solid,
               ),
               borderRadius: BorderRadius.circular(8),
@@ -123,18 +127,26 @@ class EventMetadataSection extends StatelessWidget {
                 Row(
                   children: [
                     Icon(
-                      event.isRemoved ? Icons.remove_circle_outline : Icons.schedule,
-                      color: event.isRemoved ? Colors.red.shade700 : Colors.orange.shade700,
+                      event.isRemoved
+                          ? Icons.remove_circle_outline
+                          : Icons.schedule,
+                      color: event.isRemoved
+                          ? Colors.red.shade700
+                          : Colors.orange.shade700,
                       size: 20,
                     ),
                     const SizedBox(width: 8),
                     Text(
                       event.isRemoved
-                          ? (event.hasNewTime ? 'Event Time Changed' : 'Event Removed')
+                          ? (event.hasNewTime
+                                ? 'Event Time Changed'
+                                : 'Event Removed')
                           : 'Time Changed',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: event.isRemoved ? Colors.red.shade700 : Colors.orange.shade700,
+                        color: event.isRemoved
+                            ? Colors.red.shade700
+                            : Colors.orange.shade700,
                       ),
                     ),
                   ],
@@ -144,7 +156,9 @@ class EventMetadataSection extends StatelessWidget {
                   Text(
                     'Reason: ${event.removalReason}',
                     style: TextStyle(
-                      color: event.isRemoved ? Colors.red.shade600 : Colors.orange.shade600,
+                      color: event.isRemoved
+                          ? Colors.red.shade600
+                          : Colors.orange.shade600,
                       fontSize: 13,
                     ),
                   ),
@@ -160,7 +174,11 @@ class EventMetadataSection extends StatelessWidget {
                     ),
                     child: Row(
                       children: [
-                        Icon(Icons.arrow_forward, color: Colors.red.shade700, size: 16),
+                        Icon(
+                          Icons.arrow_forward,
+                          color: Colors.red.shade700,
+                          size: 16,
+                        ),
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
@@ -205,7 +223,10 @@ class EventMetadataSection extends StatelessWidget {
                     decoration: InputDecoration(
                       labelText: l10n.phone,
                       border: const OutlineInputBorder(),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
                     ),
                     keyboardType: TextInputType.phone,
                   ),
@@ -221,7 +242,7 @@ class EventMetadataSection extends StatelessWidget {
                   _RecordNumberAutocomplete(
                     value: recordNumber,
                     allRecordNumberOptions: _getFilteredRecordNumberOptions(),
-                    isEnabled: true,  // Always enabled for new behavior
+                    isEnabled: true, // Always enabled for new behavior
                     labelText: l10n.recordNumber,
                     onRecordNumberSelected: onRecordNumberSelected,
                     onRecordNumberChanged: onRecordNumberChanged,
@@ -252,7 +273,10 @@ class EventMetadataSection extends StatelessWidget {
                       decoration: InputDecoration(
                         labelText: l10n.eventType,
                         border: const OutlineInputBorder(),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
                         suffixIcon: const Icon(Icons.arrow_drop_down),
                       ),
                       child: Text(
@@ -281,10 +305,19 @@ class EventMetadataSection extends StatelessWidget {
                   Expanded(
                     child: Card(
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                        title: Text(l10n.startTime, style: const TextStyle(fontSize: 13)),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
+                        title: Text(
+                          l10n.startTime,
+                          style: const TextStyle(fontSize: 13),
+                        ),
                         subtitle: Text(
-                          DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(startTime),
+                          DateFormat(
+                            'MMM d, y - HH:mm',
+                            Localizations.localeOf(context).toString(),
+                          ).format(startTime),
                           style: const TextStyle(fontSize: 11),
                         ),
                         trailing: const Icon(Icons.access_time, size: 18),
@@ -296,12 +329,18 @@ class EventMetadataSection extends StatelessWidget {
                   Expanded(
                     child: Card(
                       child: ListTile(
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 2,
+                        ),
                         title: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Flexible(
-                              child: Text(l10n.endTime, style: const TextStyle(fontSize: 13)),
+                              child: Text(
+                                l10n.endTime,
+                                style: const TextStyle(fontSize: 13),
+                              ),
                             ),
                             if (endTime != null) ...[
                               const SizedBox(width: 4),
@@ -311,7 +350,10 @@ class EventMetadataSection extends StatelessWidget {
                         ),
                         subtitle: Text(
                           endTime != null
-                              ? DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(endTime!)
+                              ? DateFormat(
+                                  'MMM d, y - HH:mm',
+                                  Localizations.localeOf(context).toString(),
+                                ).format(endTime!)
                               : l10n.openEnded,
                           style: const TextStyle(fontSize: 11),
                         ),
@@ -328,7 +370,12 @@ class EventMetadataSection extends StatelessWidget {
                   Card(
                     child: ListTile(
                       title: Text(l10n.startTime),
-                      subtitle: Text(DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(startTime)),
+                      subtitle: Text(
+                        DateFormat(
+                          'MMM d, y - HH:mm',
+                          Localizations.localeOf(context).toString(),
+                        ).format(startTime),
+                      ),
                       trailing: const Icon(Icons.access_time),
                       onTap: onStartTimeTap,
                     ),
@@ -345,9 +392,14 @@ class EventMetadataSection extends StatelessWidget {
                           ],
                         ],
                       ),
-                      subtitle: Text(endTime != null
-                          ? DateFormat('MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(endTime!)
-                          : 'Open-ended'),
+                      subtitle: Text(
+                        endTime != null
+                            ? DateFormat(
+                                'MMM d, y - HH:mm',
+                                Localizations.localeOf(context).toString(),
+                              ).format(endTime!)
+                            : 'Open-ended',
+                      ),
                       trailing: const Icon(Icons.access_time),
                       onTap: onEndTimeTap,
                     ),
@@ -363,14 +415,19 @@ class EventMetadataSection extends StatelessWidget {
 
   /// Build display text for event types with overflow handling
   /// Shows "Type1, Type2, +N more" format when there are too many types
-  String _buildEventTypeDisplayText(BuildContext context, List<EventType> types) {
+  String _buildEventTypeDisplayText(
+    BuildContext context,
+    List<EventType> types,
+  ) {
     if (types.isEmpty) {
       return '';
     }
 
     // Get localized names
     final typeNames = types
-        .map((type) => EventTypeLocalizations.getLocalizedEventType(context, type))
+        .map(
+          (type) => EventTypeLocalizations.getLocalizedEventType(context, type),
+        )
         .toList();
 
     // If only 1-2 types, show all
@@ -404,9 +461,7 @@ class EventMetadataSection extends StatelessWidget {
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
           onTap: onClearEndTime,
-          child: const Center(
-            child: Icon(Icons.clear, size: 16),
-          ),
+          child: const Center(child: Icon(Icons.clear, size: 16)),
         ),
       ),
     );
@@ -444,7 +499,8 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   });
 
   @override
-  State<_RecordNumberAutocomplete> createState() => _RecordNumberAutocompleteState();
+  State<_RecordNumberAutocomplete> createState() =>
+      _RecordNumberAutocompleteState();
 }
 
 class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
@@ -502,36 +558,55 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
 
     final query = _controller.text.toLowerCase();
     if (query.isEmpty) {
-      options.addAll(widget.allRecordNumberOptions.map((opt) =>
-        _RecordNumberOptionItem(
-          displayText: opt.displayText,
-          value: opt.recordNumber,
-          isSpecial: false,
-        )
-      ));
+      options.addAll(
+        widget.allRecordNumberOptions.map(
+          (opt) => _RecordNumberOptionItem(
+            displayText: opt.displayText,
+            value: opt.recordNumber,
+            isSpecial: false,
+          ),
+        ),
+      );
     } else {
       final filtered = widget.allRecordNumberOptions.where((opt) {
         return opt.recordNumber.toLowerCase().contains(query) ||
-               opt.name.toLowerCase().contains(query);
+            opt.name.toLowerCase().contains(query);
       });
-      options.addAll(filtered.map((opt) =>
-        _RecordNumberOptionItem(
-          displayText: opt.displayText,
-          value: opt.recordNumber,
-          isSpecial: false,
-        )
-      ));
+      options.addAll(
+        filtered.map(
+          (opt) => _RecordNumberOptionItem(
+            displayText: opt.displayText,
+            value: opt.recordNumber,
+            isSpecial: false,
+          ),
+        ),
+      );
     }
     return options;
   }
 
   void _showOverlay() {
+    if (_getFilteredOptions().isEmpty) {
+      _removeOverlay();
+      return;
+    }
     _removeOverlay();
     _overlayEntry = _createOverlayEntry();
     Overlay.of(context).insert(_overlayEntry!);
   }
 
   void _updateOverlay() {
+    final hasOptions = _getFilteredOptions().isNotEmpty;
+    if (!hasOptions) {
+      _removeOverlay();
+      return;
+    }
+
+    if (_overlayEntry == null) {
+      _showOverlay();
+      return;
+    }
+
     _overlayEntry?.markNeedsBuild();
   }
 
@@ -547,6 +622,9 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
     return OverlayEntry(
       builder: (context) {
         final options = _getFilteredOptions();
+        if (options.isEmpty) {
+          return const SizedBox.shrink();
+        }
 
         return Positioned(
           width: size.width,
@@ -575,7 +653,10 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
                         _focusNode.unfocus();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 10.0,
+                          horizontal: 12.0,
+                        ),
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
@@ -588,7 +669,9 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
                           option.displayText,
                           style: TextStyle(
                             fontSize: 14,
-                            fontWeight: option.isSpecial ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: option.isSpecial
+                                ? FontWeight.bold
+                                : FontWeight.normal,
                           ),
                         ),
                       ),
@@ -618,7 +701,10 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
         decoration: InputDecoration(
           labelText: widget.labelText,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
           errorText: widget.errorText,
           suffixIcon: widget.isValidating
               ? const SizedBox(
@@ -719,7 +805,9 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
     if (text.isEmpty) {
       return widget.allNames; // Show all names when empty (user requested)
     }
-    return widget.allNames.where((name) => name.toLowerCase().contains(text)).toList();
+    return widget.allNames
+        .where((name) => name.toLowerCase().contains(text))
+        .toList();
   }
 
   void _showOverlay() {
@@ -775,7 +863,10 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
                         _focusNode.unfocus();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 10.0,
+                          horizontal: 12.0,
+                        ),
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
@@ -809,7 +900,10 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
         decoration: InputDecoration(
           labelText: widget.labelText,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
           suffixIcon: widget.isReadOnly
               ? const Icon(Icons.lock_outline, size: 18)
               : null,
