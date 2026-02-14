@@ -2,11 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import '../../cubits/schedule_cubit.dart';
-import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
-import '../../models/event.dart';
 import '../../repositories/event_repository.dart';
-import '../../services/database_service_interface.dart';
 import '../../services/service_locator.dart';
 import '../../services/time_service.dart';
 import 'query_appointments_dialog.dart';
@@ -22,14 +19,11 @@ class ScheduleFabMenuHelper {
     required bool isDrawingMode,
     required bool Function() isViewingToday,
     required DateTime selectedDate,
-    required DateTime lastActiveDate,
     required Future<void> Function() saveDrawing,
     required Future<void> Function() loadDrawing,
     required VoidCallback toggleDrawingMode,
     required VoidCallback createEvent,
-    required IDatabaseService dbService,
     required String bookUuid,
-    required DateTime Function(DateTime) get3DayWindowStart,
     required Function(DateTime) onDateChange,
   }) {
     if (!isMenuVisible) {
@@ -60,11 +54,17 @@ class ScheduleFabMenuHelper {
         FloatingActionButton(
           heroTag: 'test_time',
           onPressed: () => ScheduleTestMenuHelper.showTestTimeDialog(context),
-          backgroundColor: TimeService.instance.isTestMode ? Colors.red : Colors.grey.shade700,
+          backgroundColor: TimeService.instance.isTestMode
+              ? Colors.red
+              : Colors.grey.shade700,
           child: Icon(
-            TimeService.instance.isTestMode ? Icons.schedule : Icons.access_time,
+            TimeService.instance.isTestMode
+                ? Icons.schedule
+                : Icons.access_time,
           ),
-          tooltip: TimeService.instance.isTestMode ? l10n.resetToRealTime : l10n.testTimeActive,
+          tooltip: TimeService.instance.isTestMode
+              ? l10n.resetToRealTime
+              : l10n.testTimeActive,
         ),
         const SizedBox(height: 12),
         // Go to Today FAB (only show when not viewing today)
@@ -81,98 +81,20 @@ class ScheduleFabMenuHelper {
             child: const Icon(Icons.today),
             tooltip: l10n.goToTodayTooltip,
           ),
-        if (!isViewingToday())
-          const SizedBox(height: 12),
+        if (!isViewingToday()) const SizedBox(height: 12),
         // Query Appointments FAB (disabled in drawing mode)
         FloatingActionButton(
           heroTag: 'query_appointments',
           onPressed: isDrawingMode
               ? null
               : () => showQueryAppointmentsDialog(
-                    context,
-                    bookUuid,
-                    getIt<IEventRepository>(),
-                  ),
+                  context,
+                  bookUuid,
+                  getIt<IEventRepository>(),
+                ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.teal,
           child: const Icon(Icons.search),
           tooltip: isDrawingMode ? null : l10n.queryAppointments,
-        ),
-        const SizedBox(height: 12),
-        // Generate random events FAB (disabled in drawing mode)
-        FloatingActionButton(
-          heroTag: 'generate_events',
-          onPressed: isDrawingMode
-              ? null
-              : () => ScheduleTestMenuHelper.showGenerateEventsDialog(
-                    context: context,
-                    dbService: dbService,
-                    bookUuid: bookUuid,
-                    selectedDate: selectedDate,
-                    get3DayWindowStart: get3DayWindowStart,
-                  ),
-          backgroundColor: isDrawingMode ? Colors.grey : Colors.purple,
-          child: const Icon(Icons.science),
-          tooltip: isDrawingMode ? null : 'Generate Random Events',
-        ),
-        const SizedBox(height: 12),
-        // Clear all events FAB (disabled in drawing mode)
-        FloatingActionButton(
-          heroTag: 'clear_all_events',
-          onPressed: isDrawingMode
-              ? null
-              : () => ScheduleTestMenuHelper.showClearAllEventsDialog(
-                    context,
-                    dbService,
-                    bookUuid,
-                  ),
-          backgroundColor: isDrawingMode ? Colors.grey : Colors.red.shade700,
-          child: const Icon(Icons.delete_sweep),
-          tooltip: isDrawingMode ? null : '清除所有活動',
-        ),
-        const SizedBox(height: 12),
-        // Heavy load test Stage 1 FAB (disabled in drawing mode)
-        FloatingActionButton(
-          heroTag: 'heavy_load_stage1',
-          onPressed: isDrawingMode
-              ? null
-              : () => ScheduleTestMenuHelper.showHeavyLoadStage1Dialog(
-                    context,
-                    dbService,
-                    bookUuid,
-                  ),
-          backgroundColor: isDrawingMode ? Colors.grey : Colors.blue,
-          child: const Icon(Icons.create),
-          tooltip: isDrawingMode ? null : l10n.heavyLoadStage1Only,
-        ),
-        const SizedBox(height: 12),
-        // Heavy load test Stage 2 FAB (disabled in drawing mode)
-        FloatingActionButton(
-          heroTag: 'heavy_load_stage2',
-          onPressed: isDrawingMode
-              ? null
-              : () => ScheduleTestMenuHelper.showHeavyLoadStage2Dialog(
-                    context,
-                    dbService,
-                    bookUuid,
-                  ),
-          backgroundColor: isDrawingMode ? Colors.grey : Colors.indigo,
-          child: const Icon(Icons.draw),
-          tooltip: isDrawingMode ? null : l10n.heavyLoadStage2Only,
-        ),
-        const SizedBox(height: 12),
-        // Heavy load test FAB (disabled in drawing mode)
-        FloatingActionButton(
-          heroTag: 'heavy_load_test',
-          onPressed: isDrawingMode
-              ? null
-              : () => ScheduleTestMenuHelper.showHeavyLoadTestDialog(
-                    context,
-                    dbService,
-                    bookUuid,
-                  ),
-          backgroundColor: isDrawingMode ? Colors.grey : Colors.deepOrange,
-          child: const Icon(Icons.warning_amber),
-          tooltip: isDrawingMode ? null : l10n.heavyLoadTest,
         ),
         const SizedBox(height: 12),
         // Drawing mode toggle FAB
