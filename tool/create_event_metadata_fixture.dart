@@ -1,6 +1,8 @@
 import 'dart:io';
+import 'dart:convert';
 
-import 'package:schedule_note_app/services/api_client.dart';
+import 'package:http/http.dart' as http;
+import 'package:http/io_client.dart';
 import 'package:uuid/uuid.dart';
 
 Map<String, String> _loadEnvFile(String path) {
@@ -66,12 +68,14 @@ Future<void> main() async {
     return;
   }
 
-  final apiClient = ApiClient(baseUrl: baseUrl);
   final uuid = const Uuid();
   final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+  final client = _buildClient(baseUrl);
 
   try {
-    final createdBook = await apiClient.createBook(
+    final createdBook = await _createBook(
+      client: client,
+      baseUrl: baseUrl,
       name: 'IT metadata fixture $suffix',
       deviceId: deviceId,
       deviceToken: deviceToken,
@@ -86,7 +90,9 @@ Future<void> main() async {
     final startTime = DateTime.now().toUtc().add(const Duration(minutes: 30));
     final endTime = startTime.add(const Duration(minutes: 30));
 
-    await apiClient.createEvent(
+    await _createEvent(
+      client: client,
+      baseUrl: baseUrl,
       bookUuid: bookUuid,
       eventData: {
         'id': eventId,
@@ -126,7 +132,85 @@ SN_TEST_RECORD_UUID=$recordUuid
     stdout.writeln(
       'Run test: flutter test test/app/integration/event_metadata_server_smoke_test.dart',
     );
+  } catch (e) {
+    stderr.writeln('Failed to create integration fixture: $e');
+    exitCode = 1;
   } finally {
-    apiClient.dispose();
+    client.close();
+  }
+}
+
+http.Client _buildClient(String baseUrl) {
+  final isHttps = baseUrl.startsWith('https://');
+  if (!isHttps) {
+    return http.Client();
+  }
+
+  final allowBadCert =
+      (Platform.environment['SN_TEST_ALLOW_BAD_CERT'] ?? '1') != '0';
+  final ioClient = HttpClient();
+  if (allowBadCert) {
+    ioClient.badCertificateCallback = (_, __, ___) => true;
+  }
+  return IOClient(ioClient);
+}
+
+Future<Map<String, dynamic>> _createBook({
+  required http.Client client,
+  required String baseUrl,
+  required String name,
+  required String deviceId,
+  required String deviceToken,
+}) async {
+  final response = await client
+      .post(
+        Uri.parse('$baseUrl/api/books'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode({'name': name}),
+      )
+      .timeout(const Duration(seconds: 20));
+
+  if (response.statusCode != 200) {
+    throw StateError(
+      'Create book failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
+  final body = jsonDecode(response.body) as Map<String, dynamic>;
+  final book = body['book'];
+  if (book is Map<String, dynamic>) {
+    return {...book, 'uuid': book['bookUuid'] ?? book['book_uuid']};
+  }
+  return body;
+}
+
+Future<void> _createEvent({
+  required http.Client client,
+  required String baseUrl,
+  required String bookUuid,
+  required Map<String, dynamic> eventData,
+  required String deviceId,
+  required String deviceToken,
+}) async {
+  final response = await client
+      .post(
+        Uri.parse('$baseUrl/api/books/$bookUuid/events'),
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Device-ID': deviceId,
+          'X-Device-Token': deviceToken,
+        },
+        body: jsonEncode(eventData),
+      )
+      .timeout(const Duration(seconds: 20));
+
+  if (response.statusCode != 200) {
+    throw StateError(
+      'Create event failed: ${response.statusCode} ${response.body}',
+    );
   }
 }

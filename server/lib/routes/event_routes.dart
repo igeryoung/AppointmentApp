@@ -404,7 +404,7 @@ class EventRoutes {
           is_deleted, is_removed, removal_reason, original_event_id, new_event_id, is_checked, has_note
         )
         VALUES (
-          COALESCE(NULLIF(@eventId, ''), uuid_generate_v4()),
+          COALESCE(NULLIF(@eventId, '')::uuid, uuid_generate_v4()),
           @bookUuid, @recordUuid, @title, @eventTypes, @hasChargeItems,
           @startTime, @endTime, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1,
           false, @isRemoved, @removalReason, @originalEventId, @newEventId, @isChecked, @hasNote

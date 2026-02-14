@@ -13,6 +13,7 @@ import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../support/db_seed.dart';
 import '../../support/fixtures/event_fixtures.dart';
+import '../../support/fixtures/note_fixtures.dart';
 import '../../support/test_db_path.dart';
 
 class _FakeEventMetadataApiClient extends ApiClient {
@@ -31,6 +32,8 @@ class _FakeEventMetadataApiClient extends ApiClient {
   Map<String, dynamic>? lastRecordData;
   String? lastRecordDeviceId;
   String? lastRecordDeviceToken;
+  Object? updateEventError;
+  Object? updateRecordError;
 
   @override
   Future<Map<String, dynamic>> updateEvent({
@@ -41,6 +44,7 @@ class _FakeEventMetadataApiClient extends ApiClient {
     required String deviceToken,
   }) async {
     updateEventCalls += 1;
+    if (updateEventError != null) throw updateEventError!;
     lastUpdateBookUuid = bookUuid;
     lastUpdateEventId = eventId;
     lastEventData = Map<String, dynamic>.from(eventData);
@@ -57,6 +61,7 @@ class _FakeEventMetadataApiClient extends ApiClient {
     required String deviceToken,
   }) async {
     updateRecordCalls += 1;
+    if (updateRecordError != null) throw updateRecordError!;
     lastRecordUuid = recordUuid;
     lastRecordData = Map<String, dynamic>.from(recordData);
     lastRecordDeviceId = deviceId;
@@ -70,6 +75,10 @@ class _FakeNoteSyncAdapter extends NoteSyncAdapter {
 
   int saveCalls = 0;
   Note? existingNote;
+  Note? saveResponse;
+  String? lastSaveEventId;
+  Note? lastSavedNote;
+  Object? saveError;
 
   @override
   Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
@@ -84,7 +93,10 @@ class _FakeNoteSyncAdapter extends NoteSyncAdapter {
   @override
   Future<Note> saveNote(String eventId, Note note) async {
     saveCalls += 1;
-    return note;
+    lastSaveEventId = eventId;
+    lastSavedNote = note;
+    if (saveError != null) throw saveError!;
+    return saveResponse ?? note;
   }
 }
 
@@ -211,6 +223,88 @@ void main() {
 
       expect(fakeApiClient.updateEventCalls, 0);
       expect(fakeApiClient.updateRecordCalls, 0);
+    },
+  );
+
+  test(
+    'EVENT-FLOW-001: saveEvent() follows app trigger -> server -> return -> local/state update',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      fakeNoteSyncAdapter.saveResponse = makeNote(
+        recordUuid: 'record-a1',
+        version: 7,
+      );
+
+      final controller = buildController();
+      controller.updatePhone('0955667788');
+      controller.updateEventTypes(const [EventType.followUp]);
+
+      await controller.saveEvent();
+
+      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.lastSaveEventId, 'event-a1');
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 1);
+
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.recordUuid, 'record-a1');
+      expect(controller.state.note!.version, 7);
+      expect(controller.state.lastKnownPages, isNotEmpty);
+      expect(controller.state.hasChanges, isFalse);
+      expect(controller.state.hasUnsyncedChanges, isFalse);
+      expect(controller.state.isOffline, isFalse);
+
+      final persistedEvent = await dbService.getEventById('event-a1');
+      expect(persistedEvent, isNotNull);
+      expect(persistedEvent!.eventTypes, const [EventType.followUp]);
+
+      final recordRows = await db.query(
+        'records',
+        columns: ['phone'],
+        where: 'record_uuid = ?',
+        whereArgs: ['record-a1'],
+        limit: 1,
+      );
+      expect(recordRows.single['phone'], '0955667788');
+    },
+  );
+
+  test(
+    'EVENT-FLOW-002: saveEvent() marks state offline when metadata sync fails after trigger',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      fakeApiClient.updateEventError = ApiException(
+        'Server unavailable',
+        statusCode: 503,
+      );
+
+      final controller = buildController();
+      controller.updatePhone('0900001234');
+      controller.updateEventTypes(const [EventType.emergency]);
+
+      await expectLater(controller.saveEvent, throwsA(isA<ApiException>()));
+
+      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 0);
+      expect(controller.state.isOffline, isTrue);
+      expect(controller.state.isLoading, isFalse);
+
+      final persistedEvent = await dbService.getEventById('event-a1');
+      expect(persistedEvent, isNotNull);
+      expect(persistedEvent!.eventTypes, const [EventType.emergency]);
     },
   );
 }
