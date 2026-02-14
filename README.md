@@ -67,6 +67,16 @@ Run integration tests:
 flutter test integration_test/
 ```
 
+Run live server metadata smoke test (auto-create fixture IDs):
+```bash
+SN_TEST_BASE_URL=http://localhost:8080 \
+SN_TEST_DEVICE_ID=<device-id> \
+SN_TEST_DEVICE_TOKEN=<device-token> \
+dart run tool/create_event_metadata_fixture.dart
+
+flutter test test/app/integration/event_metadata_server_smoke_test.dart
+```
+
 ## Project Structure
 
 ```

@@ -28,7 +28,7 @@ class EventDetailController {
   ContentService? _contentService;
   NoteSyncAdapter? _noteSyncAdapter;
   ServerHealthChecker? _serverHealthChecker;
-  final ConnectivityWatcher _connectivityWatcher = ConnectivityWatcher();
+  final ConnectivityWatcher _connectivityWatcher;
   StreamSubscription<bool>? _connectivitySubscription;
 
   // State tracking
@@ -41,7 +41,21 @@ class EventDetailController {
     required this.isNew,
     required IDatabaseService dbService,
     required this.onStateChanged,
+    ContentService? contentService,
+    NoteSyncAdapter? noteSyncAdapter,
+    ServerHealthChecker? serverHealthChecker,
+    ConnectivityWatcher? connectivityWatcher,
   })  : _dbService = dbService,
+        _contentService = contentService,
+        _noteSyncAdapter =
+            noteSyncAdapter ??
+            (contentService != null ? NoteSyncAdapter(contentService) : null),
+        _serverHealthChecker =
+            serverHealthChecker ??
+            (contentService != null
+                ? ServerHealthChecker(contentService)
+                : null),
+        _connectivityWatcher = connectivityWatcher ?? ConnectivityWatcher(),
         _state = EventDetailState.fromEvent(event);
 
   EventDetailState get state => _state;
@@ -288,6 +302,12 @@ class EventDetailController {
             ));
             // Save to server
             await saveNoteToServer(savedEvent.id!, existingNote.pages, canvasSize: canvasSize);
+            await _syncMetadataToServer(
+              eventData: savedEvent,
+              name: nameText,
+              recordNumber: recordNumberText,
+              phone: phoneText.isEmpty ? null : phoneText,
+            );
             return savedEvent;
           }
         }
@@ -321,6 +341,12 @@ class EventDetailController {
             ));
             // Save to server
             await saveNoteToServer(savedEvent.id!, existingNote.pages, canvasSize: canvasSize);
+            await _syncMetadataToServer(
+              eventData: savedEvent,
+              name: nameText,
+              recordNumber: recordNumberText,
+              phone: phoneText.isEmpty ? null : phoneText,
+            );
             return savedEvent;
           }
         }
@@ -328,6 +354,12 @@ class EventDetailController {
 
       // Save handwriting note to server
       await saveNoteToServer(savedEvent.id!, pages, canvasSize: canvasSize);
+      await _syncMetadataToServer(
+        eventData: savedEvent,
+        name: nameText,
+        recordNumber: recordNumberText,
+        phone: phoneText.isEmpty ? null : phoneText,
+      );
 
       return savedEvent;
     } catch (e) {
@@ -403,6 +435,71 @@ class EventDetailController {
       hasUnsyncedChanges: false,
       lastKnownPages: savedNote.pages,
     ));
+  }
+
+  Map<String, dynamic> _buildEventSyncPayload(
+    Event eventData, {
+    required String name,
+    required String? phone,
+  }) {
+    final payload = Map<String, dynamic>.from(eventData.toMap());
+    payload['name'] = name;
+    payload['record_name'] = name;
+    payload['recordName'] = name;
+    payload['phone'] = phone;
+    payload['eventTypes'] = eventData.eventTypes.map((t) => t.name).toList();
+    return payload;
+  }
+
+  Future<void> _syncMetadataToServer({
+    required Event eventData,
+    required String name,
+    required String recordNumber,
+    required String? phone,
+  }) async {
+    if (_contentService == null) {
+      throw Exception('Cannot sync metadata: Services not initialized');
+    }
+    if (eventData.id == null) {
+      throw Exception('Cannot sync metadata: Event ID is missing');
+    }
+    if (_dbService is! PRDDatabaseService) return;
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final credentials = await prdDb.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception('Device not registered, cannot sync metadata to server');
+    }
+
+    try {
+      final apiClient = _contentService!.apiClient;
+
+      await apiClient.updateEvent(
+        bookUuid: eventData.bookUuid,
+        eventId: eventData.id!,
+        eventData: _buildEventSyncPayload(eventData, name: name, phone: phone),
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+
+      if (eventData.recordUuid.isNotEmpty) {
+        await apiClient.updateRecord(
+          recordUuid: eventData.recordUuid,
+          recordData: {
+            'name': name,
+            'phone': phone,
+            'record_number': recordNumber,
+          },
+          deviceId: credentials.deviceId,
+          deviceToken: credentials.deviceToken,
+        );
+      }
+
+      _updateState(_state.copyWith(isOffline: false));
+    } catch (e) {
+      _updateState(_state.copyWith(isOffline: true));
+      rethrow;
+    }
   }
 
   /// Delete event permanently

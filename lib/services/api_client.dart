@@ -120,6 +120,46 @@ class ApiClient {
     }
   }
 
+  /// Update record metadata on server.
+  /// Used to sync record-level fields (name/phone/record_number).
+  Future<Map<String, dynamic>> updateRecord({
+    required String recordUuid,
+    required Map<String, dynamic> recordData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    if (recordData.isEmpty) {
+      throw ArgumentError('recordData cannot be empty');
+    }
+
+    try {
+      final response = await _client
+          .put(
+            Uri.parse('$baseUrl/api/records/$recordUuid'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode(recordData),
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return (json['record'] as Map<String, dynamic>?) ?? json;
+      }
+
+      throw ApiException(
+        'Update record failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Fetch event metadata from server
   Future<Map<String, dynamic>?> fetchEvent({
     required String bookUuid,

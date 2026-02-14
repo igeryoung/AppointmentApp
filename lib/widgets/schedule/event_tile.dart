@@ -69,9 +69,7 @@ class ScheduleEventTileHelper {
             TextSpan(text: event.title),
             TextSpan(
               text: '($lastTwoDigits)',
-              style: TextStyle(
-                fontSize: slotHeight * 0.3,
-              ),
+              style: TextStyle(fontSize: slotHeight * 0.3),
             ),
           ],
         ),
@@ -110,13 +108,24 @@ class ScheduleEventTileHelper {
   }
 
   /// Get colors for event types (up to 2, alphabetically sorted)
-  static List<Color> _getEventColors(BuildContext context, Event event, Color Function(BuildContext, EventType) getEventTypeColor) {
-    final sorted = EventType.sortAlphabetically(event.eventTypes);
-    final topTwo = sorted.take(2).toList();
+  static List<Color> _getEventColors(
+    BuildContext context,
+    Event event,
+    Color Function(BuildContext, EventType) getEventTypeColor,
+  ) {
+    final uniqueSorted = EventType.sortAlphabetically(
+      event.eventTypes.toSet().toList(),
+    );
+    final topTwo = uniqueSorted.take(2).toList();
+    if (topTwo.isEmpty) {
+      return [getEventTypeColor(context, EventType.other)];
+    }
     return topTwo.map((type) => getEventTypeColor(context, type)).toList();
   }
 
-  /// Build split-color background widget for multi-type events
+  /// Build color background widget for event types
+  /// - single type: single color
+  /// - multi type: 2-color split
   /// Optionally prepends a handwriting icon (10% width) when hasHandwriting is true
   static Widget _buildColorBackground(
     List<Color> colors,
@@ -128,7 +137,7 @@ class ScheduleEventTileHelper {
     if (colors.length == 1) {
       colorWidget = Container(color: colors[0].withOpacity(opacity));
     } else {
-      // Vertical split for 2 colors
+      // Render two selected colors as a simple 50/50 split.
       colorWidget = Row(
         children: [
           Expanded(child: Container(color: colors[0].withOpacity(opacity))),
@@ -140,7 +149,8 @@ class ScheduleEventTileHelper {
     // Prepend icon if event has handwriting
     if (hasHandwriting) {
       return Row(
-        crossAxisAlignment: CrossAxisAlignment.stretch, // Force children to fill 100% height
+        crossAxisAlignment:
+            CrossAxisAlignment.stretch, // Force children to fill 100% height
         children: [
           // Icon section - 10% width, 100% height
           Expanded(
@@ -154,10 +164,7 @@ class ScheduleEventTileHelper {
             ),
           ),
           // Color section - 90% width
-          Expanded(
-            flex: 90,
-            child: colorWidget,
-          ),
+          Expanded(flex: 90, child: colorWidget),
         ],
       );
     }
@@ -185,7 +192,8 @@ class ScheduleEventTileHelper {
 
     // Get colors for this event (up to 2, alphabetically sorted)
     final colors = _getEventColors(context, event, getEventTypeColor);
-    final primaryColor = colors.first; // Use first color for borders and accents
+    final primaryColor =
+        colors.first; // Use first color for borders and accents
 
     Widget eventWidget = GestureDetector(
       onTap: isMenuOpen ? null : onTap,
@@ -202,12 +210,12 @@ class ScheduleEventTileHelper {
           border: isMenuOpen
               ? Border.all(color: Colors.white, width: 2)
               : event.isRemoved
-                  ? Border.all(
-                      color: primaryColor.withOpacity(0.6),
-                      width: 1,
-                      style: BorderStyle.solid,
-                    )
-                  : null,
+              ? Border.all(
+                  color: primaryColor.withOpacity(0.6),
+                  width: 1,
+                  style: BorderStyle.solid,
+                )
+              : null,
         ),
         child: Stack(
           clipBehavior: Clip.none,
@@ -223,7 +231,9 @@ class ScheduleEventTileHelper {
             // Content layer with padding
             Padding(
               padding: EdgeInsets.only(
-                left: hasHandwriting ? 0 : 2, // No left padding when icon present
+                left: hasHandwriting
+                    ? 0
+                    : 2, // No left padding when icon present
                 right: 2,
                 top: slotHeight * 0.15, // 10% top padding
                 bottom: 0,
@@ -275,7 +285,6 @@ class ScheduleEventTileHelper {
         ),
       ),
     );
-  
 
     // Make event draggable only when menu is open
     if (isMenuOpen) {
@@ -295,7 +304,11 @@ class ScheduleEventTileHelper {
                   children: [
                     // Background color layer (single or split)
                     Positioned.fill(
-                      child: _buildColorBackground(colors, 1.0, hasHandwriting: hasHandwriting),
+                      child: _buildColorBackground(
+                        colors,
+                        1.0,
+                        hasHandwriting: hasHandwriting,
+                      ),
                     ),
                     // Content layer
                     Padding(
@@ -319,10 +332,7 @@ class ScheduleEventTileHelper {
             ),
           ),
         ),
-        childWhenDragging: Opacity(
-          opacity: 0.3,
-          child: eventWidget,
-        ),
+        childWhenDragging: Opacity(opacity: 0.3, child: eventWidget),
         onDragEnd: (details) {
           // Drag ended, no action needed
         },
@@ -353,17 +363,17 @@ class ScheduleEventTileHelper {
       content = Align(
         alignment: Alignment.topLeft,
         child: buildFormattedNameText(
-            event: event,
-            fontSize: fontSize,
-            slotHeight: slotHeight,
-            color: event.isRemoved ? Colors.white70 : Colors.white,
-            height: 1.2,
-            decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-            decorationColor: Colors.white70,
-            fontWeight: FontWeight.bold,
-            overflow: TextOverflow.ellipsis,
-            maxLines: 1,
-          ),
+          event: event,
+          fontSize: fontSize,
+          slotHeight: slotHeight,
+          color: event.isRemoved ? Colors.white70 : Colors.white,
+          height: 1.2,
+          decoration: event.isRemoved ? TextDecoration.lineThrough : null,
+          decorationColor: Colors.white70,
+          fontWeight: FontWeight.bold,
+          overflow: TextOverflow.ellipsis,
+          maxLines: 1,
+        ),
       );
     } else if (tileHeight < 20) {
       // Open-end events: Very small - Only show name with tiny font
@@ -376,7 +386,9 @@ class ScheduleEventTileHelper {
     // Add left padding when handwriting icon is present (icon takes 10% width)
     if (hasHandwriting) {
       return Padding(
-        padding: const EdgeInsets.only(left: 12), // Shift text right to avoid icon
+        padding: const EdgeInsets.only(
+          left: 12,
+        ), // Shift text right to avoid icon
         child: content,
       );
     }
@@ -384,7 +396,11 @@ class ScheduleEventTileHelper {
     return content;
   }
 
-  static Widget _buildNameOnly(Event event, double fontSize, double slotHeight) {
+  static Widget _buildNameOnly(
+    Event event,
+    double fontSize,
+    double slotHeight,
+  ) {
     return Align(
       alignment: Alignment.topLeft,
       child: buildFormattedNameText(
