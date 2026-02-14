@@ -2,7 +2,6 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/event.dart';
 import '../models/schedule_drawing.dart';
-import '../models/sync_models.dart';
 import '../repositories/device_repository.dart';
 import '../repositories/event_repository.dart';
 import '../services/api_client.dart';
@@ -41,9 +40,9 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     this._timeService, {
     ApiClient? apiClient,
     IDeviceRepository? deviceRepository,
-  })  : _apiClient = apiClient,
-        _deviceRepository = deviceRepository,
-        super(const ScheduleInitial());
+  }) : _apiClient = apiClient,
+       _deviceRepository = deviceRepository,
+       super(const ScheduleInitial());
 
   // ===================
   // Load Operations
@@ -59,34 +58,51 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Load events for the selected date (using view mode window)
   ///
   /// [generation] - Request generation number for race condition prevention
-  Future<void> loadEvents({DateTime? date, bool? showOldEvents, int? generation}) async {
+  Future<void> loadEvents({
+    DateTime? date,
+    bool? showOldEvents,
+    int? generation,
+  }) async {
     if (_currentBookUuid == null) {
       emit(const ScheduleError('No book selected'));
       return;
     }
 
     final currentState = state;
-    final selectedDate = date ??
-        (currentState is ScheduleLoaded ? currentState.selectedDate : _timeService.now());
+    final selectedDate =
+        date ??
+        (currentState is ScheduleLoaded
+            ? currentState.selectedDate
+            : _timeService.now());
 
     // Get view mode from current state or default to 2-day
-    final viewMode = currentState is ScheduleLoaded ? currentState.viewMode : ScheduleDrawing.VIEW_MODE_2DAY;
+    final viewMode = currentState is ScheduleLoaded
+        ? currentState.viewMode
+        : ScheduleDrawing.VIEW_MODE_2DAY;
 
     // Always show all events (hardcoded to true)
     final effectiveShowOldEvents = true;
 
     // Preserve showDrawing from current state
-    final effectiveShowDrawing = currentState is ScheduleLoaded ? currentState.showDrawing : true;
+    final effectiveShowDrawing = currentState is ScheduleLoaded
+        ? currentState.showDrawing
+        : true;
 
     // Preserve pendingNextAppointment from current state
-    final pendingNextAppointment = currentState is ScheduleLoaded ? currentState.pendingNextAppointment : null;
+    final pendingNextAppointment = currentState is ScheduleLoaded
+        ? currentState.pendingNextAppointment
+        : null;
 
     // Check if date is changing - if so, clear drawing to avoid showing old drawing on new date
-    final isDateChanging = currentState is ScheduleLoaded &&
-        _getWindowStart(currentState.selectedDate, viewMode) != _getWindowStart(selectedDate, viewMode);
+    final isDateChanging =
+        currentState is ScheduleLoaded &&
+        _getWindowStart(currentState.selectedDate, viewMode) !=
+            _getWindowStart(selectedDate, viewMode);
 
     // Only preserve drawing if date is NOT changing (same window)
-    final currentDrawing = (currentState is ScheduleLoaded && !isDateChanging) ? currentState.drawing : null;
+    final currentDrawing = (currentState is ScheduleLoaded && !isDateChanging)
+        ? currentState.drawing
+        : null;
 
     emit(const ScheduleLoading());
 
@@ -112,7 +128,9 @@ class ScheduleCubit extends Cubit<ScheduleState> {
               deviceId: credentials.deviceId,
               deviceToken: credentials.deviceToken,
             );
-            events = serverEvents.map((e) => Event.fromServerResponse(e)).toList();
+            events = serverEvents
+                .map((e) => Event.fromServerResponse(e))
+                .toList();
           } catch (e) {
             // Fallback to local repository on server error
             debugPrint('Server fetch failed, falling back to local: $e');
@@ -147,17 +165,20 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       // Always show all events - no filtering by removed/rescheduled status
       final filteredEvents = events;
 
-      emit(ScheduleLoaded(
-        selectedDate: selectedDate,
-        events: filteredEvents,
-        drawing: currentDrawing,
-        isOffline: currentState is ScheduleLoaded ? currentState.isOffline : false,
-        showOldEvents: effectiveShowOldEvents,
-        showDrawing: effectiveShowDrawing,
-        pendingNextAppointment: pendingNextAppointment,
-        viewMode: viewMode,
-      ));
-
+      emit(
+        ScheduleLoaded(
+          selectedDate: selectedDate,
+          events: filteredEvents,
+          drawing: currentDrawing,
+          isOffline: currentState is ScheduleLoaded
+              ? currentState.isOffline
+              : false,
+          showOldEvents: effectiveShowOldEvents,
+          showDrawing: effectiveShowDrawing,
+          pendingNextAppointment: pendingNextAppointment,
+          viewMode: viewMode,
+        ),
+      );
     } catch (e) {
       emit(ScheduleError('Failed to load events: $e'));
     }
@@ -169,7 +190,11 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     _currentRequestGeneration++;
     final requestGeneration = _currentRequestGeneration;
 
-    await loadEvents(date: date, showOldEvents: true, generation: requestGeneration);
+    await loadEvents(
+      date: date,
+      showOldEvents: true,
+      generation: requestGeneration,
+    );
   }
 
   // ===================
@@ -189,7 +214,24 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     }
 
     try {
-      final newEvent = await _eventRepository.create(event);
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        throw Exception('Server API is not configured');
+      }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered');
+      }
+
+      final created = await apiClient.createEvent(
+        bookUuid: event.bookUuid,
+        eventData: event.toMap(),
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      final newEvent = Event.fromServerResponse(created);
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
@@ -208,7 +250,24 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     }
 
     try {
-      await _eventRepository.update(event);
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        throw Exception('Server API is not configured');
+      }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered');
+      }
+
+      await apiClient.updateEvent(
+        bookUuid: event.bookUuid,
+        eventId: event.id!,
+        eventData: event.toMap(),
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
@@ -219,9 +278,35 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
   /// Delete an event (soft delete)
   /// Returns the updated event with isRemoved=true for syncing
-  Future<Event?> deleteEvent(String eventId, {String reason = 'Deleted by user'}) async {
+  Future<Event?> deleteEvent(
+    String eventId, {
+    String reason = 'Deleted by user',
+  }) async {
     try {
-      final updatedEvent = await _eventRepository.removeEvent(eventId, reason);
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        throw Exception('Server API is not configured');
+      }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered');
+      }
+
+      final currentState = state;
+      if (currentState is! ScheduleLoaded) {
+        throw Exception('Schedule is not loaded');
+      }
+
+      final updatedRaw = await apiClient.removeEvent(
+        bookUuid: _currentBookUuid!,
+        eventId: eventId,
+        reason: reason,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      final updatedEvent = Event.fromServerResponse(updatedRaw);
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
@@ -238,45 +323,31 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     try {
       // Get event before deletion
       final event = await _eventRepository.getById(eventId);
-      if (event == null) throw Exception('Event not found');
-
-      // Push delete to server (if connected)
       final apiClient = _apiClient;
       final deviceRepository = _deviceRepository;
-      if (apiClient != null && deviceRepository != null) {
-        final credentials = await deviceRepository.getCredentials();
-        if (credentials != null) {
-          final deleteChange = SyncChange(
-            tableName: 'events',
-            recordId: eventId,
-            operation: 'delete',
-            data: event.toMap(),
-            timestamp: DateTime.now(),
-            version: event.version,
-          );
-
-          final request = SyncRequest(
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-            localChanges: [deleteChange],
-          );
-
-          try {
-            await apiClient.pushChanges(request);
-          } catch (e) {
-            // Log but don't fail - will be synced later
-            debugPrint('Warning: Failed to sync delete to server: $e');
-          }
-        }
+      if (apiClient == null || deviceRepository == null) {
+        throw Exception('Server API is not configured');
       }
 
-      // Hard delete from local database
-      await _eventRepository.delete(eventId);
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered');
+      }
+
+      await apiClient.deleteEvent(
+        bookUuid: _currentBookUuid!,
+        eventId: eventId,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
 
-      return event.copyWith(isRemoved: true, removalReason: 'Permanently deleted');
+      return event?.copyWith(
+        isRemoved: true,
+        removalReason: 'Permanently deleted',
+      );
     } catch (e) {
       emit(ScheduleError('Failed to hard delete event: $e'));
       return null;
@@ -292,53 +363,37 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     String reason,
   ) async {
     try {
-      final result = await _eventRepository.changeEventTime(
-        originalEvent,
-        newStartTime,
-        newEndTime,
-        reason,
-      );
-
-      // Push changes to server (similar to hardDeleteEvent)
       final apiClient = _apiClient;
       final deviceRepository = _deviceRepository;
-      if (apiClient != null && deviceRepository != null) {
-        final credentials = await deviceRepository.getCredentials();
-        if (credentials != null) {
-          // Sync old event (soft deleted with isRemoved=true)
-          final oldEventChange = SyncChange(
-            tableName: 'events',
-            recordId: result.oldEvent.id!,
-            operation: 'update',
-            data: result.oldEvent.toMap(),
-            timestamp: DateTime.now(),
-            version: result.oldEvent.version,
-          );
-
-          // Sync new event (created)
-          final newEventChange = SyncChange(
-            tableName: 'events',
-            recordId: result.newEvent.id!,
-            operation: 'create',
-            data: result.newEvent.toMap(),
-            timestamp: DateTime.now(),
-            version: result.newEvent.version,
-          );
-
-          final request = SyncRequest(
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-            localChanges: [oldEventChange, newEventChange],
-          );
-
-          try {
-            await apiClient.pushChanges(request);
-          } catch (e) {
-            // Log but don't fail - will be synced later
-            debugPrint('Warning: Failed to sync time change to server: $e');
-          }
-        }
+      if (apiClient == null || deviceRepository == null) {
+        throw Exception('Server API is not configured');
       }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered');
+      }
+
+      final response = await apiClient.rescheduleEvent(
+        bookUuid: _currentBookUuid!,
+        eventId: originalEvent.id!,
+        newStartTime: newStartTime,
+        newEndTime: newEndTime,
+        reason: reason,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+
+      final oldEvent = Event.fromServerResponse(
+        response['oldEvent'] as Map<String, dynamic>,
+      );
+      final newEvent = Event.fromServerResponse(
+        response['newEvent'] as Map<String, dynamic>,
+      );
+      final result = ChangeEventTimeResult(
+        newEvent: newEvent,
+        oldEvent: oldEvent,
+      );
 
       // Reload events to update UI
       await loadEvents(generation: _currentRequestGeneration);
@@ -354,7 +409,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   // ===================
 
   /// Load drawing for the current date and view mode (always 3-day view)
-  Future<void> loadDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY, bool forceRefresh = false}) async {
+  Future<void> loadDrawing({
+    int viewMode = ScheduleDrawing.VIEW_MODE_3DAY,
+    bool forceRefresh = false,
+  }) async {
     if (_currentBookUuid == null) {
       return;
     }
@@ -392,14 +450,15 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       if (currentState is ScheduleLoaded) {
         emit(currentState.copyWith(drawing: drawing));
       }
-
     } catch (e) {
       emit(ScheduleError('Failed to save drawing: $e'));
     }
   }
 
   /// Delete current drawing (always 3-day view)
-  Future<void> deleteDrawing({int viewMode = ScheduleDrawing.VIEW_MODE_3DAY}) async {
+  Future<void> deleteDrawing({
+    int viewMode = ScheduleDrawing.VIEW_MODE_3DAY,
+  }) async {
     if (_currentBookUuid == null) {
       return;
     }
@@ -447,13 +506,15 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     final currentState = state;
     if (currentState is! ScheduleLoaded) return;
 
-
     // Clear drawing when changing view mode (different view modes have different drawings)
     emit(currentState.copyWith(viewMode: viewMode, clearDrawing: true));
 
     // Reload events for the new view mode window
     _currentRequestGeneration++;
-    await loadEvents(date: currentState.selectedDate, generation: _currentRequestGeneration);
+    await loadEvents(
+      date: currentState.selectedDate,
+      generation: _currentRequestGeneration,
+    );
 
     // Load drawing for the new view mode
     await loadDrawing(viewMode: viewMode);

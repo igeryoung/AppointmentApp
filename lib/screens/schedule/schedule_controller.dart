@@ -6,18 +6,8 @@ import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/book.dart';
 import '../../models/event.dart';
-import '../../models/schedule_drawing.dart';
-import '../../repositories/event_repository.dart';
-import '../../repositories/note_repository.dart';
-import '../../services/api_client.dart';
 import '../../services/content_service.dart';
-import '../../services/database/prd_database_service.dart';
 import '../../services/database_service_interface.dart';
-import '../../services/network_service.dart';
-import '../../services/server_config_service.dart';
-import '../../services/service_locator.dart';
-import '../../services/sync_coordinator.dart';
-import '../../services/sync_service.dart';
 import '../../services/time_service.dart';
 import '../../utils/schedule/schedule_layout_utils.dart';
 import 'services/event_management_service.dart';
@@ -34,15 +24,18 @@ class ScheduleController extends ChangeNotifier {
     required IDatabaseService dbService,
     required this.contextProvider,
   }) : _dbService = dbService {
-    assert(book.uuid.isNotEmpty, 'Book must have a valid UUID to open ScheduleScreen');
+    assert(
+      book.uuid.isNotEmpty,
+      'Book must have a valid UUID to open ScheduleScreen',
+    );
   }
 
   final Book book;
   final IDatabaseService _dbService;
   final BuildContext Function() contextProvider;
 
-  final TransformationController transformationController = TransformationController();
-  final NetworkService _networkService = NetworkService();
+  final TransformationController transformationController =
+      TransformationController();
 
   DateTime _selectedDate = TimeService.instance.now();
   DateTime get selectedDate => _selectedDate;
@@ -86,13 +79,6 @@ class ScheduleController extends ChangeNotifier {
 
   EventManagementService? _eventService;
   EventManagementService? get eventService => _eventService;
-
-  SyncCoordinator? _syncCoordinator;
-  SyncCoordinator? get syncCoordinator => _syncCoordinator;
-
-  SyncService? _syncService;
-
-  Future<void>? _syncCoordinatorInit;
 
   String get _bookUuid => book.uuid;
 
@@ -147,50 +133,58 @@ class ScheduleController extends ChangeNotifier {
       onUpdateCubitOfflineStatus: (isOffline) {
         context.read<ScheduleCubit>().setOfflineStatus(isOffline);
       },
-      onShowSnackbar: (message, {backgroundColor, durationSeconds, action, detailTitle, detailMessage}) {
-        if (!context.mounted) return;
+      onShowSnackbar:
+          (
+            message, {
+            backgroundColor,
+            durationSeconds,
+            action,
+            detailTitle,
+            detailMessage,
+          }) {
+            if (!context.mounted) return;
 
-        if (detailTitle != null && detailMessage != null) {
-          if (backgroundColor == Colors.orange) {
-            SnackBarUtils.showWarningWithDetails(
-              context: context,
-              message: message,
-              detailTitle: detailTitle,
-              detailMessage: detailMessage,
-            );
-          } else if (backgroundColor == Colors.red) {
-            SnackBarUtils.showErrorWithDetails(
-              context: context,
-              message: message,
-              detailTitle: detailTitle,
-              detailMessage: detailMessage,
-            );
-          } else if (backgroundColor == Colors.green) {
-            SnackBarUtils.showSuccessWithDetails(
-              context: context,
-              message: message,
-              detailTitle: detailTitle,
-              detailMessage: detailMessage,
-            );
-          } else {
-            SnackBarUtils.showInfoWithDetails(
-              context: context,
-              message: message,
-              detailTitle: detailTitle,
-              detailMessage: detailMessage,
-            );
-          }
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(message),
-              backgroundColor: backgroundColor,
-              duration: Duration(seconds: durationSeconds ?? 2),
-              action: action,
-            ),
-          );
-        }
-      },
+            if (detailTitle != null && detailMessage != null) {
+              if (backgroundColor == Colors.orange) {
+                SnackBarUtils.showWarningWithDetails(
+                  context: context,
+                  message: message,
+                  detailTitle: detailTitle,
+                  detailMessage: detailMessage,
+                );
+              } else if (backgroundColor == Colors.red) {
+                SnackBarUtils.showErrorWithDetails(
+                  context: context,
+                  message: message,
+                  detailTitle: detailTitle,
+                  detailMessage: detailMessage,
+                );
+              } else if (backgroundColor == Colors.green) {
+                SnackBarUtils.showSuccessWithDetails(
+                  context: context,
+                  message: message,
+                  detailTitle: detailTitle,
+                  detailMessage: detailMessage,
+                );
+              } else {
+                SnackBarUtils.showInfoWithDetails(
+                  context: context,
+                  message: message,
+                  detailTitle: detailTitle,
+                  detailMessage: detailMessage,
+                );
+              }
+            } else {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(message),
+                  backgroundColor: backgroundColor,
+                  duration: Duration(seconds: durationSeconds ?? 2),
+                  action: action,
+                ),
+              );
+            }
+          },
       isMounted: () => context.mounted,
       onUpdateDrawingServiceContentService: (contentService) {
         if (_drawingService != null) {
@@ -210,17 +204,28 @@ class ScheduleController extends ChangeNotifier {
         );
       },
       onReloadEvents: () => context.read<ScheduleCubit>().loadEvents(),
-      onUpdateEvent: (event) => context.read<ScheduleCubit>().updateEvent(event),
+      onUpdateEvent: (event) =>
+          context.read<ScheduleCubit>().updateEvent(event),
       onDeleteEvent: (eventId, reason) async {
-        final updatedEvent = await context.read<ScheduleCubit>().deleteEvent(eventId, reason: reason);
+        final updatedEvent = await context.read<ScheduleCubit>().deleteEvent(
+          eventId,
+          reason: reason,
+        );
         return updatedEvent;
       },
       onHardDeleteEvent: (eventId) async {
-        final updatedEvent = await context.read<ScheduleCubit>().hardDeleteEvent(eventId);
+        final updatedEvent = await context
+            .read<ScheduleCubit>()
+            .hardDeleteEvent(eventId);
         return updatedEvent;
       },
       onChangeEventTime: (event, startTime, endTime, reason) async {
-        await context.read<ScheduleCubit>().changeEventTime(event, startTime, endTime, reason);
+        await context.read<ScheduleCubit>().changeEventTime(
+          event,
+          startTime,
+          endTime,
+          reason,
+        );
       },
       onShowSnackbar: (message, {backgroundColor, durationSeconds}) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -236,7 +241,8 @@ class ScheduleController extends ChangeNotifier {
       onSyncEvent: (event) async {
         await _connectivityService?.syncEventToServer(event);
       },
-      onSetPendingNextAppointment: (pending) => context.read<ScheduleCubit>().setPendingNextAppointment(pending),
+      onSetPendingNextAppointment: (pending) =>
+          context.read<ScheduleCubit>().setPendingNextAppointment(pending),
       dateService: _dateService!,
     );
 
@@ -244,7 +250,6 @@ class ScheduleController extends ChangeNotifier {
     await _connectivityService?.initialize();
     _contentService = _connectivityService?.contentService;
     _connectivityService?.setupConnectivityMonitoring();
-    Future.microtask(() => ensureSyncCoordinator(context));
 
     await _drawingService?.loadDrawing(_selectedDate);
   }
@@ -254,17 +259,19 @@ class ScheduleController extends ChangeNotifier {
     _dateService?.dispose();
     _connectivityService?.dispose();
     _drawingService?.dispose();
-    _syncCoordinator?.stopAutoSync();
-    _syncCoordinator = null;
     transformationController.dispose();
     super.dispose();
   }
 
   /// Lifecycle handler for app resume/pause.
-  Future<void> handleLifecycle(AppLifecycleState state, BuildContext context) async {
+  Future<void> handleLifecycle(
+    AppLifecycleState state,
+    BuildContext context,
+  ) async {
     if (state == AppLifecycleState.resumed) {
       _dateService?.checkAndHandleDateChange();
-    } else if (state == AppLifecycleState.paused || state == AppLifecycleState.inactive) {
+    } else if (state == AppLifecycleState.paused ||
+        state == AppLifecycleState.inactive) {
       if (_isDrawingMode) {
         await saveDrawing(context);
       }
@@ -275,17 +282,25 @@ class ScheduleController extends ChangeNotifier {
   String getPageId() => _drawingService!.getPageId(_selectedDate);
 
   /// Canvas key for current page.
-  GlobalKey<HandwritingCanvasState> getCanvasKeyForCurrentPage() => _drawingService!.getCanvasKey(_selectedDate);
+  GlobalKey<HandwritingCanvasState> getCanvasKeyForCurrentPage() =>
+      _drawingService!.getCanvasKey(_selectedDate);
 
   Future<void> loadDrawing() async {
     await _drawingService?.loadDrawing(_selectedDate);
   }
 
-  Future<void> preloadNotesInBackground(BuildContext context, List<Event> events, int generation) async {
+  Future<void> preloadNotesInBackground(
+    BuildContext context,
+    List<Event> events,
+    int generation,
+  ) async {
     if (events.isEmpty) return;
     if (_contentService == null) return;
 
-    final eventIds = events.where((e) => e.id != null).map((e) => e.id!).toList();
+    final eventIds = events
+        .where((e) => e.id != null)
+        .map((e) => e.id!)
+        .toList();
     if (eventIds.isEmpty) return;
 
     final preloadStartTime = DateTime.now();
@@ -302,38 +317,6 @@ class ScheduleController extends ChangeNotifier {
     }
   }
 
-  Future<void> ensureSyncCoordinator(BuildContext context) async {
-    if (_syncCoordinator != null) return;
-    _syncCoordinatorInit ??= _createSyncCoordinator(context);
-    await _syncCoordinatorInit;
-  }
-
-  Future<void> _createSyncCoordinator(BuildContext context) async {
-    if (!context.mounted) return;
-    if (_dbService is! PRDDatabaseService) return;
-
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
-      final serverConfig = ServerConfigService(prdDb);
-      final serverUrl = await serverConfig.getServerUrlOrDefault(
-        defaultUrl: 'http://localhost:8080',
-      );
-      final apiClient = ApiClient(baseUrl: serverUrl);
-      _syncService = SyncService(
-        apiClient: apiClient,
-        eventRepository: getIt<IEventRepository>(),
-        noteRepository: getIt<INoteRepository>(),
-        databaseService: _dbService,
-      );
-      _syncCoordinator = SyncCoordinator(
-        syncService: _syncService!,
-        networkService: _networkService,
-      );
-      _syncCoordinator!.startAutoSync();
-      await _syncCoordinator!.syncNow();
-    } catch (e) {}
-  }
-
   void scheduleSaveDrawing() => _drawingService?.scheduleSave(_selectedDate);
 
   Future<void> saveDrawing(BuildContext context) async {
@@ -346,7 +329,11 @@ class ScheduleController extends ChangeNotifier {
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorSavingDrawing(e.toString()))),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(context)!.errorSavingDrawing(e.toString()),
+            ),
+          ),
         );
       }
     }
@@ -393,7 +380,9 @@ class ScheduleController extends ChangeNotifier {
     final currentWindow = _previousSelectedDate != null
         ? ScheduleLayoutUtils.get3DayWindowStart(_previousSelectedDate!)
         : null;
-    final newWindow = ScheduleLayoutUtils.get3DayWindowStart(state.selectedDate);
+    final newWindow = ScheduleLayoutUtils.get3DayWindowStart(
+      state.selectedDate,
+    );
     final localWindow = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
 
     if (currentWindow != newWindow) {

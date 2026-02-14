@@ -89,9 +89,8 @@ lib/
 │   ├── web_prd_database_service.dart    # Web database service
 │   ├── note_content_service.dart        # Note operations
 │   ├── drawing_content_service.dart     # Drawing operations
-│   ├── sync_coordinator.dart            # Bulk sync operations
 │   ├── api_client.dart                  # Server API client
-│   ├── book_backup_service.dart         # Book backup/restore
+│   ├── content_service.dart             # Legacy compatibility facade (deprecated)
 │   ├── book_order_service.dart          # Book ordering
 │   ├── time_service.dart                # Time utilities
 │   └── service_locator.dart             # Dependency injection
@@ -200,7 +199,7 @@ schedule_drawings (id, book_id, date, view_mode, strokes_data, ...)
 │  ┌─────────────────────────────────────────────────┐        │
 │  │  NoteContentService                             │        │
 │  │  DrawingContentService                          │        │
-│  │  SyncCoordinator                                │        │
+│  │  ApiClient + Server APIs                        │        │
 │  │  BookOrderService                               │        │
 │  └─────────┬───────────────────────────────────────┘        │
 └────────────┼──────────────────────────────────────────────────┘
@@ -284,14 +283,14 @@ The `schedule_screen.dart` (2,004 lines) is currently being refactored using a c
 4. Keep core screen logic with Cubit state management
 
 **Progress Indicators:**
-- Multiple backup files exist (`schedule_screen.dart.backup`, `.bak2`, `.bak3`)
+- Multiple temporary refactor snapshots exist for `schedule_screen.dart`
 - New directories created: `lib/widgets/schedule/`, `lib/painters/`
 - Widget extraction in progress: `event_tile.dart`, `fab_menu.dart`, `drawing_toolbar.dart`, `test_menu.dart`
 
 **Next Steps:**
 1. Complete widget extraction from schedule_screen.dart
 2. Integrate extracted components with ScheduleCubit
-3. Remove backup files once refactoring is stable
+3. Remove temporary snapshots once refactoring is stable
 4. Apply same pattern to EventDetailScreen
 
 ## Development

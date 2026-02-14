@@ -1,16 +1,33 @@
 @Tags(['book', 'unit'])
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/repositories/book_repository_impl.dart';
+import 'package:schedule_note_app/services/api_client.dart';
 import 'package:schedule_note_app/services/database/prd_database_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../support/test_db_path.dart';
 
+class _FakeBookDeleteApiClient extends ApiClient {
+  _FakeBookDeleteApiClient() : super(baseUrl: 'http://fake.local');
+
+  int deleteCalls = 0;
+
+  @override
+  Future<void> deleteBook({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    deleteCalls += 1;
+  }
+}
+
 void main() {
   late PRDDatabaseService dbService;
   late Database db;
   late BookRepositoryImpl repository;
+  _FakeBookDeleteApiClient? fakeApiClient;
 
   setUpAll(() async {
     sqfliteFfiInit();
@@ -26,9 +43,11 @@ void main() {
     await db.delete('device_info');
 
     repository = BookRepositoryImpl(() => dbService.database);
+    fakeApiClient = _FakeBookDeleteApiClient();
   });
 
   tearDown(() async {
+    fakeApiClient?.dispose();
     await dbService.close();
     PRDDatabaseService.resetInstance();
   });
@@ -74,4 +93,34 @@ void main() {
     // Assert
     expect(deleted, isNull);
   });
+
+  test(
+    'BOOK-UNIT-014: delete() only removes local book and does not call server delete',
+    () async {
+      // Arrange
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      await insertBookRow(uuid: 'book-local-only-delete', name: 'Delete Local');
+      final localOnlyDeleteRepository = BookRepositoryImpl(
+        () => dbService.database,
+        apiClient: fakeApiClient,
+        dbService: dbService,
+      );
+
+      // Act
+      await localOnlyDeleteRepository.delete('book-local-only-delete');
+      final deleted = await localOnlyDeleteRepository.getByUuid(
+        'book-local-only-delete',
+      );
+
+      // Assert
+      expect(deleted, isNull);
+      expect(fakeApiClient!.deleteCalls, 0);
+    },
+  );
 }

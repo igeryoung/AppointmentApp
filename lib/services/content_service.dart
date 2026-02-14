@@ -5,13 +5,12 @@ import '../models/event.dart';
 import '../models/schedule_drawing.dart';
 import 'api_client.dart';
 
-
 /// ContentService - Unified content management with server-first strategy
 ///
 /// **DEPRECATED**: This class is being replaced by focused services:
 /// - [NoteContentService] for note operations
 /// - [DrawingContentService] for drawing operations
-/// - [SyncCoordinator] for bulk sync operations
+/// - direct server write APIs for event/book operations
 ///
 /// This class is kept for backward compatibility during refactoring.
 /// New code should use the replacement services above.
@@ -24,10 +23,12 @@ import 'api_client.dart';
 ///                             Hide complexity from UI
 ///
 /// Linus说: "Abstraction layers should hide complexity, not add it."
-@Deprecated('Use NoteContentService, DrawingContentService, and SyncCoordinator instead')
+@Deprecated(
+  'Use NoteContentService, DrawingContentService, and direct API operations instead',
+)
 class ContentService {
   final ApiClient _apiClient;
-  final dynamic _db;  // PRDDatabaseService or mock
+  final dynamic _db; // PRDDatabaseService or mock
 
   // RACE CONDITION FIX: Save operation queue to serialize drawing saves
   final List<Future<void> Function()> _drawingSaveQueue = [];
@@ -91,7 +92,9 @@ class ContentService {
     }
   }
 
-  Map<String, dynamic> _convertServerEventTimestamps(Map<String, dynamic> original) {
+  Map<String, dynamic> _convertServerEventTimestamps(
+    Map<String, dynamic> original,
+  ) {
     int? _parseSeconds(dynamic value) {
       if (value == null) return null;
       if (value is int) return value;
@@ -122,7 +125,9 @@ class ContentService {
         final end = map['end_time'];
         final created = map['created_at'];
         final updated = map['updated_at'];
-        print('[ContentService] $label start=${start.runtimeType}=$start end=${end.runtimeType}=$end created=${created.runtimeType}=$created updated=${updated.runtimeType}=$updated');
+        print(
+          '[ContentService] $label start=${start.runtimeType}=$start end=${end.runtimeType}=$end created=${created.runtimeType}=$created updated=${updated.runtimeType}=$updated',
+        );
       } catch (_) {}
       return true;
     }());
@@ -130,7 +135,9 @@ class ContentService {
 
   void _debugPrintEvent(String label, Event event) {
     assert(() {
-      print('[ContentService] $label id=${event.id} start=${event.startTime.toIso8601String()} (isUtc=${event.startTime.isUtc}) end=${event.endTime?.toIso8601String()}');
+      print(
+        '[ContentService] $label id=${event.id} start=${event.startTime.toIso8601String()} (isUtc=${event.startTime.isUtc}) end=${event.endTime?.toIso8601String()}',
+      );
       return true;
     }());
   }
@@ -173,7 +180,9 @@ class ContentService {
       // Get bookId for the event
       final event = await _db.getEventById(eventId);
       if (event == null) {
-        debugPrint('[ContentService] getNote: event not found: eventId=$eventId');
+        debugPrint(
+          '[ContentService] getNote: event not found: eventId=$eventId',
+        );
         return null;
       }
 
@@ -185,7 +194,9 @@ class ContentService {
       );
 
       if (serverNote != null) {
-        debugPrint('[ContentService] getNote: fetched note version=${serverNote.version}');
+        debugPrint(
+          '[ContentService] getNote: fetched note version=${serverNote.version}',
+        );
         return serverNote;
       }
 
@@ -217,7 +228,9 @@ class ContentService {
       );
 
       if (serverNote != null) {
-        debugPrint('[ContentService] getNoteByRecordUuid: fetched note version=${serverNote.version}');
+        debugPrint(
+          '[ContentService] getNoteByRecordUuid: fetched note version=${serverNote.version}',
+        );
         return serverNote;
       }
 
@@ -252,8 +265,12 @@ class ContentService {
       'version': noteMap['version'],
     };
 
-    debugPrint('[ContentService] saveNote: eventId=$eventId, bookUuid=${event.bookUuid}, recordUuid=${note.recordUuid}');
-    debugPrint('[ContentService] saveNote: noteData version=${noteData['version']}');
+    debugPrint(
+      '[ContentService] saveNote: eventId=$eventId, bookUuid=${event.bookUuid}, recordUuid=${note.recordUuid}',
+    );
+    debugPrint(
+      '[ContentService] saveNote: noteData version=${noteData['version']}',
+    );
 
     try {
       // Save directly to server
@@ -472,7 +489,10 @@ class ContentService {
   }
 
   /// Internal save drawing implementation (called from queue)
-  Future<void> _saveDrawingInternal(ScheduleDrawing drawing, {int retryCount = 0}) async {
+  Future<void> _saveDrawingInternal(
+    ScheduleDrawing drawing, {
+    int retryCount = 0,
+  }) async {
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();

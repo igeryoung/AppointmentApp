@@ -40,13 +40,22 @@ class ScheduleConnectivityService {
   final void Function(bool isOffline) onUpdateCubitOfflineStatus;
 
   /// Callback to show snackbar
-  final void Function(String message, {Color? backgroundColor, int? durationSeconds, SnackBarAction? action, String? detailTitle, String? detailMessage}) onShowSnackbar;
+  final void Function(
+    String message, {
+    Color? backgroundColor,
+    int? durationSeconds,
+    SnackBarAction? action,
+    String? detailTitle,
+    String? detailMessage,
+  })
+  onShowSnackbar;
 
   /// Callback to check if widget is mounted
   final bool Function() isMounted;
 
   /// Callback to update drawing service with ContentService
-  final void Function(ContentService? contentService) onUpdateDrawingServiceContentService;
+  final void Function(ContentService? contentService)
+  onUpdateDrawingServiceContentService;
 
   ScheduleConnectivityService({
     required IDatabaseService dbService,
@@ -56,8 +65,8 @@ class ScheduleConnectivityService {
     required this.onShowSnackbar,
     required this.isMounted,
     required this.onUpdateDrawingServiceContentService,
-  })  : _dbService = dbService,
-        _bookUuid = bookUuid;
+  }) : _dbService = dbService,
+       _bookUuid = bookUuid;
 
   /// Get current offline status
   bool get isOffline => _isOffline;
@@ -82,14 +91,12 @@ class ScheduleConnectivityService {
       // Update drawing service with ContentService
       onUpdateDrawingServiceContentService(_contentService);
 
-
       // Check server connectivity
       final serverReachable = await checkServerConnectivity();
       _isOffline = !serverReachable;
       _wasOfflineLastCheck = !serverReachable;
       onStateChanged(_isOffline, _isSyncing);
       onUpdateCubitOfflineStatus(_isOffline);
-
 
       // Auto-sync dirty notes for this book if online
       if (serverReachable) {
@@ -108,12 +115,11 @@ class ScheduleConnectivityService {
 
   /// Setup network connectivity monitoring for automatic sync retry
   void setupConnectivityMonitoring() {
-
-    _connectivitySubscription = Connectivity().onConnectivityChanged.listen(
-      (ConnectivityResult result) {
-        _onConnectivityChanged(result);
-      },
-    );
+    _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
+      ConnectivityResult result,
+    ) {
+      _onConnectivityChanged(result);
+    });
 
     // Also check initial connectivity state
     Connectivity().checkConnectivity().then((result) {
@@ -140,7 +146,6 @@ class ScheduleConnectivityService {
   void _onConnectivityChanged(ConnectivityResult result) {
     final hasConnection = result != ConnectivityResult.none;
 
-
     // Verify actual server connectivity, not just network interface status
     Future.microtask(() async {
       final serverReachable = await checkServerConnectivity();
@@ -152,10 +157,8 @@ class ScheduleConnectivityService {
         onStateChanged(_isOffline, _isSyncing);
         onUpdateCubitOfflineStatus(_isOffline);
 
-
         // Network just came back online - auto-sync dirty notes
         if (serverReachable && wasOfflineBefore) {
-
           // Wait a bit for network to stabilize
           Future.delayed(const Duration(seconds: 1), () {
             if (isMounted() && !_isSyncing) {
@@ -175,7 +178,6 @@ class ScheduleConnectivityService {
     onStateChanged(_isOffline, _isSyncing);
 
     try {
-
       final result = await _contentService!.syncDirtyNotesForBook(_bookUuid);
 
       if (isMounted()) {
@@ -192,12 +194,13 @@ class ScheduleConnectivityService {
           );
         } else if (result.hasFailures) {
           onShowSnackbar(
-            'Synced ${result.success}/${result.total} notes. ${result.failed} failed - check if book is backed up',
+            'Synced ${result.success}/${result.total} notes. ${result.failed} failed - check server book availability',
             backgroundColor: Colors.orange,
             durationSeconds: 5,
             detailTitle: 'Sync Failed',
-            detailMessage: 'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
-                'Solution: Use the book backup feature to sync the book to the server first.',
+            detailMessage:
+                'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
+                'Solution: create or import the book from server first.',
           );
         }
       }

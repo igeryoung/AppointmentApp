@@ -22,14 +22,19 @@ mixin BookOperationsMixin {
 
   Future<Book?> getBookByUuid(String uuid) async {
     final db = await database;
-    final maps = await db.query('books', where: 'book_uuid = ?', whereArgs: [uuid], limit: 1);
+    final maps = await db.query(
+      'books',
+      where: 'book_uuid = ?',
+      whereArgs: [uuid],
+      limit: 1,
+    );
     if (maps.isEmpty) return null;
     return Book.fromMap(maps.first);
   }
 
   Future<Book> createBook(String name) async {
     // Note: This method is deprecated for production use
-    // Books should be created via BookRepositoryImpl which calls /api/create-books
+    // Books should be created via BookRepositoryImpl which calls POST /api/books
     // This is kept for backward compatibility and testing only
     if (name.trim().isEmpty) {
       throw ArgumentError('Book name cannot be empty');
@@ -49,7 +54,8 @@ mixin BookOperationsMixin {
   }
 
   Future<Book> updateBook(Book book) async {
-    if (book.name.trim().isEmpty) throw ArgumentError('Book name cannot be empty');
+    if (book.name.trim().isEmpty)
+      throw ArgumentError('Book name cannot be empty');
 
     final db = await database;
     final updatedRows = await db.update(
@@ -77,7 +83,11 @@ mixin BookOperationsMixin {
 
   Future<void> deleteBook(String uuid) async {
     final db = await database;
-    final deletedRows = await db.delete('books', where: 'book_uuid = ?', whereArgs: [uuid]);
+    final deletedRows = await db.delete(
+      'books',
+      where: 'book_uuid = ?',
+      whereArgs: [uuid],
+    );
     if (deletedRows == 0) throw Exception('Book not found');
   }
 
@@ -97,12 +107,11 @@ mixin BookOperationsMixin {
     final result = await db.query(
       'events',
       columns: ['DISTINCT record_number'],
-      where: 'book_uuid = ? AND record_number IS NOT NULL AND record_number != ""',
+      where:
+          'book_uuid = ? AND record_number IS NOT NULL AND record_number != ""',
       whereArgs: [bookUuid],
       orderBy: 'record_number ASC',
     );
-    return result
-        .map((row) => row['record_number'] as String)
-        .toList();
+    return result.map((row) => row['record_number'] as String).toList();
   }
 }

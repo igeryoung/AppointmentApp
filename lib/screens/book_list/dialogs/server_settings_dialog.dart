@@ -17,10 +17,7 @@ class ServerSettingsResult {
 class ServerSettingsDialog extends StatefulWidget {
   final String currentUrl;
 
-  const ServerSettingsDialog({
-    super.key,
-    required this.currentUrl,
-  });
+  const ServerSettingsDialog({super.key, required this.currentUrl});
 
   /// Show the dialog and return the new URL if updated
   static Future<String?> show(
@@ -101,7 +98,7 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
   List<Widget> _buildUrlStep() {
     return [
       const Text(
-        'Configure the server URL for sync and backup operations.',
+        'Configure the server URL for server data operations.',
         style: TextStyle(fontSize: 14, color: Colors.grey),
       ),
       const SizedBox(height: 16),

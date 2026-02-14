@@ -1,6 +1,6 @@
-# Schedule Note Sync Server
+# Schedule Note Server
 
-PostgreSQL-based sync server built with Dart Shelf.
+PostgreSQL-based API server built with Dart Shelf.
 
 ## Quick Start
 
@@ -49,26 +49,32 @@ dart run main.dart --dev --migrate
 
 **Available APIs:**
 
-1. **Legacy Sync API** (`/api/sync/*`)
-   - `POST /api/sync/pull` - Pull server changes
-   - `POST /api/sync/push` - Push local changes
-   - `POST /api/sync/full` - Full bidirectional sync
-   - `POST /api/sync/resolve-conflict` - Resolve conflict
+1. **Book API** (`/api/books/*`)
+   - `POST /api/books` - Create book
+   - `GET /api/books` - List books
+   - `GET /api/books/{bookUuid}` - Get book metadata
+   - `PATCH /api/books/{bookUuid}` - Rename/update book
+   - `POST /api/books/{bookUuid}/archive` - Archive book
+   - `DELETE /api/books/{bookUuid}` - Soft-delete book
+   - `GET /api/books/{bookUuid}/bundle` - Fetch full book payload
 
-2. **Server-Store API** (Phase 2 - On-demand access)
-   - `GET /api/books/{bookId}/events/{eventId}/note` - Get note
-   - `POST /api/books/{bookId}/events/{eventId}/note` - Create/update note
-   - `DELETE /api/books/{bookId}/events/{eventId}/note` - Delete note
-   - `POST /api/notes/batch` - Batch get notes
+2. **Event API** (`/api/books/{bookUuid}/events/*`)
+   - `GET /api/books/{bookUuid}/events` - List events by date range
+   - `POST /api/books/{bookUuid}/events` - Create event
+   - `PATCH /api/books/{bookUuid}/events/{eventId}` - Update event
+   - `POST /api/books/{bookUuid}/events/{eventId}/remove` - Soft remove event
+   - `POST /api/books/{bookUuid}/events/{eventId}/reschedule` - Reschedule event
+   - `DELETE /api/books/{bookUuid}/events/{eventId}` - Soft delete event
 
-3. **Device Management** (`/api/devices/*`)
+3. **Server-Store Notes/Drawings**
+   - `GET/POST/DELETE /api/books/{bookUuid}/events/{eventId}/note`
+   - `GET/POST/DELETE /api/books/{bookUuid}/drawings`
+   - `POST /api/notes/batch`
+   - `POST /api/drawings/batch`
+
+4. **Device Management** (`/api/devices/*`)
    - `POST /api/devices/register` - Register device
    - `GET /api/devices/{id}` - Get device info
-
-4. **Book Backup** (`/api/books/*`)
-   - `POST /api/books/upload` - Upload book backup
-   - `GET /api/books/list` - List backups
-   - `POST /api/books/restore/{id}` - Restore backup
 
 See `doc/Server-Store/` for Server-Store API implementation details.
 
@@ -93,7 +99,6 @@ See `doc/Server-Store/` for Server-Store API implementation details.
 - `events` - Appointment entries
 - `notes` - Handwriting notes (1:1 with events)
 - `schedule_drawings` - Schedule overlay drawings
-- `book_backups` - Complete book snapshots
 - `sync_log` - Audit trail
 
 **Key patterns:**
@@ -150,27 +155,21 @@ dart analyze
 # Format code
 dart format lib/
 
-# Run sync tests
-../test_sync_flow.sh
-
 # Run notes API tests
 ./test_notes_api.sh
 ```
 
 ## Architecture
 
-**Two sync strategies:**
+**Server-first architecture:**
 
-1. **Legacy Sync** - Full table sync (Phase 1)
-   - Pull all changes since last sync
-   - Push all local changes
-   - Good for initial implementation
+1. **Domain writes via explicit REST endpoints**
+   - Books/events/notes/drawings are written directly.
+   - No generic sync transport endpoints.
 
-2. **Server-Store** - On-demand fetch (Phase 2+)
-   - Fetch specific resources by ID
-   - Optimistic locking with version checks
-   - Better performance, lower bandwidth
-   - Gradual migration from Legacy Sync
+2. **Server-store reads**
+   - Fetch resources by book/date/record/event scope.
+   - Optimistic locking supported by `version` fields on mutable entities.
 
 See `doc/Server-Store/` for migration roadmap.
 

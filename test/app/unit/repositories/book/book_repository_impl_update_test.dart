@@ -2,16 +2,43 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/models/book.dart';
 import 'package:schedule_note_app/repositories/book_repository_impl.dart';
+import 'package:schedule_note_app/services/api_client.dart';
 import 'package:schedule_note_app/services/database/prd_database_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../support/test_db_path.dart';
 
+class _FakeBookUpdateApiClient extends ApiClient {
+  _FakeBookUpdateApiClient() : super(baseUrl: 'http://fake.local');
+
+  int updateCalls = 0;
+  String? lastBookUuid;
+  String? lastName;
+  String? lastDeviceId;
+  String? lastDeviceToken;
+
+  @override
+  Future<Map<String, dynamic>> updateBook({
+    required String bookUuid,
+    required String name,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    updateCalls += 1;
+    lastBookUuid = bookUuid;
+    lastName = name;
+    lastDeviceId = deviceId;
+    lastDeviceToken = deviceToken;
+    return {'bookUuid': bookUuid, 'name': name, 'version': 2};
+  }
+}
+
 void main() {
   late PRDDatabaseService dbService;
   late Database db;
   late BookRepositoryImpl repository;
+  _FakeBookUpdateApiClient? fakeApiClient;
 
   setUpAll(() async {
     sqfliteFfiInit();
@@ -27,9 +54,11 @@ void main() {
     await db.delete('device_info');
 
     repository = BookRepositoryImpl(() => dbService.database);
+    fakeApiClient = _FakeBookUpdateApiClient();
   });
 
   tearDown(() async {
+    fakeApiClient?.dispose();
     await dbService.close();
     PRDDatabaseService.resetInstance();
   });
@@ -109,6 +138,41 @@ void main() {
           }),
         ),
       );
+    },
+  );
+
+  test(
+    'BOOK-UNIT-013: update() syncs rename to server when API client is configured',
+    () async {
+      // Arrange
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      await insertBookRow(uuid: 'book-update-2', name: 'Old Name');
+      final withServer = BookRepositoryImpl(
+        () => dbService.database,
+        apiClient: fakeApiClient,
+        dbService: dbService,
+      );
+      final payload = Book(
+        uuid: 'book-update-2',
+        name: '  Server Name  ',
+        createdAt: DateTime.utc(2026, 1, 1),
+      );
+
+      // Act
+      await withServer.update(payload);
+
+      // Assert
+      expect(fakeApiClient!.updateCalls, 1);
+      expect(fakeApiClient!.lastBookUuid, 'book-update-2');
+      expect(fakeApiClient!.lastName, 'Server Name');
+      expect(fakeApiClient!.lastDeviceId, 'device-001');
+      expect(fakeApiClient!.lastDeviceToken, 'token-001');
     },
   );
 }

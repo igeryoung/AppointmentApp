@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/book.dart';
 import 'book_list_state.dart';
@@ -8,7 +7,7 @@ import 'dialogs/create_book_dialog.dart';
 import 'dialogs/rename_book_dialog.dart';
 import 'dialogs/archive_book_confirm_dialog.dart';
 import 'dialogs/delete_book_confirm_dialog.dart';
-import 'dialogs/restore_backup_dialog.dart';
+import 'dialogs/import_server_book_dialog.dart';
 import 'dialogs/server_settings_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/api_client.dart';
@@ -19,7 +18,6 @@ import '../../services/service_locator.dart';
 class BookListController extends ChangeNotifier {
   final BookRepository repo;
   final BookOrderAdapter order;
-  final BookBackupAdapter backup;
   final ServerConfigAdapter serverConfig;
   final DeviceRegistrationAdapter deviceReg;
 
@@ -29,7 +27,6 @@ class BookListController extends ChangeNotifier {
   BookListController({
     required this.repo,
     required this.order,
-    required this.backup,
     required this.serverConfig,
     required this.deviceReg,
   });
@@ -52,16 +49,20 @@ class BookListController extends ChangeNotifier {
       final savedOrder = await order.loadOrder();
       final orderedBooks = order.applyOrder(books, savedOrder);
 
-      _setState(_state.copyWith(
-        books: orderedBooks,
-        isLoading: false,
-        errorMessage: null,
-      ));
+      _setState(
+        _state.copyWith(
+          books: orderedBooks,
+          isLoading: false,
+          errorMessage: null,
+        ),
+      );
     } catch (e) {
-      _setState(_state.copyWith(
-        isLoading: false,
-        errorMessage: 'Error loading books: $e',
-      ));
+      _setState(
+        _state.copyWith(
+          isLoading: false,
+          errorMessage: 'Error loading books: $e',
+        ),
+      );
     }
   }
 
@@ -141,8 +142,7 @@ class BookListController extends ChangeNotifier {
       _setState(_state.copyWith(isLoading: false));
       if (context.mounted) {
         final l10n = AppLocalizations.of(context)!;
-        SnackBarUtils.showError(
-            context, l10n.errorArchivingBook(e.toString()));
+        SnackBarUtils.showError(context, l10n.errorArchivingBook(e.toString()));
       }
     }
   }
@@ -192,69 +192,87 @@ class BookListController extends ChangeNotifier {
     await order.saveCurrentOrder(books);
   }
 
-  /// Show restore backup flow
-  Future<void> openRestoreFlow(BuildContext context) async {
-    if (!backup.available) {
-      if (context.mounted) {
-        SnackBarUtils.showWarning(
-            context, 'Book backup is not available on web');
-      }
-      return;
-    }
-
+  /// Show server import flow
+  Future<void> openImportFromServerFlow(BuildContext context) async {
     _setState(_state.copyWith(isLoading: true));
     try {
-      final backups = await backup.listBackups();
-      _setState(_state.copyWith(isLoading: false));
+      final serverBooks = await repo.listServerBooks();
+      _setState(_state.copyWith(isLoading: false, errorMessage: null));
 
-      if (backups.isEmpty) {
+      if (serverBooks.isEmpty) {
         if (context.mounted) {
-          SnackBarUtils.showInfo(context, 'No backups available');
+          SnackBarUtils.showInfo(context, 'No server books available');
         }
         return;
       }
 
       if (context.mounted) {
-        final selectedBackupId =
-            await RestoreBackupDialog.show(context, backups: backups);
+        final selectedBookUuid = await ImportServerBookDialog.show(
+          context,
+          books: serverBooks,
+        );
 
-        if (selectedBackupId != null) {
-          await _restoreBookFromServer(context, selectedBackupId);
+        if (selectedBookUuid != null && selectedBookUuid.isNotEmpty) {
+          await _importBookFromServer(context, selectedBookUuid);
         }
       }
     } catch (e) {
-      _setState(_state.copyWith(isLoading: false));
+      final message = _buildImportErrorMessage(e);
+      _setState(_state.copyWith(isLoading: false, errorMessage: message));
       if (context.mounted) {
-        SnackBarUtils.showError(context, 'Failed to load backups: $e');
+        SnackBarUtils.showError(context, message);
       }
     }
   }
 
-  /// Restore book from server
-  Future<void> _restoreBookFromServer(
-      BuildContext context, int backupId) async {
+  /// Import book from server
+  Future<void> _importBookFromServer(
+    BuildContext context,
+    String bookUuid,
+  ) async {
     _setState(_state.copyWith(isLoading: true));
     try {
-      final message = await backup.restore(backupId);
+      await repo.pullBookFromServer(bookUuid);
 
-      // Refresh the book list to show the restored book
+      // Refresh the book list to show imported data
       await _loadBooks();
 
       if (context.mounted) {
-        SnackBarUtils.showSuccess(context, message);
+        SnackBarUtils.showSuccess(context, 'Book imported successfully');
       }
     } catch (e) {
-      _setState(_state.copyWith(isLoading: false));
+      _setState(
+        _state.copyWith(
+          isLoading: false,
+          errorMessage: 'Failed to import book: $e',
+        ),
+      );
       if (context.mounted) {
-        SnackBarUtils.showError(context, 'Failed to restore book: $e');
+        SnackBarUtils.showError(context, 'Failed to import book: $e');
       }
     }
+  }
+
+  String _buildImportErrorMessage(Object error) {
+    if (error is ApiException) {
+      final code = error.statusCode;
+      if (code == 404) {
+        return 'Import failed: /api/books not found on server. Update/restart server and verify URL in Server Settings.';
+      }
+      if (code == 401 || code == 403) {
+        return 'Import failed: device credentials are invalid. Re-register this device in server setup.';
+      }
+    }
+    return 'Failed to load server books: $error';
+  }
+
+  /// Clear current error state.
+  void clearError() {
+    _setState(_state.clearError());
   }
 
   /// Show server settings flow
   Future<void> openServerSettingsFlow(BuildContext context) async {
-    if (!backup.available) return;
-
     final currentUrl = await serverConfig.getUrlOrDefault();
 
     if (!context.mounted) return;
@@ -273,13 +291,11 @@ class BookListController extends ChangeNotifier {
         await registerContentServices(apiClient);
 
         if (context.mounted) {
-          SnackBarUtils.showSuccess(
-              context, 'Server URL updated to: $newUrl');
+          SnackBarUtils.showSuccess(context, 'Server URL updated to: $newUrl');
         }
       } catch (e) {
         if (context.mounted) {
-          SnackBarUtils.showError(
-              context, 'Failed to update server URL: $e');
+          SnackBarUtils.showError(context, 'Failed to update server URL: $e');
         }
       }
     }

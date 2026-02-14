@@ -1,7 +1,7 @@
 openapi: 3.0.0
 info:
-  title: Schedule Note Sync API
-  description: REST API for syncing schedule data across devices
+  title: Schedule Note Server API
+  description: Server-first API for books, events, notes, drawings, and admin monitoring.
   version: 1.0.0
 servers:
   - url: http://localhost:8080
@@ -9,126 +9,50 @@ servers:
 
 tags:
   - name: Health
-    description: Health check endpoints
   - name: Authentication
-    description: Device registration and authentication
+  - name: Records
   - name: Books
-    description: |
-      Book management operations:
-      - Create new book on server (gets UUID)
-      - List all books on server
-      - Pull book from server to local device
-      - Get book metadata
-  - name: Backups
-    description: |
-      File-based backup operations:
-      - Create compressed backup of a book
-      - List backups for a book
-      - Download/restore/delete backups
-  - name: Sync
-    description: |
-      Bidirectional sync operations:
-      - Push local changes to server
-      - Pull server changes to local
-      - Full bidirectional sync
-      - Conflict resolution
+  - name: Events
   - name: Notes
-    description: |
-      Server-stored handwriting notes:
-      - Get/save/delete notes for events
-      - Batch operations for notes
-      - Optimistic locking support
   - name: Drawings
-    description: |
-      Server-stored schedule drawings:
-      - Get/save/delete drawings
-      - Batch operations for drawings
-      - Optimistic locking support
   - name: Batch
-    description: Atomic batch save for notes and drawings
   - name: Dashboard
-    description: Admin monitoring and statistics
 
 paths:
   /health:
     get:
-      tags:
-        - Health
+      tags: [Health]
       summary: Health check
-      description: Check if the server and database are healthy
       responses:
         '200':
-          description: Server is healthy
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  status:
-                    type: string
-                    example: healthy
-                  service:
-                    type: string
-                    example: schedule_note_sync_server
+          description: Service is healthy
 
   /api/devices/register:
     post:
-      tags:
-        - Authentication
-      summary: Register a new device
-      description: Register a device and receive credentials for sync operations
+      tags: [Authentication]
+      summary: Register device
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - deviceName
-                - password
+              required: [deviceName, password]
               properties:
                 deviceName:
                   type: string
-                  example: "John's iPhone"
                 platform:
                   type: string
-                  example: "iOS"
                 password:
                   type: string
-                  description: Registration password (configured on server)
-                  example: "password"
       responses:
         '200':
-          description: Device registered successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  deviceId:
-                    type: string
-                    format: uuid
-                  deviceToken:
-                    type: string
-                  message:
-                    type: string
-        '401':
-          description: Invalid registration password
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Invalid registration password"
+          description: Device registered
 
   /api/devices/{deviceId}:
     get:
-      summary: Get device information
+      tags: [Authentication]
+      summary: Get device metadata
       parameters:
         - name: deviceId
           in: path
@@ -138,271 +62,21 @@ paths:
             format: uuid
       responses:
         '200':
-          description: Device information
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/Device'
+          description: Device found
         '404':
           description: Device not found
 
-  /api/sync/pull:
+  /api/devices/sync-time:
     post:
-      tags:
-        - Sync
-      summary: Pull server changes
-      description: Retrieve changes from the server since last sync
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SyncRequest'
-      responses:
-        '200':
-          description: Changes retrieved successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SyncResponse'
-        '403':
-          description: Invalid device credentials
-
-  /api/sync/push:
-    post:
-      tags:
-        - Sync
-      summary: Push local changes
-      description: Send local changes to the server
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SyncRequest'
-      responses:
-        '200':
-          description: Changes applied successfully
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SyncResponse'
-        '403':
-          description: Invalid device credentials
-
-  /api/sync/full:
-    post:
-      tags:
-        - Sync
-      summary: Full bidirectional sync
-      description: Perform a complete sync operation (push and pull)
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SyncRequest'
-      responses:
-        '200':
-          description: Full sync completed
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/SyncResponse'
-        '403':
-          description: Invalid device credentials
-
-  /api/sync/resolve-conflict:
-    post:
-      tags:
-        - Sync
-      summary: Resolve a sync conflict
-      description: Submit resolution for a detected conflict
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ConflictResolutionRequest'
-      responses:
-        '200':
-          description: Conflict resolved successfully
-        '403':
-          description: Invalid device credentials
-
-  /api/books/{bookId}/backup:
-    post:
-      tags:
-        - Backups
-      summary: Create file-based backup
-      description: Create a compressed SQL backup of a book
-      parameters:
-        - name: bookId
-          in: path
-          required: true
-          schema:
-            type: integer
+      tags: [Authentication]
+      summary: Update device sync timestamp
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - deviceId
-                - deviceToken
-              properties:
-                deviceId:
-                  type: string
-                  format: uuid
-                deviceToken:
-                  type: string
-                backupName:
-                  type: string
-                  example: "My Backup 2025-10-24"
-      responses:
-        '200':
-          description: Backup created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-                  backupId:
-                    type: integer
-        '403':
-          description: Invalid device credentials
-        '500':
-          description: Backup creation failed
-
-  /api/books/{bookId}/backups:
-    get:
-      tags:
-        - Backups
-      summary: List backups for a book
-      description: Get all backups for a specific book
-      parameters:
-        - name: bookId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: deviceId
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: deviceToken
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: List of backups for the book
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  backups:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        bookId:
-                          type: integer
-                        bookUuid:
-                          type: string
-                          format: uuid
-                        backupName:
-                          type: string
-                        backupType:
-                          type: string
-                        status:
-                          type: string
-                        sizeBytes:
-                          type: integer
-                        sizeMB:
-                          type: string
-                        isFileBased:
-                          type: boolean
-                        createdAt:
-                          type: string
-                          format: date-time
-                        restoredAt:
-                          type: string
-                          format: date-time
-                          nullable: true
-        '403':
-          description: Invalid device credentials
-
-  /api/backups/{backupId}/download:
-    get:
-      tags:
-        - Backups
-      summary: Download backup file
-      description: Download a backup file (streaming, gzip compressed SQL)
-      parameters:
-        - name: backupId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: deviceId
-          in: query
-          required: true
-          schema:
-            type: string
-            format: uuid
-        - name: deviceToken
-          in: query
-          required: true
-          schema:
-            type: string
-      responses:
-        '200':
-          description: Backup file
-          content:
-            application/gzip:
-              schema:
-                type: string
-                format: binary
-        '403':
-          description: Invalid device credentials
-        '404':
-          description: Backup not found
-
-  /api/backups/{backupId}/restore:
-    post:
-      tags:
-        - Backups
-      summary: Restore from backup
-      description: Restore a book from backup (supports both file-based and JSON backups)
-      parameters:
-        - name: backupId
-          in: path
-          required: true
-          schema:
-            type: integer
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required:
-                - deviceId
-                - deviceToken
+              required: [deviceId, deviceToken]
               properties:
                 deviceId:
                   type: string
@@ -411,207 +85,214 @@ paths:
                   type: string
       responses:
         '200':
-          description: Book restored successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-        '403':
-          description: Invalid device credentials
-        '404':
-          description: Backup not found
-        '500':
-          description: Restore failed
+          description: Sync time updated
 
-  /api/backups/{backupId}:
+  /api/records:
+    post:
+      tags: [Records]
+      summary: Create record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Record created
+
+  /api/records/{recordUuid}:
+    get:
+      tags: [Records]
+      summary: Get record by UUID
+      parameters:
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Record found
+        '404':
+          description: Record not found
+    put:
+      tags: [Records]
+      summary: Update record
+      parameters:
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Record updated
+        '404':
+          description: Record not found
     delete:
-      tags:
-        - Backups
-      summary: Delete backup
-      description: Delete a backup (marks as deleted and removes file)
+      tags: [Records]
+      summary: Soft delete record
       parameters:
-        - name: backupId
+        - name: recordUuid
           in: path
-          required: true
-          schema:
-            type: integer
-        - name: deviceId
-          in: query
           required: true
           schema:
             type: string
             format: uuid
-        - name: deviceToken
-          in: query
+      responses:
+        '200':
+          description: Record deleted
+        '404':
+          description: Record not found
+
+  /api/records/by-number/{recordNumber}:
+    get:
+      tags: [Records]
+      summary: Get record by record number
+      parameters:
+        - name: recordNumber
+          in: path
           required: true
           schema:
             type: string
       responses:
         '200':
-          description: Backup deleted successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  message:
-                    type: string
-        '403':
-          description: Invalid device credentials
+          description: Record found
+        '404':
+          description: Record not found
 
-  # LEGACY ENDPOINT REMOVED: /api/books/upload
-  # This legacy JSON-based upload endpoint has been replaced by the Book Pull API
-  # Use POST /api/books/{bookUuid}/backup for file-based backups instead
+  /api/records/get-or-create:
+    post:
+      tags: [Records]
+      summary: Get or create record
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Record resolved
 
-  /api/books/list:
+  /api/records/validate:
+    post:
+      tags: [Records]
+      summary: Validate record number/name pair
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [record_number, name]
+              properties:
+                record_number:
+                  type: string
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Validation result
+
+  /api/books:
+    post:
+      tags: [Books]
+      summary: Create a book
+      security:
+        - deviceAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+      responses:
+        '200':
+          description: Book created
     get:
-      tags:
-        - Books
-      summary: List all books on server
-      description: 'Get all books available on the server for the authenticated device. Optionally filter by search query.'
+      tags: [Books]
+      summary: List books for device
+      security:
+        - deviceAuth: []
       parameters:
         - name: search
           in: query
           required: false
           schema:
             type: string
-          description: Optional search query to filter books by name
-        - name: X-Device-ID
-          in: header
-          required: true
+        - name: includeArchived
+          in: query
+          required: false
           schema:
-            type: string
-            format: uuid
-          description: Device ID for authentication
-        - name: X-Device-Token
-          in: header
-          required: true
-          schema:
-            type: string
-          description: Device token for authentication
+            type: boolean
       responses:
         '200':
-          description: List of books on server
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  books:
-                    type: array
-                    items:
-                      type: object
-                      properties:
-                        id:
-                          type: integer
-                        bookUuid:
-                          type: string
-                          format: uuid
-                        name:
-                          type: string
-                        createdAt:
-                          type: string
-                          format: date-time
-                        size:
-                          type: integer
-                  count:
-                    type: integer
-        '401':
-          description: Missing or invalid credentials
-        '403':
-          description: Invalid device credentials
+          description: Book list
 
-  /api/create-books:
-    post:
-      tags:
-        - Books
-      summary: Create new book on server
-      description: |
-        Create a new book on the server and get a UUID.
-        This MUST be called before creating a book locally.
-        The server assigns a UUID which is used for all future operations.
+  /api/books/{bookUuid}:
+    get:
+      tags: [Books]
+      summary: Get book metadata
+      security:
+        - deviceAuth: []
       parameters:
-        - name: X-Device-ID
-          in: header
+        - name: bookUuid
+          in: path
           required: true
           schema:
             type: string
             format: uuid
-          description: Device ID for authentication
-        - name: X-Device-Token
-          in: header
+      responses:
+        '200':
+          description: Book metadata
+        '404':
+          description: Book not found
+    patch:
+      tags: [Books]
+      summary: Update book metadata (rename)
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
           required: true
           schema:
             type: string
-          description: Device token for authentication
+            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - name
+              required: [name]
               properties:
                 name:
                   type: string
-                  description: Book name
-                  example: "2025 Schedule"
-                created_at:
-                  type: string
-                  format: date-time
-                  description: Creation timestamp (optional, defaults to server time)
       responses:
         '200':
-          description: Book created successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  message:
-                    type: string
-                    example: "Book created successfully"
-                  uuid:
-                    type: string
-                    format: uuid
-                    description: The UUID assigned by the server
-                  name:
-                    type: string
-                  device_id:
-                    type: string
-                    format: uuid
-                  created_at:
-                    type: string
-                    format: date-time
-        '400':
-          description: Bad request (missing or empty name)
-        '401':
-          description: Missing or invalid credentials
-        '403':
-          description: Invalid device credentials
-
-  /api/books/pull/{bookUuid}:
-    post:
-      tags:
-        - Books
-      summary: Pull complete book data from server
-      description: |
-        Pull complete book data (book + events + notes + drawings) from server.
-        This is used to add a server book to the local device.
+          description: Book updated
+        '404':
+          description: Book not found
+    delete:
+      tags: [Books]
+      summary: Soft delete book
+      security:
+        - deviceAuth: []
       parameters:
         - name: bookUuid
           in: path
@@ -619,68 +300,18 @@ paths:
           schema:
             type: string
             format: uuid
-          description: Book UUID
-        - name: X-Device-ID
-          in: header
-          required: true
-          schema:
-            type: string
-            format: uuid
-          description: Device ID for authentication
-        - name: X-Device-Token
-          in: header
-          required: true
-          schema:
-            type: string
-          description: Device token for authentication
       responses:
         '200':
-          description: Book data retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  data:
-                    type: object
-                    description: Complete book data
-                    properties:
-                      book:
-                        type: object
-                        description: Book metadata
-                      events:
-                        type: array
-                        description: All events in the book
-                        items:
-                          type: object
-                      notes:
-                        type: array
-                        description: All notes for events
-                        items:
-                          type: object
-                      drawings:
-                        type: array
-                        description: All schedule drawings
-                        items:
-                          type: object
-        '401':
-          description: Missing or invalid credentials
-        '403':
-          description: Invalid device credentials
+          description: Book deleted
         '404':
-          description: Book not found or does not belong to this device
+          description: Book not found
 
-  /api/books/{bookUuid}/info:
-    get:
-      tags:
-        - Books
-      summary: Get book metadata
-      description: |
-        Get book metadata only (without events/notes/drawings).
-        Useful for checking if a book exists on server or getting version info.
+  /api/books/{bookUuid}/archive:
+    post:
+      tags: [Books]
+      summary: Archive book
+      security:
+        - deviceAuth: []
       parameters:
         - name: bookUuid
           in: path
@@ -688,197 +319,407 @@ paths:
           schema:
             type: string
             format: uuid
-          description: Book UUID
-        - name: X-Device-ID
-          in: header
+      responses:
+        '200':
+          description: Book archived
+        '404':
+          description: Book not found
+
+  /api/books/{bookUuid}/bundle:
+    get:
+      tags: [Books]
+      summary: Get complete book bundle (book/events/notes/drawings)
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
           required: true
           schema:
             type: string
             format: uuid
-          description: Device ID for authentication
-        - name: X-Device-Token
-          in: header
+      responses:
+        '200':
+          description: Bundle loaded
+        '404':
+          description: Book not found
+
+  /api/books/{bookUuid}/events:
+    get:
+      tags: [Events]
+      summary: Query events by date range
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
           required: true
           schema:
             type: string
-          description: Device token for authentication
-      responses:
-        '200':
-          description: Book metadata retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  book:
-                    type: object
-                    description: Book metadata
-                    properties:
-                      bookUuid:
-                        type: string
-                        format: uuid
-                      name:
-                        type: string
-                      deviceId:
-                        type: string
-                        format: uuid
-                      createdAt:
-                        type: string
-                        format: date-time
-                      updatedAt:
-                        type: string
-                        format: date-time
-                      version:
-                        type: integer
-        '401':
-          description: Missing or invalid credentials
-        '403':
-          description: Invalid device credentials
-        '404':
-          description: Book not found or does not belong to this device
-
-  # LEGACY ENDPOINTS REMOVED:
-  # - /api/books/restore/{backupId} - Use POST /api/books/pull/{bookUuid} instead
-  # - /api/books/{backupId} DELETE - Use DELETE /api/backups/{backupId} instead
-  # These legacy JSON-based endpoints have been replaced by the Book Pull API and Book Backup API
-
-  # Server-Store API: Notes
-  /api/books/{bookId}/events/{eventId}/note:
-    get:
-      tags:
-        - Notes
-      summary: Get note for an event
-      description: Retrieve a handwriting note for a specific event
-      parameters:
-        - name: bookId
-          in: path
+            format: uuid
+        - name: startDate
+          in: query
           required: true
           schema:
-            type: integer
-        - name: eventId
-          in: path
+            type: string
+            format: date-time
+        - name: endDate
+          in: query
           required: true
           schema:
-            type: integer
-      security:
-        - deviceAuth: []
+            type: string
+            format: date-time
       responses:
         '200':
-          description: Note retrieved successfully, or note is null if it doesn't exist
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  note:
-                    oneOf:
-                      - $ref: '#/components/schemas/Note'
-                      - type: 'null'
-        '403':
-          description: Unauthorized access
-
+          description: Events list
     post:
-      tags:
-        - Notes
-      summary: Create or update note
-      description: Create a new note or update existing with optimistic locking
-      parameters:
-        - name: bookId
-          in: path
-          required: true
-          schema:
-            type: integer
-        - name: eventId
-          in: path
-          required: true
-          schema:
-            type: integer
+      tags: [Events]
+      summary: Create event
       security:
         - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - strokesData
-              properties:
-                strokesData:
-                  type: string
-                  description: JSON string of stroke data
-                version:
-                  type: integer
-                  description: Expected version for optimistic locking
       responses:
         '200':
-          description: Note created/updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  note:
-                    $ref: '#/components/schemas/Note'
-                  version:
-                    type: integer
-        '409':
-          description: Version conflict
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  conflict:
-                    type: boolean
-                  serverVersion:
-                    type: integer
-                  serverNote:
-                    $ref: '#/components/schemas/Note'
-        '403':
-          description: Unauthorized access
+          description: Event created
 
-    delete:
-      tags:
-        - Notes
-      summary: Delete note
-      description: Soft delete a note for an event
+  /api/books/{bookUuid}/events/{eventId}:
+    get:
+      tags: [Events]
+      summary: Get event detail
+      security:
+        - deviceAuth: []
       parameters:
-        - name: bookId
+        - name: bookUuid
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: eventId
           in: path
           required: true
           schema:
-            type: integer
-      security:
-        - deviceAuth: []
+            type: string
+            format: uuid
       responses:
         '200':
-          description: Note deleted successfully
+          description: Event detail
         '404':
-          description: Note not found
-        '403':
-          description: Unauthorized access
+          description: Event not found
+    patch:
+      tags: [Events]
+      summary: Update event
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Event updated
+        '404':
+          description: Event not found
+    delete:
+      tags: [Events]
+      summary: Hard delete event
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Event deleted
+        '404':
+          description: Event not found
+
+  /api/books/{bookUuid}/events/{eventId}/remove:
+    post:
+      tags: [Events]
+      summary: Soft remove event
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Event removed
+        '404':
+          description: Event not found
+
+  /api/books/{bookUuid}/events/{eventId}/reschedule:
+    post:
+      tags: [Events]
+      summary: Reschedule event (creates a new event and links old/new)
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [newStartTime, reason]
+              properties:
+                newStartTime:
+                  type: string
+                  format: date-time
+                newEndTime:
+                  type: string
+                  format: date-time
+                  nullable: true
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Event rescheduled
+
+  /api/books/{bookUuid}/records/{recordUuid}:
+    get:
+      tags: [Events]
+      summary: Get record details within book scope
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Record details
+        '404':
+          description: Record not found
+
+  /api/books/{bookUuid}/events/{eventId}/note:
+    get:
+      tags: [Notes]
+      summary: Get note by event
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Note payload or null
+    post:
+      tags: [Notes]
+      summary: Create/update note by event
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Note saved
+        '409':
+          description: Version conflict
+    delete:
+      tags: [Notes]
+      summary: Delete note by event
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Note deleted
+
+  /api/books/{bookUuid}/records/{recordUuid}/note:
+    get:
+      tags: [Notes]
+      summary: Get note by record
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Note payload or null
+    post:
+      tags: [Notes]
+      summary: Create/update note by record
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+      responses:
+        '200':
+          description: Note saved
+        '409':
+          description: Version conflict
+    delete:
+      tags: [Notes]
+      summary: Delete note by record
+      security:
+        - deviceAuth: []
+      parameters:
+        - name: bookUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Note deleted
 
   /api/notes/batch:
     post:
-      tags:
-        - Notes
+      tags: [Notes]
       summary: Batch get notes
-      description: Retrieve notes for multiple events
       security:
         - deviceAuth: []
       requestBody:
@@ -887,184 +728,96 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - eventIds
               properties:
                 eventIds:
                   type: array
                   items:
-                    type: integer
+                    type: string
       responses:
         '200':
-          description: Notes retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  notes:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Note'
-                  count:
-                    type: integer
-        '403':
-          description: Unauthorized access
+          description: Notes list
 
-  # Server-Store API: Drawings
-  /api/books/{bookId}/drawings:
+  /api/books/{bookUuid}/drawings:
     get:
-      tags:
-        - Drawings
-      summary: Get drawing for date and view mode
-      description: Retrieve a schedule drawing using composite key (book_id, date, view_mode)
+      tags: [Drawings]
+      summary: Get drawing
+      security:
+        - deviceAuth: []
       parameters:
-        - name: bookId
+        - name: bookUuid
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: date
           in: query
           required: true
           schema:
             type: string
-            format: date
-          description: ISO date string (e.g., "2025-10-23")
+            example: '2026-02-13'
         - name: viewMode
           in: query
           required: true
           schema:
             type: integer
-          description: View mode (0=Day, 1=3-Day, 2=Week)
-      security:
-        - deviceAuth: []
       responses:
         '200':
-          description: Drawing retrieved successfully, or drawing is null if it doesn't exist
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  drawing:
-                    oneOf:
-                      - $ref: '#/components/schemas/Drawing'
-                      - type: 'null'
-        '403':
-          description: Unauthorized access
-
+          description: Drawing payload or null
     post:
-      tags:
-        - Drawings
-      summary: Create or update drawing
-      description: Create a new drawing or update existing with optimistic locking
+      tags: [Drawings]
+      summary: Create/update drawing
+      security:
+        - deviceAuth: []
       parameters:
-        - name: bookId
+        - name: bookUuid
           in: path
           required: true
           schema:
-            type: integer
-      security:
-        - deviceAuth: []
+            type: string
+            format: uuid
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              required:
-                - date
-                - viewMode
-                - strokesData
-              properties:
-                date:
-                  type: string
-                  format: date
-                  description: ISO date string
-                viewMode:
-                  type: integer
-                  description: View mode (0=Day, 1=3-Day, 2=Week)
-                strokesData:
-                  type: string
-                  description: JSON string of stroke data
-                version:
-                  type: integer
-                  description: Expected version for optimistic locking
       responses:
         '200':
-          description: Drawing created/updated successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  drawing:
-                    $ref: '#/components/schemas/Drawing'
-                  version:
-                    type: integer
+          description: Drawing saved
         '409':
           description: Version conflict
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  conflict:
-                    type: boolean
-                  serverVersion:
-                    type: integer
-                  serverDrawing:
-                    $ref: '#/components/schemas/Drawing'
-        '403':
-          description: Unauthorized access
-
     delete:
-      tags:
-        - Drawings
+      tags: [Drawings]
       summary: Delete drawing
-      description: Soft delete a schedule drawing
+      security:
+        - deviceAuth: []
       parameters:
-        - name: bookId
+        - name: bookUuid
           in: path
           required: true
           schema:
-            type: integer
+            type: string
+            format: uuid
         - name: date
           in: query
           required: true
           schema:
             type: string
-            format: date
+            example: '2026-02-13'
         - name: viewMode
           in: query
           required: true
           schema:
             type: integer
-      security:
-        - deviceAuth: []
       responses:
         '200':
-          description: Drawing deleted successfully
-        '404':
-          description: Drawing not found
-        '403':
-          description: Unauthorized access
+          description: Drawing deleted
 
   /api/drawings/batch:
     post:
-      tags:
-        - Drawings
+      tags: [Drawings]
       summary: Batch get drawings
-      description: Retrieve drawings for a date range and view mode
       security:
         - deviceAuth: []
       requestBody:
@@ -1073,478 +826,211 @@ paths:
           application/json:
             schema:
               type: object
-              required:
-                - bookId
-                - dateRange
-                - viewMode
               properties:
-                bookId:
-                  type: integer
-                dateRange:
-                  type: object
-                  required:
-                    - start
-                    - end
-                  properties:
-                    start:
-                      type: string
-                      format: date
-                    end:
-                      type: string
-                      format: date
-                viewMode:
-                  type: integer
+                bookUuid:
+                  type: string
+                  format: uuid
+                startDate:
+                  type: string
+                  example: '2026-02-01'
+                endDate:
+                  type: string
+                  example: '2026-02-13'
       responses:
         '200':
-          description: Drawings retrieved successfully
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                  drawings:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/Drawing'
-                  count:
-                    type: integer
-        '403':
-          description: Unauthorized access
+          description: Drawings list
 
   /api/batch/save:
     post:
-      summary: Batch save notes and drawings
-      description: |
-        Save multiple notes and drawings in a single atomic transaction.
-
-        Strategy: All-or-nothing
-        - All operations succeed → COMMIT, return success
-        - Any operation fails → ROLLBACK, return error
-
-        Maximum 1000 items per batch.
-      tags:
-        - Batch
+      tags: [Batch]
+      summary: Atomic batch save (notes + drawings)
       security:
-        - DeviceAuth: []
+        - deviceAuth: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
               type: object
-              properties:
-                notes:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - eventId
-                      - bookId
-                      - strokesData
-                    properties:
-                      eventId:
-                        type: integer
-                        description: Event ID this note belongs to
-                      bookId:
-                        type: integer
-                        description: Book ID for authorization
-                      strokesData:
-                        type: string
-                        description: JSON string of stroke data
-                      version:
-                        type: integer
-                        description: Expected version for optimistic locking (optional, for updates)
-                drawings:
-                  type: array
-                  items:
-                    type: object
-                    required:
-                      - bookId
-                      - date
-                      - viewMode
-                      - strokesData
-                    properties:
-                      bookId:
-                        type: integer
-                        description: Book ID
-                      date:
-                        type: string
-                        format: date-time
-                        description: Date in ISO8601 format
-                      viewMode:
-                        type: integer
-                        description: View mode (0=Day, 1=3-Day, 2=Week)
-                      strokesData:
-                        type: string
-                        description: JSON string of stroke data
-                      version:
-                        type: integer
-                        description: Expected version for optimistic locking (optional, for updates)
-            example:
-              notes:
-                - eventId: 1
-                  bookId: 1
-                  strokesData: '[{"points":[{"x":100,"y":200}]}]'
-                  version: 2
-                - eventId: 2
-                  bookId: 1
-                  strokesData: '[{"points":[{"x":150,"y":250}]}]'
-              drawings:
-                - bookId: 1
-                  date: "2025-11-01T00:00:00Z"
-                  viewMode: 0
-                  strokesData: '[{"points":[{"x":50,"y":100}]}]'
-                  version: 1
       responses:
         '200':
-          description: Batch save succeeded
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: true
-                  results:
-                    type: object
-                    properties:
-                      notes:
-                        type: object
-                        properties:
-                          succeeded:
-                            type: integer
-                            description: Number of notes successfully saved
-                          failed:
-                            type: integer
-                            description: Number of notes that failed (always 0 in all-or-nothing mode)
-                      drawings:
-                        type: object
-                        properties:
-                          succeeded:
-                            type: integer
-                            description: Number of drawings successfully saved
-                          failed:
-                            type: integer
-                            description: Number of drawings that failed (always 0 in all-or-nothing mode)
-        '400':
-          description: Bad request or validation error
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Event does not belong to book: eventId=123, bookId=456"
-                  results:
-                    type: object
-                    properties:
-                      notes:
-                        type: object
-                        properties:
-                          succeeded:
-                            type: integer
-                          failed:
-                            type: integer
-                      drawings:
-                        type: object
-                        properties:
-                          succeeded:
-                            type: integer
-                          failed:
-                            type: integer
-        '401':
-          description: Missing authentication headers
-        '403':
-          description: Invalid credentials or unauthorized access to book
+          description: Batch save result
         '409':
-          description: Version conflict - optimistic locking failure
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Version conflict: eventId=1, expected=2, server=3"
-        '413':
-          description: Payload too large (over 1000 items)
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  success:
-                    type: boolean
-                    example: false
-                  message:
-                    type: string
-                    example: "Payload too large: maximum 1000 items allowed (got 1500)"
-        '500':
-          description: Internal server error
+          description: Version conflict
+
+  /api/dashboard/auth/login:
+    post:
+      tags: [Dashboard]
+      summary: Dashboard login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+      responses:
+        '200':
+          description: Login success
+        '401':
+          description: Login failed
+
+  /api/dashboard/stats:
+    get:
+      tags: [Dashboard]
+      summary: Dashboard summary statistics
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Stats
+
+  /api/dashboard/devices:
+    get:
+      tags: [Dashboard]
+      summary: List devices
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Devices list
+
+  /api/dashboard/books:
+    get:
+      tags: [Dashboard]
+      summary: List books
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Books list
+
+  /api/dashboard/records:
+    get:
+      tags: [Dashboard]
+      summary: List records
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Records list
+
+  /api/dashboard/records/{recordUuid}:
+    get:
+      tags: [Dashboard]
+      summary: Get record details
+      security:
+        - dashboardAuth: []
+      parameters:
+        - name: recordUuid
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Record details
+        '404':
+          description: Record not found
+
+  /api/dashboard/events:
+    get:
+      tags: [Dashboard]
+      summary: List events
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Events list
+
+  /api/dashboard/events/{eventId}:
+    get:
+      tags: [Dashboard]
+      summary: Get event details
+      security:
+        - dashboardAuth: []
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event details
+        '404':
+          description: Event not found
+
+  /api/dashboard/events/{eventId}/note:
+    get:
+      tags: [Dashboard]
+      summary: Get note for event
+      security:
+        - dashboardAuth: []
+      parameters:
+        - name: eventId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Event note
+
+  /api/dashboard/notes:
+    get:
+      tags: [Dashboard]
+      summary: List notes
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Notes list
+
+  /api/dashboard/drawings:
+    get:
+      tags: [Dashboard]
+      summary: List drawings
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Drawings list
+
+  /api/dashboard/backups:
+    get:
+      tags: [Dashboard]
+      summary: List historical backup records (monitoring)
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Backup records
+
+  /api/dashboard/sync-logs:
+    get:
+      tags: [Dashboard]
+      summary: List historical sync logs (monitoring)
+      security:
+        - dashboardAuth: []
+      responses:
+        '200':
+          description: Sync log records
 
 components:
-  schemas:
-    Device:
-      type: object
-      properties:
-        id:
-          type: string
-          format: uuid
-        deviceName:
-          type: string
-        deviceToken:
-          type: string
-        platform:
-          type: string
-        registeredAt:
-          type: string
-          format: date-time
-        lastSyncAt:
-          type: string
-          format: date-time
-        isActive:
-          type: boolean
-
-    SyncRequest:
-      type: object
-      required:
-        - deviceId
-        - deviceToken
-      properties:
-        deviceId:
-          type: string
-          format: uuid
-        deviceToken:
-          type: string
-        lastSyncAt:
-          type: string
-          format: date-time
-        localChanges:
-          type: array
-          items:
-            $ref: '#/components/schemas/SyncChange'
-
-    SyncChange:
-      type: object
-      required:
-        - id
-        - tableName
-        - recordId
-        - operation
-        - timestamp
-      properties:
-        id:
-          type: string
-          format: uuid
-        tableName:
-          type: string
-          example: "events"
-        recordId:
-          type: string
-        operation:
-          type: string
-          enum: [insert, update, delete]
-        data:
-          type: object
-        timestamp:
-          type: string
-          format: date-time
-        deviceId:
-          type: string
-          format: uuid
-
-    SyncResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        message:
-          type: string
-        serverChanges:
-          type: array
-          items:
-            $ref: '#/components/schemas/SyncChange'
-        conflicts:
-          type: array
-          items:
-            $ref: '#/components/schemas/SyncConflict'
-        serverTime:
-          type: string
-          format: date-time
-        changesApplied:
-          type: integer
-
-    SyncConflict:
-      type: object
-      properties:
-        tableName:
-          type: string
-        recordId:
-          type: string
-        localVersion:
-          type: object
-        serverVersion:
-          type: object
-        localTimestamp:
-          type: string
-          format: date-time
-        serverTimestamp:
-          type: string
-          format: date-time
-
-    ConflictResolutionRequest:
-      type: object
-      required:
-        - deviceId
-        - deviceToken
-        - tableName
-        - recordId
-        - resolution
-      properties:
-        deviceId:
-          type: string
-          format: uuid
-        deviceToken:
-          type: string
-        tableName:
-          type: string
-        recordId:
-          type: string
-        resolution:
-          type: string
-          enum: [useLocal, useServer, merge]
-        mergedData:
-          type: object
-
-    BookBackupUploadRequest:
-      type: object
-      required:
-        - deviceId
-        - deviceToken
-        - bookId
-        - backupName
-        - backupData
-      properties:
-        deviceId:
-          type: string
-          format: uuid
-        deviceToken:
-          type: string
-        bookId:
-          type: integer
-        backupName:
-          type: string
-        backupData:
-          type: object
-          description: Complete book data including book, events, notes, and drawings
-          properties:
-            book:
-              type: object
-            events:
-              type: array
-              items:
-                type: object
-            notes:
-              type: array
-              items:
-                type: object
-            drawings:
-              type: array
-              items:
-                type: object
-
-    BookBackupInfo:
-      type: object
-      properties:
-        id:
-          type: integer
-        bookId:
-          type: integer
-        backupName:
-          type: string
-        backupSize:
-          type: integer
-          description: Size in bytes
-        createdAt:
-          type: string
-          format: date-time
-        restoredAt:
-          type: string
-          format: date-time
-          nullable: true
-
-    BookBackupListResponse:
-      type: object
-      properties:
-        success:
-          type: boolean
-        backups:
-          type: array
-          items:
-            $ref: '#/components/schemas/BookBackupInfo'
-
-    Note:
-      type: object
-      description: Handwriting note associated with an event
-      properties:
-        id:
-          type: integer
-        eventId:
-          type: integer
-        strokesData:
-          type: string
-          description: JSON string containing stroke data
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        version:
-          type: integer
-          description: Version number for optimistic locking
-
-    Drawing:
-      type: object
-      description: Schedule drawing for a specific date and view mode
-      properties:
-        id:
-          type: integer
-        bookId:
-          type: integer
-        date:
-          type: string
-          format: date-time
-          description: Date normalized to midnight
-        viewMode:
-          type: integer
-          description: View mode (0=Day, 1=3-Day, 2=Week)
-        strokesData:
-          type: string
-          description: JSON string containing stroke data
-        createdAt:
-          type: string
-          format: date-time
-        updatedAt:
-          type: string
-          format: date-time
-        version:
-          type: integer
-          description: Version number for optimistic locking
-
   securitySchemes:
     deviceAuth:
       type: apiKey
       in: header
       name: X-Device-ID
-      description: Device authentication using X-Device-ID and X-Device-Token headers
+      description: Use X-Device-ID and X-Device-Token headers together.
+    dashboardAuth:
+      type: apiKey
+      in: header
+      name: Authorization
+      description: Bearer JWT from dashboard login.

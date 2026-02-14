@@ -53,4 +53,16 @@ class BookRepository {
       return null;
     }
   }
+
+  /// List books available on server
+  Future<List<Map<String, dynamic>>> listServerBooks({
+    String? searchQuery,
+  }) async {
+    return await _repo.listServerBooks(searchQuery: searchQuery);
+  }
+
+  /// Pull a server book bundle into local cache
+  Future<void> pullBookFromServer(String bookUuid) async {
+    await _repo.pullBookFromServer(bookUuid);
+  }
 }

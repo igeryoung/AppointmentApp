@@ -83,19 +83,22 @@ Test bullets:
 - update with no fields returns bad request.
 - soft-delete behavior and retrieval after delete.
 
-## 3.3 Book creation and pull (server-store)
+## 3.3 Book APIs (server-store)
 
 Endpoints:
-- `POST /api/create-books`
-- `GET /api/books/list`
-- `POST /api/books/pull/<bookUuid>`
-- `GET /api/books/<bookUuid>/info`
+- `POST /api/books`
+- `GET /api/books`
+- `GET /api/books/<bookUuid>`
+- `PATCH /api/books/<bookUuid>`
+- `POST /api/books/<bookUuid>/archive`
+- `DELETE /api/books/<bookUuid>`
+- `GET /api/books/<bookUuid>/bundle`
 
 Test bullets:
 - auth required on all endpoints.
-- pull/info on unknown book returns not-found path.
+- unknown book returns not-found path.
 - list search query behavior.
-- cross-device pull access tracking (`book_device_access`) behavior.
+- cross-device access tracking (`book_device_access`) behavior.
 
 ## 3.4 Event query APIs
 
@@ -138,22 +141,7 @@ Test bullets:
 - soft-delete behavior and not-found path.
 - date-range batch result filtering.
 
-## 3.7 Sync APIs
-
-Endpoints:
-- `POST /api/sync/pull`
-- `POST /api/sync/push`
-- `POST /api/sync/full`
-- `POST /api/sync/resolve-conflict`
-
-Test bullets:
-- invalid credentials path.
-- empty local changes push behavior.
-- conflict generation and conflict payload shape.
-- full sync ordering (apply local then fetch server changes).
-- conflict resolution `merge` update path.
-
-## 3.8 Batch API
+## 3.7 Batch API
 
 Endpoint:
 - `POST /api/batch/save`
@@ -164,7 +152,7 @@ Test bullets:
 - mixed note+drawing conflict rollback behavior.
 - status code mapping (400/403/409/413/500).
 
-## 3.9 Dashboard APIs
+## 3.8 Dashboard APIs
 
 Endpoints:
 - `POST /api/dashboard/auth/login`
@@ -210,7 +198,7 @@ Test bullets:
 - initial load/render states.
 - create/rename/archive/delete flows.
 - reorder persistence behavior.
-- restore-from-server and server-settings update flow.
+- import-from-server and server-settings update flow.
 
 ## 4.3 Schedule flow
 
@@ -228,7 +216,7 @@ Test bullets:
 - create/edit/remove/delete/change-time/drop behavior.
 - drawing mode toggle, auto-save on navigation/back/lifecycle.
 - drawing load/save race handling and per-window canvas behavior.
-- offline status updates and sync notification behavior.
+- offline status updates and server connectivity notification behavior.
 
 ## 4.4 Event detail flow
 
@@ -243,7 +231,7 @@ Test bullets:
 - save event (new/update) + note save flow.
 - remove/delete/change-time actions.
 - charge item add/edit/delete/toggle paid/filter behavior.
-- offline/online state handling for note sync.
+- offline/online state handling for note fetch/save.
 
 ## 4.5 Repository/database core behavior
 
@@ -283,7 +271,7 @@ Note: this is a manual check plan template, not execution results.
 | Startup | Invalid registration password | error shown, remains on registration step |
 | Book List | Create book | new book appears immediately and persists after refresh |
 | Book List | Rename/archive/delete book | UI and data reflect operation after refresh |
-| Book List | Restore from server | selected server book appears locally with events/notes/drawings |
+| Book List | Import from server | selected server book appears locally with events/notes/drawings |
 | Schedule | Change date window | events and drawing reflect new window only |
 | Schedule | Drag/drop event within valid hours | event time changed and persisted |
 | Schedule | Remove event with reason | event marked removed with reason, still queryable as removed |
@@ -295,7 +283,7 @@ Note: this is a manual check plan template, not execution results.
 | Event Detail | Charge items CRUD | totals and item states update correctly |
 | API | Note save conflict (stale version) | API returns 409 with serverVersion/serverNote |
 | API | Drawing save conflict (stale version) | API returns 409 with serverVersion/serverDrawing |
-| API | Sync full with valid credentials | pull/push operation succeeds, sync time updated |
+| API | Event update with valid credentials | server mutation succeeds and updated event is returned |
 
 ## 6) Legacy / To-Remove Candidates (Flag Only)
 
@@ -316,8 +304,6 @@ High-confidence legacy/inconsistent areas identified from current code:
 - client sends `eventIds`; server expects `record_uuids`.
 - Batch service schema mismatch:
 - `server/lib/services/batch_service.dart` still uses old columns (`books.id`, `events.book_id`, `notes.event_id`) while schema/routes are UUID + record-based.
-- Sync coordinator behavior currently stubbed:
-- `SyncCoordinator.syncNow()` returns "Full sync temporarily disabled" without running actual full sync.
 - Deprecated UI behavior still referenced:
 - schedule "old events toggle" path is deprecated no-op but related labels still exist.
 
@@ -333,7 +319,6 @@ Phase B (core behavior):
 - cover drawing conflict/retry and lifecycle auto-save paths.
 - cover record validation and charge-item workflows.
 
-Phase C (sync and admin):
-- cover sync pull/push/full/conflict resolution paths.
+Phase C (admin and operational APIs):
 - cover dashboard auth and main read endpoints.
 - decide keep/remove for batch API based on schema alignment.

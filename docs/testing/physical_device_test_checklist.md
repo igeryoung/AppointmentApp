@@ -29,10 +29,10 @@ Use this checklist for real-device verification after unit tests pass.
 | [V] | Try to create book with blank name | Book is not created; validation feedback is shown |
 | [X] | Rename a book (with extra spaces before/after name) | Name is saved and displayed trimmed |
 | [ ] | Archive a book | Book disappears from active list (not shown as active) |
-| [ ] | Delete a book | Book is removed and no longer appears in list |
+| [V] | Delete a book | Book is removed and no longer appears in list |
 | [ ] | Reorder books by drag/drop, then relaunch app | Order persists after relaunch |
-| [ ] | Open restore-from-server flow, search by keyword, pull one book | Search result appears; pulled book is added locally |
-| [ ] | Try pulling a book that already exists locally | App blocks duplicate restore with clear message |
+| [ ] | Open import-from-server flow, search by keyword, pull one book | Search result appears; imported book is added locally |
+| [ ] | Try pulling a book that already exists locally | App blocks duplicate import with clear message |
 
 ## 3. Event Behavior
 
@@ -70,12 +70,12 @@ Use this checklist for real-device verification after unit tests pass.
 | [ ] | Complete setup once, then relaunch app multiple times | Credentials remain valid; app does not ask setup again |
 | [ ] | Re-register / update device setup (if flow exists) | Latest credentials replace old state and app continues normally |
 
-## 7. Offline / Online & Sync Sanity
+## 7. Offline / Online Server Connectivity
 
 | Done | Operation | Expected Behavior |
 |---|---|---|
-| [ ] | Turn on airplane mode, create/edit local book/event/note | Local operations still work without crash |
-| [ ] | Re-enable network and trigger sync path | Local changes sync without duplicate objects |
+| [ ] | Turn on airplane mode, try create/edit book/event/note | Write is blocked with clear online-required message |
+| [ ] | Re-enable network and retry same operation | Operation succeeds without duplicate objects |
 | [ ] | Pull server data after reconnect | Pulled data merges cleanly with local state |
 
 ## 8. Performance Sanity (Manual)

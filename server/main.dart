@@ -7,9 +7,7 @@ import 'package:dotenv/dotenv.dart';
 import 'lib/config/database_config.dart';
 import 'lib/database/connection.dart';
 import 'lib/routes/device_routes.dart';
-import 'lib/routes/sync_routes.dart';
-import 'lib/routes/book_backup_routes.dart';
-import 'lib/routes/book_pull_routes.dart';
+import 'lib/routes/book_routes.dart';
 import 'lib/routes/note_routes.dart';
 import 'lib/routes/drawing_routes.dart';
 import 'lib/routes/batch_routes.dart';
@@ -62,17 +60,9 @@ void main(List<String> args) async {
   final recordRoutes = RecordRoutes(db);
   app.mount('/api/records/', recordRoutes.router);
 
-  // Sync routes
-  final syncRoutes = SyncRoutes(db);
-  app.mount('/api/sync/', syncRoutes.router);
-
-  // Book creation routes
-  final bookBackupRoutes = BookBackupRoutes(db);
-  app.mount('/api/create-books', bookBackupRoutes.createBookRouter);
-
-  // Book pull routes
-  final bookPullRoutes = BookPullRoutes(db);
-  app.mount('/api/books/', bookPullRoutes.router);
+  // Book routes
+  final bookRoutes = BookRoutes(db);
+  app.mount('/api/books', bookRoutes.router);
 
   // Note routes (Server-Store API)
   final noteRoutes = NoteRoutes(db);
@@ -93,8 +83,10 @@ void main(List<String> args) async {
   app.mount('/api/batch/', batchRoutes.router);
 
   // Dashboard routes (Monitoring API - Read-only)
-  final dashboardUsername = Platform.environment['DASHBOARD_USERNAME'] ?? 'admin';
-  final dashboardPassword = Platform.environment['DASHBOARD_PASSWORD'] ?? 'admin123';
+  final dashboardUsername =
+      Platform.environment['DASHBOARD_USERNAME'] ?? 'admin';
+  final dashboardPassword =
+      Platform.environment['DASHBOARD_PASSWORD'] ?? 'admin123';
   final dashboardRoutes = DashboardRoutes(
     db,
     adminUsername: dashboardUsername,
@@ -123,10 +115,7 @@ void main(List<String> args) async {
   app.get('/openapi.yaml', (Request request) async {
     final file = File('openapi.yaml');
     final content = await file.readAsString();
-    return Response.ok(
-      content,
-      headers: {'Content-Type': 'text/yaml'},
-    );
+    return Response.ok(content, headers: {'Content-Type': 'text/yaml'});
   });
 
   // Swagger UI redirect
@@ -169,14 +158,18 @@ void main(List<String> args) async {
       context,
     );
 
-    print('✅ HTTPS enabled (${serverConfig.isDevelopment ? 'self-signed cert' : 'production cert'})');
+    print(
+      '✅ HTTPS enabled (${serverConfig.isDevelopment ? 'self-signed cert' : 'production cert'})',
+    );
   } else {
     // HTTP mode - only allowed in development
     if (!serverConfig.isDevelopment) {
       print('');
       print('❌ FATAL ERROR: Production server cannot start without HTTPS!');
       print('');
-      print('   This would violate medical data protection laws (HIPAA, GDPR).');
+      print(
+        '   This would violate medical data protection laws (HIPAA, GDPR).',
+      );
       print('   Patient data MUST be encrypted in transit.');
       print('');
       print('   To fix:');
@@ -196,7 +189,9 @@ void main(List<String> args) async {
   shelf_io.serveRequests(server, handler);
 
   final protocol = serverConfig.enableSSL ? 'https' : 'http';
-  print('✅ Server listening on $protocol://${server.address.host}:${server.port}');
+  print(
+    '✅ Server listening on $protocol://${server.address.host}:${server.port}',
+  );
   print('');
   print('📚 API Documentation:');
   print('   $protocol://${server.address.host}:${server.port}/docs');
@@ -206,35 +201,27 @@ void main(List<String> args) async {
   print('   POST /api/devices/register - Register device');
   print('   GET  /api/devices/<id> - Get device info');
   print('');
-  print('   === Sync API ===');
-  print('   POST /api/sync/pull - Pull server changes');
-  print('   POST /api/sync/push - Push local changes');
-  print('   POST /api/sync/full - Full bidirectional sync');
-  print('   POST /api/sync/resolve-conflict - Resolve conflict');
-  print('');
-  print('   === Book Creation API ===');
-  print('   POST /api/create-books - Create new book and get UUID');
-  print('');
-  print('   === Book Pull API (Server → Local) ===');
-  print('   GET  /api/books/list?search=query - List all books with optional search');
-  print('   POST /api/books/pull/<bookUuid> - Pull complete book data');
-  print('   GET  /api/books/<bookUuid>/info - Get book metadata only');
-  print('');
-  print('   === Book Backup API (File-based) ===');
-  print('   POST /api/books/<bookId>/backup - Create backup');
-  print('   GET  /api/books/<bookId>/backups - List backups for book');
-  print('   GET  /api/backups/<backupId>/download - Download backup file');
-  print('   POST /api/backups/<backupId>/restore - Restore from backup');
-  print('   DELETE /api/backups/<backupId> - Delete backup');
+  print('   === Book API ===');
+  print('   POST   /api/books - Create new book');
+  print('   GET    /api/books?search=query - List books');
+  print('   GET    /api/books/<bookUuid> - Get book metadata');
+  print('   PATCH  /api/books/<bookUuid> - Rename/update book');
+  print('   POST   /api/books/<bookUuid>/archive - Archive book');
+  print('   DELETE /api/books/<bookUuid> - Soft delete book');
+  print('   GET    /api/books/<bookUuid>/bundle - Get full book payload');
   print('');
   print('   === Server-Store API (Notes & Drawings) ===');
   print('   GET  /api/books/<bookId>/events/<eventId>/note - Get note');
-  print('   POST /api/books/<bookId>/events/<eventId>/note - Create/update note');
+  print(
+    '   POST /api/books/<bookId>/events/<eventId>/note - Create/update note',
+  );
   print('   DELETE /api/books/<bookId>/events/<eventId>/note - Delete note');
   print('   POST /api/notes/batch - Batch get notes');
   print('   GET  /api/books/<bookId>/drawings?date=X&viewMode=Y - Get drawing');
   print('   POST /api/books/<bookId>/drawings - Create/update drawing');
-  print('   DELETE /api/books/<bookId>/drawings?date=X&viewMode=Y - Delete drawing');
+  print(
+    '   DELETE /api/books/<bookId>/drawings?date=X&viewMode=Y - Delete drawing',
+  );
   print('   POST /api/drawings/batch - Batch get drawings');
   print('');
   print('   === Batch Operations API ===');

@@ -24,10 +24,10 @@
 - Real case: user renames a book from book menu.
 - Purpose: ensure name is trimmed, persisted, and missing targets are rejected.
 
-## WF-BOOK-07 Restore Book From Server
-- Real case: user opens restore dialog, searches server books, and pulls one to local.
+## WF-BOOK-07 Import Book From Server
+- Real case: user opens import dialog, searches server books, and pulls one to local.
 - Purpose: ensure credential checks, server query forwarding, duplicate-local prevention, and valid pull persistence.
 
 ## WF-BOOK-08 Check Server Book Info
-- Real case: user checks if a server book is still available before restore.
+- Real case: user checks if a server book is still available before import.
 - Purpose: ensure 404 returns a safe null result instead of crashing the workflow.

@@ -1,13 +1,17 @@
+import 'dart:convert';
+
 import 'package:sqflite/sqflite.dart';
-import 'package:flutter/foundation.dart';
+
 import '../models/book.dart';
 import '../services/api_client.dart';
 import '../services/database/prd_database_service.dart';
 import 'book_repository.dart';
 import 'base_repository.dart';
 
-/// Implementation of BookRepository using SQLite
-class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepository {
+/// Implementation of BookRepository using SQLite as local cache,
+/// with server as source of truth.
+class BookRepositoryImpl extends BaseRepository<Book, int>
+    implements IBookRepository {
   final ApiClient? _apiClient;
   final PRDDatabaseService? _dbService;
 
@@ -15,9 +19,9 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
     Future<Database> Function() getDatabaseFn, {
     ApiClient? apiClient,
     PRDDatabaseService? dbService,
-  })  : _apiClient = apiClient,
-        _dbService = dbService,
-        super(getDatabaseFn);
+  }) : _apiClient = apiClient,
+       _dbService = dbService,
+       super(getDatabaseFn);
 
   @override
   String get tableName => 'books';
@@ -33,11 +37,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
     if (includeArchived) {
       return queryAll(orderBy: 'created_at DESC');
     }
-    // Use custom query for non-archived books
-    return query(
-      where: 'archived_at IS NULL',
-      orderBy: 'created_at DESC',
-    );
+    return query(where: 'archived_at IS NULL', orderBy: 'created_at DESC');
   }
 
   @override
@@ -50,47 +50,105 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
     return results.isEmpty ? null : results.first;
   }
 
+  Future<DeviceCredentials> _requireCredentials(String action) async {
+    if (_dbService == null) {
+      throw Exception(
+        'Database service not configured. $action requires device credentials.',
+      );
+    }
+    final credentials = await _dbService.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception(
+        'Device not registered. Please register device before $action.',
+      );
+    }
+    return credentials;
+  }
+
+  dynamic _pick(Map<String, dynamic> map, String camel, String snake) {
+    if (map.containsKey(camel)) return map[camel];
+    return map[snake];
+  }
+
+  DateTime _parseServerTimestamp(dynamic value) {
+    if (value == null) {
+      throw ArgumentError('Server timestamp is null');
+    }
+
+    if (value is int) {
+      return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
+    }
+
+    if (value is String) {
+      final parsed = DateTime.parse(value);
+      if (parsed.isUtc) return parsed;
+      return DateTime.utc(
+        parsed.year,
+        parsed.month,
+        parsed.day,
+        parsed.hour,
+        parsed.minute,
+        parsed.second,
+        parsed.millisecond,
+        parsed.microsecond,
+      );
+    }
+
+    if (value is DateTime) {
+      if (value.isUtc) return value;
+      return DateTime.utc(
+        value.year,
+        value.month,
+        value.day,
+        value.hour,
+        value.minute,
+        value.second,
+        value.millisecond,
+        value.microsecond,
+      );
+    }
+
+    throw ArgumentError('Unsupported timestamp type: ${value.runtimeType}');
+  }
+
+  int _toSeconds(dynamic value) =>
+      _parseServerTimestamp(value).millisecondsSinceEpoch ~/ 1000;
+  int? _toSecondsOrNull(dynamic value) =>
+      value == null ? null : _toSeconds(value);
+
   @override
   Future<Book> create(String name) async {
-    if (name.trim().isEmpty) {
+    final trimmedName = name.trim();
+    if (trimmedName.isEmpty) {
       throw ArgumentError('Book name cannot be empty');
     }
 
-    // Step 1: Call server API to create book and get UUID
-    if (_apiClient == null || _dbService == null) {
-      throw Exception('API client or database service not configured. Book creation requires server connection.');
+    if (_apiClient == null) {
+      throw Exception(
+        'API client not configured. Book creation requires server connection.',
+      );
     }
 
-    final credentials = await _dbService!.getDeviceCredentials();
-    if (credentials == null) {
-      throw Exception('Device not registered. Please register device before creating books.');
-    }
-
+    final credentials = await _requireCredentials('creating books');
     final now = DateTime.now().toUtc();
 
     try {
-      // Call /api/create-books endpoint
-      final response = await _apiClient!.createBook(
-        name: name.trim(),
+      final response = await _apiClient.createBook(
+        name: trimmedName,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
+      final serverUuid =
+          (response['uuid'] ?? response['bookUuid'] ?? response['book_uuid'])
+              as String;
 
-      final serverUuid = response['uuid'] as String;
-
-
-      // Step 2: Create book locally with server-provided UUID
       await insert({
         'book_uuid': serverUuid,
-        'name': name.trim(),
+        'name': trimmedName,
         'created_at': now.millisecondsSinceEpoch ~/ 1000,
       });
 
-      return Book(
-        uuid: serverUuid,
-        name: name.trim(),
-        createdAt: now,
-      );
+      return Book(uuid: serverUuid, name: trimmedName, createdAt: now);
     } catch (e) {
       throw Exception('Failed to create book: Server connection required. $e');
     }
@@ -98,22 +156,51 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
 
   @override
   Future<Book> update(Book book) async {
-    if (book.name.trim().isEmpty) throw ArgumentError('Book name cannot be empty');
+    final trimmedName = book.name.trim();
+    if (trimmedName.isEmpty) throw ArgumentError('Book name cannot be empty');
 
     final db = await getDatabaseFn();
+    final existingRows = await db.query(
+      'books',
+      columns: ['book_uuid', 'version'],
+      where: 'book_uuid = ?',
+      whereArgs: [book.uuid],
+      limit: 1,
+    );
+    if (existingRows.isEmpty) throw Exception('Book not found');
+
+    final rawVersion = existingRows.first['version'];
+    final currentVersion = rawVersion is int
+        ? rawVersion
+        : int.tryParse(rawVersion?.toString() ?? '') ?? 1;
+    final nextVersion = currentVersion + 1;
+
+    if (_apiClient != null) {
+      final credentials = await _requireCredentials('updating books');
+      await _apiClient.updateBook(
+        bookUuid: book.uuid,
+        name: trimmedName,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+    }
+
     final updatedRows = await db.update(
       'books',
-      {'name': book.name.trim()},
+      {'name': trimmedName, 'version': nextVersion, 'is_dirty': 0},
       where: 'book_uuid = ?',
       whereArgs: [book.uuid],
     );
 
     if (updatedRows == 0) throw Exception('Book not found');
-    return book.copyWith(name: book.name.trim());
+    return book.copyWith(name: trimmedName);
   }
 
   @override
   Future<void> delete(String uuid) async {
+    // Device-level delete: remove only local copy.
+    // Server copy stays available for future import.
+
     final db = await getDatabaseFn();
     final deletedRows = await db.delete(
       'books',
@@ -126,6 +213,15 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
   /// Archive a book (soft delete)
   @override
   Future<void> archive(String uuid) async {
+    if (_apiClient != null) {
+      final credentials = await _requireCredentials('archiving books');
+      await _apiClient.archiveBook(
+        bookUuid: uuid,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+    }
+
     final db = await getDatabaseFn();
     final now = DateTime.now().toUtc();
     final updatedRows = await db.update(
@@ -139,188 +235,166 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
 
   @override
   Future<void> reorder(List<Book> books) async {
-    // Note: Book model doesn't have an 'order' field currently
-    // This is a placeholder for future implementation
-    // For now, ordering is handled by created_at DESC in getAll()
-    // and by BookOrderService which uses SharedPreferences
+    // Ordering handled by BookOrderService (SharedPreferences).
   }
 
   @override
-  Future<List<Map<String, dynamic>>> listServerBooks({String? searchQuery}) async {
-    if (_apiClient == null || _dbService == null) {
-      throw Exception('API client or database service not configured. Server operations require configuration.');
-    }
-
-    final credentials = await _dbService!.getDeviceCredentials();
-    if (credentials == null) {
-      throw Exception('Device not registered. Please register device before accessing server books.');
-    }
-
-    try {
-      return await _apiClient!.listServerBooks(
-        deviceId: credentials.deviceId,
-        deviceToken: credentials.deviceToken,
-        searchQuery: searchQuery,
+  Future<List<Map<String, dynamic>>> listServerBooks({
+    String? searchQuery,
+  }) async {
+    if (_apiClient == null) {
+      throw Exception(
+        'API client not configured. Server operations require configuration.',
       );
-    } catch (e) {
-      rethrow;
     }
+    final credentials = await _requireCredentials('accessing server books');
+
+    return _apiClient.listServerBooks(
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+      searchQuery: searchQuery,
+    );
   }
 
   @override
   Future<void> pullBookFromServer(String bookUuid) async {
-    if (_apiClient == null || _dbService == null) {
-      throw Exception('API client or database service not configured. Book pull requires server connection.');
+    if (_apiClient == null) {
+      throw Exception(
+        'API client not configured. Book pull requires server connection.',
+      );
     }
+    final credentials = await _requireCredentials('pulling books');
 
-    final credentials = await _dbService!.getDeviceCredentials();
-    if (credentials == null) {
-      throw Exception('Device not registered. Please register device before pulling books.');
-    }
-
-    // Check if book already exists locally
     final existingBook = await getByUuid(bookUuid);
     if (existingBook != null) {
-      throw Exception('Book already exists locally. Cannot pull book that already exists.');
+      throw Exception(
+        'Book already exists locally. Cannot pull book that already exists.',
+      );
     }
 
     try {
-      // Pull complete book data from server
-      final bookData = await _apiClient!.pullBook(
+      final bookData = await _apiClient.pullBook(
         bookUuid: bookUuid,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
 
-      DateTime _parseServerTimestamp(dynamic value) {
-        if (value == null) {
-          throw ArgumentError('Server timestamp is null');
-        }
-
-        if (value is int) {
-          return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true);
-        }
-
-        if (value is String) {
-          final parsed = DateTime.parse(value);
-          if (parsed.isUtc) return parsed;
-          return DateTime.utc(
-            parsed.year,
-            parsed.month,
-            parsed.day,
-            parsed.hour,
-            parsed.minute,
-            parsed.second,
-            parsed.millisecond,
-            parsed.microsecond,
-          );
-        }
-
-        if (value is DateTime) {
-          if (value.isUtc) return value;
-          return DateTime.utc(
-            value.year,
-            value.month,
-            value.day,
-            value.hour,
-            value.minute,
-            value.second,
-            value.millisecond,
-            value.microsecond,
-          );
-        }
-
-        throw ArgumentError('Unsupported timestamp type: ${value.runtimeType}');
-      }
-
-      int _toSeconds(dynamic value) => _parseServerTimestamp(value).millisecondsSinceEpoch ~/ 1000;
-      int? _toSecondsOrNull(dynamic value) => value == null ? null : _toSeconds(value);
-
       final db = await getDatabaseFn();
+      final events =
+          (bookData['events'] as List?)?.cast<Map<String, dynamic>>() ??
+          const [];
+      final notes =
+          (bookData['notes'] as List?)?.cast<Map<String, dynamic>>() ??
+          const [];
+      final drawings =
+          (bookData['drawings'] as List?)?.cast<Map<String, dynamic>>() ??
+          const [];
 
-      // Extract counts for logging
-      final events = bookData['events'] as List;
-      final notes = bookData['notes'] as List;
-      final drawings = bookData['drawings'] as List;
-
-      // Use transaction to ensure atomicity
       await db.transaction((txn) async {
-        // 1. Insert book
         final bookMap = bookData['book'] as Map<String, dynamic>;
         await txn.insert('books', {
-          'book_uuid': bookMap['book_uuid'],
+          'book_uuid': _pick(bookMap, 'bookUuid', 'book_uuid'),
           'name': bookMap['name'],
-          'created_at': _toSeconds(bookMap['created_at']),
-          'archived_at': null,  // Clear archived status when pulling from server
-          'version': bookMap['version'],
+          'created_at': _toSeconds(_pick(bookMap, 'createdAt', 'created_at')),
+          'archived_at': null,
+          'version': bookMap['version'] ?? 1,
           'is_dirty': 0,
         });
 
-        // 2. Insert events
-        for (final eventMap in events) {
-          final event = eventMap as Map<String, dynamic>;
+        for (final event in events) {
+          final recordUuid = (_pick(event, 'recordUuid', 'record_uuid') ?? '')
+              .toString();
+          if (recordUuid.isEmpty) {
+            continue;
+          }
+
+          await txn.insert('records', {
+            'record_uuid': recordUuid,
+            'record_number':
+                (_pick(event, 'recordNumber', 'record_number') ?? '')
+                    .toString(),
+            'name':
+                (_pick(event, 'name', 'name') ?? _pick(event, 'title', 'title'))
+                    ?.toString(),
+            'phone': _pick(event, 'phone', 'phone')?.toString(),
+            'version': 1,
+            'is_dirty': 0,
+            'is_deleted': 0,
+          }, conflictAlgorithm: ConflictAlgorithm.ignore);
+
+          final eventTypesValue = _pick(event, 'eventTypes', 'event_types');
+          final eventTypes = eventTypesValue is List
+              ? jsonEncode(eventTypesValue)
+              : (eventTypesValue?.toString() ?? '[]');
+
           await txn.insert('events', {
-            'id': event['id'],
-            'book_uuid': event['book_uuid'],
-            'name': event['name'],
-            'record_number': event['record_number'],
-            'phone': event['phone'],
-            'event_type': event['event_type'],
-            'event_types': event['event_types'] ?? '[]',
-            'has_charge_items': event['has_charge_items'] == true ? 1 : 0,
-            'start_time': _toSeconds(event['start_time']),
-            'end_time': _toSecondsOrNull(event['end_time']),
-            'created_at': _toSeconds(event['created_at']),
-            'updated_at': event['updated_at'] != null
-                ? _toSeconds(event['updated_at'])
-                : _toSeconds(event['created_at']),
-            'is_removed': event['is_removed'] == true ? 1 : 0,
-            'removal_reason': event['removal_reason'],
-            'original_event_id': event['original_event_id'],
-            'new_event_id': event['new_event_id'],
-            'is_checked': event['is_checked'] == true ? 1 : 0,
-            'has_note': event['has_note'] == true ? 1 : 0,
-            'version': event['version'],
+            'id': _pick(event, 'id', 'id'),
+            'book_uuid': _pick(event, 'bookUuid', 'book_uuid') ?? bookUuid,
+            'record_uuid': recordUuid,
+            'title': _pick(event, 'title', 'title')?.toString() ?? '',
+            'record_number':
+                (_pick(event, 'recordNumber', 'record_number') ?? '')
+                    .toString(),
+            'event_types': eventTypes,
+            'has_charge_items':
+                _pick(event, 'hasChargeItems', 'has_charge_items') == true
+                ? 1
+                : 0,
+            'start_time': _toSeconds(_pick(event, 'startTime', 'start_time')),
+            'end_time': _toSecondsOrNull(_pick(event, 'endTime', 'end_time')),
+            'created_at': _toSeconds(_pick(event, 'createdAt', 'created_at')),
+            'updated_at':
+                _toSecondsOrNull(_pick(event, 'updatedAt', 'updated_at')) ??
+                _toSeconds(_pick(event, 'createdAt', 'created_at')),
+            'is_removed': _pick(event, 'isRemoved', 'is_removed') == true
+                ? 1
+                : 0,
+            'removal_reason': _pick(event, 'removalReason', 'removal_reason'),
+            'original_event_id': _pick(
+              event,
+              'originalEventId',
+              'original_event_id',
+            ),
+            'new_event_id': _pick(event, 'newEventId', 'new_event_id'),
+            'is_checked': _pick(event, 'isChecked', 'is_checked') == true
+                ? 1
+                : 0,
+            'has_note': _pick(event, 'hasNote', 'has_note') == true ? 1 : 0,
+            'version': _pick(event, 'version', 'version') ?? 1,
             'is_dirty': 0,
           });
         }
 
-        // 3. Insert notes
-        for (final noteMap in notes) {
-          final note = noteMap as Map<String, dynamic>;
+        for (final note in notes) {
+          final createdAt = _toSeconds(_pick(note, 'createdAt', 'created_at'));
+          final updatedAt =
+              _toSecondsOrNull(_pick(note, 'updatedAt', 'updated_at')) ??
+              createdAt;
           await txn.insert('notes', {
-            'id': note['id'],
-            'event_id': note['event_id'],
-            'strokes_data': note['strokes_data'],
-            'pages_data': note['pages_data'],
-            'created_at': _toSeconds(note['created_at']),
-            'updated_at': note['updated_at'] != null
-                ? _toSeconds(note['updated_at'])
-                : _toSeconds(note['created_at']),
-            'version': note['version'],
+            'record_uuid': _pick(note, 'recordUuid', 'record_uuid'),
+            'pages_data': _pick(note, 'pagesData', 'pages_data'),
+            'created_at': createdAt,
+            'updated_at': updatedAt,
+            'version': _pick(note, 'version', 'version') ?? 1,
             'is_dirty': 0,
-          });
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
 
-        // 4. Insert schedule drawings
-        for (final drawingMap in drawings) {
-          final drawing = drawingMap as Map<String, dynamic>;
+        for (final drawing in drawings) {
           await txn.insert('schedule_drawings', {
-            'id': drawing['id'],
-            'book_uuid': drawing['book_uuid'],
-            'date': _toSeconds(drawing['date']),
-            'view_mode': drawing['view_mode'],
-            'strokes_data': drawing['strokes_data'],
-            'created_at': _toSeconds(drawing['created_at']),
-            'updated_at': drawing['updated_at'] != null
-                ? _toSeconds(drawing['updated_at'])
-                : _toSeconds(drawing['created_at']),
-            'version': drawing['version'],
+            'book_uuid': _pick(drawing, 'bookUuid', 'book_uuid') ?? bookUuid,
+            'date': _toSeconds(_pick(drawing, 'date', 'date')),
+            'view_mode': _pick(drawing, 'viewMode', 'view_mode') ?? 0,
+            'strokes_data': _pick(drawing, 'strokesData', 'strokes_data'),
+            'created_at': _toSeconds(_pick(drawing, 'createdAt', 'created_at')),
+            'updated_at':
+                _toSecondsOrNull(_pick(drawing, 'updatedAt', 'updated_at')) ??
+                _toSeconds(_pick(drawing, 'createdAt', 'created_at')),
+            'version': _pick(drawing, 'version', 'version') ?? 1,
             'is_dirty': 0,
-          });
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       });
-
     } catch (e) {
       throw Exception('Failed to pull book from server: $e');
     }
@@ -328,17 +402,15 @@ class BookRepositoryImpl extends BaseRepository<Book, int> implements IBookRepos
 
   @override
   Future<Map<String, dynamic>?> getServerBookInfo(String bookUuid) async {
-    if (_apiClient == null || _dbService == null) {
-      throw Exception('API client or database service not configured. Server operations require configuration.');
+    if (_apiClient == null) {
+      throw Exception(
+        'API client not configured. Server operations require configuration.',
+      );
     }
-
-    final credentials = await _dbService!.getDeviceCredentials();
-    if (credentials == null) {
-      throw Exception('Device not registered. Please register device before accessing server books.');
-    }
+    final credentials = await _requireCredentials('accessing server books');
 
     try {
-      return await _apiClient!.getServerBookInfo(
+      return await _apiClient.getServerBookInfo(
         bookUuid: bookUuid,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,

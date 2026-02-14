@@ -29,7 +29,6 @@ class _BookListScreenState extends State<BookListScreen> {
     _controller = BookListController(
       repo: BookRepository.fromGetIt(),
       order: BookOrderAdapter.fromGetIt(),
-      backup: BookBackupAdapter.fromGetIt(),
       serverConfig: ServerConfigAdapter.fromGetIt(),
       deviceReg: DeviceRegistrationAdapter.fromGetIt(),
     )..initialize();
@@ -53,14 +52,34 @@ class _BookListScreenState extends State<BookListScreen> {
             appBar: _buildAppBar(context, controller),
             body: state.isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : BookListView(
-                    books: state.books,
-                    onRefresh: controller.reload,
-                    onReorder: controller.reorderBooks,
-                    onTap: _openSchedule,
-                    onRename: (book) => controller.promptRename(context, book),
-                    onArchive: (book) => controller.promptArchive(context, book),
-                    onDelete: (book) => controller.promptDelete(context, book),
+                : Column(
+                    children: [
+                      if (state.errorMessage != null)
+                        MaterialBanner(
+                          content: Text(state.errorMessage!),
+                          backgroundColor: Colors.red.shade50,
+                          actions: [
+                            TextButton(
+                              onPressed: controller.clearError,
+                              child: const Text('Dismiss'),
+                            ),
+                          ],
+                        ),
+                      Expanded(
+                        child: BookListView(
+                          books: state.books,
+                          onRefresh: controller.reload,
+                          onReorder: controller.reorderBooks,
+                          onTap: _openSchedule,
+                          onRename: (book) =>
+                              controller.promptRename(context, book),
+                          onArchive: (book) =>
+                              controller.promptArchive(context, book),
+                          onDelete: (book) =>
+                              controller.promptDelete(context, book),
+                        ),
+                      ),
+                    ],
                   ),
             floatingActionButton: FloatingActionButton(
               onPressed: () => controller.promptCreate(context),
@@ -83,12 +102,12 @@ class _BookListScreenState extends State<BookListScreen> {
           icon: const Icon(Icons.refresh),
           onPressed: controller.reload,
         ),
-        // Restore from Server
+        // Import from Server
         if (!PlatformUtils.isWeb)
           IconButton(
             icon: const Icon(Icons.cloud_download),
-            tooltip: 'Restore from Server',
-            onPressed: () => controller.openRestoreFlow(context),
+            tooltip: 'Import from Server',
+            onPressed: () => controller.openImportFromServerFlow(context),
           ),
         // Server Settings
         if (!PlatformUtils.isWeb)

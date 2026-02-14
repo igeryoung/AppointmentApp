@@ -3,7 +3,6 @@ import 'package:http/http.dart' as http;
 import 'package:flutter/foundation.dart';
 import 'http_client_factory.dart';
 import '../models/note.dart';
-import '../models/sync_models.dart';
 
 /// HTTP API client for communicating with sync server
 class ApiClient {
@@ -19,10 +18,8 @@ class ApiClient {
 
     // Log SSL configuration
     if (baseUrl.startsWith('https://')) {
-      if (kDebugMode) {
-      }
-    } else if (baseUrl.startsWith('http://')) {
-    }
+      if (kDebugMode) {}
+    } else if (baseUrl.startsWith('http://')) {}
   }
 
   /// Clean up resources
@@ -56,14 +53,18 @@ class ApiClient {
     try {
       // URL encode the record number in case it contains special characters
       final encodedRecordNumber = Uri.encodeComponent(recordNumber);
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/books/$bookUuid/persons/$encodedRecordNumber'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse(
+              '$baseUrl/api/books/$bookUuid/persons/$encodedRecordNumber',
+            ),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -92,18 +93,17 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/records/validate'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode({
-          'record_number': recordNumber,
-          'name': name,
-        }),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/records/validate'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode({'record_number': recordNumber, 'name': name}),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -128,14 +128,16 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -164,20 +166,23 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/events')
-          .replace(queryParameters: {
-        'startDate': startDate.toUtc().toIso8601String(),
-        'endDate': endDate.toUtc().toIso8601String(),
-      });
-
-      final response = await _client.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
+      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/events').replace(
+        queryParameters: {
+          'startDate': startDate.toUtc().toIso8601String(),
+          'endDate': endDate.toUtc().toIso8601String(),
         },
-      ).timeout(timeout);
+      );
+
+      final response = await _client
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -194,6 +199,165 @@ class ApiClient {
     }
   }
 
+  /// Create event on server
+  Future<Map<String, dynamic>> createEvent({
+    required String bookUuid,
+    required Map<String, dynamic> eventData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/books/$bookUuid/events'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode(eventData),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['event'] as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Create event failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  /// Update event on server
+  Future<Map<String, dynamic>> updateEvent({
+    required String bookUuid,
+    required String eventId,
+    required Map<String, dynamic> eventData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .patch(
+          Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode(eventData),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['event'] as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Update event failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  /// Soft remove event on server
+  Future<Map<String, dynamic>> removeEvent({
+    required String bookUuid,
+    required String eventId,
+    required String reason,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/remove'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode({'reason': reason}),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['event'] as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Remove event failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  /// Hard delete event on server
+  Future<void> deleteEvent({
+    required String bookUuid,
+    required String eventId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .delete(
+          Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Delete event failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
+  /// Reschedule event (creates new event and removes old event)
+  Future<Map<String, dynamic>> rescheduleEvent({
+    required String bookUuid,
+    required String eventId,
+    required DateTime newStartTime,
+    DateTime? newEndTime,
+    required String reason,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/reschedule'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode({
+            'newStartTime': newStartTime.toUtc().toIso8601String(),
+            'newEndTime': newEndTime?.toUtc().toIso8601String(),
+            'reason': reason,
+          }),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Reschedule event failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
   // ===================
   // Server-Store API: Notes
   // ===================
@@ -206,14 +370,16 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -240,14 +406,16 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/books/$bookUuid/records/$recordUuid/note'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid/records/$recordUuid/note'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -290,15 +458,17 @@ class ApiClient {
       debugPrint('[ApiClient] saveNote: POST $url');
       debugPrint('[ApiClient] saveNote: hasEventData=${eventData != null}');
 
-      final response = await _client.post(
-        Uri.parse(url),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode(requestBody),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse(url),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode(requestBody),
+          )
+          .timeout(timeout);
 
       debugPrint('[ApiClient] saveNote: response=${response.statusCode}');
 
@@ -320,7 +490,9 @@ class ApiClient {
           responseBody: response.body,
         );
       } else if (response.statusCode == 404) {
-        debugPrint('[ApiClient] saveNote: 404 - Event not found on server. Response: ${response.body}');
+        debugPrint(
+          '[ApiClient] saveNote: 404 - Event not found on server. Response: ${response.body}',
+        );
         throw ApiException(
           'Event not found on server',
           statusCode: 404,
@@ -346,14 +518,16 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.delete(
-        Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .delete(
+            Uri.parse('$baseUrl/api/books/$bookUuid/events/$eventId/note'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode != 200) {
         throw ApiException(
@@ -374,15 +548,17 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/notes/batch'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode({'eventIds': eventIds}),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/notes/batch'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode({'eventIds': eventIds}),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -415,20 +591,20 @@ class ApiClient {
     try {
       // Format date as YYYY-MM-DD
       final dateStr = date.toIso8601String().split('T')[0];
-      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/drawings')
-          .replace(queryParameters: {
-        'date': dateStr,
-        'viewMode': viewMode.toString(),
-      });
+      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/drawings').replace(
+        queryParameters: {'date': dateStr, 'viewMode': viewMode.toString()},
+      );
 
-      final response = await _client.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -454,15 +630,17 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/books/$bookUuid/drawings'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode(drawingData),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/books/$bookUuid/drawings'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode(drawingData),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -497,20 +675,20 @@ class ApiClient {
     try {
       // Format date as YYYY-MM-DD
       final dateStr = date.toIso8601String().split('T')[0];
-      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/drawings')
-          .replace(queryParameters: {
-        'date': dateStr,
-        'viewMode': viewMode.toString(),
-      });
+      final uri = Uri.parse('$baseUrl/api/books/$bookUuid/drawings').replace(
+        queryParameters: {'date': dateStr, 'viewMode': viewMode.toString()},
+      );
 
-      final response = await _client.delete(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .delete(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode != 200) {
         throw ApiException(
@@ -537,19 +715,21 @@ class ApiClient {
       final startDateStr = startDate.toIso8601String().split('T')[0];
       final endDateStr = endDate.toIso8601String().split('T')[0];
 
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/drawings/batch'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode({
-          'bookUuid': bookUuid,
-          'startDate': startDateStr,
-          'endDate': endDateStr,
-        }),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/drawings/batch'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode({
+              'bookUuid': bookUuid,
+              'startDate': startDateStr,
+              'endDate': endDateStr,
+            }),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -578,14 +758,16 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/records/$recordUuid/charge-items'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/records/$recordUuid/charge-items'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -613,15 +795,17 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/records/$recordUuid/charge-items'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode(chargeItemData),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/records/$recordUuid/charge-items'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode(chargeItemData),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -651,14 +835,16 @@ class ApiClient {
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.delete(
-        Uri.parse('$baseUrl/api/charge-items/$chargeItemId'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .delete(
+            Uri.parse('$baseUrl/api/charge-items/$chargeItemId'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode != 200) {
         throw ApiException(
@@ -673,35 +859,34 @@ class ApiClient {
   }
 
   // ===================
-  // Book Creation API
+  // Book API
   // ===================
 
-  /// Create a new book on the server and get UUID
-  /// This must be called before creating a book locally
+  /// Create a new book on the server
   Future<Map<String, dynamic>> createBook({
     required String name,
     required String deviceId,
     required String deviceToken,
   }) async {
     try {
-      final now = DateTime.now();
-
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/create-books'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-        body: jsonEncode({
-          'name': name,
-          'created_at': now.toUtc().toIso8601String(),
-        }),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/books'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode({'name': name}),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        return json;
+        final book = json['book'] as Map<String, dynamic>?;
+        if (book == null) return json;
+        // Backward-compatible fields for existing call sites/tests.
+        return {...book, 'uuid': book['bookUuid'] ?? book['book_uuid']};
       } else if (response.statusCode == 401) {
         throw ApiException(
           'Unauthorized: Invalid device credentials',
@@ -710,7 +895,7 @@ class ApiClient {
         );
       } else if (response.statusCode == 400) {
         throw ApiException(
-          'Bad request: ${jsonDecode(response.body)['message']}',
+          'Bad request: ${(jsonDecode(response.body) as Map<String, dynamic>)['message']}',
           statusCode: response.statusCode,
           responseBody: response.body,
         );
@@ -726,13 +911,7 @@ class ApiClient {
     }
   }
 
-  // ===================
-  // Book Pull API (Server → Local)
-  // ===================
-
-  /// List all books available on server for the device
-  /// Optional [searchQuery] filters books by name (case-insensitive)
-  /// Returns books in the format expected by the restore dialog
+  /// List books on server for current device
   Future<List<Map<String, dynamic>>> listServerBooks({
     required String deviceId,
     required String deviceToken,
@@ -740,35 +919,24 @@ class ApiClient {
   }) async {
     try {
       final uri = searchQuery != null && searchQuery.isNotEmpty
-          ? Uri.parse('$baseUrl/api/books/list?search=$searchQuery')
-          : Uri.parse('$baseUrl/api/books/list');
+          ? Uri.parse('$baseUrl/api/books?search=$searchQuery')
+          : Uri.parse('$baseUrl/api/books');
 
-      final response = await _client.get(
-        uri,
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            uri,
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
         final books = (json['books'] as List).cast<Map<String, dynamic>>();
-
-        // Transform to backup list format for compatibility
-        // NOTE: Using bookUuid as 'id' for backward compatibility with restore dialog
-        return books.map((book) {
-          return {
-            'id': book['id'],
-            'bookUuid': book['bookUuid'],
-            'backupName': book['name'],
-            'backupSize': book['size'] ?? 0,
-            'createdAt': book['createdAt'],
-            'restoredAt': null,
-            'deviceId': book['deviceId'],  // Pass through deviceId from server
-          };
-        }).toList();
+        return books;
       } else if (response.statusCode == 401) {
         throw ApiException(
           'Unauthorized: Invalid device credentials',
@@ -787,26 +955,28 @@ class ApiClient {
     }
   }
 
-  /// Pull complete book data from server (book + events + notes + drawings)
-  /// This is used to add a server book to local device
+  /// Fetch complete book payload (book + events + notes + drawings)
+  /// from canonical endpoint.
   Future<Map<String, dynamic>> pullBook({
     required String bookUuid,
     required String deviceId,
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/books/pull/$bookUuid'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid/bundle'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
-        return json['data'] as Map<String, dynamic>;
+        return json['bundle'] as Map<String, dynamic>;
       } else if (response.statusCode == 401) {
         throw ApiException(
           'Unauthorized: Invalid device credentials',
@@ -831,22 +1001,23 @@ class ApiClient {
     }
   }
 
-  /// Get book metadata only (without events/notes/drawings)
-  /// Useful for checking if a book exists on server or getting version info
+  /// Get book metadata
   Future<Map<String, dynamic>> getServerBookInfo({
     required String bookUuid,
     required String deviceId,
     required String deviceToken,
   }) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/books/$bookUuid/info'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': deviceId,
-          'X-Device-Token': deviceToken,
-        },
-      ).timeout(timeout);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -875,18 +1046,100 @@ class ApiClient {
     }
   }
 
+  /// Rename/update book metadata
+  Future<Map<String, dynamic>> updateBook({
+    required String bookUuid,
+    required String name,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .patch(
+          Uri.parse('$baseUrl/api/books/$bookUuid'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode({'name': name}),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['book'] as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Update book failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  Future<Map<String, dynamic>> archiveBook({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/books/$bookUuid/archive'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return json['book'] as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Archive book failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  Future<void> deleteBook({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .delete(
+          Uri.parse('$baseUrl/api/books/$bookUuid'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Delete book failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+  }
+
   // ===================
   // Device Registration API
   // ===================
 
   /// Check if a device is registered on the server
-  Future<bool> checkDeviceRegistration({
-    required String deviceId,
-  }) async {
+  Future<bool> checkDeviceRegistration({required String deviceId}) async {
     try {
-      final response = await _client.get(
-        Uri.parse('$baseUrl/api/devices/$deviceId'),
-      ).timeout(timeout);
+      final response = await _client
+          .get(Uri.parse('$baseUrl/api/devices/$deviceId'))
+          .timeout(timeout);
 
       return response.statusCode == 200;
     } catch (e) {
@@ -901,17 +1154,17 @@ class ApiClient {
     String? platform,
   }) async {
     try {
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/devices/register'),
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: jsonEncode({
-          'deviceName': deviceName,
-          'platform': platform,
-          'password': password,
-        }),
-      ).timeout(timeout);
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/devices/register'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'deviceName': deviceName,
+              'platform': platform,
+              'password': password,
+            }),
+          )
+          .timeout(timeout);
 
       if (response.statusCode == 200) {
         final json = jsonDecode(response.body) as Map<String, dynamic>;
@@ -933,134 +1186,6 @@ class ApiClient {
       rethrow;
     }
   }
-
-  // ===================
-  // Generic Sync API
-  // ===================
-
-  /// Push local changes to server
-  /// Sends local changes and returns server acknowledgment
-  Future<SyncResponse> pushChanges(SyncRequest request) async {
-    try {
-
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/sync/push'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': request.deviceId,
-          'X-Device-Token': request.deviceToken,
-        },
-        body: jsonEncode(request.toJson()),
-      ).timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final syncResponse = SyncResponse.fromJson(json);
-        if (syncResponse.conflicts != null && syncResponse.conflicts!.isNotEmpty) {
-        }
-        return syncResponse;
-      } else if (response.statusCode == 401) {
-        throw ApiException(
-          'Unauthorized: Invalid device credentials',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      } else if (response.statusCode == 409) {
-        // Conflicts detected
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        return SyncResponse.fromJson(json);
-      } else {
-        throw ApiException(
-          'Push changes failed: ${response.statusCode}',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Pull server changes
-  /// Retrieves changes from server since last sync
-  Future<SyncResponse> pullChanges(SyncRequest request) async {
-    try {
-
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/sync/pull'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': request.deviceId,
-          'X-Device-Token': request.deviceToken,
-        },
-        body: jsonEncode(request.toJson()),
-      ).timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final syncResponse = SyncResponse.fromJson(json);
-        return syncResponse;
-      } else if (response.statusCode == 401) {
-        throw ApiException(
-          'Unauthorized: Invalid device credentials',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      } else {
-        throw ApiException(
-          'Pull changes failed: ${response.statusCode}',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
-
-  /// Perform full bidirectional sync
-  /// Pushes local changes and pulls server changes in a single transaction
-  Future<SyncResponse> fullSync(SyncRequest request) async {
-    try {
-
-      final response = await _client.post(
-        Uri.parse('$baseUrl/api/sync/full'),
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Device-ID': request.deviceId,
-          'X-Device-Token': request.deviceToken,
-        },
-        body: jsonEncode(request.toJson()),
-      ).timeout(timeout);
-
-      if (response.statusCode == 200) {
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final syncResponse = SyncResponse.fromJson(json);
-        if (syncResponse.conflicts != null && syncResponse.conflicts!.isNotEmpty) {
-        }
-        return syncResponse;
-      } else if (response.statusCode == 401) {
-        throw ApiException(
-          'Unauthorized: Invalid device credentials',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      } else if (response.statusCode == 409) {
-        // Conflicts detected
-        final json = jsonDecode(response.body) as Map<String, dynamic>;
-        final syncResponse = SyncResponse.fromJson(json);
-        return syncResponse;
-      } else {
-        throw ApiException(
-          'Full sync failed: ${response.statusCode}',
-          statusCode: response.statusCode,
-          responseBody: response.body,
-        );
-      }
-    } catch (e) {
-      rethrow;
-    }
-  }
 }
 
 /// API Exception with details
@@ -1069,11 +1194,7 @@ class ApiException implements Exception {
   final int? statusCode;
   final String? responseBody;
 
-  ApiException(
-    this.message, {
-    this.statusCode,
-    this.responseBody,
-  });
+  ApiException(this.message, {this.statusCode, this.responseBody});
 
   @override
   String toString() {
@@ -1083,11 +1204,7 @@ class ApiException implements Exception {
 
 /// API Conflict Exception (409) with server state
 class ApiConflictException extends ApiException {
-  ApiConflictException(
-    super.message, {
-    super.statusCode,
-    super.responseBody,
-  });
+  ApiConflictException(super.message, {super.statusCode, super.responseBody});
 
   Map<String, dynamic>? get serverState {
     if (responseBody == null) return null;
