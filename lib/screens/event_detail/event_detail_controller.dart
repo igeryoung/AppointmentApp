@@ -222,10 +222,13 @@ class EventDetailController {
     // Always fetch from server first
     _updateState(_state.copyWith(isLoadingFromServer: true));
     try {
-      final serverNote = await _noteSyncAdapter!.getNote(
-        event.id!,
-        forceRefresh: true,
-      );
+      Note? serverNote;
+      if (event.recordUuid.isNotEmpty) {
+        serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
+          event.bookUuid,
+          event.recordUuid,
+        );
+      }
 
       if (_noteEditGeneration != noteLoadGeneration) {
         _updateState(_state.copyWith(isLoadingFromServer: false));
@@ -388,8 +391,8 @@ class EventDetailController {
       throw Exception('Event not found');
     }
 
-    Note? baseNote = await _noteSyncAdapter!.getNote(eventId, forceRefresh: true);
-    if (baseNote == null && eventData.recordUuid.isNotEmpty) {
+    Note? baseNote;
+    if (eventData.recordUuid.isNotEmpty) {
       baseNote = await _noteSyncAdapter!.getNoteByRecordUuid(
         eventData.bookUuid,
         eventData.recordUuid,

@@ -74,20 +74,35 @@ class _FakeNoteSyncAdapter extends NoteSyncAdapter {
   _FakeNoteSyncAdapter(super.contentService);
 
   int saveCalls = 0;
+  int getNoteCalls = 0;
+  int getNoteByRecordUuidCalls = 0;
   Note? existingNote;
+  final Map<String, Note?> notesByEventId = {};
+  Note? noteByRecordUuid;
   Note? saveResponse;
   String? lastSaveEventId;
+  String? lastGetNoteEventId;
+  String? lastGetRecordBookUuid;
+  String? lastGetRecordUuid;
   Note? lastSavedNote;
   Object? saveError;
 
   @override
   Future<Note?> getNote(String eventId, {bool forceRefresh = false}) async {
+    getNoteCalls += 1;
+    lastGetNoteEventId = eventId;
+    if (notesByEventId.containsKey(eventId)) {
+      return notesByEventId[eventId];
+    }
     return existingNote;
   }
 
   @override
   Future<Note?> getNoteByRecordUuid(String bookUuid, String recordUuid) async {
-    return existingNote;
+    getNoteByRecordUuidCalls += 1;
+    lastGetRecordBookUuid = bookUuid;
+    lastGetRecordUuid = recordUuid;
+    return noteByRecordUuid ?? existingNote;
   }
 
   @override
@@ -305,6 +320,45 @@ void main() {
       final persistedEvent = await dbService.getEventById('event-a1');
       expect(persistedEvent, isNotNull);
       expect(persistedEvent!.eventTypes, const [EventType.emergency]);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-003: loadNote() fetches note by record UUID',
+    () async {
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(
+        recordUuid: 'record-a1',
+        version: 5,
+      );
+
+      final controller = buildController();
+      await controller.loadNote();
+
+      expect(fakeNoteSyncAdapter.getNoteCalls, 0);
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 1);
+      expect(fakeNoteSyncAdapter.lastGetRecordBookUuid, 'book-a');
+      expect(fakeNoteSyncAdapter.lastGetRecordUuid, 'record-a1');
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.recordUuid, 'record-a1');
+      expect(controller.state.note!.version, 5);
+      expect(controller.state.isLoadingFromServer, isFalse);
+      expect(controller.state.isOffline, isFalse);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-004: loadNote() keeps empty state when record note does not exist',
+    () async {
+      fakeNoteSyncAdapter.noteByRecordUuid = null;
+
+      final controller = buildController();
+      await controller.loadNote();
+
+      expect(fakeNoteSyncAdapter.getNoteCalls, 0);
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 1);
+      expect(controller.state.note, isNull);
+      expect(controller.state.isLoadingFromServer, isFalse);
+      expect(controller.state.isOffline, isFalse);
     },
   );
 }

@@ -23,6 +23,7 @@ Default mode is `--full`.
 1. Device registration gate.
 2. Book creation and book management.
 3. Event creation/update/remove/delete/reschedule.
+   - Includes no-record-number reschedule note continuity coverage (old/new event should resolve same note).
 4. Note behaviors.
 5. Drawing behaviors.
 6. Event-detail trigger -> server -> return -> update.

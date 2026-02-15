@@ -3,18 +3,21 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/models/event.dart';
 import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/repositories/event_repository_impl.dart';
+import 'package:schedule_note_app/repositories/note_repository_impl.dart';
 import 'package:schedule_note_app/services/database/prd_database_service.dart';
 import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../support/db_seed.dart';
 import '../../../support/fixtures/event_fixtures.dart';
+import '../../../support/fixtures/note_fixtures.dart';
 import '../../../support/test_db_path.dart';
 
 void main() {
   late PRDDatabaseService dbService;
   late Database db;
   late EventRepositoryImpl repository;
+  late NoteRepositoryImpl noteRepository;
 
   setUpAll(() async {
     sqfliteFfiInit();
@@ -29,6 +32,7 @@ void main() {
     await dbService.clearAllData();
     await db.delete('device_info');
     repository = EventRepositoryImpl(() => dbService.database);
+    noteRepository = NoteRepositoryImpl(() => dbService.database);
 
     await seedBook(db, bookUuid: 'book-a');
     await seedRecord(
@@ -42,6 +46,12 @@ void main() {
       recordUuid: 'record-a2',
       name: 'Bob',
       recordNumber: '002',
+    );
+    await seedRecord(
+      db,
+      recordUuid: 'record-empty-1',
+      name: 'WalkIn',
+      recordNumber: '',
     );
   });
 
@@ -243,6 +253,53 @@ void main() {
       expect(oldPersisted!.newEventId, result.newEvent.id);
       expect(newPersisted!.startTime.toUtc().hour, 11);
       expect(newPersisted.endTime!.toUtc().hour, 12);
+    },
+  );
+
+  test(
+    'EVENT-UNIT-009: no-record-number event keeps shared note across reschedule old/new events',
+    () async {
+      // Arrange: event with empty record_number and note saved by its record_uuid
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-no-rn-1',
+          bookUuid: 'book-a',
+          recordUuid: 'record-empty-1',
+          title: 'WalkIn',
+          recordNumber: '',
+          startTime: DateTime.utc(2026, 1, 4, 9),
+          endTime: DateTime.utc(2026, 1, 4, 10),
+        ),
+      );
+      await noteRepository.saveToCache(makeNote(recordUuid: 'record-empty-1'));
+
+      final original = (await repository.getById('event-no-rn-1'))!;
+
+      // Act: reschedule event
+      final result = await repository.changeEventTime(
+        original,
+        DateTime.utc(2026, 1, 4, 11),
+        DateTime.utc(2026, 1, 4, 12),
+        'rescheduled',
+      );
+
+      final oldPersisted = await repository.getById('event-no-rn-1');
+      final newPersisted = await repository.getById(result.newEvent.id!);
+      final oldEventNote = await noteRepository.getCached('event-no-rn-1');
+      final newEventNote = await noteRepository.getCached(result.newEvent.id!);
+
+      // Assert: old/new events still resolve the same shared note
+      expect(oldPersisted, isNotNull);
+      expect(newPersisted, isNotNull);
+      expect(oldPersisted!.recordNumber, isEmpty);
+      expect(newPersisted!.recordNumber, isEmpty);
+      expect(oldPersisted.recordUuid, 'record-empty-1');
+      expect(newPersisted.recordUuid, 'record-empty-1');
+      expect(oldEventNote, isNotNull);
+      expect(newEventNote, isNotNull);
+      expect(oldEventNote!.recordUuid, 'record-empty-1');
+      expect(newEventNote!.recordUuid, 'record-empty-1');
     },
   );
 }
