@@ -119,6 +119,7 @@ SN_TEST_DEVICE_TOKEN=$deviceToken
 SN_TEST_BOOK_UUID=$bookUuid
 SN_TEST_EVENT_ID=$eventId
 SN_TEST_RECORD_UUID=$recordUuid
+SN_TEST_FIXTURE_AUTO_CLEANUP=1
 ''';
     await file.writeAsString(content);
 

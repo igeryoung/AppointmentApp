@@ -17,6 +17,7 @@ class _LiveServerConfig {
   final String? bookUuid;
   final String? eventId;
   final String? recordUuid;
+  final bool autoCleanupFixture;
 
   const _LiveServerConfig({
     required this.baseUrl,
@@ -25,6 +26,7 @@ class _LiveServerConfig {
     this.bookUuid,
     this.eventId,
     this.recordUuid,
+    required this.autoCleanupFixture,
   });
 
   static Map<String, String> _loadEnvFile(String path) {
@@ -67,6 +69,14 @@ class _LiveServerConfig {
     final bookUuid = resolve('SN_TEST_BOOK_UUID');
     final eventId = resolve('SN_TEST_EVENT_ID');
     final recordUuid = resolve('SN_TEST_RECORD_UUID');
+    final autoCleanupRaw = resolve(
+      'SN_TEST_FIXTURE_AUTO_CLEANUP',
+    ).toLowerCase();
+    final autoCleanupFixture =
+        autoCleanupRaw == '1' ||
+        autoCleanupRaw == 'true' ||
+        autoCleanupRaw == 'yes' ||
+        autoCleanupRaw == 'on';
 
     if (baseUrl.isEmpty || deviceId.isEmpty || deviceToken.isEmpty) {
       return null;
@@ -90,6 +100,7 @@ class _LiveServerConfig {
       bookUuid: bookUuid.isEmpty ? null : bookUuid,
       eventId: eventId.isEmpty ? null : eventId,
       recordUuid: recordUuid.isEmpty ? null : recordUuid,
+      autoCleanupFixture: autoCleanupFixture,
     );
   }
 }
@@ -224,6 +235,46 @@ List<String> _parseEventTypes(dynamic value) {
   return [value.toString()];
 }
 
+Future<Map<String, dynamic>> _createTemporaryBook({
+  required ApiClient apiClient,
+  required _LiveServerConfig config,
+  required String name,
+}) async {
+  final createdBook = await apiClient.createBook(
+    name: name,
+    deviceId: config.deviceId,
+    deviceToken: config.deviceToken,
+  );
+  return createdBook;
+}
+
+Map<String, dynamic> _buildSingleStrokeNotePayload({
+  required String eventId,
+  required int version,
+}) {
+  final pagesData = jsonEncode({
+    'formatVersion': 2,
+    'pages': [
+      [
+        {
+          'id': 'stroke-$eventId',
+          'event_uuid': eventId,
+          'points': [
+            {'x': 10.0, 'y': 10.0},
+            {'x': 20.0, 'y': 20.0},
+          ],
+          'stroke_width': 2.0,
+          'color': 4278190080,
+          'stroke_type': 'pen',
+        },
+      ],
+    ],
+    'erasedStrokesByEvent': <String, List<String>>{},
+  });
+
+  return {'pagesData': pagesData, 'version': version};
+}
+
 void main() {
   final config = _LiveServerConfig.fromEnv();
   final shouldSkip = config == null;
@@ -255,7 +306,7 @@ void main() {
         );
         expect(originalEvent, isNotNull);
 
-        if (!fixture.isTemporary) {
+        if (!fixture.isTemporary && !live.autoCleanupFixture) {
           originalEventTypes = _parseEventTypes(
             originalEvent!['event_types'] ?? originalEvent['eventTypes'],
           );
@@ -311,7 +362,8 @@ void main() {
         expect(refreshedRecord['phone'], targetPhone);
       } finally {
         try {
-          if (fixture != null && fixture.isTemporary) {
+          if (fixture != null &&
+              (fixture.isTemporary || live.autoCleanupFixture)) {
             await apiClient.deleteBook(
               bookUuid: fixture.bookUuid,
               deviceId: live.deviceId,
@@ -339,6 +391,131 @@ void main() {
         }
         apiClient.dispose();
         httpClient.close();
+      }
+    },
+    skip: shouldSkip ? skipReason : false,
+  );
+
+  test(
+    'EVENT-INTEG-002: no-record-number note remains visible for old/new events after reschedule',
+    () async {
+      final live = config!;
+      final apiClient = ApiClient(baseUrl: live.baseUrl);
+      final uuid = const Uuid();
+      String? bookUuid;
+
+      try {
+        final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+        final createdBook = await _createTemporaryBook(
+          apiClient: apiClient,
+          config: live,
+          name: 'IT no-rn reschedule $suffix',
+        );
+        bookUuid = _pickString(
+          createdBook,
+          keys: const ['bookUuid', 'book_uuid', 'uuid'],
+        );
+
+        final oldEventId = uuid.v4();
+        final recordUuid = uuid.v4();
+        final startTime = DateTime.now().toUtc().add(
+          const Duration(minutes: 15),
+        );
+        final endTime = startTime.add(const Duration(minutes: 30));
+
+        await apiClient.createEvent(
+          bookUuid: bookUuid,
+          eventData: {
+            'id': oldEventId,
+            'record_uuid': recordUuid,
+            'title': 'IT no-rn fixture $suffix',
+            'record_number': '',
+            'record_name': 'IT NoRN $suffix',
+            'record_phone': null,
+            'event_types': const ['consultation'],
+            'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
+            'end_time': endTime.millisecondsSinceEpoch ~/ 1000,
+          },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        // Save initial note on the original event.
+        await apiClient.saveNote(
+          bookUuid: bookUuid,
+          eventId: oldEventId,
+          noteData: _buildSingleStrokeNotePayload(
+            eventId: oldEventId,
+            version: 1,
+          ),
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        final beforeRescheduleOldNote = await apiClient.fetchNote(
+          bookUuid: bookUuid,
+          eventId: oldEventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        expect(beforeRescheduleOldNote, isNotNull);
+        expect(beforeRescheduleOldNote!.recordUuid, recordUuid);
+        expect(beforeRescheduleOldNote.isNotEmpty, isTrue);
+
+        // Reschedule event and capture new event ID from server response.
+        final rescheduled = await apiClient.rescheduleEvent(
+          bookUuid: bookUuid,
+          eventId: oldEventId,
+          newStartTime: startTime.add(const Duration(hours: 2)),
+          newEndTime: endTime.add(const Duration(hours: 2)),
+          reason: 'integration reschedule',
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        final oldEvent = rescheduled['oldEvent'] as Map<String, dynamic>;
+        final newEvent = rescheduled['newEvent'] as Map<String, dynamic>;
+        final newEventId = _pickString(newEvent, keys: const ['id']);
+
+        expect(_pickString(oldEvent, keys: const ['id']), oldEventId);
+        expect(oldEvent['is_removed'], isTrue);
+        expect(oldEvent['new_event_id'], newEventId);
+        expect(newEvent['original_event_id'], oldEventId);
+
+        // Verify both old and new events can fetch the same note.
+        final oldEventNote = await apiClient.fetchNote(
+          bookUuid: bookUuid,
+          eventId: oldEventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        final newEventNote = await apiClient.fetchNote(
+          bookUuid: bookUuid,
+          eventId: newEventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        expect(oldEventNote, isNotNull);
+        expect(newEventNote, isNotNull);
+        expect(oldEventNote!.recordUuid, recordUuid);
+        expect(newEventNote!.recordUuid, recordUuid);
+        expect(oldEventNote.pages, isNotEmpty);
+        expect(newEventNote.pages, isNotEmpty);
+      } finally {
+        // Always cleanup to avoid polluting shared integration environments.
+        if (bookUuid != null) {
+          try {
+            await apiClient.deleteBook(
+              bookUuid: bookUuid,
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            );
+          } catch (_) {
+            // Best-effort cleanup.
+          }
+        }
+        apiClient.dispose();
       }
     },
     skip: shouldSkip ? skipReason : false,
