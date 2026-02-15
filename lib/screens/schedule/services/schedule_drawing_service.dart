@@ -22,7 +22,7 @@ class ScheduleDrawingService {
   final String bookUuid;
   final VoidCallback onDrawingChanged;
 
-  // Canvas key management - one key per 3-day window
+  // Canvas key management - one key per effective schedule window
   final Map<String, GlobalKey<HandwritingCanvasState>> _canvasKeys = {};
 
   // Current drawing state
@@ -41,8 +41,8 @@ class ScheduleDrawingService {
     required this.bookUuid,
     required this.onDrawingChanged,
     ContentService? contentService,
-  })  : _dbService = dbService,
-        _contentService = contentService;
+  }) : _dbService = dbService,
+       _contentService = contentService;
 
   /// Get the current drawing
   ScheduleDrawing? get currentDrawing => _currentDrawing;
@@ -52,15 +52,21 @@ class ScheduleDrawingService {
     _contentService = service;
   }
 
-  /// Generate page ID for a given date (3-day window identifier)
-  String getPageId(DateTime selectedDate) {
-    final normalizedDate = ScheduleLayoutUtils.get3DayWindowStart(selectedDate);
-    return '3day_${normalizedDate.millisecondsSinceEpoch}';
+  /// Generate page ID for a given date and view mode.
+  String getPageId(DateTime selectedDate, int viewMode) {
+    final normalizedDate = ScheduleLayoutUtils.getEffectiveDate(
+      selectedDate,
+      viewMode: viewMode,
+    );
+    return 'vm_${viewMode}_${normalizedDate.millisecondsSinceEpoch}';
   }
 
   /// Get or create canvas key for the current page
-  GlobalKey<HandwritingCanvasState> getCanvasKey(DateTime selectedDate) {
-    final pageId = getPageId(selectedDate);
+  GlobalKey<HandwritingCanvasState> getCanvasKey(
+    DateTime selectedDate,
+    int viewMode,
+  ) {
+    final pageId = getPageId(selectedDate, viewMode);
     if (!_canvasKeys.containsKey(pageId)) {
       _canvasKeys[pageId] = GlobalKey<HandwritingCanvasState>();
     }
@@ -68,7 +74,10 @@ class ScheduleDrawingService {
   }
 
   /// Load drawing for the selected date (cache-first with server fallback)
-  Future<void> loadDrawing(DateTime selectedDate) async {
+  Future<void> loadDrawing(
+    DateTime selectedDate, {
+    required int viewMode,
+  }) async {
     // RACE CONDITION FIX: Increment generation counter
     _drawingLoadGeneration++;
     final loadGeneration = _drawingLoadGeneration;
@@ -79,7 +88,10 @@ class ScheduleDrawingService {
       onDrawingChanged();
 
       // Use effective date to ensure consistency with UI rendering
-      final effectiveDate = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
+      final effectiveDate = ScheduleLayoutUtils.getEffectiveDate(
+        selectedDate,
+        viewMode: viewMode,
+      );
 
       // Use ContentService for cache-first strategy with server fallback
       ScheduleDrawing? drawing;
@@ -87,16 +99,15 @@ class ScheduleDrawingService {
         drawing = await _contentService!.getDrawing(
           bookUuid: bookUuid,
           date: effectiveDate,
-          viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
+          viewMode: viewMode,
           forceRefresh: false,
         );
       } else if (_dbService is PRDDatabaseService) {
         // Fallback to direct database access
-        final prdDb = _dbService as PRDDatabaseService;
-        drawing = await prdDb.getDrawing(
+        drawing = await _dbService.getDrawing(
           bookUuid,
           effectiveDate,
-          ScheduleDrawing.VIEW_MODE_3DAY,
+          viewMode,
         );
       }
 
@@ -112,11 +123,9 @@ class ScheduleDrawingService {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         // RACE CONDITION FIX: Check again before loading into canvas
         if (loadGeneration == _drawingLoadGeneration) {
-          _loadStrokesIntoCanvas(selectedDate, drawing);
-        } else {
-        }
+          _loadStrokesIntoCanvas(selectedDate, drawing, viewMode: viewMode);
+        } else {}
       });
-
     } catch (e) {
       // Only update state if this load is still current
       if (loadGeneration == _drawingLoadGeneration) {
@@ -127,10 +136,12 @@ class ScheduleDrawingService {
   }
 
   /// Load strokes from drawing into canvas
-  void _loadStrokesIntoCanvas(DateTime selectedDate, ScheduleDrawing? drawing) {
-    final canvasKey = getCanvasKey(selectedDate);
-    final pageId = getPageId(selectedDate);
-    final effectiveDate = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
+  void _loadStrokesIntoCanvas(
+    DateTime selectedDate,
+    ScheduleDrawing? drawing, {
+    required int viewMode,
+  }) {
+    final canvasKey = getCanvasKey(selectedDate, viewMode);
 
     if (drawing != null && drawing.strokes.isNotEmpty) {
       canvasKey.currentState?.loadStrokes(drawing.strokes);
@@ -140,10 +151,10 @@ class ScheduleDrawingService {
   }
 
   /// Schedule a debounced save (500ms delay)
-  void scheduleSave(DateTime selectedDate) {
+  void scheduleSave(DateTime selectedDate, int viewMode) {
     _saveDebounceTimer?.cancel();
     _saveDebounceTimer = Timer(const Duration(milliseconds: 500), () {
-      saveDrawing(selectedDate);
+      saveDrawing(selectedDate, viewMode: viewMode);
     });
   }
 
@@ -153,7 +164,10 @@ class ScheduleDrawingService {
   }
 
   /// Save drawing with race condition prevention
-  Future<void> saveDrawing(DateTime selectedDate) async {
+  Future<void> saveDrawing(
+    DateTime selectedDate, {
+    required int viewMode,
+  }) async {
     // Prevent concurrent saves
     if (_isSaving) {
       return;
@@ -161,9 +175,12 @@ class ScheduleDrawingService {
 
     // RACE CONDITION FIX: Capture date at save start for validation
     final dateAtSaveStart = selectedDate;
-    final effectiveDateAtStart = ScheduleLayoutUtils.getEffectiveDate(dateAtSaveStart);
+    final effectiveDateAtStart = ScheduleLayoutUtils.getEffectiveDate(
+      dateAtSaveStart,
+      viewMode: viewMode,
+    );
 
-    final canvasKey = getCanvasKey(selectedDate);
+    final canvasKey = getCanvasKey(selectedDate, viewMode);
     final canvasState = canvasKey.currentState;
     if (canvasState == null) {
       return;
@@ -179,8 +196,10 @@ class ScheduleDrawingService {
     try {
       final strokes = canvasState.getStrokes();
       final now = TimeService.instance.now();
-      final effectiveDate = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
-      final pageId = getPageId(selectedDate);
+      final effectiveDate = ScheduleLayoutUtils.getEffectiveDate(
+        selectedDate,
+        viewMode: viewMode,
+      );
 
       // Only use existing ID, createdAt, and version if it matches the current page
       int? drawingId;
@@ -188,7 +207,7 @@ class ScheduleDrawingService {
       int version = 1;
       if (_currentDrawing != null &&
           _currentDrawing!.bookUuid == bookUuid &&
-          _currentDrawing!.viewMode == ScheduleDrawing.VIEW_MODE_3DAY &&
+          _currentDrawing!.viewMode == viewMode &&
           _currentDrawing!.date.year == effectiveDate.year &&
           _currentDrawing!.date.month == effectiveDate.month &&
           _currentDrawing!.date.day == effectiveDate.day) {
@@ -201,20 +220,22 @@ class ScheduleDrawingService {
         id: drawingId,
         bookUuid: bookUuid,
         date: effectiveDate,
-        viewMode: ScheduleDrawing.VIEW_MODE_3DAY,
+        viewMode: viewMode,
         strokes: strokes,
         version: version,
         createdAt: createdAt ?? now,
         updatedAt: now,
       );
 
-
       // Use ContentService or fallback to database
       if (_contentService != null) {
         await _contentService!.saveDrawing(drawing);
 
         // RACE CONDITION FIX: Verify date hasn't changed during save
-        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
+        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(
+          selectedDate,
+          viewMode: viewMode,
+        );
         if (effectiveDateAtStart != effectiveDateAfterSave) {
           return;
         }
@@ -228,22 +249,23 @@ class ScheduleDrawingService {
 
         // Update current drawing state
         if (_dbService is PRDDatabaseService) {
-          final prdDb = _dbService as PRDDatabaseService;
-          final savedDrawing = await prdDb.getDrawing(
+          final savedDrawing = await _dbService.getDrawing(
             bookUuid,
             effectiveDate,
-            ScheduleDrawing.VIEW_MODE_3DAY,
+            viewMode,
           );
           _currentDrawing = savedDrawing ?? drawing;
         } else {
           _currentDrawing = drawing;
         }
       } else if (_dbService is PRDDatabaseService) {
-        final prdDb = _dbService as PRDDatabaseService;
-        final savedDrawing = await prdDb.saveDrawing(drawing);
+        final savedDrawing = await _dbService.saveDrawing(drawing);
 
         // RACE CONDITION FIX: Verify date hasn't changed during save
-        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(selectedDate);
+        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(
+          selectedDate,
+          viewMode: viewMode,
+        );
         if (effectiveDateAtStart != effectiveDateAfterSave) {
           return;
         }

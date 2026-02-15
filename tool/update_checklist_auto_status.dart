@@ -72,6 +72,9 @@ const Map<String, List<String>> _operationToPipelineSteps = {
     'Pipeline 08 - Drawing Save/Load/Update/Clear',
   ],
   'Switch date and return': ['Pipeline 08 - Drawing Save/Load/Update/Clear'],
+  'In 2-day mode, draw on one page, navigate to previous page, then return': [
+    'Pipeline 08 - Drawing Save/Load/Update/Clear',
+  ],
   '(If clear action exists) clear drawing for date': [
     'Pipeline 08 - Drawing Save/Load/Update/Clear',
   ],

@@ -71,6 +71,7 @@ Use this checklist for real-device verification after unit tests pass.
 | [ ] | [ ] | Draw on schedule overlay, leave screen, return to same date | Drawing persists and reloads correctly |
 | [ ] | [ ] | Update existing drawing on same date | Latest drawing content replaces previous version |
 | [ ] | [ ] | Switch date and return | Drawing is tied to correct date and does not leak to other dates |
+| [ ] | [ ] | In 2-day mode, draw on one page, navigate to previous page, then return | Drawing stays on the original 2-day page and does not appear on the previous page |
 | [ ] | [ ] | (If clear action exists) clear drawing for date | Drawing is removed for that date/view |
 
 ## 6. Device Credentials & Session

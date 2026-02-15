@@ -6,6 +6,7 @@ import '../../cubits/schedule_state.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/book.dart';
 import '../../models/event.dart';
+import '../../models/schedule_drawing.dart';
 import '../../services/content_service.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/time_service.dart';
@@ -39,6 +40,8 @@ class ScheduleController extends ChangeNotifier {
 
   DateTime _selectedDate = TimeService.instance.now();
   DateTime get selectedDate => _selectedDate;
+  int _viewMode = ScheduleDrawing.VIEW_MODE_2DAY;
+  int get viewMode => _viewMode;
 
   DateTime? _previousSelectedDate;
   DateTime? get previousSelectedDate => _previousSelectedDate;
@@ -251,7 +254,13 @@ class ScheduleController extends ChangeNotifier {
     _contentService = _connectivityService?.contentService;
     _connectivityService?.setupConnectivityMonitoring();
 
-    await _drawingService?.loadDrawing(_selectedDate);
+    final currentState = context.read<ScheduleCubit>().state;
+    if (currentState is ScheduleLoaded) {
+      _viewMode = currentState.viewMode;
+      _dateService?.setViewMode(_viewMode);
+    }
+
+    await _drawingService?.loadDrawing(_selectedDate, viewMode: _viewMode);
   }
 
   @override
@@ -279,14 +288,14 @@ class ScheduleController extends ChangeNotifier {
   }
 
   /// Generate unique page identifier for current view and date.
-  String getPageId() => _drawingService!.getPageId(_selectedDate);
+  String getPageId() => _drawingService!.getPageId(_selectedDate, _viewMode);
 
   /// Canvas key for current page.
   GlobalKey<HandwritingCanvasState> getCanvasKeyForCurrentPage() =>
-      _drawingService!.getCanvasKey(_selectedDate);
+      _drawingService!.getCanvasKey(_selectedDate, _viewMode);
 
   Future<void> loadDrawing() async {
-    await _drawingService?.loadDrawing(_selectedDate);
+    await _drawingService?.loadDrawing(_selectedDate, viewMode: _viewMode);
   }
 
   Future<void> preloadNotesInBackground(
@@ -317,11 +326,12 @@ class ScheduleController extends ChangeNotifier {
     }
   }
 
-  void scheduleSaveDrawing() => _drawingService?.scheduleSave(_selectedDate);
+  void scheduleSaveDrawing() =>
+      _drawingService?.scheduleSave(_selectedDate, _viewMode);
 
   Future<void> saveDrawing(BuildContext context) async {
     try {
-      await _drawingService?.saveDrawing(_selectedDate);
+      await _drawingService?.saveDrawing(_selectedDate, viewMode: _viewMode);
       final savedDrawing = _drawingService?.currentDrawing;
       if (context.mounted && savedDrawing != null) {
         context.read<ScheduleCubit>().saveDrawing(savedDrawing);
@@ -365,6 +375,17 @@ class ScheduleController extends ChangeNotifier {
     notifyListeners();
   }
 
+  void setViewMode(int viewMode) {
+    if (_viewMode == viewMode) {
+      _dateService?.setViewMode(viewMode);
+      return;
+    }
+
+    _viewMode = viewMode;
+    _dateService?.setViewMode(viewMode);
+    notifyListeners();
+  }
+
   void panToCurrentTime() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       transformationController.value = Matrix4.identity();
@@ -377,13 +398,23 @@ class ScheduleController extends ChangeNotifier {
     final preloadGeneration = _currentPreloadGeneration;
     preloadNotesInBackground(context, state.events, preloadGeneration);
 
+    final didViewModeChange = _viewMode != state.viewMode;
+    if (didViewModeChange) {
+      _viewMode = state.viewMode;
+    }
+    _dateService?.setViewMode(_viewMode);
+
+    if (didViewModeChange) {
+      _previousSelectedDate = state.selectedDate;
+      loadDrawing();
+      return;
+    }
+
     final currentWindow = _previousSelectedDate != null
-        ? ScheduleLayoutUtils.get3DayWindowStart(_previousSelectedDate!)
+        ? _getWindowStart(_previousSelectedDate!, _viewMode)
         : null;
-    final newWindow = ScheduleLayoutUtils.get3DayWindowStart(
-      state.selectedDate,
-    );
-    final localWindow = ScheduleLayoutUtils.get3DayWindowStart(_selectedDate);
+    final newWindow = _getWindowStart(state.selectedDate, _viewMode);
+    final localWindow = _getWindowStart(_selectedDate, _viewMode);
 
     if (currentWindow != newWindow) {
       if (newWindow == localWindow) {
@@ -403,5 +434,9 @@ class ScheduleController extends ChangeNotifier {
   int bumpPreloadGeneration() {
     _currentPreloadGeneration++;
     return _currentPreloadGeneration;
+  }
+
+  DateTime _getWindowStart(DateTime date, int viewMode) {
+    return ScheduleLayoutUtils.getEffectiveDate(date, viewMode: viewMode);
   }
 }

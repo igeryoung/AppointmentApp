@@ -1,7 +1,7 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 
 import '../../models/event.dart';
+import '../../models/schedule_drawing.dart';
 import '../../services/time_service.dart';
 
 /// Data class representing a positioned event with layout information
@@ -30,8 +30,8 @@ class PositionedEventData {
 /// Utility class for schedule layout calculations
 class ScheduleLayoutUtils {
   // Time range constants
-  static const int startHour = 9;  // 9:00 AM
-  static const int endHour = 21;   // 9:00 PM
+  static const int startHour = 9; // 9:00 AM
+  static const int endHour = 21; // 9:00 PM
   static const int totalSlots = (endHour - startHour) * 4; // 48 slots
 
   // Large screen detection threshold for text scaling
@@ -60,14 +60,23 @@ class ScheduleLayoutUtils {
   }
 
   /// Get the effective date for data operations (loading/saving events and drawings)
-  static DateTime getEffectiveDate(DateTime selectedDate) {
+  static DateTime getEffectiveDate(
+    DateTime selectedDate, {
+    int viewMode = ScheduleDrawing.VIEW_MODE_3DAY,
+  }) {
+    if (viewMode == ScheduleDrawing.VIEW_MODE_2DAY) {
+      return get2DayWindowStart(selectedDate);
+    }
     return get3DayWindowStart(selectedDate);
   }
 
   /// Get unique page identifier for the current view and date
-  static String getPageId(DateTime selectedDate) {
-    final effectiveDate = getEffectiveDate(selectedDate);
-    return 'page_1_${effectiveDate.year}_${effectiveDate.month}_${effectiveDate.day}';
+  static String getPageId(
+    DateTime selectedDate, {
+    int viewMode = ScheduleDrawing.VIEW_MODE_3DAY,
+  }) {
+    final effectiveDate = getEffectiveDate(selectedDate, viewMode: viewMode);
+    return 'page_${viewMode}_${effectiveDate.year}_${effectiveDate.month}_${effectiveDate.day}';
   }
 
   /// Get navigation increment (always 3 days)
@@ -79,7 +88,11 @@ class ScheduleLayoutUtils {
   static bool isViewingToday(DateTime selectedDate) {
     final now = TimeService.instance.now();
     final today = DateTime(now.year, now.month, now.day);
-    final viewingDate = DateTime(selectedDate.year, selectedDate.month, selectedDate.day);
+    final viewingDate = DateTime(
+      selectedDate.year,
+      selectedDate.month,
+      selectedDate.day,
+    );
     return viewingDate == today;
   }
 
@@ -105,7 +118,10 @@ class ScheduleLayoutUtils {
   }
 
   /// Calculate the Y position offset for an event based on its start time
-  static double calculateEventTopPosition(DateTime startTime, double slotHeight) {
+  static double calculateEventTopPosition(
+    DateTime startTime,
+    double slotHeight,
+  ) {
     final hour = startTime.hour;
     final minute = startTime.minute;
     final slotIndex = (hour - startHour) * 4 + (minute ~/ 15);
@@ -224,17 +240,25 @@ class ScheduleLayoutUtils {
       final slotEvents = eventsBySlot[slotIndex]!;
 
       // Separate close-end and open-end events
-      final closeEndEvents = slotEvents.where((e) => !shouldDisplayAsOpenEnd(e)).toList();
-      final openEndEvents = slotEvents.where((e) => shouldDisplayAsOpenEnd(e)).toList();
+      final closeEndEvents = slotEvents
+          .where((e) => !shouldDisplayAsOpenEnd(e))
+          .toList();
+      final openEndEvents = slotEvents
+          .where((e) => shouldDisplayAsOpenEnd(e))
+          .toList();
 
       // Sort each list by creation time for stable ordering (with ID as fallback)
       closeEndEvents.sort((a, b) {
         final timeComparison = a.createdAt.compareTo(b.createdAt);
-        return timeComparison != 0 ? timeComparison : (a.id ?? '').compareTo(b.id ?? '');
+        return timeComparison != 0
+            ? timeComparison
+            : (a.id ?? '').compareTo(b.id ?? '');
       });
       openEndEvents.sort((a, b) {
         final timeComparison = a.createdAt.compareTo(b.createdAt);
-        return timeComparison != 0 ? timeComparison : (a.id ?? '').compareTo(b.id ?? '');
+        return timeComparison != 0
+            ? timeComparison
+            : (a.id ?? '').compareTo(b.id ?? '');
       });
 
       // Process in order: close-end events first, then open-end events
@@ -250,7 +274,10 @@ class ScheduleLayoutUtils {
         for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
           final checkSlot = slotIndex + spanOffset;
           final concurrentInSlot = slotEventCount[checkSlot] ?? 0;
-          maxConcurrentForThisEvent = max(maxConcurrentForThisEvent, concurrentInSlot);
+          maxConcurrentForThisEvent = max(
+            maxConcurrentForThisEvent,
+            concurrentInSlot,
+          );
         }
 
         // Calculate event width based on concurrent events
@@ -287,24 +314,31 @@ class ScheduleLayoutUtils {
         // Mark position as occupied in all spanned slots
         for (int spanOffset = 0; spanOffset < slotsSpanned; spanOffset++) {
           final occupySlot = slotIndex + spanOffset;
-          slotOccupancy.putIfAbsent(occupySlot, () => {}).add(horizontalPosition);
+          slotOccupancy
+              .putIfAbsent(occupySlot, () => {})
+              .add(horizontalPosition);
         }
 
         // Calculate position and height
-        final topPosition = calculateEventTopPosition(event.startTime, slotHeight);
+        final topPosition = calculateEventTopPosition(
+          event.startTime,
+          slotHeight,
+        );
         final tileHeight = (slotsSpanned * slotHeight) - 1; // Subtract margin
 
         // Add positioned event data
-        positionedEvents.add(PositionedEventData(
-          event: event,
-          slotIndex: slotIndex,
-          slotsSpanned: slotsSpanned,
-          horizontalPosition: horizontalPosition,
-          maxConcurrentEvents: maxConcurrentForThisEvent,
-          topPosition: topPosition,
-          width: eventWidth,
-          height: tileHeight,
-        ));
+        positionedEvents.add(
+          PositionedEventData(
+            event: event,
+            slotIndex: slotIndex,
+            slotsSpanned: slotsSpanned,
+            horizontalPosition: horizontalPosition,
+            maxConcurrentEvents: maxConcurrentForThisEvent,
+            topPosition: topPosition,
+            width: eventWidth,
+            height: tileHeight,
+          ),
+        );
       }
     }
 
