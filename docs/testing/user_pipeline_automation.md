@@ -25,6 +25,7 @@ Default mode is `--full`.
 3. Event creation/update/remove/delete/reschedule.
    - Includes no-record-number reschedule note continuity coverage (old/new event should resolve same note).
 4. Note behaviors.
+   - Includes has-note indicator scope coverage: events that only load shared existing note without note edits must keep note tag off.
 5. Drawing behaviors.
 6. Event-detail trigger -> server -> return -> update.
 7. App bootstrap widget path.

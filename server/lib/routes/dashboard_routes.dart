@@ -346,7 +346,7 @@ class DashboardRoutes {
           r.name,
           r.phone,
           r.record_number,
-          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+          e.has_note
         FROM events e
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE e.is_deleted = false
@@ -630,7 +630,7 @@ class DashboardRoutes {
           r.name,
           r.phone,
           r.record_number,
-          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+          e.has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
@@ -718,7 +718,7 @@ class DashboardRoutes {
           r.name,
           r.phone,
           r.record_number,
-          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+          e.has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
@@ -753,7 +753,7 @@ class DashboardRoutes {
           r.name,
           r.phone,
           r.record_number,
-          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+          e.has_note
         FROM events e
         LEFT JOIN books b ON e.book_uuid = b.book_uuid
         LEFT JOIN records r ON e.record_uuid = r.record_uuid

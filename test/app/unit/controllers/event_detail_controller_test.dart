@@ -176,6 +176,17 @@ void main() {
     );
   }
 
+  EventDetailController buildNewController(Event event) {
+    return EventDetailController(
+      event: event,
+      isNew: true,
+      dbService: dbService,
+      onStateChanged: (_) {},
+      contentService: fakeContentService,
+      noteSyncAdapter: fakeNoteSyncAdapter,
+    );
+  }
+
   test(
     'EVENT-DETAIL-UNIT-001: saveEvent() syncs event and record metadata to server',
     () async {
@@ -196,7 +207,7 @@ void main() {
 
       await controller.saveEvent();
 
-      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
 
@@ -217,6 +228,8 @@ void main() {
               .cast<String>();
       expect(eventTypes, containsAll(['followUp', 'surgery']));
       expect(fakeApiClient.lastEventData?['phone'], '0900000000');
+      expect(fakeApiClient.lastEventData, isNot(contains('has_note')));
+      expect(fakeApiClient.lastEventData, isNot(contains('hasNote')));
     },
   );
 
@@ -259,6 +272,15 @@ void main() {
       final controller = buildController();
       controller.updatePhone('0955667788');
       controller.updateEventTypes(const [EventType.followUp]);
+      controller.updatePages([
+        const [
+          Stroke(
+            id: 'stroke-event-a1',
+            eventUuid: 'event-a1',
+            points: [StrokePoint(10, 10), StrokePoint(20, 20)],
+          ),
+        ],
+      ]);
 
       await controller.saveEvent();
 
@@ -311,7 +333,7 @@ void main() {
 
       await expectLater(controller.saveEvent, throwsA(isA<ApiException>()));
 
-      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 0);
       expect(controller.state.isOffline, isTrue);
@@ -320,6 +342,39 @@ void main() {
       final persistedEvent = await dbService.getEventById('event-a1');
       expect(persistedEvent, isNotNull);
       expect(persistedEvent!.eventTypes, const [EventType.emergency]);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-005: new event loading existing note does not save note when untouched',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(recordUuid: 'record-a1');
+
+      final newEvent = makeEvent(
+        id: 'event-new-1',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'Alice',
+        recordNumber: '001',
+        eventTypes: const [EventType.consultation],
+      );
+      final controller = buildNewController(newEvent);
+      controller.updateName('Alice');
+      controller.updateRecordNumber('001');
+
+      await controller.saveEvent();
+
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 1);
+      expect(fakeNoteSyncAdapter.saveCalls, 0);
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 1);
     },
   );
 

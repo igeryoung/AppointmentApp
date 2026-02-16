@@ -156,7 +156,7 @@ class EventRoutes {
           e.is_removed, e.removal_reason, e.original_event_id, e.new_event_id,
           e.is_checked, e.version,
           r.name as record_name, r.phone as record_phone, r.record_number,
-          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+          e.has_note
         FROM events e
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE e.book_uuid = @bookUuid
@@ -208,7 +208,7 @@ class EventRoutes {
           e.is_removed, e.removal_reason, e.original_event_id, e.new_event_id,
           e.is_checked, e.version,
           r.name as record_name, r.phone as record_phone, r.record_number,
-          EXISTS(SELECT 1 FROM notes n WHERE n.record_uuid = e.record_uuid AND n.is_deleted = false) as has_note
+          e.has_note
         FROM events e
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE e.id = @eventId AND e.book_uuid = @bookUuid AND e.is_deleted = false

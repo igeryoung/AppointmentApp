@@ -35,6 +35,7 @@ class EventDetailController {
   EventDetailState _state;
   bool _wasOfflineLastCheck = false;
   int _noteEditGeneration = 0;
+  bool _noteEditedInSession = false;
 
   EventDetailController({
     required this.event,
@@ -244,6 +245,7 @@ class EventDetailController {
           isLoadingFromServer: false,
           isOffline: false,
         ));
+        _noteEditedInSession = false;
         return;
       } else {
       }
@@ -260,7 +262,6 @@ class EventDetailController {
 
   /// Save event with handwriting note
   Future<Event> saveEvent({Size? canvasSize}) async {
-
     final pages = _state.lastKnownPages;
 
     _updateState(_state.copyWith(isLoading: true));
@@ -303,14 +304,19 @@ class EventDetailController {
               note: existingNote,
               lastKnownPages: existingNote.pages,
             ));
-            // Save to server
-            await saveNoteToServer(savedEvent.id!, existingNote.pages, canvasSize: canvasSize);
+            // Loaded existing note only; do not save unless user edited note in this session.
+            _noteEditedInSession = false;
             await _syncMetadataToServer(
               eventData: savedEvent,
               name: nameText,
               recordNumber: recordNumberText,
               phone: phoneText.isEmpty ? null : phoneText,
             );
+            _updateState(_state.copyWith(
+              isLoading: false,
+              hasChanges: false,
+              hasUnsyncedChanges: false,
+            ));
             return savedEvent;
           }
         }
@@ -342,27 +348,39 @@ class EventDetailController {
               note: existingNote,
               lastKnownPages: existingNote.pages,
             ));
-            // Save to server
-            await saveNoteToServer(savedEvent.id!, existingNote.pages, canvasSize: canvasSize);
+            // Loaded existing note only; do not save unless user edited note in this session.
+            _noteEditedInSession = false;
             await _syncMetadataToServer(
               eventData: savedEvent,
               name: nameText,
               recordNumber: recordNumberText,
               phone: phoneText.isEmpty ? null : phoneText,
             );
+            _updateState(_state.copyWith(
+              isLoading: false,
+              hasChanges: false,
+              hasUnsyncedChanges: false,
+            ));
             return savedEvent;
           }
         }
       }
 
-      // Save handwriting note to server
-      await saveNoteToServer(savedEvent.id!, pages, canvasSize: canvasSize);
+      // Save handwriting note only when this event actually edited note content.
+      if (_shouldSaveNote(pages)) {
+        await saveNoteToServer(savedEvent.id!, pages, canvasSize: canvasSize);
+      }
       await _syncMetadataToServer(
         eventData: savedEvent,
         name: nameText,
         recordNumber: recordNumberText,
         phone: phoneText.isEmpty ? null : phoneText,
       );
+      _updateState(_state.copyWith(
+        isLoading: false,
+        hasChanges: false,
+        hasUnsyncedChanges: false,
+      ));
 
       return savedEvent;
     } catch (e) {
@@ -430,6 +448,7 @@ class EventDetailController {
 
     // Save directly to server (no local cache)
     final savedNote = await _noteSyncAdapter!.saveNote(eventId, noteToSave);
+    _noteEditedInSession = false;
 
     // Update UI state on success
     _updateState(_state.copyWith(
@@ -446,6 +465,9 @@ class EventDetailController {
     required String? phone,
   }) {
     final payload = Map<String, dynamic>.from(eventData.toMap());
+    // has_note must always be derived on server from stroke ownership.
+    payload.remove('has_note');
+    payload.remove('hasNote');
     payload['name'] = name;
     payload['record_name'] = name;
     payload['recordName'] = name;
@@ -957,6 +979,7 @@ class EventDetailController {
       note: existingNote,
       lastKnownPages: existingNote.pages,
     ));
+    _noteEditedInSession = false;
     _incrementNoteGeneration();
   }
 
@@ -1105,6 +1128,7 @@ class EventDetailController {
       lastKnownPages: pages,
       hasChanges: true,
     ));
+    _noteEditedInSession = true;
     _incrementNoteGeneration();
   }
 
@@ -1128,10 +1152,20 @@ class EventDetailController {
       erasedStrokesByEvent: updatedMap,
       hasChanges: true,
     ));
+    _noteEditedInSession = true;
   }
 
   void _incrementNoteGeneration() {
     _noteEditGeneration++;
+  }
+
+  bool _shouldSaveNote(List<List<Stroke>> pages) {
+    if (!_noteEditedInSession) return false;
+    final hasAnyStroke = pages.any((page) => page.isNotEmpty);
+    final hasAnyErasedStroke = _state.erasedStrokesByEvent.values.any(
+      (ids) => ids.isNotEmpty,
+    );
+    return hasAnyStroke || hasAnyErasedStroke;
   }
 
   Future<void> _logLocalEventSnapshot() async {

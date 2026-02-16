@@ -59,6 +59,11 @@ const Map<String, List<String>> _operationToPipelineSteps = {
   'Open another event with same record/person': [
     'Pipeline 07 - Note Save/Load/Sync Apply',
   ],
+  'Create event for record that already has note, but do not write/update note and save':
+      [
+        'Pipeline 09 - Event Detail Trigger -> Server -> Return -> Update',
+        'Pipeline 12 - Live Event Metadata Roundtrip',
+      ],
   'Create no-record-number event with handwriting note, then reschedule time and open old/new events':
       ['Pipeline 12 - Live Event Metadata Roundtrip'],
   'Edit note again and save': ['Pipeline 07 - Note Save/Load/Sync Apply'],
