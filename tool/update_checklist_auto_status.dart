@@ -66,6 +66,8 @@ const Map<String, List<String>> _operationToPipelineSteps = {
       ],
   'Create no-record-number event with handwriting note, then reschedule time and open old/new events':
       ['Pipeline 12 - Live Event Metadata Roundtrip'],
+  'Create no-record-number event, draw note and auto-save, then reenter and fill record number':
+      ['Pipeline 12 - Live Event Metadata Roundtrip'],
   'Edit note again and save': ['Pipeline 07 - Note Save/Load/Sync Apply'],
   '(If note clear/delete action exists) clear note cache/content': [
     'Pipeline 07 - Note Save/Load/Sync Apply',

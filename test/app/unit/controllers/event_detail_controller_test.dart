@@ -1,4 +1,8 @@
 @Tags(['event', 'unit'])
+library;
+
+import 'dart:convert';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/models/event.dart';
 import 'package:schedule_note_app/models/event_type.dart';
@@ -8,7 +12,6 @@ import 'package:schedule_note_app/screens/event_detail/event_detail_controller.d
 import 'package:schedule_note_app/services/api_client.dart';
 import 'package:schedule_note_app/services/content_service.dart';
 import 'package:schedule_note_app/services/database/prd_database_service.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../support/db_seed.dart';
@@ -20,11 +23,16 @@ class _FakeEventMetadataApiClient extends ApiClient {
   _FakeEventMetadataApiClient() : super(baseUrl: 'http://fake.local');
 
   int updateEventCalls = 0;
+  int createEventCalls = 0;
   int updateRecordCalls = 0;
 
   String? lastUpdateBookUuid;
   String? lastUpdateEventId;
   Map<String, dynamic>? lastEventData;
+  String? forcedServerRecordUuid;
+  Map<String, dynamic>? fetchEventResponse;
+  String? lastCreateBookUuid;
+  Map<String, dynamic>? lastCreateEventData;
   String? lastEventDeviceId;
   String? lastEventDeviceToken;
 
@@ -34,6 +42,23 @@ class _FakeEventMetadataApiClient extends ApiClient {
   String? lastRecordDeviceToken;
   Object? updateEventError;
   Object? updateRecordError;
+  String? requiredRecordUuidForUpdate;
+  bool failUpdateEventWithNotFound = false;
+
+  @override
+  Future<Map<String, dynamic>> createEvent({
+    required String bookUuid,
+    required Map<String, dynamic> eventData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    createEventCalls += 1;
+    lastCreateBookUuid = bookUuid;
+    lastCreateEventData = Map<String, dynamic>.from(eventData);
+    lastEventDeviceId = deviceId;
+    lastEventDeviceToken = deviceToken;
+    return {'id': eventData['id'] ?? 'created-event-id', ...eventData};
+  }
 
   @override
   Future<Map<String, dynamic>> updateEvent({
@@ -44,13 +69,36 @@ class _FakeEventMetadataApiClient extends ApiClient {
     required String deviceToken,
   }) async {
     updateEventCalls += 1;
+    if (failUpdateEventWithNotFound) {
+      throw ApiException('Event not found', statusCode: 404);
+    }
     if (updateEventError != null) throw updateEventError!;
     lastUpdateBookUuid = bookUuid;
     lastUpdateEventId = eventId;
     lastEventData = Map<String, dynamic>.from(eventData);
     lastEventDeviceId = deviceId;
     lastEventDeviceToken = deviceToken;
-    return {'id': eventId, ...eventData};
+    return {
+      'id': eventId,
+      ...eventData,
+      if (forcedServerRecordUuid != null) 'record_uuid': forcedServerRecordUuid,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchEvent({
+    required String bookUuid,
+    required String eventId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    if (fetchEventResponse != null) {
+      return Map<String, dynamic>.from(fetchEventResponse!);
+    }
+    return {
+      'id': eventId,
+      if (forcedServerRecordUuid != null) 'record_uuid': forcedServerRecordUuid,
+    };
   }
 
   @override
@@ -61,6 +109,10 @@ class _FakeEventMetadataApiClient extends ApiClient {
     required String deviceToken,
   }) async {
     updateRecordCalls += 1;
+    if (requiredRecordUuidForUpdate != null &&
+        recordUuid != requiredRecordUuidForUpdate) {
+      throw ApiException('Record conflict', statusCode: 409);
+    }
     if (updateRecordError != null) throw updateRecordError!;
     lastRecordUuid = recordUuid;
     lastRecordData = Map<String, dynamic>.from(recordData);
@@ -78,13 +130,17 @@ class _FakeNoteSyncAdapter extends NoteSyncAdapter {
   int getNoteByRecordUuidCalls = 0;
   Note? existingNote;
   final Map<String, Note?> notesByEventId = {};
+  final Map<String, Note?> notesByRecordUuid = {};
   Note? noteByRecordUuid;
   Note? saveResponse;
+  int conflictResponsesRemaining = 0;
+  int conflictServerVersion = 1;
   String? lastSaveEventId;
   String? lastGetNoteEventId;
   String? lastGetRecordBookUuid;
   String? lastGetRecordUuid;
   Note? lastSavedNote;
+  final List<Note> savedNotes = [];
   Object? saveError;
 
   @override
@@ -102,6 +158,9 @@ class _FakeNoteSyncAdapter extends NoteSyncAdapter {
     getNoteByRecordUuidCalls += 1;
     lastGetRecordBookUuid = bookUuid;
     lastGetRecordUuid = recordUuid;
+    if (notesByRecordUuid.containsKey(recordUuid)) {
+      return notesByRecordUuid[recordUuid];
+    }
     return noteByRecordUuid ?? existingNote;
   }
 
@@ -110,6 +169,20 @@ class _FakeNoteSyncAdapter extends NoteSyncAdapter {
     saveCalls += 1;
     lastSaveEventId = eventId;
     lastSavedNote = note;
+    savedNotes.add(note);
+    if (conflictResponsesRemaining > 0) {
+      conflictResponsesRemaining -= 1;
+      throw ApiConflictException(
+        'Note version conflict',
+        statusCode: 409,
+        responseBody: jsonEncode({
+          'error': 'VERSION_CONFLICT',
+          'serverVersion': conflictServerVersion,
+          'message':
+              'Note version conflict. Please pull the latest note and retry.',
+        }),
+      );
+    }
     if (saveError != null) throw saveError!;
     return saveResponse ?? note;
   }
@@ -165,15 +238,19 @@ void main() {
     PRDDatabaseService.resetInstance();
   });
 
-  EventDetailController buildController() {
+  EventDetailController buildExistingController(Event event) {
     return EventDetailController(
-      event: seededEvent,
+      event: event,
       isNew: false,
       dbService: dbService,
       onStateChanged: (_) {},
       contentService: fakeContentService,
       noteSyncAdapter: fakeNoteSyncAdapter,
     );
+  }
+
+  EventDetailController buildController() {
+    return buildExistingController(seededEvent);
   }
 
   EventDetailController buildNewController(Event event) {
@@ -375,6 +452,311 @@ void main() {
       expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-006: saveEvent() refill record number reuses existing record UUID',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      await seedRecord(
+        db,
+        recordUuid: 'record-empty-refill',
+        name: 'alice',
+        recordNumber: '',
+      );
+      final refillEvent = makeEvent(
+        id: 'event-refill-1',
+        bookUuid: 'book-a',
+        recordUuid: 'record-empty-refill',
+        title: 'alice',
+        recordNumber: '',
+        eventTypes: const [EventType.consultation],
+      );
+      await seedEvent(db, event: refillEvent);
+
+      fakeApiClient.requiredRecordUuidForUpdate = 'record-a1';
+
+      final controller = buildExistingController(refillEvent);
+      controller.updateRecordNumber('001');
+
+      await controller.saveEvent();
+
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 1);
+      expect(fakeApiClient.lastRecordUuid, 'record-a1');
+      expect(fakeApiClient.lastRecordData?['record_number'], '001');
+
+      final persisted = await dbService.getEventById('event-refill-1');
+      expect(persisted, isNotNull);
+      expect(persisted!.recordUuid, 'record-a1');
+      expect(persisted.recordNumber, '001');
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-007: saveEvent() keeps existing handwriting when relinking from empty record number',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-empty-note',
+        name: 'WalkIn',
+        recordNumber: '',
+      );
+      final noRecordEvent = makeEvent(
+        id: 'event-refill-note-1',
+        bookUuid: 'book-a',
+        recordUuid: 'record-empty-note',
+        title: 'WalkIn',
+        recordNumber: '',
+        eventTypes: const [EventType.consultation],
+      );
+      await seedEvent(db, event: noRecordEvent);
+
+      fakeNoteSyncAdapter.notesByRecordUuid['record-empty-note'] = makeNote(
+        recordUuid: 'record-empty-note',
+        version: 3,
+      );
+      fakeNoteSyncAdapter.notesByRecordUuid['record-a1'] = Note(
+        recordUuid: 'record-a1',
+        pages: const [
+          [
+            Stroke(
+              id: 'server-stroke-a1',
+              eventUuid: 'event-server-a1',
+              points: [StrokePoint(1, 1), StrokePoint(2, 2)],
+            ),
+          ],
+        ],
+        createdAt: DateTime.utc(2026, 1, 1, 9),
+        updatedAt: DateTime.utc(2026, 1, 1, 9),
+        version: 1,
+      );
+      fakeNoteSyncAdapter.conflictResponsesRemaining = 1;
+      fakeNoteSyncAdapter.conflictServerVersion = 1;
+      fakeNoteSyncAdapter.saveResponse = makeNote(
+        recordUuid: 'record-a1',
+        pages: const [
+          [
+            Stroke(
+              id: 'server-stroke-a1',
+              eventUuid: 'event-server-a1',
+              points: [StrokePoint(1, 1), StrokePoint(2, 2)],
+            ),
+            Stroke(
+              id: 'stroke-1',
+              eventUuid: 'event-1',
+              points: [StrokePoint(10, 10), StrokePoint(20, 20)],
+            ),
+          ],
+        ],
+        version: 2,
+      );
+
+      final controller = buildExistingController(noRecordEvent);
+      await controller.loadNote();
+      controller.updateName('Alice');
+      controller.updateRecordNumber('001');
+
+      await controller.saveEvent();
+
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 1);
+      expect(fakeApiClient.lastRecordUuid, 'record-a1');
+      expect(fakeNoteSyncAdapter.saveCalls, 2);
+      expect(fakeNoteSyncAdapter.lastSaveEventId, 'event-refill-note-1');
+      expect(fakeNoteSyncAdapter.savedNotes.first.version, 2);
+      expect(fakeNoteSyncAdapter.savedNotes.last.version, 2);
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.recordUuid, 'record-a1');
+      expect(controller.state.note!.version, 2);
+      final flattenedStrokeIds = controller.state.note!.pages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(flattenedStrokeIds, contains('server-stroke-a1'));
+      expect(flattenedStrokeIds, contains('stroke-1'));
+      expect(controller.state.hasChanges, isFalse);
+
+      final persisted = await dbService.getEventById('event-refill-note-1');
+      expect(persisted, isNotNull);
+      expect(persisted!.recordUuid, 'record-a1');
+      expect(persisted.recordNumber, '001');
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-008: saveEvent() creates event on server when new event metadata patch returns 404',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      fakeApiClient.failUpdateEventWithNotFound = true;
+
+      final newEvent = makeEvent(
+        id: 'event-new-empty-record',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'WalkIn',
+        recordNumber: '',
+        eventTypes: const [EventType.consultation],
+      );
+      final controller = buildNewController(newEvent);
+      controller.updateName('WalkIn');
+      controller.updateRecordNumber('');
+
+      await controller.saveEvent();
+
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.createEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 1);
+      expect(fakeApiClient.lastCreateBookUuid, 'book-a');
+      expect(fakeApiClient.lastCreateEventData?['record_number'], '');
+      expect(controller.state.isOffline, isFalse);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-009: saveEvent() uses server remapped record UUID when syncing record metadata',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-empty-remap',
+        name: 'WalkIn',
+        recordNumber: '',
+      );
+      final remapEvent = makeEvent(
+        id: 'event-remap-1',
+        bookUuid: 'book-a',
+        recordUuid: 'record-empty-remap',
+        title: 'WalkIn',
+        recordNumber: '',
+        eventTypes: const [EventType.consultation],
+      );
+      await seedEvent(db, event: remapEvent);
+
+      fakeApiClient.forcedServerRecordUuid = 'record-server-remap-1';
+      fakeApiClient.requiredRecordUuidForUpdate = 'record-server-remap-1';
+
+      final controller = buildExistingController(remapEvent);
+      controller.updateName('Remap User');
+      controller.updateRecordNumber('NEW-001');
+
+      await controller.saveEvent();
+
+      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateRecordCalls, 1);
+      expect(fakeApiClient.lastRecordUuid, 'record-server-remap-1');
+
+      final persisted = await dbService.getEventById('event-remap-1');
+      expect(persisted, isNotNull);
+      expect(persisted!.recordUuid, isNotEmpty);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-010: create without record number then reenter and fill record number keeps note and updates event linkage',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      final newEvent = makeEvent(
+        id: 'event-create-reenter-1',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'WalkIn',
+        recordNumber: '',
+        eventTypes: const [EventType.consultation],
+      );
+
+      final createController = buildNewController(newEvent);
+      createController.updateName('WalkIn');
+      createController.updateRecordNumber('');
+      createController.updatePages([
+        const [
+          Stroke(
+            id: 'stroke-create-reenter-1',
+            eventUuid: 'event-create-reenter-1',
+            points: [StrokePoint(5, 5), StrokePoint(15, 15)],
+          ),
+        ],
+      ]);
+
+      final createdEvent = await createController.saveEvent();
+      expect(createdEvent.recordNumber, isEmpty);
+      expect(createdEvent.recordUuid, isNotEmpty);
+      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.lastSavedNote, isNotNull);
+      final createdNote = fakeNoteSyncAdapter.lastSavedNote!;
+      fakeNoteSyncAdapter.notesByRecordUuid[createdEvent.recordUuid] =
+          createdNote;
+
+      fakeApiClient.requiredRecordUuidForUpdate = 'record-a1';
+      fakeNoteSyncAdapter.notesByRecordUuid['record-a1'] = null;
+
+      final reopenController = buildExistingController(createdEvent);
+      await reopenController.loadNote();
+      expect(reopenController.state.note, isNotNull);
+      final reopenStrokeIds = reopenController.state.note!.pages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(reopenStrokeIds, contains('stroke-create-reenter-1'));
+
+      reopenController.updateName('Alice');
+      reopenController.updateRecordNumber('001');
+      final updatedEvent = await reopenController.saveEvent();
+
+      expect(updatedEvent.recordNumber, '001');
+      expect(updatedEvent.recordUuid, 'record-a1');
+      expect(fakeApiClient.updateRecordCalls, greaterThanOrEqualTo(2));
+      expect(fakeApiClient.lastRecordUuid, 'record-a1');
+      expect(fakeNoteSyncAdapter.saveCalls, greaterThanOrEqualTo(2));
+      expect(reopenController.state.note, isNotNull);
+      final updatedStrokeIds = reopenController.state.note!.pages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(updatedStrokeIds, contains('stroke-create-reenter-1'));
+
+      final persisted = await dbService.getEventById(createdEvent.id!);
+      expect(persisted, isNotNull);
+      expect(persisted!.recordNumber, '001');
+      expect(persisted.recordUuid, 'record-a1');
     },
   );
 

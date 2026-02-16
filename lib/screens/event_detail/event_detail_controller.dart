@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import '../../models/event.dart';
@@ -10,12 +11,10 @@ import '../../services/database/prd_database_service.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
 import '../../services/server_config_service.dart';
-import '../../widgets/handwriting_canvas.dart';
 import 'event_detail_state.dart';
 import 'adapters/connectivity_watcher.dart';
 import 'adapters/server_health_checker.dart';
 import 'adapters/note_sync_adapter.dart';
-
 
 /// Controller for Event Detail Screen business logic
 class EventDetailController {
@@ -33,7 +32,6 @@ class EventDetailController {
 
   // State tracking
   EventDetailState _state;
-  bool _wasOfflineLastCheck = false;
   int _noteEditGeneration = 0;
   bool _noteEditedInSession = false;
 
@@ -46,18 +44,18 @@ class EventDetailController {
     NoteSyncAdapter? noteSyncAdapter,
     ServerHealthChecker? serverHealthChecker,
     ConnectivityWatcher? connectivityWatcher,
-  })  : _dbService = dbService,
-        _contentService = contentService,
-        _noteSyncAdapter =
-            noteSyncAdapter ??
-            (contentService != null ? NoteSyncAdapter(contentService) : null),
-        _serverHealthChecker =
-            serverHealthChecker ??
-            (contentService != null
-                ? ServerHealthChecker(contentService)
-                : null),
-        _connectivityWatcher = connectivityWatcher ?? ConnectivityWatcher(),
-        _state = EventDetailState.fromEvent(event);
+  }) : _dbService = dbService,
+       _contentService = contentService,
+       _noteSyncAdapter =
+           noteSyncAdapter ??
+           (contentService != null ? NoteSyncAdapter(contentService) : null),
+       _serverHealthChecker =
+           serverHealthChecker ??
+           (contentService != null
+               ? ServerHealthChecker(contentService)
+               : null),
+       _connectivityWatcher = connectivityWatcher ?? ConnectivityWatcher(),
+       _state = EventDetailState.fromEvent(event);
 
   EventDetailState get state => _state;
 
@@ -70,7 +68,6 @@ class EventDetailController {
   /// Initialize ContentService and load initial data
   Future<void> initialize() async {
     try {
-
       // Step 1: Initialize ContentService with correct server URL
       final prdDb = _dbService as PRDDatabaseService;
       final serverConfig = ServerConfigService(prdDb);
@@ -80,13 +77,6 @@ class EventDetailController {
         defaultUrl: 'http://localhost:8080',
       );
 
-
-      // Get device credentials for logging
-      final credentials = await prdDb.getDeviceCredentials();
-      if (credentials != null) {
-      } else {
-      }
-
       final apiClient = ApiClient(baseUrl: serverUrl);
       _contentService = ContentService(apiClient, _dbService);
       _noteSyncAdapter = NoteSyncAdapter(_contentService!);
@@ -95,13 +85,9 @@ class EventDetailController {
       // Mark services as ready
       _updateState(_state.copyWith(isServicesReady: true));
 
-
       // Step 1.5: Check actual server connectivity on startup
       final serverReachable = await _checkServerConnectivity();
-      _updateState(_state.copyWith(
-        isOffline: !serverReachable,
-      ));
-      _wasOfflineLastCheck = !serverReachable;
+      _updateState(_state.copyWith(isOffline: !serverReachable));
 
       // Step 2: Load initial data (now that ContentService is ready)
       if (!isNew) {
@@ -113,13 +99,14 @@ class EventDetailController {
           await _loadNewEvent();
         }
       }
-    } catch (e, stackTrace) {
-
+    } catch (e) {
       // Mark services as ready anyway to avoid blocking UI forever
-      _updateState(_state.copyWith(
-        isServicesReady: true,
-        isOffline: true, // Mark as offline since initialization failed
-      ));
+      _updateState(
+        _state.copyWith(
+          isServicesReady: true,
+          isOffline: true, // Mark as offline since initialization failed
+        ),
+      );
 
       rethrow; // Let the caller handle showing error to user
     }
@@ -131,8 +118,7 @@ class EventDetailController {
     try {
       final newEvent = await _dbService.getEventById(event.newEventId!);
       _updateState(_state.copyWith(newEvent: newEvent));
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   Future<void> _refreshEventFromServer() async {
@@ -142,7 +128,9 @@ class EventDetailController {
 
     try {
       await _logEventTime('before_server_fetch', event);
-      final refreshedEvent = await _contentService!.refreshEventFromServer(event.id!);
+      final refreshedEvent = await _contentService!.refreshEventFromServer(
+        event.id!,
+      );
       if (refreshedEvent != null) {
         // Persist server-authoritative data locally to prevent stale local values from overriding UI
         await _dbService.replaceEventWithServerData(refreshedEvent);
@@ -161,29 +149,28 @@ class EventDetailController {
           }
         }
 
-        _updateState(_state.copyWith(
-          name: name,
-          recordNumber: refreshedEvent.recordNumber,
-          phone: phone,
-          selectedEventTypes: refreshedEvent.eventTypes,
-          startTime: refreshedEvent.startTime,
-          endTime: refreshedEvent.endTime,
-        ));
+        _updateState(
+          _state.copyWith(
+            name: name,
+            recordNumber: refreshedEvent.recordNumber,
+            phone: phone,
+            selectedEventTypes: refreshedEvent.eventTypes,
+            startTime: refreshedEvent.startTime,
+            endTime: refreshedEvent.endTime,
+          ),
+        );
         await _logStateTime('after_state_update');
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Setup network connectivity monitoring for automatic sync retry
   void setupConnectivityMonitoring() {
-
     _connectivityWatcher.startWatching();
-    _connectivitySubscription = _connectivityWatcher.onConnectivityChanged.listen(
-      (hasConnection) {
-        _onConnectivityChanged(hasConnection);
-      },
-    );
+    _connectivitySubscription = _connectivityWatcher.onConnectivityChanged
+        .listen((hasConnection) {
+          _onConnectivityChanged(hasConnection);
+        });
   }
 
   /// Check actual server connectivity using health check
@@ -197,15 +184,10 @@ class EventDetailController {
 
   /// Handle connectivity changes - automatically retry sync when network returns
   void _onConnectivityChanged(bool hasConnection) async {
-
     // Verify actual server connectivity
     final serverReachable = await _checkServerConnectivity();
-    final wasOfflineBefore = _wasOfflineLastCheck;
 
     _updateState(_state.copyWith(isOffline: !serverReachable));
-    _wasOfflineLastCheck = !serverReachable;
-
-
   }
 
   /// Load note from server
@@ -237,23 +219,23 @@ class EventDetailController {
       }
 
       if (serverNote != null) {
-        _updateState(_state.copyWith(
-          note: serverNote,
-          lastKnownPages: serverNote.pages,
-          erasedStrokesByEvent: serverNote.erasedStrokesByEvent,
-          hasUnsyncedChanges: false,
-          isLoadingFromServer: false,
-          isOffline: false,
-        ));
+        _updateState(
+          _state.copyWith(
+            note: serverNote,
+            lastKnownPages: serverNote.pages,
+            erasedStrokesByEvent: serverNote.erasedStrokesByEvent,
+            hasUnsyncedChanges: false,
+            isLoadingFromServer: false,
+            isOffline: false,
+          ),
+        );
         _noteEditedInSession = false;
         return;
-      } else {
-      }
+      } else {}
     } catch (e) {
-      _updateState(_state.copyWith(
-        isLoadingFromServer: false,
-        isOffline: true,
-      ));
+      _updateState(
+        _state.copyWith(isLoadingFromServer: false, isOffline: true),
+      );
       throw Exception('Failed to load note: Cannot connect to server');
     }
 
@@ -272,7 +254,8 @@ class EventDetailController {
       final phoneText = _state.phone.trim();
 
       // Check if user cleared the end time (converting close-end to open-end event)
-      final shouldClearEndTime = event.endTime != null && _state.endTime == null;
+      final shouldClearEndTime =
+          event.endTime != null && _state.endTime == null;
 
       if (_dbService is! PRDDatabaseService) {
         throw Exception('PRDDatabaseService required');
@@ -300,10 +283,12 @@ class EventDetailController {
           );
           if (existingNote != null && existingNote.isNotEmpty) {
             // Load existing note (safety: never lose existing patient data)
-            _updateState(_state.copyWith(
-              note: existingNote,
-              lastKnownPages: existingNote.pages,
-            ));
+            _updateState(
+              _state.copyWith(
+                note: existingNote,
+                lastKnownPages: existingNote.pages,
+              ),
+            );
             // Loaded existing note only; do not save unless user edited note in this session.
             _noteEditedInSession = false;
             await _syncMetadataToServer(
@@ -311,12 +296,15 @@ class EventDetailController {
               name: nameText,
               recordNumber: recordNumberText,
               phone: phoneText.isEmpty ? null : phoneText,
+              allowCreateOnMissingEvent: true,
             );
-            _updateState(_state.copyWith(
-              isLoading: false,
-              hasChanges: false,
-              hasUnsyncedChanges: false,
-            ));
+            _updateState(
+              _state.copyWith(
+                isLoading: false,
+                hasChanges: false,
+                hasUnsyncedChanges: false,
+              ),
+            );
             return savedEvent;
           }
         }
@@ -335,19 +323,31 @@ class EventDetailController {
 
         // Check if record_number was added and there's an existing note
         final oldRecordNumber = event.recordNumber.trim();
-        final recordNumberAdded = oldRecordNumber.isEmpty && recordNumberText.isNotEmpty;
+        final recordNumberAdded =
+            oldRecordNumber.isEmpty && recordNumberText.isNotEmpty;
+        final recordRelinked =
+            event.recordUuid.isNotEmpty &&
+            savedEvent.recordUuid != event.recordUuid;
+        final shouldCarryForwardCurrentNote =
+            recordNumberAdded &&
+            recordRelinked &&
+            _hasCurrentNoteContent(pages);
 
         if (recordNumberAdded) {
           final existingNote = await _fetchExistingNoteForRecordNumber(
             recordNumber: recordNumberText,
             name: nameText,
           );
-          if (existingNote != null && existingNote.isNotEmpty) {
+          if (existingNote != null &&
+              existingNote.isNotEmpty &&
+              !shouldCarryForwardCurrentNote) {
             // Load existing note
-            _updateState(_state.copyWith(
-              note: existingNote,
-              lastKnownPages: existingNote.pages,
-            ));
+            _updateState(
+              _state.copyWith(
+                note: existingNote,
+                lastKnownPages: existingNote.pages,
+              ),
+            );
             // Loaded existing note only; do not save unless user edited note in this session.
             _noteEditedInSession = false;
             await _syncMetadataToServer(
@@ -355,14 +355,21 @@ class EventDetailController {
               name: nameText,
               recordNumber: recordNumberText,
               phone: phoneText.isEmpty ? null : phoneText,
+              allowCreateOnMissingEvent: false,
             );
-            _updateState(_state.copyWith(
-              isLoading: false,
-              hasChanges: false,
-              hasUnsyncedChanges: false,
-            ));
+            _updateState(
+              _state.copyWith(
+                isLoading: false,
+                hasChanges: false,
+                hasUnsyncedChanges: false,
+              ),
+            );
             return savedEvent;
           }
+        }
+
+        if (shouldCarryForwardCurrentNote && !_noteEditedInSession) {
+          _noteEditedInSession = true;
         }
       }
 
@@ -375,12 +382,15 @@ class EventDetailController {
         name: nameText,
         recordNumber: recordNumberText,
         phone: phoneText.isEmpty ? null : phoneText,
+        allowCreateOnMissingEvent: isNew,
       );
-      _updateState(_state.copyWith(
-        isLoading: false,
-        hasChanges: false,
-        hasUnsyncedChanges: false,
-      ));
+      _updateState(
+        _state.copyWith(
+          isLoading: false,
+          hasChanges: false,
+          hasUnsyncedChanges: false,
+        ),
+      );
 
       return savedEvent;
     } catch (e) {
@@ -422,7 +432,9 @@ class EventDetailController {
     final canvasHeight = canvasSize?.height ?? baseNote?.canvasHeight;
 
     // Merge erased strokes from base note and current state
-    final mergedErasedStrokes = Map<String, List<String>>.from(baseNote?.erasedStrokesByEvent ?? {});
+    final mergedErasedStrokes = Map<String, List<String>>.from(
+      baseNote?.erasedStrokesByEvent ?? {},
+    );
     for (final entry in _state.erasedStrokesByEvent.entries) {
       final existingList = mergedErasedStrokes[entry.key] ?? [];
       final newList = [...existingList];
@@ -444,19 +456,183 @@ class EventDetailController {
       updatedAt: DateTime.now(),
       version: nextVersion,
     );
-    debugPrint('[EventDetail] saveNoteToServer: eventId=$eventId baseVersion=${baseNote?.version} nextVersion=$nextVersion');
+    debugPrint(
+      '[EventDetail] saveNoteToServer: eventId=$eventId '
+      'recordUuid=${eventData.recordUuid} '
+      'baseVersion=${baseNote?.version} nextVersion=$nextVersion',
+    );
 
     // Save directly to server (no local cache)
-    final savedNote = await _noteSyncAdapter!.saveNote(eventId, noteToSave);
+    final savedNote = await _saveNoteWithConflictRetry(
+      eventId: eventId,
+      eventData: eventData,
+      noteToSave: noteToSave,
+    );
     _noteEditedInSession = false;
 
     // Update UI state on success
-    _updateState(_state.copyWith(
-      note: savedNote,
-      hasChanges: false,
-      hasUnsyncedChanges: false,
-      lastKnownPages: savedNote.pages,
-    ));
+    _updateState(
+      _state.copyWith(
+        note: savedNote,
+        hasChanges: false,
+        hasUnsyncedChanges: false,
+        lastKnownPages: savedNote.pages,
+      ),
+    );
+  }
+
+  Future<Note> _saveNoteWithConflictRetry({
+    required String eventId,
+    required Event eventData,
+    required Note noteToSave,
+    int retryCount = 0,
+  }) async {
+    const maxRetries = 2;
+
+    try {
+      return await _noteSyncAdapter!.saveNote(eventId, noteToSave);
+    } on ApiConflictException catch (e) {
+      if (retryCount >= maxRetries) {
+        rethrow;
+      }
+
+      debugPrint(
+        '[EventDetail] note save conflict: eventId=$eventId '
+        'recordUuid=${eventData.recordUuid} '
+        'clientVersion=${noteToSave.version} serverVersion=${e.serverVersion} '
+        'retry=${retryCount + 1}/$maxRetries',
+      );
+
+      Note? serverNote;
+      if (eventData.recordUuid.isNotEmpty) {
+        serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
+          eventData.bookUuid,
+          eventData.recordUuid,
+        );
+      }
+
+      final mergedPages = _mergeNotePages(
+        serverPages: serverNote?.pages ?? const [[]],
+        localPages: noteToSave.pages,
+      );
+      final mergedErasedStrokes = _mergeErasedStrokesByEvent(
+        server: serverNote?.erasedStrokesByEvent ?? const {},
+        local: noteToSave.erasedStrokesByEvent,
+      );
+      final baseVersion =
+          serverNote?.version ?? e.serverVersion ?? noteToSave.version;
+
+      final retryNote = noteToSave.copyWith(
+        pages: mergedPages,
+        erasedStrokesByEvent: mergedErasedStrokes,
+        canvasWidth: noteToSave.canvasWidth ?? serverNote?.canvasWidth,
+        canvasHeight: noteToSave.canvasHeight ?? serverNote?.canvasHeight,
+        createdAt: serverNote?.createdAt ?? noteToSave.createdAt,
+        updatedAt: DateTime.now(),
+        version: baseVersion + 1,
+      );
+
+      return _saveNoteWithConflictRetry(
+        eventId: eventId,
+        eventData: eventData,
+        noteToSave: retryNote,
+        retryCount: retryCount + 1,
+      );
+    }
+  }
+
+  List<List<Stroke>> _mergeNotePages({
+    required List<List<Stroke>> serverPages,
+    required List<List<Stroke>> localPages,
+  }) {
+    final pageCount = math.max(serverPages.length, localPages.length);
+    if (pageCount == 0) {
+      return const [[]];
+    }
+
+    final mergedPages = <List<Stroke>>[];
+    for (int i = 0; i < pageCount; i++) {
+      final serverPage = i < serverPages.length
+          ? serverPages[i]
+          : const <Stroke>[];
+      final localPage = i < localPages.length
+          ? localPages[i]
+          : const <Stroke>[];
+      mergedPages.add(_mergePageStrokes(serverPage, localPage));
+    }
+
+    return mergedPages;
+  }
+
+  List<Stroke> _mergePageStrokes(List<Stroke> server, List<Stroke> local) {
+    if (server.isEmpty) return List<Stroke>.from(local);
+    if (local.isEmpty) return List<Stroke>.from(server);
+
+    final byId = <String, Stroke>{};
+    final localNullId = <Stroke>[];
+    for (final stroke in server) {
+      final id = stroke.id;
+      if (id != null && id.isNotEmpty) {
+        byId[id] = stroke;
+      }
+    }
+    for (final stroke in local) {
+      final id = stroke.id;
+      if (id != null && id.isNotEmpty) {
+        byId[id] = stroke;
+      } else {
+        localNullId.add(stroke);
+      }
+    }
+
+    final merged = <Stroke>[];
+    final addedIds = <String>{};
+
+    for (final stroke in server) {
+      final id = stroke.id;
+      if (id != null && id.isNotEmpty) {
+        final chosen = byId[id] ?? stroke;
+        merged.add(chosen);
+        addedIds.add(id);
+      } else {
+        merged.add(stroke);
+      }
+    }
+
+    for (final stroke in local) {
+      final id = stroke.id;
+      if (id == null || id.isEmpty) continue;
+      if (addedIds.contains(id)) continue;
+      merged.add(stroke);
+      addedIds.add(id);
+    }
+
+    merged.addAll(localNullId);
+    return merged;
+  }
+
+  Map<String, List<String>> _mergeErasedStrokesByEvent({
+    required Map<String, List<String>> server,
+    required Map<String, List<String>> local,
+  }) {
+    final merged = <String, List<String>>{};
+
+    for (final entry in server.entries) {
+      merged[entry.key] = List<String>.from(entry.value);
+    }
+
+    for (final entry in local.entries) {
+      final current = merged[entry.key] ?? <String>[];
+      final next = <String>[...current];
+      for (final id in entry.value) {
+        if (!next.contains(id)) {
+          next.add(id);
+        }
+      }
+      merged[entry.key] = next;
+    }
+
+    return merged;
   }
 
   Map<String, dynamic> _buildEventSyncPayload(
@@ -481,6 +657,7 @@ class EventDetailController {
     required String name,
     required String recordNumber,
     required String? phone,
+    bool allowCreateOnMissingEvent = false,
   }) async {
     if (_contentService == null) {
       throw Exception('Cannot sync metadata: Services not initialized');
@@ -498,33 +675,184 @@ class EventDetailController {
 
     try {
       final apiClient = _contentService!.apiClient;
+      final eventPayload = _buildEventSyncPayload(
+        eventData,
+        name: name,
+        phone: phone,
+      );
+      Map<String, dynamic>? syncedEventPayload;
 
-      await apiClient.updateEvent(
-        bookUuid: eventData.bookUuid,
-        eventId: eventData.id!,
-        eventData: _buildEventSyncPayload(eventData, name: name, phone: phone),
-        deviceId: credentials.deviceId,
-        deviceToken: credentials.deviceToken,
+      debugPrint(
+        '[EventDetail] metadata sync start: eventId=${eventData.id} '
+        'bookUuid=${eventData.bookUuid} recordUuid=${eventData.recordUuid} '
+        'recordNumber="$recordNumber" allowCreateOnMissingEvent=$allowCreateOnMissingEvent',
       );
 
-      if (eventData.recordUuid.isNotEmpty) {
-        await apiClient.updateRecord(
-          recordUuid: eventData.recordUuid,
-          recordData: {
-            'name': name,
-            'phone': phone,
-            'record_number': recordNumber,
-          },
+      try {
+        syncedEventPayload = await apiClient.updateEvent(
+          bookUuid: eventData.bookUuid,
+          eventId: eventData.id!,
+          eventData: eventPayload,
+          deviceId: credentials.deviceId,
+          deviceToken: credentials.deviceToken,
+        );
+      } on ApiException catch (e) {
+        final shouldCreateFallback =
+            allowCreateOnMissingEvent && e.statusCode == 404;
+        if (!shouldCreateFallback) {
+          rethrow;
+        }
+
+        debugPrint(
+          '[EventDetail] metadata sync updateEvent 404 for eventId=${eventData.id}; '
+          'falling back to createEvent',
+        );
+        syncedEventPayload = await apiClient.createEvent(
+          bookUuid: eventData.bookUuid,
+          eventData: eventPayload,
           deviceId: credentials.deviceId,
           deviceToken: credentials.deviceToken,
         );
       }
 
+      if (eventData.recordUuid.isNotEmpty) {
+        final recordData = {
+          'name': name,
+          'phone': phone,
+          'record_number': recordNumber,
+        };
+        var recordUuidForSync = eventData.recordUuid;
+        final serverRecordUuid = _extractRecordUuidFromEventPayload(
+          syncedEventPayload,
+        );
+        if (serverRecordUuid != null &&
+            serverRecordUuid.isNotEmpty &&
+            serverRecordUuid != recordUuidForSync) {
+          debugPrint(
+            '[EventDetail] metadata sync record_uuid remap from event response: '
+            'local=$recordUuidForSync server=$serverRecordUuid',
+          );
+          recordUuidForSync = serverRecordUuid;
+        }
+
+        debugPrint(
+          '[EventDetail] metadata sync updateRecord start: '
+          'eventId=${eventData.id} recordUuid=$recordUuidForSync',
+        );
+
+        try {
+          await apiClient.updateRecord(
+            recordUuid: recordUuidForSync,
+            recordData: recordData,
+            deviceId: credentials.deviceId,
+            deviceToken: credentials.deviceToken,
+          );
+        } on ApiException catch (e) {
+          final shouldRetryWithServerRecord =
+              e.statusCode == 404 && recordUuidForSync == eventData.recordUuid;
+          if (!shouldRetryWithServerRecord) {
+            rethrow;
+          }
+
+          debugPrint(
+            '[EventDetail] metadata sync updateRecord 404: '
+            'recordUuid=${eventData.recordUuid}; fetching server event for remap',
+          );
+          final serverEvent = await apiClient.fetchEvent(
+            bookUuid: eventData.bookUuid,
+            eventId: eventData.id!,
+            deviceId: credentials.deviceId,
+            deviceToken: credentials.deviceToken,
+          );
+          final retryRecordUuid = _extractRecordUuidFromEventPayload(
+            serverEvent,
+          );
+          if (retryRecordUuid == null || retryRecordUuid.isEmpty) {
+            rethrow;
+          }
+
+          debugPrint(
+            '[EventDetail] metadata sync retry updateRecord with server recordUuid=$retryRecordUuid',
+          );
+          await apiClient.updateRecord(
+            recordUuid: retryRecordUuid,
+            recordData: recordData,
+            deviceId: credentials.deviceId,
+            deviceToken: credentials.deviceToken,
+          );
+          recordUuidForSync = retryRecordUuid;
+        }
+
+        if (recordUuidForSync != eventData.recordUuid) {
+          await _updateLocalEventRecordUuid(
+            eventId: eventData.id!,
+            recordUuid: recordUuidForSync,
+          );
+        }
+      }
+
+      debugPrint(
+        '[EventDetail] metadata sync success: eventId=${eventData.id}',
+      );
       _updateState(_state.copyWith(isOffline: false));
     } catch (e) {
+      if (e is ApiException) {
+        debugPrint(
+          '[EventDetail] metadata sync failed: eventId=${eventData.id} '
+          'status=${e.statusCode} body=${e.responseBody}',
+        );
+      } else {
+        debugPrint(
+          '[EventDetail] metadata sync failed: eventId=${eventData.id} error=$e',
+        );
+      }
       _updateState(_state.copyWith(isOffline: true));
       rethrow;
     }
+  }
+
+  String? _extractRecordUuidFromEventPayload(Map<String, dynamic>? payload) {
+    if (payload == null) return null;
+    final value = payload['record_uuid'] ?? payload['recordUuid'];
+    final text = value?.toString().trim();
+    if (text == null || text.isEmpty) {
+      return null;
+    }
+    return text;
+  }
+
+  Future<void> _updateLocalEventRecordUuid({
+    required String eventId,
+    required String recordUuid,
+  }) async {
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+    final prdDb = _dbService as PRDDatabaseService;
+    final localEvent = await prdDb.getEventById(eventId);
+    if (localEvent == null) {
+      return;
+    }
+
+    if (localEvent.recordUuid == recordUuid) {
+      return;
+    }
+
+    final localRecord = await prdDb.getRecordByUuid(recordUuid);
+    if (localRecord == null) {
+      debugPrint(
+        '[EventDetail] local event record_uuid update skipped: '
+        'target record not found locally (eventId=$eventId target=$recordUuid)',
+      );
+      return;
+    }
+
+    debugPrint(
+      '[EventDetail] local event record_uuid update: eventId=$eventId '
+      'from=${localEvent.recordUuid} to=$recordUuid',
+    );
+    final updatedEvent = localEvent.copyWith(recordUuid: recordUuid);
+    await prdDb.updateEvent(updatedEvent);
   }
 
   /// Delete event permanently
@@ -554,7 +882,11 @@ class EventDetailController {
   }
 
   /// Change event time with reason
-  Future<void> changeEventTime(DateTime newStartTime, DateTime? newEndTime, String reason) async {
+  Future<void> changeEventTime(
+    DateTime newStartTime,
+    DateTime? newEndTime,
+    String reason,
+  ) async {
     if (isNew) return;
 
     _updateState(_state.copyWith(isLoading: true));
@@ -573,11 +905,13 @@ class EventDetailController {
 
   /// Update record number
   void updateRecordNumber(String recordNumber) {
-    _updateState(_state.copyWith(
-      recordNumber: recordNumber,
-      hasChanges: true,
-      clearRecordNumberError: true, // Clear error when user types
-    ));
+    _updateState(
+      _state.copyWith(
+        recordNumber: recordNumber,
+        hasChanges: true,
+        clearRecordNumberError: true, // Clear error when user types
+      ),
+    );
 
     // Note: Charge items are now loaded based on recordUuid from the event,
     // not from name/recordNumber. They will be reloaded when the event is saved
@@ -601,10 +935,12 @@ class EventDetailController {
     try {
       // Check if we have PRD database service
       if (_dbService is! PRDDatabaseService) {
-        _updateState(_state.copyWith(
-          isValidatingRecordNumber: false,
-          clearRecordNumberError: true,
-        ));
+        _updateState(
+          _state.copyWith(
+            isValidatingRecordNumber: false,
+            clearRecordNumberError: true,
+          ),
+        );
         return true;
       }
 
@@ -614,28 +950,36 @@ class EventDetailController {
       if (credentials == null) {
         // Truly offline - no credentials - fall back to local validation only
         final localRecord = await prdDb.getRecordByRecordNumber(recordNumber);
-        if (localRecord != null && localRecord.name != null && localRecord.name != name) {
-          _updateState(_state.copyWith(
-            isValidatingRecordNumber: false,
-            recordNumberError: '病例號已存在',
-            recordNumber: '',  // Clear the record number field
-          ));
+        if (localRecord != null &&
+            localRecord.name != null &&
+            localRecord.name != name) {
+          _updateState(
+            _state.copyWith(
+              isValidatingRecordNumber: false,
+              recordNumberError: '病例號已存在',
+              recordNumber: '', // Clear the record number field
+            ),
+          );
           return false;
         }
-        _updateState(_state.copyWith(
-          isValidatingRecordNumber: false,
-          clearRecordNumberError: true,
-        ));
+        _updateState(
+          _state.copyWith(
+            isValidatingRecordNumber: false,
+            clearRecordNumberError: true,
+          ),
+        );
         return true;
       }
 
       if (_contentService == null) {
         // Online but not initialized yet - cannot validate properly
         // Return false to prevent proceeding without validation
-        _updateState(_state.copyWith(
-          isValidatingRecordNumber: false,
-          recordNumberError: '服務初始化中，請稍後再試',
-        ));
+        _updateState(
+          _state.copyWith(
+            isValidatingRecordNumber: false,
+            recordNumberError: '服務初始化中，請稍後再試',
+          ),
+        );
         return false;
       }
 
@@ -648,26 +992,34 @@ class EventDetailController {
       );
 
       if (result.hasConflict) {
-        _updateState(_state.copyWith(
-          isValidatingRecordNumber: false,
-          recordNumberError: '病例號已存在',
-          recordNumber: '',  // Clear the record number field
-        ));
+        _updateState(
+          _state.copyWith(
+            isValidatingRecordNumber: false,
+            recordNumberError: '病例號已存在',
+            recordNumber: '', // Clear the record number field
+          ),
+        );
         return false;
       }
 
-      _updateState(_state.copyWith(
-        isValidatingRecordNumber: false,
-        clearRecordNumberError: true,
-      ));
+      _updateState(
+        _state.copyWith(
+          isValidatingRecordNumber: false,
+          clearRecordNumberError: true,
+        ),
+      );
       return true;
     } catch (e) {
       // On error, do NOT allow user to continue - validation failed
-      debugPrint('[EventDetailController] validateRecordNumberOnBlur error: $e');
-      _updateState(_state.copyWith(
-        isValidatingRecordNumber: false,
-        recordNumberError: '驗證失敗，請稍後再試',
-      ));
+      debugPrint(
+        '[EventDetailController] validateRecordNumberOnBlur error: $e',
+      );
+      _updateState(
+        _state.copyWith(
+          isValidatingRecordNumber: false,
+          recordNumberError: '驗證失敗，請稍後再試',
+        ),
+      );
       return false;
     }
   }
@@ -686,7 +1038,9 @@ class EventDetailController {
 
   /// Update event types
   void updateEventTypes(List<EventType> eventTypes) {
-    _updateState(_state.copyWith(selectedEventTypes: eventTypes, hasChanges: true));
+    _updateState(
+      _state.copyWith(selectedEventTypes: eventTypes, hasChanges: true),
+    );
   }
 
   /// Load charge items for the current event (based on record_uuid)
@@ -718,15 +1072,14 @@ class EventDetailController {
       }
 
       _updateState(_state.copyWith(chargeItems: chargeItems));
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Toggle the filter to show all items or only this event's items
   Future<void> toggleChargeItemsFilter() async {
-    _updateState(_state.copyWith(
-      showOnlyThisEventItems: !_state.showOnlyThisEventItems,
-    ));
+    _updateState(
+      _state.copyWith(showOnlyThisEventItems: !_state.showOnlyThisEventItems),
+    );
     await loadChargeItems();
   }
 
@@ -750,20 +1103,25 @@ class EventDetailController {
       final prdDb = _dbService as PRDDatabaseService;
 
       // Get record by name AND record number and update phone
-      final record = await prdDb.getRecordByNameAndRecordNumber(name, recordNumber);
+      final record = await prdDb.getRecordByNameAndRecordNumber(
+        name,
+        recordNumber,
+      );
       if (record != null && record.recordUuid != null) {
         await prdDb.updateRecord(
           recordUuid: record.recordUuid!,
           phone: phone.isEmpty ? null : phone,
         );
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Add a new charge item
   /// If associateWithEvent is true, the item will be linked to this event
-  Future<void> addChargeItem(ChargeItem item, {bool associateWithEvent = false}) async {
+  Future<void> addChargeItem(
+    ChargeItem item, {
+    bool associateWithEvent = false,
+  }) async {
     if (event.recordUuid.isEmpty) {
       return;
     }
@@ -798,9 +1156,7 @@ class EventDetailController {
 
       // Reload all charge items
       await loadChargeItems();
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Edit an existing charge item
@@ -842,9 +1198,7 @@ class EventDetailController {
 
       // Reload all charge items
       await loadChargeItems();
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Delete a charge item
@@ -859,9 +1213,7 @@ class EventDetailController {
 
       // Reload all charge items
       await loadChargeItems();
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Toggle paid status of a charge item
@@ -882,13 +1234,14 @@ class EventDetailController {
 
       // Reload all charge items
       await loadChargeItems();
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Update the received amount of a charge item
-  Future<void> updateChargeItemReceivedAmount(ChargeItem item, int receivedAmount) async {
+  Future<void> updateChargeItemReceivedAmount(
+    ChargeItem item,
+    int receivedAmount,
+  ) async {
     if (_dbService is! PRDDatabaseService) {
       return;
     }
@@ -902,13 +1255,13 @@ class EventDetailController {
 
       // Reload all charge items
       await loadChargeItems();
-
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Update charge items (legacy method - kept for compatibility but now loads from database)
-  @Deprecated('Use addChargeItem, editChargeItem, deleteChargeItem, or toggleChargeItemPaidStatus instead')
+  @Deprecated(
+    'Use addChargeItem, editChargeItem, deleteChargeItem, or toggleChargeItemPaidStatus instead',
+  )
   void updateChargeItems(List<ChargeItem> chargeItems) {
     _updateState(_state.copyWith(chargeItems: chargeItems, hasChanges: true));
   }
@@ -930,7 +1283,10 @@ class EventDetailController {
     final nameText = (name ?? _state.name).trim();
 
     var record = nameText.isNotEmpty
-        ? await prdDb.getRecordByNameAndRecordNumber(nameText, trimmedRecordNumber)
+        ? await prdDb.getRecordByNameAndRecordNumber(
+            nameText,
+            trimmedRecordNumber,
+          )
         : null;
     record ??= await prdDb.getRecordByRecordNumber(trimmedRecordNumber);
 
@@ -941,7 +1297,10 @@ class EventDetailController {
 
     if (_noteSyncAdapter != null) {
       try {
-        final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(event.bookUuid, recordUuid);
+        final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
+          event.bookUuid,
+          recordUuid,
+        );
         if (serverNote != null) {
           return serverNote;
         }
@@ -974,11 +1333,9 @@ class EventDetailController {
   /// Load existing person note (when user chooses "載入現有")
   /// Replaces current canvas with DB handwriting
   Future<void> loadExistingPersonNote(Note existingNote) async {
-    final totalStrokes = existingNote.pages.fold<int>(0, (sum, page) => sum + page.length);
-    _updateState(_state.copyWith(
-      note: existingNote,
-      lastKnownPages: existingNote.pages,
-    ));
+    _updateState(
+      _state.copyWith(note: existingNote, lastKnownPages: existingNote.pages),
+    );
     _noteEditedInSession = false;
     _incrementNoteGeneration();
   }
@@ -1017,10 +1374,12 @@ class EventDetailController {
       final prdDb = _dbService as PRDDatabaseService;
       final results = await prdDb.getAllRecordNumbersWithNames(event.bookUuid);
       return results
-          .map((item) => RecordNumberOption(
-                recordNumber: item['recordNumber']!,
-                name: item['name']!,
-              ))
+          .map(
+            (item) => RecordNumberOption(
+              recordNumber: item['recordNumber']!,
+              name: item['name']!,
+            ),
+          )
           .toList();
     }
     return [];
@@ -1029,22 +1388,22 @@ class EventDetailController {
   /// Handle name field focused - clear record number
   void onNameFieldFocused() {
     if (_state.recordNumber.trim().isNotEmpty) {
-      _updateState(_state.copyWith(
-        recordNumber: '',
-        isNameReadOnly: false,
-        hasChanges: true,
-      ));
+      _updateState(
+        _state.copyWith(
+          recordNumber: '',
+          isNameReadOnly: false,
+          hasChanges: true,
+        ),
+      );
     }
   }
 
   /// Handle record number field focused - clear name
   void onRecordNumberFieldFocused() {
     if (_state.name.trim().isNotEmpty) {
-      _updateState(_state.copyWith(
-        name: '',
-        isNameReadOnly: false,
-        hasChanges: true,
-      ));
+      _updateState(
+        _state.copyWith(name: '', isNameReadOnly: false, hasChanges: true),
+      );
     }
   }
 
@@ -1062,13 +1421,15 @@ class EventDetailController {
 
     final phone = await prdDb.getPhoneByRecordNumber(recordNumber);
 
-    _updateState(_state.copyWith(
-      name: name,
-      recordNumber: recordNumber,
-      phone: phone ?? '',
-      isNameReadOnly: true,
-      hasChanges: true,
-    ));
+    _updateState(
+      _state.copyWith(
+        name: name,
+        recordNumber: recordNumber,
+        phone: phone ?? '',
+        isNameReadOnly: true,
+        hasChanges: true,
+      ),
+    );
 
     // Note: Charge items are loaded based on recordUuid from the event.
     // For existing events, they're already loaded. For new events, they'll be
@@ -1084,26 +1445,25 @@ class EventDetailController {
       if (noteToLoad != null && noteToLoad.isNotEmpty) {
         loadExistingPersonNote(noteToLoad);
       }
-    } catch (e) {
-    }
+    } catch (e) {}
   }
 
   /// Handle name selected from autocomplete - set editable mode
   void onNameSelected(String name) {
-    _updateState(_state.copyWith(
-      name: name,
-      isNameReadOnly: false,
-      hasChanges: true,
-    ));
+    _updateState(
+      _state.copyWith(name: name, isNameReadOnly: false, hasChanges: true),
+    );
   }
 
   /// Clear record number (called when "留空" option is selected)
   void clearRecordNumber() {
-    _updateState(_state.copyWith(
-      recordNumber: '',
-      isNameReadOnly: false,
-      hasChanges: true,
-    ));
+    _updateState(
+      _state.copyWith(
+        recordNumber: '',
+        isNameReadOnly: false,
+        hasChanges: true,
+      ),
+    );
   }
 
   /// Update start time
@@ -1123,11 +1483,7 @@ class EventDetailController {
 
   /// Update strokes (called when canvas changes)
   void updatePages(List<List<Stroke>> pages) {
-    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
-    _updateState(_state.copyWith(
-      lastKnownPages: pages,
-      hasChanges: true,
-    ));
+    _updateState(_state.copyWith(lastKnownPages: pages, hasChanges: true));
     _noteEditedInSession = true;
     _incrementNoteGeneration();
   }
@@ -1137,7 +1493,9 @@ class EventDetailController {
     if (erasedStrokeIds.isEmpty || event.id == null) return;
 
     final currentEventId = event.id!;
-    final updatedMap = Map<String, List<String>>.from(_state.erasedStrokesByEvent);
+    final updatedMap = Map<String, List<String>>.from(
+      _state.erasedStrokesByEvent,
+    );
     final existingList = updatedMap[currentEventId] ?? [];
     // Add new erased stroke IDs (avoiding duplicates)
     final newList = [...existingList];
@@ -1148,15 +1506,23 @@ class EventDetailController {
     }
     updatedMap[currentEventId] = newList;
 
-    _updateState(_state.copyWith(
-      erasedStrokesByEvent: updatedMap,
-      hasChanges: true,
-    ));
+    _updateState(
+      _state.copyWith(erasedStrokesByEvent: updatedMap, hasChanges: true),
+    );
     _noteEditedInSession = true;
   }
 
   void _incrementNoteGeneration() {
     _noteEditGeneration++;
+  }
+
+  bool _hasCurrentNoteContent(List<List<Stroke>> pages) {
+    final hasAnyStroke = pages.any((page) => page.isNotEmpty);
+    final hasLoadedNote = _state.note?.isNotEmpty ?? false;
+    final hasAnyErasedStroke = _state.erasedStrokesByEvent.values.any(
+      (ids) => ids.isNotEmpty,
+    );
+    return hasAnyStroke || hasLoadedNote || hasAnyErasedStroke;
   }
 
   bool _shouldSaveNote(List<List<Stroke>> pages) {
@@ -1216,10 +1582,7 @@ class RecordNumberOption {
   final String recordNumber;
   final String name;
 
-  RecordNumberOption({
-    required this.recordNumber,
-    required this.name,
-  });
+  RecordNumberOption({required this.recordNumber, required this.name});
 
   /// Display text for the dropdown: "recordNumber - name"
   String get displayText => '$recordNumber - $name';

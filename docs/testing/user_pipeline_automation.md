@@ -24,6 +24,7 @@ Default mode is `--full`.
 2. Book creation and book management.
 3. Event creation/update/remove/delete/reschedule.
    - Includes no-record-number reschedule note continuity coverage (old/new event should resolve same note).
+   - Includes no-record-number refill coverage (reenter + fill record number keeps note and updates event metadata).
 4. Note behaviors.
    - Includes has-note indicator scope coverage: events that only load shared existing note without note edits must keep note tag off.
 5. Drawing behaviors.

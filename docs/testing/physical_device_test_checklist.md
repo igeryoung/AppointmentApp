@@ -62,6 +62,7 @@ Use this checklist for real-device verification after unit tests pass.
 | [ ] | [V] | Open another event with same record/person | Same shared note content is shown (record-based note) |
 | [ ] | [V] | Create event for record that already has note, but do not write/update note and save | Event does not show note tag; note tag appears only on events that actually create/update note |
 | [ ] | [V] | Create no-record-number event with handwriting note, then reschedule time and open old/new events | Both old (cancelled) and new event show the same shared handwriting note |
+| [ ] | [V] | Create no-record-number event, draw note and auto-save, then reenter and fill record number | Event is updated with the filled record number and handwriting note remains readable |
 | [ ] | [V] | Edit note again and save | New strokes persist and previous content remains valid |
 | [ ] | [V] | (If note clear/delete action exists) clear note cache/content | Note is removed/cleared and not shown on reopen |
 

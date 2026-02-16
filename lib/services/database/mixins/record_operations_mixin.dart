@@ -48,6 +48,7 @@ mixin RecordOperationsMixin {
       'records',
       where: 'record_number = ? AND is_deleted = 0',
       whereArgs: [recordNumber],
+      orderBy: 'updated_at DESC',
       limit: 1,
     );
     if (results.isEmpty) return null;
@@ -56,7 +57,10 @@ mixin RecordOperationsMixin {
 
   /// Find record by BOTH name AND record_number
   /// Returns null if either is empty or no match found
-  Future<Record?> getRecordByNameAndRecordNumber(String name, String recordNumber) async {
+  Future<Record?> getRecordByNameAndRecordNumber(
+    String name,
+    String recordNumber,
+  ) async {
     if (recordNumber.isEmpty || name.isEmpty) return null;
     final db = await database;
     final results = await db.query(
@@ -70,30 +74,42 @@ mixin RecordOperationsMixin {
   }
 
   /// Get existing record or create new one
-  /// - Non-empty recordNumber + non-empty name: match by BOTH, return existing record_uuid
-  /// - Empty recordNumber or empty name: always create new standalone record
+  /// - Non-empty recordNumber: prefer record_number match first (server treats it as canonical identity)
+  /// - Non-empty recordNumber + non-empty name: keep local compatibility by still allowing name updates
+  /// - Empty recordNumber or no match: create new standalone record
   Future<Record> getOrCreateRecord({
     required String recordNumber,
     String? name,
     String? phone,
     bool updateExisting = true,
   }) async {
-    // Match by BOTH name AND record_number when both are non-empty
-    if (recordNumber.isNotEmpty && name != null && name.isNotEmpty) {
-      final existing = await getRecordByNameAndRecordNumber(name, recordNumber);
+    final normalizedName = name?.trim();
+    final hasName = normalizedName != null && normalizedName.isNotEmpty;
+
+    if (recordNumber.isNotEmpty) {
+      final existing = await getRecordByRecordNumber(recordNumber);
       if (existing != null) {
-        // Only update phone if different (name already matches)
-        if (updateExisting && phone != null && phone != existing.phone) {
+        final shouldUpdateName =
+            updateExisting && hasName && normalizedName != existing.name;
+        final shouldUpdatePhone =
+            updateExisting && phone != null && phone != existing.phone;
+
+        if (shouldUpdateName || shouldUpdatePhone) {
           return await updateRecord(
             recordUuid: existing.recordUuid!,
-            phone: phone,
+            name: shouldUpdateName ? normalizedName : null,
+            phone: shouldUpdatePhone ? phone : null,
           );
         }
         return existing;
       }
     }
-    // Create new record (either empty recordNumber, empty name, or no match found)
-    return await createRecord(recordNumber: recordNumber, name: name, phone: phone);
+
+    return await createRecord(
+      recordNumber: recordNumber,
+      name: hasName ? normalizedName : name,
+      phone: phone,
+    );
   }
 
   Future<Record> updateRecord({
@@ -115,7 +131,12 @@ mixin RecordOperationsMixin {
     if (phone != null) updates['phone'] = phone;
     if (recordNumber != null) updates['record_number'] = recordNumber;
 
-    await db.update('records', updates, where: 'record_uuid = ?', whereArgs: [recordUuid]);
+    await db.update(
+      'records',
+      updates,
+      where: 'record_uuid = ?',
+      whereArgs: [recordUuid],
+    );
 
     return existing.copyWith(
       name: name ?? existing.name,
@@ -141,7 +162,11 @@ mixin RecordOperationsMixin {
 
   Future<List<Record>> getAllRecords() async {
     final db = await database;
-    final results = await db.query('records', where: 'is_deleted = 0', orderBy: 'name ASC');
+    final results = await db.query(
+      'records',
+      where: 'is_deleted = 0',
+      orderBy: 'name ASC',
+    );
     return results.map((map) => Record.fromMap(map)).toList();
   }
 
@@ -169,6 +194,9 @@ mixin RecordOperationsMixin {
     if (recordUuids.isEmpty) return;
     final db = await database;
     final placeholders = List.filled(recordUuids.length, '?').join(',');
-    await db.execute('UPDATE records SET is_dirty = 0 WHERE record_uuid IN ($placeholders)', recordUuids);
+    await db.execute(
+      'UPDATE records SET is_dirty = 0 WHERE record_uuid IN ($placeholders)',
+      recordUuids,
+    );
   }
 }
