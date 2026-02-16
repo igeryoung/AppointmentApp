@@ -249,6 +249,15 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       return;
     }
 
+    final previousState = state;
+    if (previousState is ScheduleLoaded) {
+      emit(
+        previousState.copyWith(
+          events: _replaceEvent(previousState.events, event),
+        ),
+      );
+    }
+
     try {
       final apiClient = _apiClient;
       final deviceRepository = _deviceRepository;
@@ -261,16 +270,23 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         throw Exception('Device not registered');
       }
 
-      await apiClient.updateEvent(
+      final updatedRaw = await apiClient.updateEvent(
         bookUuid: event.bookUuid,
         eventId: event.id!,
         eventData: event.toMap(),
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
+      final updatedFromServer = Event.fromServerResponse(updatedRaw);
 
-      // Reload events to update UI
-      await loadEvents(generation: _currentRequestGeneration);
+      final currentState = state;
+      if (currentState is ScheduleLoaded) {
+        emit(
+          currentState.copyWith(
+            events: _replaceEvent(currentState.events, updatedFromServer),
+          ),
+        );
+      }
     } catch (e) {
       emit(ScheduleError('Failed to update event: $e'));
     }
@@ -586,5 +602,13 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   /// Get window size (number of days) based on view mode
   int _getWindowSize(int viewMode) {
     return viewMode == ScheduleDrawing.VIEW_MODE_2DAY ? 2 : 3;
+  }
+
+  List<Event> _replaceEvent(List<Event> events, Event updatedEvent) {
+    final index = events.indexWhere((event) => event.id == updatedEvent.id);
+    if (index < 0) return events;
+    final updatedEvents = List<Event>.from(events);
+    updatedEvents[index] = updatedEvent;
+    return updatedEvents;
   }
 }

@@ -49,10 +49,10 @@ class Event {
     this.isChecked = false,
     this.hasNote = false,
     this.version = 1,
-  })  : eventTypes = eventTypes.isEmpty
-            ? throw ArgumentError('Event must have at least one event type')
-            : eventTypes,
-        chargeItems = chargeItems ?? [];
+  }) : eventTypes = eventTypes.isEmpty
+           ? throw ArgumentError('Event must have at least one event type')
+           : eventTypes,
+       chargeItems = chargeItems ?? [];
 
   Event copyWith({
     String? id,
@@ -110,9 +110,11 @@ class Event {
   }
 
   String get timeRangeDisplay {
-    final startStr = '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
+    final startStr =
+        '${startTime.hour.toString().padLeft(2, '0')}:${startTime.minute.toString().padLeft(2, '0')}';
     if (endTime == null) return startStr;
-    final endStr = '${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}';
+    final endStr =
+        '${endTime!.hour.toString().padLeft(2, '0')}:${endTime!.minute.toString().padLeft(2, '0')}';
     return '$startStr - $endStr';
   }
 
@@ -143,18 +145,28 @@ class Event {
 
   factory Event.fromMap(Map<String, dynamic> map) {
     List<EventType> eventTypes;
-    if (map['event_types'] != null && map['event_types'].toString().isNotEmpty) {
+    if (map['event_types'] != null &&
+        map['event_types'].toString().isNotEmpty) {
       eventTypes = EventType.fromStringList(map['event_types']);
     } else {
       eventTypes = [EventType.other];
     }
 
     DateTime parseTime(dynamic value) {
-      if (value == null) return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
-      if (value is int) return DateTime.fromMillisecondsSinceEpoch(value * 1000, isUtc: true).toLocal();
+      if (value == null)
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
+      if (value is int)
+        return DateTime.fromMillisecondsSinceEpoch(
+          value * 1000,
+          isUtc: true,
+        ).toLocal();
       if (value is String) {
         final seconds = int.tryParse(value);
-        if (seconds != null) return DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal();
+        if (seconds != null)
+          return DateTime.fromMillisecondsSinceEpoch(
+            seconds * 1000,
+            isUtc: true,
+          ).toLocal();
       }
       return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
     }
@@ -170,8 +182,14 @@ class Event {
       hasChargeItems: (map['has_charge_items'] ?? 0) == 1,
       startTime: parseTime(map['start_time']),
       endTime: map['end_time'] != null ? parseTime(map['end_time']) : null,
-      createdAt: DateTime.fromMillisecondsSinceEpoch((map['created_at'] ?? 0) * 1000, isUtc: true),
-      updatedAt: DateTime.fromMillisecondsSinceEpoch((map['updated_at'] ?? 0) * 1000, isUtc: true),
+      createdAt: DateTime.fromMillisecondsSinceEpoch(
+        (map['created_at'] ?? 0) * 1000,
+        isUtc: true,
+      ),
+      updatedAt: DateTime.fromMillisecondsSinceEpoch(
+        (map['updated_at'] ?? 0) * 1000,
+        isUtc: true,
+      ),
       isRemoved: (map['is_removed'] ?? 0) == 1,
       removalReason: map['removal_reason'],
       originalEventId: map['original_event_id'],
@@ -186,11 +204,15 @@ class Event {
   /// Server returns timestamps as Unix seconds
   factory Event.fromServerResponse(Map<String, dynamic> map) {
     DateTime fromSeconds(int? seconds) => seconds != null
-        ? DateTime.fromMillisecondsSinceEpoch(seconds * 1000, isUtc: true).toLocal()
+        ? DateTime.fromMillisecondsSinceEpoch(
+            seconds * 1000,
+            isUtc: true,
+          ).toLocal()
         : DateTime.now();
 
     List<EventType> eventTypes;
-    if (map['event_types'] != null && map['event_types'].toString().isNotEmpty) {
+    if (map['event_types'] != null &&
+        map['event_types'].toString().isNotEmpty) {
       eventTypes = EventType.fromStringList(map['event_types']);
     } else {
       eventTypes = [EventType.other];
@@ -220,7 +242,8 @@ class Event {
   }
 
   @override
-  String toString() => 'Event(id: $id, title: $title, recordUuid: $recordUuid, startTime: $startTime)';
+  String toString() =>
+      'Event(id: $id, title: $title, recordUuid: $recordUuid, startTime: $startTime)';
 
   @override
   bool operator ==(Object other) =>
@@ -230,8 +253,42 @@ class Event {
           other.bookUuid == bookUuid &&
           other.recordUuid == recordUuid &&
           other.title == title &&
-          listEquals(other.eventTypes, eventTypes);
+          other.recordNumber == recordNumber &&
+          listEquals(other.eventTypes, eventTypes) &&
+          listEquals(other.chargeItems, chargeItems) &&
+          other.hasChargeItems == hasChargeItems &&
+          other.startTime == startTime &&
+          other.endTime == endTime &&
+          other.createdAt == createdAt &&
+          other.updatedAt == updatedAt &&
+          other.isRemoved == isRemoved &&
+          other.removalReason == removalReason &&
+          other.originalEventId == originalEventId &&
+          other.newEventId == newEventId &&
+          other.isChecked == isChecked &&
+          other.hasNote == hasNote &&
+          other.version == version;
 
   @override
-  int get hashCode => Object.hash(id, bookUuid, recordUuid, title, Object.hashAll(eventTypes));
+  int get hashCode => Object.hash(
+    id,
+    bookUuid,
+    recordUuid,
+    title,
+    recordNumber,
+    Object.hashAll(eventTypes),
+    Object.hashAll(chargeItems),
+    hasChargeItems,
+    startTime,
+    endTime,
+    createdAt,
+    updatedAt,
+    isRemoved,
+    removalReason,
+    originalEventId,
+    newEventId,
+    isChecked,
+    hasNote,
+    version,
+  );
 }

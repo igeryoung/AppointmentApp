@@ -42,6 +42,15 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
   }
 
   @override
+  void didUpdateWidget(covariant ScheduleContextMenu oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.event.id != widget.event.id ||
+        oldWidget.event.isChecked != widget.event.isChecked) {
+      isChecked = widget.event.isChecked;
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final screenSize = MediaQuery.of(context).size;
@@ -71,7 +80,9 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
                   color: Colors.grey.shade100,
-                  borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+                  borderRadius: const BorderRadius.vertical(
+                    top: Radius.circular(8),
+                  ),
                 ),
                 child: Row(
                   children: [
@@ -93,8 +104,13 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                     // Event name
                     Expanded(
                       child: Text(
-                        widget.event.title.isEmpty ? l10n.eventOptions : widget.event.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        widget.event.title.isEmpty
+                            ? l10n.eventOptions
+                            : widget.event.title,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.bold,
+                          fontSize: 14,
+                        ),
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
@@ -113,24 +129,37 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.category, size: 20),
-                title: Text(l10n.changeEventType, style: const TextStyle(fontSize: 14)),
+                title: Text(
+                  l10n.changeEventType,
+                  style: const TextStyle(fontSize: 14),
+                ),
                 onTap: widget.onChangeType,
               ),
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.access_time, size: 20),
-                title: Text(l10n.changeEventTime, style: const TextStyle(fontSize: 14)),
+                title: Text(
+                  l10n.changeEventTime,
+                  style: const TextStyle(fontSize: 14),
+                ),
                 onTap: widget.onChangeTime,
               ),
               ListTile(
                 dense: true,
                 leading: const Icon(Icons.event_available, size: 20),
-                title: Text(l10n.scheduleNextAppointment, style: const TextStyle(fontSize: 14)),
+                title: Text(
+                  l10n.scheduleNextAppointment,
+                  style: const TextStyle(fontSize: 14),
+                ),
                 onTap: widget.onScheduleNextAppointment,
               ),
               ListTile(
                 dense: true,
-                leading: const Icon(Icons.remove_circle_outline, color: Colors.orange, size: 20),
+                leading: const Icon(
+                  Icons.remove_circle_outline,
+                  color: Colors.orange,
+                  size: 20,
+                ),
                 title: Text(
                   l10n.removeEvent,
                   style: const TextStyle(color: Colors.orange, fontSize: 14),

@@ -31,7 +31,8 @@ class EventManagementService {
   Offset? _menuPosition;
 
   /// Callback to update menu state
-  final void Function(Event? selectedEvent, Offset? position) onMenuStateChanged;
+  final void Function(Event? selectedEvent, Offset? position)
+  onMenuStateChanged;
 
   /// Callback to navigate to event detail screen
   final Future<bool?> Function(Widget screen) onNavigate;
@@ -51,16 +52,28 @@ class EventManagementService {
   final Future<Event?> Function(String eventId) onHardDeleteEvent;
 
   /// Callback to change event time via cubit
-  final Future<void> Function(Event event, DateTime startTime, DateTime? endTime, String reason) onChangeEventTime;
+  final Future<void> Function(
+    Event event,
+    DateTime startTime,
+    DateTime? endTime,
+    String reason,
+  )
+  onChangeEventTime;
 
   /// Callback to show snackbar
-  final void Function(String message, {Color? backgroundColor, int? durationSeconds}) onShowSnackbar;
+  final void Function(
+    String message, {
+    Color? backgroundColor,
+    int? durationSeconds,
+  })
+  onShowSnackbar;
 
   /// Callback to check if widget is mounted
   final bool Function() isMounted;
 
   /// Callback to get localized string
-  final String Function(String Function(AppLocalizations) getter) getLocalizedString;
+  final String Function(String Function(AppLocalizations) getter)
+  getLocalizedString;
 
   /// Callback to sync event to server
   final Future<void> Function(Event event) onSyncEvent;
@@ -87,8 +100,8 @@ class EventManagementService {
     required this.onSyncEvent,
     required this.onSetPendingNextAppointment,
     required this.dateService,
-  })  : _dbService = dbService,
-        _bookUuid = bookUuid;
+  }) : _dbService = dbService,
+       _bookUuid = bookUuid;
 
   /// Get currently selected event for menu
   Event? get selectedEventForMenu => _selectedEventForMenu;
@@ -105,8 +118,15 @@ class EventManagementService {
     List<EventType>? eventTypes,
   }) async {
     final now = TimeService.instance.now();
-    final defaultStartTime = startTime ??
-        DateTime(now.year, now.month, now.day, now.hour, (now.minute ~/ 15) * 15);
+    final defaultStartTime =
+        startTime ??
+        DateTime(
+          now.year,
+          now.month,
+          now.day,
+          now.hour,
+          (now.minute ~/ 15) * 15,
+        );
 
     final newEvent = Event(
       id: const Uuid().v4(), // Generate UUID upfront for stroke tracking
@@ -114,17 +134,16 @@ class EventManagementService {
       recordUuid: '', // Will be assigned by server
       title: name ?? '',
       recordNumber: recordNumber ?? '',
-      eventTypes: eventTypes ?? [EventType.consultation], // Default to consultation for new events
+      eventTypes:
+          eventTypes ??
+          [EventType.consultation], // Default to consultation for new events
       startTime: defaultStartTime,
       createdAt: now,
       updatedAt: now,
     );
 
     final result = await onNavigate(
-      EventDetailScreen(
-        event: newEvent,
-        isNew: true,
-      ),
+      EventDetailScreen(event: newEvent, isNew: true),
     );
 
     if (result == true) {
@@ -135,10 +154,7 @@ class EventManagementService {
   /// Edit an existing event
   Future<void> editEvent(Event event) async {
     final result = await onNavigate(
-      EventDetailScreen(
-        event: event,
-        isNew: false,
-      ),
+      EventDetailScreen(event: event, isNew: false),
     );
 
     if (result == true) {
@@ -147,13 +163,21 @@ class EventManagementService {
   }
 
   /// Schedule next appointment from existing event
-  Future<void> scheduleNextAppointment(Event originalEvent, BuildContext context) async {
+  Future<void> scheduleNextAppointment(
+    Event originalEvent,
+    BuildContext context,
+  ) async {
     // Show dialog to get days and event type
-    final result = await showScheduleNextAppointmentDialog(context, originalEvent);
+    final result = await showScheduleNextAppointmentDialog(
+      context,
+      originalEvent,
+    );
     if (result == null) return; // User cancelled
 
     // Calculate target date
-    final targetDate = originalEvent.startTime.add(Duration(days: result.daysFromOriginal));
+    final targetDate = originalEvent.startTime.add(
+      Duration(days: result.daysFromOriginal),
+    );
 
     // Store pending appointment data
     onSetPendingNextAppointment(
@@ -194,11 +218,15 @@ class EventManagementService {
         updatedAt: TimeService.instance.now(),
       );
 
-      await _dbService.updateEvent(updatedEvent);
-      onUpdateEvent(updatedEvent);
+      final persistedEvent = await _dbService.updateEvent(updatedEvent);
 
-      // Sync to server in background (best effort)
-      await onSyncEvent(updatedEvent);
+      // Keep context-menu state aligned with the event currently shown in menu.
+      if (_selectedEventForMenu?.id == persistedEvent.id) {
+        _selectedEventForMenu = persistedEvent;
+        onMenuStateChanged(_selectedEventForMenu, _menuPosition);
+      }
+
+      onUpdateEvent(persistedEvent);
     } catch (e) {
       if (isMounted()) {
         onShowSnackbar(
@@ -209,7 +237,11 @@ class EventManagementService {
   }
 
   /// Handle menu action
-  Future<void> handleMenuAction(String action, Event event, BuildContext context) async {
+  Future<void> handleMenuAction(
+    String action,
+    Event event,
+    BuildContext context,
+  ) async {
     if (action == 'changeType') {
       await changeEventType(event, context);
       closeEventMenu();
@@ -248,9 +280,12 @@ class EventManagementService {
       final currentSorted = EventType.sortAlphabetically(event.eventTypes);
       final newSorted = EventType.sortAlphabetically(selectedTypes);
 
-      final hasChanged = currentSorted.length != newSorted.length ||
-          !List.generate(currentSorted.length, (i) => currentSorted[i] == newSorted[i])
-              .every((e) => e);
+      final hasChanged =
+          currentSorted.length != newSorted.length ||
+          !List.generate(
+            currentSorted.length,
+            (i) => currentSorted[i] == newSorted[i],
+          ).every((e) => e);
 
       if (hasChanged) {
         try {
@@ -263,14 +298,14 @@ class EventManagementService {
           onUpdateEvent(updatedEvent);
 
           if (isMounted()) {
-            onShowSnackbar(
-              getLocalizedString((l10n) => l10n.eventTypeChanged),
-            );
+            onShowSnackbar(getLocalizedString((l10n) => l10n.eventTypeChanged));
           }
         } catch (e) {
           if (isMounted()) {
             onShowSnackbar(
-              getLocalizedString((l10n) => l10n.errorUpdatingEvent(e.toString())),
+              getLocalizedString(
+                (l10n) => l10n.errorUpdatingEvent(e.toString()),
+              ),
             );
           }
         }
@@ -279,7 +314,10 @@ class EventManagementService {
   }
 
   /// Change event time from schedule view
-  Future<void> changeEventTimeFromSchedule(Event event, BuildContext context) async {
+  Future<void> changeEventTimeFromSchedule(
+    Event event,
+    BuildContext context,
+  ) async {
     final result = await ChangeTimeDialog.show(
       context,
       initialStartTime: event.startTime,
@@ -305,7 +343,9 @@ class EventManagementService {
     } catch (e) {
       if (isMounted()) {
         onShowSnackbar(
-          getLocalizedString((l10n) => l10n.errorChangingEventTime(e.toString())),
+          getLocalizedString(
+            (l10n) => l10n.errorChangingEventTime(e.toString()),
+          ),
           backgroundColor: Colors.red,
           durationSeconds: 3,
         );
@@ -314,7 +354,10 @@ class EventManagementService {
   }
 
   /// Remove event from schedule (soft delete with reason)
-  Future<void> removeEventFromSchedule(Event event, BuildContext context) async {
+  Future<void> removeEventFromSchedule(
+    Event event,
+    BuildContext context,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
 
     // Show reason dialog
@@ -327,7 +370,9 @@ class EventManagementService {
 
         return StatefulBuilder(
           builder: (context, setState) {
-            final showAdditionalField = ChangeReasons.requiresAdditionalInput(selectedReason);
+            final showAdditionalField = ChangeReasons.requiresAdditionalInput(
+              selectedReason,
+            );
 
             return AlertDialog(
               title: Text(l10n.removeEvent),
@@ -367,9 +412,7 @@ class EventManagementService {
                     const SizedBox(height: 12),
                     TextField(
                       controller: additionalTextController,
-                      decoration: const InputDecoration(
-                        hintText: '請輸入其他原因...',
-                      ),
+                      decoration: const InputDecoration(hintText: '請輸入其他原因...'),
                       maxLines: 2,
                       autofocus: true,
                     ),
@@ -393,14 +436,18 @@ class EventManagementService {
 
                     // If "other" option, validate additional text
                     if (showAdditionalField) {
-                      final additionalText = additionalTextController.text.trim();
+                      final additionalText = additionalTextController.text
+                          .trim();
                       if (additionalText.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('請輸入其他原因')),
                         );
                         return;
                       }
-                      final formattedReason = ChangeReasons.formatReason(selectedReason!, additionalText);
+                      final formattedReason = ChangeReasons.formatReason(
+                        selectedReason!,
+                        additionalText,
+                      );
                       Navigator.pop(context, formattedReason);
                     } else {
                       Navigator.pop(context, selectedReason);
@@ -433,7 +480,9 @@ class EventManagementService {
       } catch (e) {
         if (isMounted()) {
           onShowSnackbar(
-            getLocalizedString((l10n) => l10n.errorRemovingEventMessage(e.toString())),
+            getLocalizedString(
+              (l10n) => l10n.errorRemovingEventMessage(e.toString()),
+            ),
           );
         }
       }
@@ -441,7 +490,10 @@ class EventManagementService {
   }
 
   /// Delete event from schedule (permanent deletion)
-  Future<void> deleteEventFromSchedule(Event event, BuildContext context) async {
+  Future<void> deleteEventFromSchedule(
+    Event event,
+    BuildContext context,
+  ) async {
     final l10n = AppLocalizations.of(context)!;
 
     final confirmed = await showDialog<bool>(
@@ -473,9 +525,7 @@ class EventManagementService {
         }
 
         if (isMounted()) {
-          onShowSnackbar(
-            getLocalizedString((l10n) => l10n.eventDeleted),
-          );
+          onShowSnackbar(getLocalizedString((l10n) => l10n.eventDeleted));
         }
       } catch (e) {
         if (isMounted()) {
@@ -488,7 +538,11 @@ class EventManagementService {
   }
 
   /// Handle event drop (drag-and-drop time change)
-  Future<void> handleEventDrop(Event event, DateTime newStartTime, BuildContext context) async {
+  Future<void> handleEventDrop(
+    Event event,
+    DateTime newStartTime,
+    BuildContext context,
+  ) async {
     // Check if time actually changed
     if (event.startTime.year == newStartTime.year &&
         event.startTime.month == newStartTime.month &&
@@ -514,7 +568,9 @@ class EventManagementService {
       potentialNewEndTime = newStartTime.add(duration);
 
       // Validate the new end time
-      final endTimeError = EventTimeValidator.validateEndTime(potentialNewEndTime);
+      final endTimeError = EventTimeValidator.validateEndTime(
+        potentialNewEndTime,
+      );
       if (endTimeError != null) {
         final endHour = potentialNewEndTime.hour.toString().padLeft(2, '0');
         final endMin = potentialNewEndTime.minute.toString().padLeft(2, '0');
@@ -549,7 +605,9 @@ class EventManagementService {
 
         return StatefulBuilder(
           builder: (context, setState) {
-            final showAdditionalField = ChangeReasons.requiresAdditionalInput(selectedReason);
+            final showAdditionalField = ChangeReasons.requiresAdditionalInput(
+              selectedReason,
+            );
 
             return AlertDialog(
               title: Text(l10n.changeEventType),
@@ -587,9 +645,7 @@ class EventManagementService {
                     const SizedBox(height: 12),
                     TextField(
                       controller: additionalTextController,
-                      decoration: const InputDecoration(
-                        hintText: '請輸入其他原因...',
-                      ),
+                      decoration: const InputDecoration(hintText: '請輸入其他原因...'),
                       maxLines: 2,
                       autofocus: true,
                     ),
@@ -613,14 +669,18 @@ class EventManagementService {
 
                     // If "other" option, validate additional text
                     if (showAdditionalField) {
-                      final additionalText = additionalTextController.text.trim();
+                      final additionalText = additionalTextController.text
+                          .trim();
                       if (additionalText.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(content: Text('請輸入其他原因')),
                         );
                         return;
                       }
-                      final formattedReason = ChangeReasons.formatReason(selectedReason!, additionalText);
+                      final formattedReason = ChangeReasons.formatReason(
+                        selectedReason!,
+                        additionalText,
+                      );
                       Navigator.pop(context, formattedReason);
                     } else {
                       Navigator.pop(context, selectedReason);
