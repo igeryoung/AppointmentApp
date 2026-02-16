@@ -11,6 +11,7 @@ class ScheduleTimeGrid extends StatelessWidget {
   final double slotHeight;
   final bool isDrawingMode;
   final Event? selectedEventForMenu;
+  final DateTime? hoveredDropStartTime;
   final void Function(DateTime startTime) onCreateEvent;
   final void Function(Event event, DateTime newStartTime) onEventDrop;
   final VoidCallback onCloseEventMenu;
@@ -21,6 +22,7 @@ class ScheduleTimeGrid extends StatelessWidget {
     required this.slotHeight,
     required this.isDrawingMode,
     required this.selectedEventForMenu,
+    required this.hoveredDropStartTime,
     required this.onCreateEvent,
     required this.onEventDrop,
     required this.onCloseEventMenu,
@@ -50,7 +52,8 @@ class ScheduleTimeGrid extends StatelessWidget {
   Widget _buildTimeSlot(BuildContext context, int index, DateTime today) {
     final hour = ScheduleLayoutUtils.startHour + (index ~/ 4);
     final minute = (index % 4) * 15;
-    final timeStr = '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
+    final timeStr =
+        '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
 
     return SizedBox(
       height: slotHeight,
@@ -63,14 +66,17 @@ class ScheduleTimeGrid extends StatelessWidget {
             padding: const EdgeInsets.only(top: 1),
             child: Text(
               timeStr,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                fontSize: 10,
-              ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontSize: 10),
             ),
           ),
           // Grid cells for each date
           ...dates.map((date) {
-            final isToday = date.year == today.year && date.month == today.month && date.day == today.day;
+            final isToday =
+                date.year == today.year &&
+                date.month == today.month &&
+                date.day == today.day;
             return _buildGridCell(context, date, hour, minute, isToday);
           }),
         ],
@@ -79,7 +85,13 @@ class ScheduleTimeGrid extends StatelessWidget {
   }
 
   /// Build grid cell with drag target and tap handling
-  Widget _buildGridCell(BuildContext context, DateTime date, int hour, int minute, bool isToday) {
+  Widget _buildGridCell(
+    BuildContext context,
+    DateTime date,
+    int hour,
+    int minute,
+    bool isToday,
+  ) {
     final theme = Theme.of(context);
     final baseBorderColor = Colors.grey.shade400;
     final todayBorderColor = theme.colorScheme.primary.withOpacity(0.25);
@@ -91,17 +103,39 @@ class ScheduleTimeGrid extends StatelessWidget {
       child: DragTarget<Event>(
         onWillAcceptWithDetails: (details) => !isDrawingMode,
         onAcceptWithDetails: (details) {
-          final newStartTime = DateTime(date.year, date.month, date.day, hour, minute);
+          final newStartTime = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            hour,
+            minute,
+          );
           onEventDrop(details.data, newStartTime);
         },
         builder: (context, candidateData, rejectedData) {
-          final isHovering = candidateData.isNotEmpty;
+          final isHoveringFromDraggable = candidateData.isNotEmpty;
+          final hovered = hoveredDropStartTime;
+          final isHoveringFromLongPressDrag =
+              hovered != null &&
+              hovered.year == date.year &&
+              hovered.month == date.month &&
+              hovered.day == date.day &&
+              hovered.hour == hour &&
+              hovered.minute == minute;
+          final isHovering =
+              isHoveringFromDraggable || isHoveringFromLongPressDrag;
           return GestureDetector(
             onTap: () {
               if (selectedEventForMenu != null) {
                 onCloseEventMenu();
               } else {
-                final startTime = DateTime(date.year, date.month, date.day, hour, minute);
+                final startTime = DateTime(
+                  date.year,
+                  date.month,
+                  date.day,
+                  hour,
+                  minute,
+                );
                 onCreateEvent(startTime);
               }
             },
@@ -112,15 +146,19 @@ class ScheduleTimeGrid extends StatelessWidget {
                   color: isHovering
                       ? hoverBorderColor
                       : isToday
-                          ? todayBorderColor
-                          : baseBorderColor,
-                  width: isHovering ? 1.5 : isToday ? 0.8 : 0.5,
+                      ? todayBorderColor
+                      : baseBorderColor,
+                  width: isHovering
+                      ? 1.5
+                      : isToday
+                      ? 0.8
+                      : 0.5,
                 ),
                 color: isHovering
                     ? hoverFillColor
                     : isToday
-                        ? todayFillColor
-                        : null,
+                    ? todayFillColor
+                    : null,
               ),
             ),
           );
@@ -138,7 +176,10 @@ class ScheduleTimeGrid extends StatelessWidget {
     }
 
     // Calculate position based on current time
-    final yPosition = ScheduleLayoutUtils.calculateEventTopPosition(now, slotHeight);
+    final yPosition = ScheduleLayoutUtils.calculateEventTopPosition(
+      now,
+      slotHeight,
+    );
     final lineColor = Theme.of(context).colorScheme.primary.withOpacity(0.9);
 
     return Positioned(
@@ -150,7 +191,8 @@ class ScheduleTimeGrid extends StatelessWidget {
           children: [
             const SizedBox(width: 60), // Time column offset
             ...dates.map((date) {
-              final isToday = date.year == now.year &&
+              final isToday =
+                  date.year == now.year &&
                   date.month == now.month &&
                   date.day == now.day;
 

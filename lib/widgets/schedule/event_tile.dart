@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
-import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../utils/schedule/schedule_layout_utils.dart';
@@ -181,7 +180,13 @@ class ScheduleEventTileHelper {
     required Color Function(BuildContext, EventType) getEventTypeColor,
     required VoidCallback onTap,
     required Function(Offset) onLongPress,
+    required Function(Offset, Rect) onLongPressDragStart,
+    required Function(Offset) onLongPressDragUpdate,
+    required Function(Offset) onLongPressDragEnd,
+    required VoidCallback onLongPressDragCancel,
     required bool isMenuOpen,
+    bool canDrag = true,
+    bool isBeingDragged = false,
     bool hasHandwriting = false,
     Widget Function(Color)? dottedBorderPainter,
   }) {
@@ -195,13 +200,8 @@ class ScheduleEventTileHelper {
     final primaryColor =
         colors.first; // Use first color for borders and accents
 
-    Widget eventWidget = GestureDetector(
-      onTap: isMenuOpen ? null : onTap,
-      onLongPressStart: (details) {
-        if (!isMenuOpen) {
-          onLongPress(details.globalPosition);
-        }
-      },
+    final tileContent = Opacity(
+      opacity: isBeingDragged ? 0.3 : 1.0,
       child: Container(
         height: tileHeight,
         margin: const EdgeInsets.only(left: 1, right: 1, top: 1),
@@ -286,61 +286,106 @@ class ScheduleEventTileHelper {
       ),
     );
 
-    // Make event draggable only when menu is open
-    if (isMenuOpen) {
-      eventWidget = Draggable<Event>(
-        data: event,
-        feedback: Material(
-          elevation: 4,
+    return _LongPressBoundaryGestureTile(
+      key: ValueKey<String>(
+        event.id ?? '${event.startTime.millisecondsSinceEpoch}-${event.title}',
+      ),
+      isMenuOpen: isMenuOpen,
+      onTap: onTap,
+      onLongPress: onLongPress,
+      onLongPressDragStart: onLongPressDragStart,
+      onLongPressDragUpdate: onLongPressDragUpdate,
+      onLongPressDragEnd: onLongPressDragEnd,
+      onLongPressDragCancel: onLongPressDragCancel,
+      canDrag: canDrag,
+      child: tileContent,
+    );
+  }
+
+  /// Build floating drag preview that keeps event block styling unchanged.
+  static Widget buildFloatingDragPreview({
+    required BuildContext context,
+    required Event event,
+    required double slotHeight,
+    required List<Event> events,
+    required Color Function(BuildContext, EventType) getEventTypeColor,
+    required double width,
+    required double height,
+    bool hasHandwriting = false,
+  }) {
+    final colors = _getEventColors(context, event, getEventTypeColor);
+    final primaryColor = colors.first;
+
+    return SizedBox(
+      width: width,
+      height: height,
+      child: Container(
+        decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(2),
-          child: Opacity(
-            opacity: 0.7,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(2),
-              child: Container(
-                width: 100,
-                height: tileHeight,
-                child: Stack(
-                  children: [
-                    // Background color layer (single or split)
-                    Positioned.fill(
-                      child: _buildColorBackground(
-                        colors,
-                        1.0,
-                        hasHandwriting: hasHandwriting,
-                      ),
-                    ),
-                    // Content layer
-                    Padding(
-                      padding: EdgeInsets.only(
-                        left: hasHandwriting ? 0 : 2,
-                        right: 2,
-                        top: 2,
-                        bottom: 0,
-                      ),
-                      child: buildEventTileContent(
-                        event: event,
-                        tileHeight: tileHeight,
-                        slotHeight: slotHeight,
-                        events: events,
-                        hasHandwriting: hasHandwriting,
-                      ),
-                    ),
-                  ],
-                ),
+          border: event.isRemoved
+              ? Border.all(
+                  color: primaryColor.withOpacity(0.6),
+                  width: 1,
+                  style: BorderStyle.solid,
+                )
+              : null,
+        ),
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: [
+            Positioned.fill(
+              child: _buildColorBackground(
+                colors,
+                event.isRemoved ? 0.3 : 0.75,
+                hasHandwriting: hasHandwriting,
               ),
             ),
-          ),
+            Padding(
+              padding: EdgeInsets.only(
+                left: hasHandwriting ? 0 : 2,
+                right: 2,
+                top: slotHeight * 0.15,
+                bottom: 0,
+              ),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  buildEventTileContent(
+                    event: event,
+                    tileHeight: height,
+                    slotHeight: slotHeight,
+                    events: events,
+                    hasHandwriting: hasHandwriting,
+                  ),
+                  if (event.hasChargeItems)
+                    Positioned(
+                      top: -8,
+                      right: event.isChecked ? slotHeight * 0.7 - 1 : -1,
+                      child: Image.asset(
+                        'assets/images/green_dollar.png',
+                        width: slotHeight * 0.48,
+                        height: slotHeight * 0.48,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                  if (event.isChecked)
+                    Positioned(
+                      top: -8,
+                      right: -1,
+                      child: Image.asset(
+                        'assets/images/icons8-ok-96.png',
+                        width: slotHeight * 0.6,
+                        height: slotHeight * 0.6,
+                        fit: BoxFit.contain,
+                      ),
+                    ),
+                ],
+              ),
+            ),
+          ],
         ),
-        childWhenDragging: Opacity(opacity: 0.3, child: eventWidget),
-        onDragEnd: (details) {
-          // Drag ended, no action needed
-        },
-        child: eventWidget,
-      );
-    }
-
-    return eventWidget;
+      ),
+    );
   }
 
   /// Build event tile content with adaptive rendering based on height
@@ -415,6 +460,100 @@ class ScheduleEventTileHelper {
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
       ),
+    );
+  }
+}
+
+class _LongPressBoundaryGestureTile extends StatefulWidget {
+  const _LongPressBoundaryGestureTile({
+    super.key,
+    required this.isMenuOpen,
+    required this.onTap,
+    required this.onLongPress,
+    required this.onLongPressDragStart,
+    required this.onLongPressDragUpdate,
+    required this.onLongPressDragEnd,
+    required this.onLongPressDragCancel,
+    required this.canDrag,
+    required this.child,
+  });
+
+  final bool isMenuOpen;
+  final VoidCallback onTap;
+  final Function(Offset) onLongPress;
+  final Function(Offset, Rect) onLongPressDragStart;
+  final Function(Offset) onLongPressDragUpdate;
+  final Function(Offset) onLongPressDragEnd;
+  final VoidCallback onLongPressDragCancel;
+  final bool canDrag;
+  final Widget child;
+
+  @override
+  State<_LongPressBoundaryGestureTile> createState() =>
+      _LongPressBoundaryGestureTileState();
+}
+
+class _LongPressBoundaryGestureTileState
+    extends State<_LongPressBoundaryGestureTile> {
+  Rect? _longPressBounds;
+  var _hasExitedBounds = false;
+
+  void _resetLongPressTracking() {
+    _hasExitedBounds = false;
+    _longPressBounds = null;
+  }
+
+  void _captureBounds() {
+    final renderBox = context.findRenderObject() as RenderBox?;
+    if (renderBox != null && renderBox.hasSize) {
+      final topLeft = renderBox.localToGlobal(Offset.zero);
+      _longPressBounds = topLeft & renderBox.size;
+    } else {
+      _longPressBounds = null;
+    }
+    _hasExitedBounds = false;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.isMenuOpen ? null : widget.onTap,
+      onLongPressStart: (details) {
+        if (!widget.isMenuOpen) {
+          widget.onLongPress(details.globalPosition);
+        }
+        _captureBounds();
+      },
+      onLongPressMoveUpdate: (details) {
+        if (!widget.canDrag) return;
+
+        if (_hasExitedBounds) {
+          widget.onLongPressDragUpdate(details.globalPosition);
+          return;
+        }
+
+        final bounds = _longPressBounds;
+        if (bounds == null) return;
+
+        if (!bounds.contains(details.globalPosition)) {
+          _hasExitedBounds = true;
+          widget.onLongPressDragStart(details.globalPosition, bounds);
+          widget.onLongPressDragUpdate(details.globalPosition);
+        }
+      },
+      onLongPressEnd: (details) {
+        if (_hasExitedBounds) {
+          widget.onLongPressDragEnd(details.globalPosition);
+        }
+        _resetLongPressTracking();
+      },
+      onLongPressCancel: () {
+        if (_hasExitedBounds) {
+          widget.onLongPressDragCancel();
+        }
+        _resetLongPressTracking();
+      },
+      child: widget.child,
     );
   }
 }

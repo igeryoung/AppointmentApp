@@ -48,7 +48,7 @@ Use this checklist for real-device verification after unit tests pass.
 | Done | Auto Test | Operation | Expected Behavior |
 |---|---|---|---|
 | [V] | [ ] | In a selected book, create an event in schedule | Event appears at chosen time slot |
-| [ ] | [ ] | Edit event title/type and save | Updated values persist after reopening event |
+| [V] | [ ] | Edit event title/type and save | Updated values persist after reopening event |
 | [ ] | [ ] | Remove event with reason | Event is marked removed (not active in normal schedule flow) |
 | [ ] | [ ] | Change event time (reschedule) | Event appears at new slot; old slot no longer active |
 | [ ] | [ ] | Delete event permanently | Event is fully removed and cannot be reopened |

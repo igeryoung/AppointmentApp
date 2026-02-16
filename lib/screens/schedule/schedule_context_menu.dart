@@ -54,14 +54,17 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final screenSize = MediaQuery.of(context).size;
+    const menuVerticalGap = 4.0;
 
     // Determine if menu should appear above or below
     final showAbove = widget.position.dy > screenSize.height / 2;
 
     return Positioned(
       left: widget.position.dx.clamp(20.0, screenSize.width - 200),
-      top: showAbove ? null : widget.position.dy + 10,
-      bottom: showAbove ? screenSize.height - widget.position.dy + 10 : null,
+      top: showAbove ? null : widget.position.dy + menuVerticalGap,
+      bottom: showAbove
+          ? screenSize.height - widget.position.dy + menuVerticalGap
+          : null,
       child: Material(
         elevation: 8,
         borderRadius: BorderRadius.circular(8),

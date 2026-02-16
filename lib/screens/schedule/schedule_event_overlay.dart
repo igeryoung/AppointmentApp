@@ -15,6 +15,11 @@ class ScheduleEventOverlay extends StatelessWidget {
   final Color Function(BuildContext, EventType) getEventTypeColor;
   final void Function(Event) onEditEvent;
   final void Function(Event, Offset) onShowEventContextMenu;
+  final void Function(Event, Offset, Rect) onLongPressDragStart;
+  final void Function(Event, Offset) onLongPressDragUpdate;
+  final void Function(Event, Offset) onLongPressDragEnd;
+  final void Function(Event) onLongPressDragCancel;
+  final Event? draggingEvent;
   final Event? selectedEventForMenu;
 
   const ScheduleEventOverlay({
@@ -26,6 +31,11 @@ class ScheduleEventOverlay extends StatelessWidget {
     required this.getEventTypeColor,
     required this.onEditEvent,
     required this.onShowEventContextMenu,
+    required this.onLongPressDragStart,
+    required this.onLongPressDragUpdate,
+    required this.onLongPressDragEnd,
+    required this.onLongPressDragCancel,
+    required this.draggingEvent,
     required this.selectedEventForMenu,
   });
 
@@ -50,7 +60,8 @@ class ScheduleEventOverlay extends StatelessWidget {
     return Expanded(
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final availableWidth = constraints.maxWidth - 4; // Account for padding/borders
+          final availableWidth =
+              constraints.maxWidth - 4; // Account for padding/borders
 
           // Calculate event positions using the layout algorithm
           final positionedEvents = ScheduleLayoutUtils.calculateEventPositions(
@@ -63,7 +74,13 @@ class ScheduleEventOverlay extends StatelessWidget {
           final List<Widget> positionedWidgets = [];
 
           for (final positioned in positionedEvents) {
-            final leftPosition = positioned.horizontalPosition * positioned.width;
+            final leftPosition =
+                positioned.horizontalPosition * positioned.width;
+            final isBeingDragged =
+                draggingEvent != null &&
+                ((draggingEvent!.id != null &&
+                        draggingEvent!.id == positioned.event.id) ||
+                    identical(draggingEvent, positioned.event));
 
             positionedWidgets.add(
               Positioned(
@@ -78,7 +95,18 @@ class ScheduleEventOverlay extends StatelessWidget {
                   events: allEvents,
                   getEventTypeColor: getEventTypeColor,
                   onTap: () => onEditEvent(positioned.event),
-                  onLongPress: (offset) => onShowEventContextMenu(positioned.event, offset),
+                  onLongPress: (offset) =>
+                      onShowEventContextMenu(positioned.event, offset),
+                  onLongPressDragStart: (offset, bounds) =>
+                      onLongPressDragStart(positioned.event, offset, bounds),
+                  onLongPressDragUpdate: (offset) =>
+                      onLongPressDragUpdate(positioned.event, offset),
+                  onLongPressDragEnd: (offset) =>
+                      onLongPressDragEnd(positioned.event, offset),
+                  onLongPressDragCancel: () =>
+                      onLongPressDragCancel(positioned.event),
+                  canDrag: !positioned.event.isRemoved,
+                  isBeingDragged: isBeingDragged,
                   isMenuOpen: selectedEventForMenu?.id == positioned.event.id,
                   hasHandwriting: positioned.event.hasNote,
                   dottedBorderPainter: (color) => CustomPaint(
@@ -89,10 +117,7 @@ class ScheduleEventOverlay extends StatelessWidget {
             );
           }
 
-          return Stack(
-            clipBehavior: Clip.none,
-            children: positionedWidgets,
-          );
+          return Stack(clipBehavior: Clip.none, children: positionedWidgets);
         },
       ),
     );
