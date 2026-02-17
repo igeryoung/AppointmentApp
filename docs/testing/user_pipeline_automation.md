@@ -31,7 +31,11 @@ Default mode is `--full`.
 6. Event-detail trigger -> server -> return -> update.
 7. App bootstrap widget path.
 8. Live fixture provision (`create book -> create event`).
-9. Live server metadata roundtrip verification.
+9. Live server feature contract roundtrip verification.
+   - Event metadata + note continuity contracts.
+   - Book CRUD/archive/bundle contracts.
+   - Drawing save/update/delete contracts.
+   - Device session/credential gating contracts.
 
 ## Live Server Requirements
 

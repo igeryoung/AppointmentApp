@@ -239,7 +239,7 @@ Checklist Source: \`docs/testing/physical_device_test_checklist.md\`
 | 4. Note Behavior | Partial | Automated: record-shared note semantics, save/update/delete/batch/sync apply + event-detail save flow + has-note indicator scope (only events that actually edit note show note tag). Manual-only: handwriting UX validation on real touch device. |
 | 5. Drawing Behavior | Partial | Automated: save/update/load/clear/range preload/batch semantics plus 2-day page/window mapping regression checks (no previous-page leakage) in drawing and schedule layout utility tests. Manual-only: canvas interaction smoothness and visual fidelity on device. |
 | 6. Device Credentials & Session | Partial | Automated: save/get/replace credential behavior. Manual-only: repeated relaunch behavior on actual installed app binary. |
-| 7. Offline / Online Connectivity | Partial | Automated: server sync failure path and live metadata roundtrip (\`event_metadata_server_smoke_test.dart\`) when server env configured. Manual-only: airplane-mode OS-level toggling and UX messaging. |
+| 7. Offline / Online Connectivity | Partial | Automated: server-side credential gating and live feature roundtrip contracts (\`event_metadata_server_smoke_test.dart\`) when server env configured. Manual-only: airplane-mode OS-level toggling and UX messaging. |
 | 8. Performance Sanity (Manual) | Manual-only | Not automatable in current unit/integration test stack; requires physical profiling and user-perceived latency checks. |
 
 ## Manual-Only Items (Explicit)

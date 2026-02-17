@@ -185,12 +185,25 @@ Future<ResolvedFixture> resolveFixture({
   if (config.bookUuid != null &&
       config.eventId != null &&
       config.recordUuid != null) {
-    return ResolvedFixture(
-      bookUuid: config.bookUuid!,
-      eventId: config.eventId!,
-      recordUuid: config.recordUuid!,
-      isTemporary: false,
-    );
+    try {
+      final existing = await apiClient.fetchEvent(
+        bookUuid: config.bookUuid!,
+        eventId: config.eventId!,
+        deviceId: config.deviceId,
+        deviceToken: config.deviceToken,
+      );
+      if (existing != null) {
+        return ResolvedFixture(
+          bookUuid: config.bookUuid!,
+          eventId: config.eventId!,
+          recordUuid: config.recordUuid!,
+          isTemporary: false,
+        );
+      }
+    } catch (_) {
+      // If shared fixture is inaccessible in this environment, fallback to
+      // temporary fixture so integration contracts remain executable.
+    }
   }
 
   final suffix = DateTime.now().millisecondsSinceEpoch.toString();

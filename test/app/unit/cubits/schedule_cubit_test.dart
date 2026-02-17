@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/cubits/schedule_cubit.dart';
 import 'package:schedule_note_app/cubits/schedule_state.dart';
 import 'package:schedule_note_app/models/event.dart';
+import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/repositories/device_repository.dart';
 import 'package:schedule_note_app/repositories/event_repository.dart';
 import 'package:schedule_note_app/services/api_client.dart';
@@ -16,6 +17,9 @@ import 'package:schedule_note_app/services/time_service.dart';
 
 class _FakeEventRepository implements IEventRepository {
   bool getByDateRangeCalled = false;
+  int createCalls = 0;
+  int updateCalls = 0;
+  int deleteCalls = 0;
 
   @override
   Future<List<Event>> getByDateRange(
@@ -43,13 +47,14 @@ class _FakeEventRepository implements IEventRepository {
   }
 
   @override
-  Future<Event> create(Event event) {
-    throw UnimplementedError();
+  Future<Event> create(Event event) async {
+    createCalls += 1;
+    return event;
   }
 
   @override
-  Future<void> delete(String id) {
-    throw UnimplementedError();
+  Future<void> delete(String id) async {
+    deleteCalls += 1;
   }
 
   @override
@@ -107,8 +112,9 @@ class _FakeEventRepository implements IEventRepository {
   }
 
   @override
-  Future<Event> update(Event event) {
-    throw UnimplementedError();
+  Future<Event> update(Event event) async {
+    updateCalls += 1;
+    return event;
   }
 }
 
@@ -138,8 +144,11 @@ class _FakeApiClient extends ApiClient {
   final List<List<Map<String, dynamic>>> queuedResponses = [];
   final List<Object> queuedUpdateResults = [];
   final List<int?> updateRequestVersions = [];
+  final List<(DateTime, DateTime)> fetchWindows = [];
   Object? fetchError;
+  Object? createError;
   int fetchCount = 0;
+  int createCalls = 0;
 
   @override
   Future<List<Map<String, dynamic>>> fetchEventsByDateRange({
@@ -152,6 +161,7 @@ class _FakeApiClient extends ApiClient {
     bool includeTimeChanged = true,
   }) async {
     fetchCount++;
+    fetchWindows.add((startDate, endDate));
     if (fetchError != null) {
       throw fetchError!;
     }
@@ -181,6 +191,29 @@ class _FakeApiClient extends ApiClient {
       return next as Map<String, dynamic>;
     }
     throw UnimplementedError('No queued update result configured');
+  }
+
+  @override
+  Future<Map<String, dynamic>> createEvent({
+    required String bookUuid,
+    required Map<String, dynamic> eventData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    createCalls += 1;
+    if (createError != null) {
+      throw createError!;
+    }
+    return {
+      ...eventData,
+      'book_uuid': eventData['book_uuid'] ?? bookUuid,
+      'record_name': eventData['record_name'] ?? eventData['title'] ?? 'Alice',
+      'event_types': eventData['event_types'] ?? const ['consultation'],
+      'is_removed': false,
+      'is_checked': false,
+      'has_note': false,
+      'version': 1,
+    };
   }
 }
 
@@ -212,6 +245,26 @@ void main() {
       'has_note': false,
       'version': 1,
     };
+  }
+
+  Event buildInputEvent({
+    String id = 'event-new',
+    String title = 'Alice',
+    DateTime? startTime,
+  }) {
+    final start = startTime ?? fixedNow.add(const Duration(hours: 2));
+    return Event(
+      id: id,
+      bookUuid: 'book-1',
+      recordUuid: 'record-1',
+      title: title,
+      recordNumber: '001',
+      eventTypes: const [EventType.consultation],
+      startTime: start,
+      endTime: start.add(const Duration(minutes: 30)),
+      createdAt: start,
+      updatedAt: start,
+    );
   }
 
   setUp(() {
@@ -392,6 +445,173 @@ void main() {
     ],
     verify: (_) {
       expect(apiClient.updateRequestVersions, equals([1, 4]));
+    },
+  );
+
+  blocTest<ScheduleCubit, ScheduleState>(
+    'SCHEDULE-CUBIT-006: selecting a new date replaces in-memory events instead of accumulating old window data',
+    build: () {
+      deviceRepository.credentials = const DeviceCredentials(
+        deviceId: 'd1',
+        deviceToken: 't1',
+      );
+      apiClient.queuedResponses.add([
+        serverEventMap(eventId: 'event-1', startTime: fixedNow),
+        serverEventMap(
+          eventId: 'event-2',
+          startTime: fixedNow.add(const Duration(hours: 1)),
+        ),
+      ]);
+      apiClient.queuedResponses.add([
+        serverEventMap(
+          eventId: 'event-3',
+          startTime: fixedNow.add(const Duration(days: 3)),
+        ),
+      ]);
+      return buildCubit();
+    },
+    act: (cubit) async {
+      await cubit.initialize('book-1');
+      await cubit.selectDate(fixedNow.add(const Duration(days: 3)));
+    },
+    expect: () => [
+      isA<ScheduleLoading>(),
+      isA<ScheduleLoaded>().having((s) => s.events.length, 'initial size', 2),
+      isA<ScheduleRefreshing>().having(
+        (s) => s.events.length,
+        'refreshing stale size',
+        2,
+      ),
+      isA<ScheduleLoaded>().having(
+        (s) => s.events.map((e) => e.id).toList(),
+        'replaced ids',
+        ['event-3'],
+      ),
+    ],
+    verify: (_) {
+      expect(apiClient.fetchCount, 2);
+      expect(eventRepository.getByDateRangeCalled, isFalse);
+    },
+  );
+
+  blocTest<ScheduleCubit, ScheduleState>(
+    'SCHEDULE-CUBIT-007: createEvent() fails fast when credentials are missing',
+    build: buildCubit,
+    act: (cubit) async {
+      await cubit.initialize('book-1');
+      await cubit.createEvent(buildInputEvent());
+    },
+    expect: () => [
+      isA<ScheduleLoading>(),
+      isA<ScheduleError>().having(
+        (s) => s.message.contains('Device not registered'),
+        'initialize error',
+        true,
+      ),
+      isA<ScheduleError>().having(
+        (s) => s.message.contains('Device not registered'),
+        'create error',
+        true,
+      ),
+    ],
+    verify: (_) {
+      expect(apiClient.createCalls, 0);
+      expect(eventRepository.createCalls, 0);
+    },
+  );
+
+  blocTest<ScheduleCubit, ScheduleState>(
+    'SCHEDULE-CUBIT-008: server-side create failure stays in error state with no local write fallback',
+    build: () {
+      deviceRepository.credentials = const DeviceCredentials(
+        deviceId: 'd1',
+        deviceToken: 't1',
+      );
+      apiClient.queuedResponses.add([
+        serverEventMap(eventId: 'event-1', startTime: fixedNow),
+      ]);
+      apiClient.createError = Exception('network down');
+      return buildCubit();
+    },
+    act: (cubit) async {
+      await cubit.initialize('book-1');
+      await cubit.createEvent(buildInputEvent(id: 'event-create-offline'));
+    },
+    expect: () => [
+      isA<ScheduleLoading>(),
+      isA<ScheduleLoaded>(),
+      isA<ScheduleError>().having(
+        (s) => s.message.contains('network down'),
+        'create error',
+        true,
+      ),
+    ],
+    verify: (_) {
+      expect(apiClient.createCalls, 1);
+      expect(eventRepository.createCalls, 0);
+    },
+  );
+
+  blocTest<ScheduleCubit, ScheduleState>(
+    'SCHEDULE-CUBIT-009: initialize + repeated refreshFromServer() perform fresh server fetch each time',
+    build: () {
+      deviceRepository.credentials = const DeviceCredentials(
+        deviceId: 'd1',
+        deviceToken: 't1',
+      );
+      apiClient.queuedResponses.add([
+        serverEventMap(eventId: 'event-1', startTime: fixedNow),
+      ]);
+      apiClient.queuedResponses.add([
+        serverEventMap(
+          eventId: 'event-2',
+          startTime: fixedNow.add(const Duration(hours: 1)),
+        ),
+      ]);
+      apiClient.queuedResponses.add([
+        serverEventMap(
+          eventId: 'event-3',
+          startTime: fixedNow.add(const Duration(hours: 2)),
+        ),
+      ]);
+      return buildCubit();
+    },
+    act: (cubit) async {
+      await cubit.initialize('book-1');
+      await cubit.refreshFromServer();
+      await cubit.refreshFromServer();
+    },
+    expect: () => [
+      isA<ScheduleLoading>(),
+      isA<ScheduleLoaded>().having(
+        (s) => s.events.first.id,
+        'load 1',
+        'event-1',
+      ),
+      isA<ScheduleRefreshing>().having(
+        (s) => s.events.first.id,
+        'refreshing 1',
+        'event-1',
+      ),
+      isA<ScheduleLoaded>().having(
+        (s) => s.events.first.id,
+        'load 2',
+        'event-2',
+      ),
+      isA<ScheduleRefreshing>().having(
+        (s) => s.events.first.id,
+        'refreshing 2',
+        'event-2',
+      ),
+      isA<ScheduleLoaded>().having(
+        (s) => s.events.first.id,
+        'load 3',
+        'event-3',
+      ),
+    ],
+    verify: (_) {
+      expect(apiClient.fetchCount, 3);
+      expect(eventRepository.getByDateRangeCalled, isFalse);
     },
   );
 }
