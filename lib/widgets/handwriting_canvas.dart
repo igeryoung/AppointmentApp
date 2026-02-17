@@ -13,7 +13,7 @@ class HandwritingCanvas extends StatefulWidget {
   final List<Stroke> initialStrokes;
   final VoidCallback? onStrokesChanged;
   final String? currentEventUuid; // Event UUID for tracking stroke origin
-  final bool showOnlyCurrentEvent; // Filter to show only current event's strokes
+  final bool showOnlyCurrentEvent; // Focus current event by graying non-current strokes
   final void Function(List<String> erasedStrokeIds)? onStrokesErased; // Callback for erased stroke IDs
 
   const HandwritingCanvas({
@@ -705,6 +705,10 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
 /// Custom painter for rendering handwriting strokes
 class HandwritingPainter extends CustomPainter {
+  static const Color _deemphasizedStrokeColor = Color(0xFFBDBDBD);
+  static const double _maxDeemphasizedOpacity = 0.55;
+  static const double _minDeemphasizedOpacity = 0.28;
+
   final List<Stroke> strokes;
   final Stroke? currentStroke;
   final DrawingTool currentTool;
@@ -725,20 +729,24 @@ class HandwritingPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    // Filter strokes if showing only current event
-    final strokesToRender = showOnlyCurrentEvent && currentEventUuid != null
-        ? strokes.where((s) => s.eventUuid == currentEventUuid).toList()
-        : strokes;
-
     // Separate strokes by type for proper z-ordering
-    final highlighterStrokes = <Stroke>[];
-    final penStrokes = <Stroke>[];
+    final highlighterStrokes = <_RenderableStroke>[];
+    final penStrokes = <_RenderableStroke>[];
 
-    for (final stroke in strokesToRender) {
+    for (final stroke in strokes) {
+      final isDeemphasized = shouldGrayOutStroke(
+        stroke: stroke,
+        showOnlyCurrentEvent: showOnlyCurrentEvent,
+        currentEventUuid: currentEventUuid,
+      );
+      final renderable = _RenderableStroke(
+        stroke: stroke,
+        isDeemphasized: isDeemphasized,
+      );
       if (stroke.strokeType == StrokeType.highlighter) {
-        highlighterStrokes.add(stroke);
+        highlighterStrokes.add(renderable);
       } else {
-        penStrokes.add(stroke);
+        penStrokes.add(renderable);
       }
     }
 
@@ -754,7 +762,11 @@ class HandwritingPainter extends CustomPainter {
 
     // Draw current stroke being drawn (on appropriate layer)
     if (currentStroke != null) {
-      _drawStroke(canvas, currentStroke!, isCurrentStroke: true);
+      _drawStroke(
+        canvas,
+        _RenderableStroke(stroke: currentStroke!, isDeemphasized: false),
+        isCurrentStroke: true,
+      );
     }
 
     // Draw eraser circle indicator when in eraser mode and actively touching
@@ -778,8 +790,37 @@ class HandwritingPainter extends CustomPainter {
     }
   }
 
+  @visibleForTesting
+  static bool shouldGrayOutStroke({
+    required Stroke stroke,
+    required bool showOnlyCurrentEvent,
+    required String? currentEventUuid,
+  }) {
+    return showOnlyCurrentEvent &&
+        currentEventUuid != null &&
+        stroke.eventUuid != currentEventUuid;
+  }
+
+  @visibleForTesting
+  static Color resolveStrokeColor({
+    required Stroke stroke,
+    required bool grayOut,
+  }) {
+    final originalColor = Color(stroke.color);
+    if (!grayOut) {
+      return originalColor;
+    }
+
+    final clampedOpacity = math.max(
+      _minDeemphasizedOpacity,
+      math.min(originalColor.a, _maxDeemphasizedOpacity),
+    );
+    return _deemphasizedStrokeColor.withValues(alpha: clampedOpacity);
+  }
+
   /// Draw a single stroke
-  void _drawStroke(Canvas canvas, Stroke stroke, {bool isCurrentStroke = false}) {
+  void _drawStroke(Canvas canvas, _RenderableStroke renderable, {bool isCurrentStroke = false}) {
+    final stroke = renderable.stroke;
     if (stroke.points.isEmpty) return;
 
     // Debug log for current stroke being drawn
@@ -787,8 +828,13 @@ class HandwritingPainter extends CustomPainter {
       final firstPoint = stroke.points.first;
     }
 
+    final displayColor = resolveStrokeColor(
+      stroke: stroke,
+      grayOut: renderable.isDeemphasized,
+    );
+
     final paint = Paint()
-      ..color = Color(stroke.color)
+      ..color = displayColor
       ..strokeWidth = stroke.strokeWidth
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round
@@ -798,7 +844,7 @@ class HandwritingPainter extends CustomPainter {
       // Single point - draw as filled circle
       final point = stroke.points.first;
       final fillPaint = Paint()
-        ..color = Color(stroke.color)
+        ..color = displayColor
         ..style = PaintingStyle.fill;
 
       canvas.drawCircle(
@@ -832,6 +878,16 @@ class HandwritingPainter extends CustomPainter {
            oldDelegate.showOnlyCurrentEvent != showOnlyCurrentEvent ||
            oldDelegate.currentEventUuid != currentEventUuid;
   }
+}
+
+class _RenderableStroke {
+  final Stroke stroke;
+  final bool isDeemphasized;
+
+  const _RenderableStroke({
+    required this.stroke,
+    required this.isDeemphasized,
+  });
 }
 
 /// Drawing tools panel for handwriting canvas
