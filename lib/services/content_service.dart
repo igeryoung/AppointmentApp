@@ -151,14 +151,7 @@ class ContentService {
   /// In server-based architecture, notes are fetched from server via API
   /// This method is kept for backward compatibility but may return null
   Future<Note?> getCachedNote(String eventId) async {
-    try {
-      // In server-first architecture, we fetch via API
-      // Local cache is not used - data comes from server
-      final note = await _db.getNoteByEventId(eventId);
-      return note;
-    } catch (e) {
-      return null;
-    }
+    return null;
   }
 
   /// Get note with server-first strategy
@@ -416,8 +409,7 @@ class ContentService {
       // Fetch from server
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        // Try local database
-        return await _db.getScheduleDrawing(bookUuid, date, viewMode);
+        throw Exception('Device not registered');
       }
 
       final serverDrawing = await _apiClient.fetchDrawing(
@@ -434,12 +426,7 @@ class ContentService {
 
       return null;
     } catch (e) {
-      // Fallback to local database
-      try {
-        return await _db.getScheduleDrawing(bookUuid, date, viewMode);
-      } catch (dbError) {
-        return null;
-      }
+      rethrow;
     }
   }
 
@@ -497,9 +484,7 @@ class ContentService {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
       if (credentials == null) {
-        // Save locally only
-        await _db.saveDrawing(drawing);
-        return;
+        throw Exception('Device not registered');
       }
 
       // Transform drawing data to server API format
@@ -518,12 +503,7 @@ class ContentService {
         deviceToken: credentials.deviceToken,
       );
     } catch (e) {
-      // Save locally on error
-      try {
-        await _db.saveDrawing(drawing);
-      } catch (dbError) {
-        rethrow;
-      }
+      rethrow;
     }
   }
 
@@ -536,19 +516,17 @@ class ContentService {
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
-      if (credentials != null) {
-        // Delete from server
-        await _apiClient.deleteDrawing(
-          bookUuid: bookUuid,
-          date: date,
-          viewMode: viewMode,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
+      if (credentials == null) {
+        throw Exception('Device not registered');
       }
-
-      // Delete from local database
-      await _db.deleteScheduleDrawing(bookUuid, date, viewMode);
+      // Delete from server
+      await _apiClient.deleteDrawing(
+        bookUuid: bookUuid,
+        date: date,
+        viewMode: viewMode,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
     } catch (e) {
       rethrow;
     }

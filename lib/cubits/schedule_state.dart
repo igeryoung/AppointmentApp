@@ -44,7 +44,16 @@ class ScheduleLoaded extends ScheduleState {
   });
 
   @override
-  List<Object?> get props => [selectedDate, events, drawing, isOffline, showOldEvents, showDrawing, pendingNextAppointment, viewMode];
+  List<Object?> get props => [
+    selectedDate,
+    events,
+    drawing,
+    isOffline,
+    showOldEvents,
+    showDrawing,
+    pendingNextAppointment,
+    viewMode,
+  ];
 
   /// Create a copy with updated values
   ScheduleLoaded copyWith({
@@ -66,8 +75,48 @@ class ScheduleLoaded extends ScheduleState {
       isOffline: isOffline ?? this.isOffline,
       showOldEvents: showOldEvents ?? this.showOldEvents,
       showDrawing: showDrawing ?? this.showDrawing,
-      pendingNextAppointment: clearPendingNextAppointment ? null : (pendingNextAppointment ?? this.pendingNextAppointment),
+      pendingNextAppointment: clearPendingNextAppointment
+          ? null
+          : (pendingNextAppointment ?? this.pendingNextAppointment),
       viewMode: viewMode ?? this.viewMode,
+    );
+  }
+}
+
+/// Refreshing state - keeps existing data visible while re-fetching from server
+class ScheduleRefreshing extends ScheduleLoaded {
+  const ScheduleRefreshing({
+    required super.selectedDate,
+    required super.events,
+    super.drawing,
+    super.isOffline,
+    super.showOldEvents,
+    super.showDrawing,
+    super.pendingNextAppointment,
+    super.viewMode,
+  });
+
+  factory ScheduleRefreshing.fromLoaded(
+    ScheduleLoaded loaded, {
+    DateTime? selectedDate,
+    List<Event>? events,
+    ScheduleDrawing? drawing,
+    bool? isOffline,
+    bool? showOldEvents,
+    bool? showDrawing,
+    PendingNextAppointment? pendingNextAppointment,
+    int? viewMode,
+  }) {
+    return ScheduleRefreshing(
+      selectedDate: selectedDate ?? loaded.selectedDate,
+      events: events ?? loaded.events,
+      drawing: drawing ?? loaded.drawing,
+      isOffline: isOffline ?? loaded.isOffline,
+      showOldEvents: showOldEvents ?? loaded.showOldEvents,
+      showDrawing: showDrawing ?? loaded.showDrawing,
+      pendingNextAppointment:
+          pendingNextAppointment ?? loaded.pendingNextAppointment,
+      viewMode: viewMode ?? loaded.viewMode,
     );
   }
 }

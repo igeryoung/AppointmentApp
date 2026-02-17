@@ -1,46 +1,30 @@
 import 'dart:async';
-import 'package:flutter/foundation.dart';
 import '../models/schedule_drawing.dart';
-import '../repositories/drawing_repository.dart';
-import '../repositories/drawing_repository_impl.dart';
 import '../repositories/device_repository.dart';
 import 'api_client.dart';
 
-/// DrawingContentService - Manages schedule drawings with cache-first strategy
+/// DrawingContentService - Manages schedule drawings with server-only strategy
 ///
 /// Responsibilities:
-/// - Fetch drawings from cache or server
+/// - Fetch drawings from server
 /// - Save drawings with race condition prevention (queued saves)
-/// - Delete drawings from cache and server
-/// - Preload drawings for performance
+/// - Delete drawings from server
 class DrawingContentService {
   final ApiClient _apiClient;
-  final IDrawingRepository _drawingRepository;
   final IDeviceRepository _deviceRepository;
 
   // RACE CONDITION FIX: Save operation queue to serialize drawing saves
   final List<Future<void> Function()> _drawingSaveQueue = [];
   bool _isProcessingDrawingSaveQueue = false;
 
-  DrawingContentService(
-    this._apiClient,
-    this._drawingRepository,
-    this._deviceRepository,
-  );
+  DrawingContentService(this._apiClient, this._deviceRepository);
 
   // ===================
   // Get Operations
   // ===================
 
-  /// Get drawing with cache-first strategy
-  ///
-  /// Flow:
-  /// 1. Check cache → if exists → return
-  /// 2. Fetch from server:
-  ///    - Success → update cache → return
-  ///    - Failure → return cached (if exists) or null
-  ///
-  /// [forceRefresh] skips cache and forces server fetch
+  /// Get drawing from server.
+  /// [forceRefresh] is kept for compatibility and ignored in server-only mode.
   Future<ScheduleDrawing?> getDrawing({
     required String bookUuid,
     required DateTime date,
@@ -48,20 +32,9 @@ class DrawingContentService {
     bool forceRefresh = false,
   }) async {
     try {
-      // Step 1: Check cache (unless forceRefresh)
-      if (!forceRefresh) {
-        final cachedDrawing = await (_drawingRepository as DrawingRepositoryImpl)
-            .getCachedWithViewMode(bookUuid, date, viewMode);
-        if (cachedDrawing != null) {
-          return cachedDrawing;
-        }
-      }
-
-      // Step 2: Fetch from server
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        return await (_drawingRepository as DrawingRepositoryImpl)
-            .getCachedWithViewMode(bookUuid, date, viewMode);
+        throw Exception('Device not registered');
       }
 
       final serverDrawing = await _apiClient.fetchDrawing(
@@ -73,26 +46,12 @@ class DrawingContentService {
       );
 
       if (serverDrawing != null) {
-        // Parse and save to cache
-        final drawing = ScheduleDrawing.fromMap(serverDrawing);
-        await _drawingRepository.saveToCache(drawing);
-        return drawing;
+        return ScheduleDrawing.fromMap(serverDrawing);
       }
 
       return null;
     } catch (e) {
-
-      // Fallback to cache
-      try {
-        final cachedDrawing = await (_drawingRepository as DrawingRepositoryImpl)
-            .getCachedWithViewMode(bookUuid, date, viewMode);
-        if (cachedDrawing != null) {
-          return cachedDrawing;
-        }
-      } catch (cacheError) {
-      }
-
-      return null;
+      rethrow;
     }
   }
 
@@ -100,7 +59,7 @@ class DrawingContentService {
   // Save Operations
   // ===================
 
-  /// Save drawing (update server and cache)
+  /// Save drawing to server
   /// RACE CONDITION FIX: Uses queue to serialize save operations
   Future<void> saveDrawing(ScheduleDrawing drawing) async {
     // Create a completer to wait for the queued operation to complete
@@ -134,8 +93,7 @@ class DrawingContentService {
         final operation = _drawingSaveQueue.removeAt(0);
         try {
           await operation();
-        } catch (e) {
-        }
+        } catch (e) {}
       }
       _isProcessingDrawingSaveQueue = false;
     });
@@ -143,15 +101,17 @@ class DrawingContentService {
 
   /// Internal save drawing implementation (called from queue)
   /// RACE CONDITION FIX: Handles version conflicts with retry logic
-  Future<void> _saveDrawingInternal(ScheduleDrawing drawing, {int retryCount = 0}) async {
+  Future<void> _saveDrawingInternal(
+    ScheduleDrawing drawing, {
+    int retryCount = 0,
+  }) async {
     const maxRetries = 3;
 
     try {
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
       if (credentials == null) {
-        await _drawingRepository.saveToCache(drawing);
-        return;
+        throw Exception('Device not registered');
       }
 
       // Save to server
@@ -162,25 +122,17 @@ class DrawingContentService {
         if (drawing.id != null) 'version': drawing.version,
       };
 
-
-      final serverResponse = await _apiClient.saveDrawing(
+      await _apiClient.saveDrawing(
         bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
 
-      // Update drawing with new version from server response
-      final newVersion = serverResponse['version'] as int? ?? drawing.version;
-      final updatedDrawing = drawing.copyWith(version: newVersion);
-
-      // Save to cache with updated version
-      await _drawingRepository.saveToCache(updatedDrawing);
-
+      // Keep server call for authoritative write; no local cache state is stored.
     } catch (e) {
       // RACE CONDITION FIX: Detect version conflicts and retry with server version
       if (e is ApiConflictException && retryCount < maxRetries) {
-
         try {
           // Get credentials for retry
           final retryCredentials = await _deviceRepository.getCredentials();
@@ -213,22 +165,15 @@ class DrawingContentService {
               updatedAt: DateTime.now(),
             );
 
-
             // Retry with server version
-            return await _saveDrawingInternal(mergedDrawing, retryCount: retryCount + 1);
-          } else {
+            return await _saveDrawingInternal(
+              mergedDrawing,
+              retryCount: retryCount + 1,
+            );
           }
-        } catch (retryError) {
-        }
+        } catch (retryError) {}
       }
-
-
-      // Still save to cache for display
-      try {
-        await _drawingRepository.saveToCache(drawing);
-      } catch (cacheError) {
-        rethrow;
-      }
+      rethrow;
     }
   }
 
@@ -236,7 +181,7 @@ class DrawingContentService {
   // Delete Operations
   // ===================
 
-  /// Delete drawing (from server and cache)
+  /// Delete drawing from server.
   Future<void> deleteDrawing({
     required String bookUuid,
     required DateTime date,
@@ -245,21 +190,17 @@ class DrawingContentService {
     try {
       // Get credentials
       final credentials = await _deviceRepository.getCredentials();
-      if (credentials != null) {
-        // Delete from server
-        await _apiClient.deleteDrawing(
-          bookUuid: bookUuid,
-          date: date,
-          viewMode: viewMode,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
+      if (credentials == null) {
+        throw Exception('Device not registered');
       }
-
-      // Delete from cache
-      await (_drawingRepository as DrawingRepositoryImpl)
-          .deleteCacheWithViewMode(bookUuid, date, viewMode);
-
+      // Delete from server
+      await _apiClient.deleteDrawing(
+        bookUuid: bookUuid,
+        date: date,
+        viewMode: viewMode,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
     } catch (e) {
       rethrow;
     }
@@ -269,40 +210,10 @@ class DrawingContentService {
   // Batch Operations
   // ===================
 
-  /// Preload drawings for a date range (for performance)
-  ///
-  /// Does not block, returns immediately
+  /// Preload drawings is disabled in server-only mode.
   Future<void> preloadDrawings({
     required String bookUuid,
     required DateTime startDate,
     required DateTime endDate,
-  }) async {
-
-    try {
-      final credentials = await _deviceRepository.getCredentials();
-      if (credentials == null) {
-        return;
-      }
-
-      final serverDrawings = await _apiClient.batchFetchDrawings(
-        bookUuid: bookUuid,
-        startDate: startDate,
-        endDate: endDate,
-        deviceId: credentials.deviceId,
-        deviceToken: credentials.deviceToken,
-      );
-
-      // Save each to cache
-      for (final drawingData in serverDrawings) {
-        try {
-          final drawing = ScheduleDrawing.fromMap(drawingData);
-          await _drawingRepository.saveToCache(drawing);
-        } catch (e) {
-        }
-      }
-
-    } catch (e) {
-      // Don't throw - preload is best-effort
-    }
-  }
+  }) async {}
 }

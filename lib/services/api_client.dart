@@ -295,6 +295,21 @@ class ApiClient {
       return json['event'] as Map<String, dynamic>;
     }
 
+    if (response.statusCode == 409) {
+      String message = 'Event version conflict';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        message = body['message'] as String? ?? message;
+      } catch (_) {
+        // Keep fallback message if response body isn't JSON.
+      }
+      throw ApiConflictException(
+        message,
+        statusCode: 409,
+        responseBody: response.body,
+      );
+    }
+
     throw ApiException(
       'Update event failed: ${response.statusCode}',
       statusCode: response.statusCode,

@@ -2,8 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 
 import '../../../models/schedule_drawing.dart';
-import '../../../services/database_service_interface.dart';
-import '../../../services/database/prd_database_service.dart';
 import '../../../services/content_service.dart';
 import '../../../services/time_service.dart';
 import '../../../utils/schedule/schedule_layout_utils.dart';
@@ -13,11 +11,10 @@ import '../../../widgets/handwriting_canvas.dart';
 ///
 /// Handles:
 /// - Canvas key management for multi-page drawings
-/// - Loading drawings (cache-first with server fallback)
+/// - Loading drawings from server
 /// - Saving drawings with debouncing and race condition prevention
 /// - Version tracking for optimistic locking
 class ScheduleDrawingService {
-  final IDatabaseService _dbService;
   ContentService? _contentService;
   final String bookUuid;
   final VoidCallback onDrawingChanged;
@@ -37,12 +34,10 @@ class ScheduleDrawingService {
   int _drawingLoadGeneration = 0;
 
   ScheduleDrawingService({
-    required IDatabaseService dbService,
     required this.bookUuid,
     required this.onDrawingChanged,
     ContentService? contentService,
-  }) : _dbService = dbService,
-       _contentService = contentService;
+  }) : _contentService = contentService;
 
   /// Get the current drawing
   ScheduleDrawing? get currentDrawing => _currentDrawing;
@@ -93,7 +88,7 @@ class ScheduleDrawingService {
         viewMode: viewMode,
       );
 
-      // Use ContentService for cache-first strategy with server fallback
+      // Use ContentService (server-only)
       ScheduleDrawing? drawing;
       if (_contentService != null) {
         drawing = await _contentService!.getDrawing(
@@ -102,13 +97,8 @@ class ScheduleDrawingService {
           viewMode: viewMode,
           forceRefresh: false,
         );
-      } else if (_dbService is PRDDatabaseService) {
-        // Fallback to direct database access
-        drawing = await _dbService.getDrawing(
-          bookUuid,
-          effectiveDate,
-          viewMode,
-        );
+      } else {
+        throw Exception('ContentService is not initialized');
       }
 
       // RACE CONDITION FIX: Check if this load is still valid
@@ -227,7 +217,7 @@ class ScheduleDrawingService {
         updatedAt: now,
       );
 
-      // Use ContentService or fallback to database
+      // Use ContentService (server-only)
       if (_contentService != null) {
         await _contentService!.saveDrawing(drawing);
 
@@ -247,37 +237,9 @@ class ScheduleDrawingService {
           return;
         }
 
-        // Update current drawing state
-        if (_dbService is PRDDatabaseService) {
-          final savedDrawing = await _dbService.getDrawing(
-            bookUuid,
-            effectiveDate,
-            viewMode,
-          );
-          _currentDrawing = savedDrawing ?? drawing;
-        } else {
-          _currentDrawing = drawing;
-        }
-      } else if (_dbService is PRDDatabaseService) {
-        final savedDrawing = await _dbService.saveDrawing(drawing);
-
-        // RACE CONDITION FIX: Verify date hasn't changed during save
-        final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(
-          selectedDate,
-          viewMode: viewMode,
-        );
-        if (effectiveDateAtStart != effectiveDateAfterSave) {
-          return;
-        }
-
-        // Race condition check - canvas version
-        final currentStateAfterSave = canvasKey.currentState;
-        if (currentStateAfterSave != null &&
-            currentStateAfterSave.canvasVersion != currentCanvasVersion) {
-          return;
-        }
-
-        _currentDrawing = savedDrawing;
+        _currentDrawing = drawing;
+      } else {
+        throw Exception('ContentService is not initialized');
       }
 
       _lastSavedCanvasVersion = currentCanvasVersion;

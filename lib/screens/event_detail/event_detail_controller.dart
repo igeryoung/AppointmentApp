@@ -1305,11 +1305,11 @@ class EventDetailController {
           return serverNote;
         }
       } catch (e) {
-        // Ignore server errors and fall back to local cache.
+        return null;
       }
     }
 
-    return await prdDb.getNoteByRecordUuid(recordUuid);
+    return null;
   }
 
   /// Check for existing person note when record number is set (for NEW events only)
@@ -1435,7 +1435,7 @@ class EventDetailController {
     // For existing events, they're already loaded. For new events, they'll be
     // loaded after the event is saved and the recordUuid is established.
 
-    // Load person note (prefer server version, fallback to local)
+    // Load person note from server.
     try {
       final noteToLoad = await _fetchExistingNoteForRecordNumber(
         recordNumber: recordNumber,

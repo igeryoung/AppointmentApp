@@ -88,7 +88,6 @@ class ScheduleController extends ChangeNotifier {
   /// Initialize services and load initial data.
   Future<void> initialize(BuildContext context) async {
     _drawingService = ScheduleDrawingService(
-      dbService: _dbService,
       bookUuid: _bookUuid,
       contentService: _contentService,
       onDrawingChanged: () => notifyListeners(),

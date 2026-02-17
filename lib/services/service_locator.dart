@@ -76,10 +76,7 @@ Future<void> setupServices({required String serverUrl}) async {
   // Phase 4 Cubits - Factories (each screen gets fresh instance)
   // BookListCubit
   getIt.registerFactory<BookListCubit>(
-    () => BookListCubit(
-      getIt<IBookRepository>(),
-      getIt<BookOrderService>(),
-    ),
+    () => BookListCubit(getIt<IBookRepository>(), getIt<BookOrderService>()),
   );
 
   // Register content services with the ApiClient
@@ -112,7 +109,6 @@ Future<void> registerContentServices(ApiClient apiClient) async {
     getIt.registerLazySingleton<NoteContentService>(
       () => NoteContentService(
         apiClient,
-        getIt<INoteRepository>(),
         getIt<IEventRepository>(),
         getIt<IDeviceRepository>(),
       ),
@@ -122,11 +118,7 @@ Future<void> registerContentServices(ApiClient apiClient) async {
       getIt.unregister<DrawingContentService>();
     }
     getIt.registerLazySingleton<DrawingContentService>(
-      () => DrawingContentService(
-        apiClient,
-        getIt<IDrawingRepository>(),
-        getIt<IDeviceRepository>(),
-      ),
+      () => DrawingContentService(apiClient, getIt<IDeviceRepository>()),
     );
 
     // Register Phase 4 cubits that depend on content services

@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../cubits/schedule_cubit.dart';
@@ -11,6 +13,7 @@ import '../services/service_locator.dart';
 import '../utils/schedule/schedule_layout_utils.dart';
 import '../widgets/schedule/drawing_toolbar.dart';
 import '../widgets/schedule/fab_menu.dart';
+import '../navigation/app_route_observer.dart';
 import 'schedule/schedule_body.dart';
 import 'schedule/schedule_controller.dart';
 
@@ -25,9 +28,13 @@ class ScheduleScreen extends StatefulWidget {
 }
 
 class _ScheduleScreenState extends State<ScheduleScreen>
-    with WidgetsBindingObserver {
+    with WidgetsBindingObserver, RouteAware {
   late final IDatabaseService _dbService;
   late final ScheduleController _controller;
+  ModalRoute<dynamic>? _currentRoute;
+  Timer? _foregroundSyncTimer;
+
+  static const Duration _foregroundSyncInterval = Duration(seconds: 30);
 
   @override
   void initState() {
@@ -43,16 +50,82 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   }
 
   @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null && route != _currentRoute) {
+      if (_currentRoute != null) {
+        appRouteObserver.unsubscribe(this);
+      }
+      _currentRoute = route;
+      appRouteObserver.subscribe(this, route);
+    }
+  }
+
+  @override
   void dispose() {
+    _stopForegroundSync();
+    appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
   }
 
   @override
+  void didPush() {
+    _refreshSchedule();
+    _startForegroundSync();
+  }
+
+  @override
+  void didPopNext() {
+    _refreshSchedule();
+    _startForegroundSync();
+  }
+
+  @override
+  void didPushNext() {
+    _stopForegroundSync();
+  }
+
+  @override
+  void didPop() {
+    _stopForegroundSync();
+  }
+
+  @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     super.didChangeAppLifecycleState(state);
     _controller.handleLifecycle(state, context);
+    if (state == AppLifecycleState.resumed) {
+      _refreshSchedule();
+      _startForegroundSync();
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached ||
+        state == AppLifecycleState.hidden) {
+      _stopForegroundSync();
+    }
+  }
+
+  void _refreshSchedule() {
+    if (!mounted) return;
+    context.read<ScheduleCubit>().refreshFromServer();
+  }
+
+  void _startForegroundSync() {
+    _foregroundSyncTimer?.cancel();
+    _foregroundSyncTimer = Timer.periodic(_foregroundSyncInterval, (_) {
+      if (!mounted) return;
+      final route = ModalRoute.of(context);
+      if (route?.isCurrent != true) return;
+      context.read<ScheduleCubit>().refreshFromServer();
+    });
+  }
+
+  void _stopForegroundSync() {
+    _foregroundSyncTimer?.cancel();
+    _foregroundSyncTimer = null;
   }
 
   @override
@@ -77,9 +150,8 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                 await _controller.saveDrawing(context);
               }
 
-              if (mounted) {
-                Navigator.of(context).pop();
-              }
+              if (!mounted) return;
+              Navigator.of(this.context).pop();
             },
             child: Stack(
               children: [
@@ -231,15 +303,24 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                       ),
                     ),
                     actions: [
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 8.0),
-                        child: SizedBox(
-                          width: 20,
-                          height: 20,
-                          child: _controller.isNavigating
-                              ? const CircularProgressIndicator(strokeWidth: 2)
-                              : const SizedBox.shrink(),
-                        ),
+                      BlocBuilder<ScheduleCubit, ScheduleState>(
+                        builder: (context, state) {
+                          final isRefreshing = state is ScheduleRefreshing;
+                          return Padding(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8.0,
+                            ),
+                            child: SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: (_controller.isNavigating || isRefreshing)
+                                  ? const CircularProgressIndicator(
+                                      strokeWidth: 2,
+                                    )
+                                  : const SizedBox.shrink(),
+                            ),
+                          );
+                        },
                       ),
                       BlocBuilder<ScheduleCubit, ScheduleState>(
                         builder: (context, state) {

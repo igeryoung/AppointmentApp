@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'l10n/app_localizations.dart';
+import 'navigation/app_route_observer.dart';
 import 'screens/book_list/book_list_screen.dart';
 import 'screens/server_setup_screen.dart';
 import 'services/database/prd_database_service.dart';
@@ -29,14 +30,12 @@ class ScheduleNoteApp extends StatelessWidget {
       theme: ThemeData(
         primarySwatch: Colors.blue,
         useMaterial3: true,
-        appBarTheme: const AppBarTheme(
-          centerTitle: true,
-          elevation: 0,
-        ),
+        appBarTheme: const AppBarTheme(centerTitle: true, elevation: 0),
         // Mobile-optimized theme
         visualDensity: VisualDensity.adaptivePlatformDensity,
       ),
       home: const _AppInitializer(),
+      navigatorObservers: [appRouteObserver],
       debugShowCheckedModeBanner: false,
     );
   }
@@ -53,7 +52,6 @@ class _AppInitializer extends StatefulWidget {
 class _AppInitializerState extends State<_AppInitializer> {
   bool _isLoading = true;
   bool _isServerConfigured = false;
-  String? _serverUrl;
 
   @override
   void initState() {
@@ -75,7 +73,6 @@ class _AppInitializerState extends State<_AppInitializer> {
         await setupServices(serverUrl: serverUrl);
         setState(() {
           _isServerConfigured = true;
-          _serverUrl = serverUrl;
           _isLoading = false;
         });
       } else {
@@ -97,11 +94,7 @@ class _AppInitializerState extends State<_AppInitializer> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const Scaffold(
-        body: Center(
-          child: CircularProgressIndicator(),
-        ),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
 
     if (_isServerConfigured) {

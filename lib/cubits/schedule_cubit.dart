@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../models/event.dart';
 import '../models/schedule_drawing.dart';
@@ -104,7 +103,13 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         ? currentState.drawing
         : null;
 
-    emit(const ScheduleLoading());
+    if (currentState is ScheduleLoaded) {
+      emit(
+        ScheduleRefreshing.fromLoaded(currentState, selectedDate: selectedDate),
+      );
+    } else {
+      emit(const ScheduleLoading());
+    }
 
     try {
       // Load events for the current view mode window (2-day or 3-day)
@@ -114,48 +119,26 @@ class ScheduleCubit extends Cubit<ScheduleState> {
 
       List<Event> events;
 
-      // Server-based fetching (server-only mode)
+      // Server-based fetching (strict server-only mode)
       final apiClient = _apiClient;
       final deviceRepository = _deviceRepository;
-      if (apiClient != null && deviceRepository != null) {
-        final credentials = await deviceRepository.getCredentials();
-        if (credentials != null) {
-          try {
-            final serverEvents = await apiClient.fetchEventsByDateRange(
-              bookUuid: _currentBookUuid!,
-              startDate: windowStart,
-              endDate: windowEnd,
-              deviceId: credentials.deviceId,
-              deviceToken: credentials.deviceToken,
-            );
-            events = serverEvents
-                .map((e) => Event.fromServerResponse(e))
-                .toList();
-          } catch (e) {
-            // Fallback to local repository on server error
-            debugPrint('Server fetch failed, falling back to local: $e');
-            events = await _eventRepository.getByDateRange(
-              _currentBookUuid!,
-              windowStart,
-              windowEnd,
-            );
-          }
-        } else {
-          // No credentials, use local repository
-          events = await _eventRepository.getByDateRange(
-            _currentBookUuid!,
-            windowStart,
-            windowEnd,
-          );
-        }
-      } else {
-        // No API client configured, use local repository
-        events = await _eventRepository.getByDateRange(
-          _currentBookUuid!,
-          windowStart,
-          windowEnd,
-        );
+      if (apiClient == null || deviceRepository == null) {
+        throw Exception('Server API is not configured');
       }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        throw Exception('Device not registered');
+      }
+
+      final serverEvents = await apiClient.fetchEventsByDateRange(
+        bookUuid: _currentBookUuid!,
+        startDate: windowStart,
+        endDate: windowEnd,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      events = serverEvents.map((e) => Event.fromServerResponse(e)).toList();
 
       // RACE CONDITION FIX: Check if this request is still valid
       if (generation != null && generation != _currentRequestGeneration) {
@@ -195,6 +178,12 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       showOldEvents: true,
       generation: requestGeneration,
     );
+  }
+
+  /// Force re-fetch from server for current selected date window.
+  Future<void> refreshFromServer() async {
+    _currentRequestGeneration++;
+    await loadEvents(generation: _currentRequestGeneration);
   }
 
   // ===================
@@ -270,14 +259,12 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         throw Exception('Device not registered');
       }
 
-      final updatedRaw = await apiClient.updateEvent(
+      final updatedFromServer = await _updateEventWithLastWriteWins(
+        event,
         bookUuid: event.bookUuid,
-        eventId: event.id!,
-        eventData: event.toMap(),
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
-      final updatedFromServer = Event.fromServerResponse(updatedRaw);
 
       final currentState = state;
       if (currentState is ScheduleLoaded) {
@@ -289,6 +276,48 @@ class ScheduleCubit extends Cubit<ScheduleState> {
       }
     } catch (e) {
       emit(ScheduleError('Failed to update event: $e'));
+    }
+  }
+
+  Future<Event> _updateEventWithLastWriteWins(
+    Event event, {
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+    int retryCount = 0,
+  }) async {
+    final apiClient = _apiClient;
+    if (apiClient == null) {
+      throw Exception('Server API is not configured');
+    }
+
+    try {
+      final updatedRaw = await apiClient.updateEvent(
+        bookUuid: bookUuid,
+        eventId: event.id!,
+        eventData: event.toMap(),
+        deviceId: deviceId,
+        deviceToken: deviceToken,
+      );
+      return Event.fromServerResponse(updatedRaw);
+    } on ApiConflictException catch (e) {
+      if (retryCount >= 1) {
+        rethrow;
+      }
+
+      final serverVersion = e.serverVersion;
+      final retryEvent = event.copyWith(
+        version: (serverVersion ?? event.version) + 1,
+        updatedAt: _timeService.now(),
+      );
+
+      return _updateEventWithLastWriteWins(
+        retryEvent,
+        bookUuid: bookUuid,
+        deviceId: deviceId,
+        deviceToken: deviceToken,
+        retryCount: retryCount + 1,
+      );
     }
   }
 
