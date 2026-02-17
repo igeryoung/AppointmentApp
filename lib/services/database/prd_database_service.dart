@@ -487,6 +487,7 @@ class PRDDatabaseService
     required List<EventType> eventTypes,
     required DateTime startTime,
     DateTime? endTime,
+    String? eventId,
   }) async {
     // Get or create record
     final record = await getOrCreateRecord(
@@ -500,6 +501,7 @@ class PRDDatabaseService
 
     final now = DateTime.now();
     final event = Event(
+      id: eventId,
       bookUuid: bookUuid,
       recordUuid: record.recordUuid!,
       title: title,

@@ -715,11 +715,18 @@ void main() {
       ]);
 
       final createdEvent = await createController.saveEvent();
+      expect(createdEvent.id, 'event-create-reenter-1');
       expect(createdEvent.recordNumber, isEmpty);
       expect(createdEvent.recordUuid, isNotEmpty);
       expect(fakeNoteSyncAdapter.saveCalls, 1);
       expect(fakeNoteSyncAdapter.lastSavedNote, isNotNull);
       final createdNote = fakeNoteSyncAdapter.lastSavedNote!;
+      final createdStrokeEventUuids = createdNote.pages
+          .expand((page) => page)
+          .map((stroke) => stroke.eventUuid)
+          .whereType<String>()
+          .toSet();
+      expect(createdStrokeEventUuids, contains(createdEvent.id));
       fakeNoteSyncAdapter.notesByRecordUuid[createdEvent.recordUuid] =
           createdNote;
 

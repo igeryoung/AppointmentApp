@@ -273,6 +273,7 @@ class EventDetailController {
           eventTypes: _state.selectedEventTypes,
           startTime: _state.startTime,
           endTime: _state.endTime,
+          eventId: event.id,
         );
 
         // Check for existing note for this record
