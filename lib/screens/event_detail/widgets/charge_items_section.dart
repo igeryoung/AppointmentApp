@@ -1,17 +1,17 @@
 import 'package:flutter/material.dart';
-import '../../../models/charge_item.dart';
+
 import '../../../l10n/app_localizations.dart';
+import '../../../models/charge_item.dart';
 import '../../../widgets/dialogs/charge_item_dialog.dart';
 import '../event_detail_controller.dart';
 
-/// Floating overlay section for managing charge items
-/// Displays as a collapsed header that expands into an overlay panel
-/// Charge items are linked to records (person-level), optionally filtered by event
-class ChargeItemsSection extends StatefulWidget {
+/// Summary row that opens a popup for charge item management.
+/// Charge items are linked to records (person-level), optionally filtered by event.
+class ChargeItemsSection extends StatelessWidget {
   final List<ChargeItem> chargeItems;
   final EventDetailController controller;
-  final bool hasRecordUuid; // Whether the event has a record_uuid set
-  final bool showOnlyThisEventItems; // Filter toggle state
+  final bool hasRecordUuid;
+  final bool showOnlyThisEventItems;
 
   const ChargeItemsSection({
     super.key,
@@ -21,343 +21,457 @@ class ChargeItemsSection extends StatefulWidget {
     required this.showOnlyThisEventItems,
   });
 
-  @override
-  State<ChargeItemsSection> createState() => _ChargeItemsSectionState();
-}
+  int get _totalAmount =>
+      chargeItems.fold(0, (sum, item) => sum + item.itemPrice);
+  int get _receivedAmount =>
+      chargeItems.fold(0, (sum, item) => sum + item.receivedAmount);
 
-class _ChargeItemsSectionState extends State<ChargeItemsSection> {
-  bool _isExpanded = false;
-  final GlobalKey _headerKey = GlobalKey();
-  final LayerLink _layerLink = LayerLink();
-  OverlayEntry? _overlayEntry;
-
-  int get _totalAmount => widget.chargeItems.fold(0, (sum, item) => sum + item.itemPrice);
-  int get _receivedAmount => widget.chargeItems.fold(0, (sum, item) => sum + item.receivedAmount);
-
-  void _toggleExpanded() {
-    if (_isExpanded) {
-      _closeOverlay();
-    } else {
-      _openOverlay();
-    }
-  }
-
-  void _openOverlay() {
-    if (_overlayEntry != null) return;
-    final overlay = Overlay.of(context);
-    if (overlay == null) return;
-
-    setState(() => _isExpanded = true);
-    _overlayEntry = _buildOverlayEntry();
-    overlay.insert(_overlayEntry!);
-  }
-
-  void _closeOverlay() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-
-    if (_isExpanded) {
-      setState(() => _isExpanded = false);
-    }
-  }
-
-  OverlayEntry _buildOverlayEntry() {
-    return OverlayEntry(
+  Future<void> _openChargeItemsPopup(BuildContext context) async {
+    await showModalBottomSheet<void>(
+      context: context,
+      isScrollControlled: true,
+      useSafeArea: true,
+      backgroundColor: Colors.transparent,
       builder: (context) {
-        final l10n = AppLocalizations.of(context)!;
-        final theme = Theme.of(context);
-        final headerRenderBox = _headerKey.currentContext?.findRenderObject() as RenderBox?;
-        final headerWidth = headerRenderBox?.size.width ?? MediaQuery.of(context).size.width;
+        return LayoutBuilder(
+          builder: (context, constraints) {
+            final sheetWidth = constraints.maxWidth >= 900
+                ? 820.0
+                : constraints.maxWidth >= 600
+                ? 620.0
+                : constraints.maxWidth;
 
-        return Stack(
-          children: [
-            Positioned.fill(
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onTap: _closeOverlay,
-                child: Container(
-                  color: Colors.transparent,
-                ),
-              ),
-            ),
-            CompositedTransformFollower(
-              link: _layerLink,
-              showWhenUnlinked: false,
-              offset: Offset.zero,
-              child: SizedBox(
-                width: headerWidth,
-                child: Material(
-                  elevation: 8,
-                  borderRadius: BorderRadius.circular(12),
-                  color: Colors.transparent,
-                  child: Container(
-                    decoration: BoxDecoration(
-                      color: theme.cardColor,
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: theme.colorScheme.primary.withOpacity(0.3),
-                        width: 2,
-                      ),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        // Header (same as collapsed state)
-                        InkWell(
-                          onTap: _toggleExpanded,
-                          borderRadius: const BorderRadius.vertical(top: Radius.circular(12)),
-                          child: Padding(
-                            padding: const EdgeInsets.all(16),
-                            child: Row(
-                              children: [
-                                Icon(
-                                  Icons.expand_more,
-                                  color: theme.colorScheme.primary,
-                                ),
-                                const SizedBox(width: 8),
-                                Text(
-                                  l10n.chargeItems,
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const Spacer(),
-                                Text(
-                                  'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
-                                  style: theme.textTheme.titleMedium?.copyWith(
-                                    color: theme.colorScheme.secondary,
-                                    fontWeight: FontWeight.w500,
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-
-                        const Divider(height: 1),
-
-                        // Filter toggle row
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                          child: Row(
-                            children: [
-                              Text(
-                                widget.showOnlyThisEventItems
-                                    ? 'This event only'
-                                    : 'All items',
-                                style: theme.textTheme.bodyMedium,
-                              ),
-                              const Spacer(),
-                              Switch(
-                                value: widget.showOnlyThisEventItems,
-                                onChanged: (_) => widget.controller.toggleChargeItemsFilter(),
-                              ),
-                            ],
-                          ),
-                        ),
-
-                        const Divider(height: 1),
-
-                        // Add button (at top of list)
-                        Padding(
-                          padding: const EdgeInsets.all(16),
-                          child: SizedBox(
-                            width: double.infinity,
-                            child: OutlinedButton.icon(
-                              onPressed: _addChargeItem,
-                              icon: const Icon(Icons.add),
-                              label: Text(l10n.addChargeItem),
-                            ),
-                          ),
-                        ),
-
-                        // Scrollable list of charge items
-                        if (widget.chargeItems.isNotEmpty)
-                          Container(
-                            constraints: const BoxConstraints(maxHeight: 300),
-                            child: ListView.builder(
-                              shrinkWrap: true,
-                              itemCount: widget.chargeItems.length,
-                              itemBuilder: (context, index) {
-                                final item = widget.chargeItems[index];
-                                return ListTile(
-                                  leading: Checkbox(
-                                    value: item.isPaid,
-                                    onChanged: (_) => _togglePaidStatus(index),
-                                  ),
-                                  title: Text(item.itemName),
-                                  subtitle: Text(
-                                    'NT\$${item.receivedAmount} / NT\$${item.itemPrice}',
-                                    style: theme.textTheme.bodyMedium?.copyWith(
-                                      color: item.isPaid
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.secondary,
-                                    ),
-                                  ),
-                                  trailing: Row(
-                                    mainAxisSize: MainAxisSize.min,
-                                    children: [
-                                      IconButton(
-                                        icon: const Icon(Icons.edit, size: 20),
-                                        onPressed: () => _editChargeItem(index),
-                                        tooltip: l10n.editChargeItemTitle,
-                                      ),
-                                      IconButton(
-                                        icon: const Icon(Icons.delete, size: 20),
-                                        onPressed: () => _deleteChargeItem(index),
-                                        tooltip: l10n.delete,
-                                      ),
-                                    ],
-                                  ),
-                                );
-                              },
-                            ),
-                          ),
-
-                        const SizedBox(height: 8),
-                      ],
+            return Align(
+              alignment: Alignment.center,
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(8, 12, 8, 12),
+                child: SizedBox(
+                  width: sheetWidth,
+                  child: FractionallySizedBox(
+                    heightFactor: 0.88,
+                    child: _ChargeItemsPopup(
+                      controller: controller,
+                      hasRecordUuid: hasRecordUuid,
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
+            );
+          },
         );
       },
     );
-  }
-
-  Future<T?> _runDialogWithOverlayPaused<T>(Future<T?> Function() dialogBuilder) async {
-    final wasExpanded = _isExpanded;
-    if (wasExpanded) {
-      _closeOverlay();
-    }
-
-    final result = await dialogBuilder();
-
-    if (wasExpanded && mounted && !_isExpanded) {
-      _openOverlay();
-    }
-
-    return result;
-  }
-
-  void _addChargeItem() async {
-    // Check if record_uuid is set (event must be saved first)
-    if (!widget.hasRecordUuid) {
-      final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber ?? 'Please save the event first to track charge items')),
-      );
-      return;
-    }
-
-    final result = await _runDialogWithOverlayPaused(
-      () => showDialog<ChargeItem>(
-        context: context,
-        builder: (context) => const ChargeItemDialog(),
-      ),
-    );
-
-    if (result != null) {
-      // Associate with this event if filter is set to show only this event's items
-      await widget.controller.addChargeItem(result, associateWithEvent: widget.showOnlyThisEventItems);
-    }
-  }
-
-  void _editChargeItem(int index) async {
-    final item = widget.chargeItems[index];
-
-    final result = await _runDialogWithOverlayPaused(
-      () => showDialog<ChargeItem>(
-        context: context,
-        builder: (context) => ChargeItemDialog(existingItem: item),
-      ),
-    );
-
-    if (result != null) {
-      // Preserve the ID from the original item
-      final updatedItem = result.copyWith(id: item.id);
-      await widget.controller.editChargeItem(updatedItem);
-    }
-  }
-
-  void _deleteChargeItem(int index) async {
-    final item = widget.chargeItems[index];
-    await widget.controller.deleteChargeItem(item);
-  }
-
-  void _togglePaidStatus(int index) async {
-    final item = widget.chargeItems[index];
-    await widget.controller.toggleChargeItemPaidStatus(item);
-  }
-
-  void _scheduleOverlayRebuild() {
-    if (!_isExpanded || _overlayEntry == null) return;
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !_isExpanded) return;
-      _overlayEntry?.markNeedsBuild();
-    });
-  }
-
-  @override
-  void didUpdateWidget(covariant ChargeItemsSection oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    _scheduleOverlayRebuild();
-  }
-
-  @override
-  void didChangeDependencies() {
-    super.didChangeDependencies();
-    _scheduleOverlayRebuild();
-  }
-
-  @override
-  void dispose() {
-    _overlayEntry?.remove();
-    _overlayEntry = null;
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
+    final progress = _totalAmount == 0
+        ? 0.0
+        : (_receivedAmount / _totalAmount).clamp(0.0, 1.0);
 
-    return CompositedTransformTarget(
-      link: _layerLink,
-      child: Card(
-        key: _headerKey,
-        margin: const EdgeInsets.symmetric(vertical: 8),
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      child: Material(
+        color: Colors.transparent,
         child: InkWell(
-          onTap: _toggleExpanded,
-          child: Padding(
-            padding: const EdgeInsets.all(16),
+          borderRadius: BorderRadius.circular(20),
+          onTap: () => _openChargeItemsPopup(context),
+          child: Ink(
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              gradient: LinearGradient(
+                colors: [
+                  theme.colorScheme.primary.withValues(alpha: 0.08),
+                  theme.colorScheme.secondary.withValues(alpha: 0.05),
+                ],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              border: Border.all(
+                color: theme.colorScheme.primary.withValues(alpha: 0.18),
+              ),
+            ),
+            child: SizedBox(
+              height: 62,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                child: Row(
+                  children: [
+                    Text(
+                      l10n.chargeItems,
+                      style: theme.textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Center(
+                            child: SizedBox(
+                              width: constraints.maxWidth * 0.8,
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(99),
+                                child: LinearProgressIndicator(
+                                  minHeight: 8,
+                                  value: progress,
+                                  backgroundColor: theme.colorScheme.primary
+                                      .withValues(alpha: 0.12),
+                                  valueColor: AlwaysStoppedAnimation<Color>(
+                                    theme.colorScheme.primary,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Text(
+                      'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
+                      style: theme.textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: theme.colorScheme.primary,
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => _openChargeItemsPopup(context),
+                      icon: const Icon(Icons.open_in_new_rounded, size: 19),
+                      tooltip: l10n.chargeItems,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ChargeItemsPopup extends StatefulWidget {
+  final EventDetailController controller;
+  final bool hasRecordUuid;
+
+  const _ChargeItemsPopup({
+    required this.controller,
+    required this.hasRecordUuid,
+  });
+
+  @override
+  State<_ChargeItemsPopup> createState() => _ChargeItemsPopupState();
+}
+
+class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
+  List<ChargeItem> get _chargeItems => widget.controller.state.chargeItems;
+  bool get _showOnlyThisEventItems =>
+      widget.controller.state.showOnlyThisEventItems;
+
+  int get _totalAmount =>
+      _chargeItems.fold(0, (sum, item) => sum + item.itemPrice);
+  int get _receivedAmount =>
+      _chargeItems.fold(0, (sum, item) => sum + item.receivedAmount);
+
+  void _refreshFromController() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  Future<void> _toggleFilter() async {
+    await widget.controller.toggleChargeItemsFilter();
+    _refreshFromController();
+  }
+
+  Future<void> _addChargeItem() async {
+    if (!widget.hasRecordUuid) {
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber)),
+      );
+      return;
+    }
+
+    final result = await showDialog<ChargeItem>(
+      context: context,
+      builder: (context) => const ChargeItemDialog(),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    await widget.controller.addChargeItem(
+      result,
+      associateWithEvent: _showOnlyThisEventItems,
+    );
+    _refreshFromController();
+  }
+
+  Future<void> _editChargeItem(ChargeItem item) async {
+    final result = await showDialog<ChargeItem>(
+      context: context,
+      builder: (context) => ChargeItemDialog(existingItem: item),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    await widget.controller.editChargeItem(result.copyWith(id: item.id));
+    _refreshFromController();
+  }
+
+  Future<void> _deleteChargeItem(ChargeItem item) async {
+    await widget.controller.deleteChargeItem(item);
+    _refreshFromController();
+  }
+
+  Future<void> _togglePaidStatus(ChargeItem item) async {
+    await widget.controller.toggleChargeItemPaidStatus(item);
+    _refreshFromController();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+    final theme = Theme.of(context);
+    final progress = _totalAmount == 0
+        ? 0.0
+        : (_receivedAmount / _totalAmount).clamp(0.0, 1.0);
+
+    return Material(
+      color: theme.colorScheme.surface,
+      borderRadius: BorderRadius.circular(28),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          Container(
+            width: 40,
+            height: 4,
+            decoration: BoxDecoration(
+              color: theme.colorScheme.outlineVariant,
+              borderRadius: BorderRadius.circular(99),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 10),
             child: Row(
               children: [
-                Icon(
-                  _isExpanded ? Icons.expand_more : Icons.chevron_right,
-                  color: theme.colorScheme.primary,
-                ),
-                const SizedBox(width: 8),
                 Text(
                   l10n.chargeItems,
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
+                  style: theme.textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.w700,
                   ),
                 ),
                 const Spacer(),
-                Text(
-                  'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
-                  style: theme.textTheme.titleMedium?.copyWith(
-                    color: theme.colorScheme.secondary,
-                    fontWeight: FontWeight.w500,
-                  ),
+                IconButton(
+                  onPressed: () => Navigator.of(context).pop(),
+                  icon: const Icon(Icons.close_rounded),
+                  tooltip: l10n.cancel,
                 ),
               ],
             ),
           ),
-        ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Container(
+              padding: const EdgeInsets.all(14),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.primaryContainer.withValues(
+                  alpha: 0.4,
+                ),
+                borderRadius: BorderRadius.circular(16),
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      Expanded(
+                        child: Text(
+                          'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
+                          style: theme.textTheme.titleMedium?.copyWith(
+                            color: theme.colorScheme.onPrimaryContainer,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        '${(progress * 100).round()}%',
+                        style: theme.textTheme.labelLarge?.copyWith(
+                          color: theme.colorScheme.onPrimaryContainer,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 8),
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(99),
+                    child: LinearProgressIndicator(
+                      minHeight: 8,
+                      value: progress,
+                      backgroundColor: theme.colorScheme.primary.withValues(
+                        alpha: 0.14,
+                      ),
+                      valueColor: AlwaysStoppedAnimation<Color>(
+                        theme.colorScheme.primary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(8, 6, 8, 4),
+            child: SwitchListTile.adaptive(
+              value: _showOnlyThisEventItems,
+              onChanged: (_) => _toggleFilter(),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 8),
+              title: Text(
+                _showOnlyThisEventItems ? 'This event only' : 'All items',
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 12),
+            child: SizedBox(
+              width: double.infinity,
+              child: FilledButton.icon(
+                onPressed: _addChargeItem,
+                icon: const Icon(Icons.add_rounded),
+                label: Text(l10n.addChargeItem),
+              ),
+            ),
+          ),
+          Expanded(
+            child: _chargeItems.isEmpty
+                ? Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text(
+                        l10n.addChargeItem,
+                        style: theme.textTheme.bodyMedium?.copyWith(
+                          color: theme.colorScheme.onSurfaceVariant,
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView.separated(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
+                    itemCount: _chargeItems.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 10),
+                    itemBuilder: (context, index) {
+                      final item = _chargeItems[index];
+                      final remainingAmount =
+                          (item.itemPrice - item.receivedAmount) < 0
+                          ? 0
+                          : (item.itemPrice - item.receivedAmount);
+
+                      return Container(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.circular(14),
+                          color: theme.colorScheme.surfaceContainerHighest
+                              .withValues(alpha: 0.35),
+                          border: Border.all(
+                            color: item.isPaid
+                                ? theme.colorScheme.primary.withValues(
+                                    alpha: 0.22,
+                                  )
+                                : theme.colorScheme.outlineVariant,
+                          ),
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+                          child: Row(
+                            children: [
+                              Checkbox(
+                                value: item.isPaid,
+                                onChanged: (_) => _togglePaidStatus(item),
+                              ),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      item.itemName,
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: theme.textTheme.titleSmall
+                                          ?.copyWith(
+                                            fontWeight: FontWeight.w600,
+                                            decoration: item.isPaid
+                                                ? TextDecoration.lineThrough
+                                                : TextDecoration.none,
+                                          ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      'NT\$${item.receivedAmount} / NT\$${item.itemPrice}',
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                            color: item.isPaid
+                                                ? theme.colorScheme.primary
+                                                : theme
+                                                      .colorScheme
+                                                      .onSurfaceVariant,
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    'NT\$${remainingAmount.toString()}',
+                                    style: theme.textTheme.labelLarge?.copyWith(
+                                      color: item.isPaid
+                                          ? theme.colorScheme.primary
+                                          : theme.colorScheme.secondary,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                  if (item.isPaid) const SizedBox(height: 2),
+                                  if (item.isPaid)
+                                    Text(
+                                      l10n.paid,
+                                      style: theme.textTheme.labelSmall
+                                          ?.copyWith(
+                                            color: theme.colorScheme.primary,
+                                          ),
+                                    ),
+                                ],
+                              ),
+                              const SizedBox(width: 4),
+                              IconButton(
+                                icon: const Icon(Icons.edit_rounded, size: 20),
+                                tooltip: l10n.editChargeItemTitle,
+                                onPressed: () => _editChargeItem(item),
+                              ),
+                              IconButton(
+                                icon: const Icon(
+                                  Icons.delete_outline_rounded,
+                                  size: 20,
+                                ),
+                                tooltip: l10n.delete,
+                                onPressed: () => _deleteChargeItem(item),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+          ),
+        ],
       ),
     );
   }
