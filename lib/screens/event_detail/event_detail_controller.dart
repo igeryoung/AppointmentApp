@@ -1044,8 +1044,9 @@ class EventDetailController {
     );
   }
 
-  /// Load charge items for the current event (based on record_uuid)
-  /// If showOnlyThisEventItems is true, only show items associated with this event
+  /// Load charge items for the current record.
+  /// UI handles "this event only" by prioritizing current-event items and
+  /// diluting others instead of removing them from the list.
   Future<void> loadChargeItems() async {
     // Need recordUuid to load charge items
     if (event.recordUuid.isEmpty) {
@@ -1060,17 +1061,10 @@ class EventDetailController {
     try {
       final prdDb = _dbService as PRDDatabaseService;
 
-      List<ChargeItem> chargeItems;
-      if (_state.showOnlyThisEventItems && event.id != null) {
-        // Get only items associated with this event
-        chargeItems = await prdDb.getChargeItemsByRecordAndEvent(
-          event.recordUuid,
-          eventId: event.id,
-        );
-      } else {
-        // Get all items for the record
-        chargeItems = await prdDb.getChargeItemsByRecordUuid(event.recordUuid);
-      }
+      // Always get all items for the record.
+      final chargeItems = await prdDb.getChargeItemsByRecordUuid(
+        event.recordUuid,
+      );
 
       _updateState(_state.copyWith(chargeItems: chargeItems));
     } catch (e) {}
@@ -1117,12 +1111,9 @@ class EventDetailController {
     } catch (e) {}
   }
 
-  /// Add a new charge item
-  /// If associateWithEvent is true, the item will be linked to this event
-  Future<void> addChargeItem(
-    ChargeItem item, {
-    bool associateWithEvent = false,
-  }) async {
+  /// Add a new charge item and link it to the current event.
+  /// This keeps "This event only" filter consistent for items created here.
+  Future<void> addChargeItem(ChargeItem item) async {
     if (event.recordUuid.isEmpty) {
       return;
     }
@@ -1133,11 +1124,12 @@ class EventDetailController {
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
+      final associatedEventId = event.id;
 
       // Check if item already exists
       final exists = await prdDb.chargeItemExists(
         recordUuid: event.recordUuid,
-        eventId: associateWithEvent ? event.id : null,
+        eventId: associatedEventId,
         itemName: item.itemName,
       );
 
@@ -1149,7 +1141,7 @@ class EventDetailController {
       // Create charge item with recordUuid from event
       final newItem = item.copyWith(
         recordUuid: event.recordUuid,
-        eventId: associateWithEvent ? event.id : null,
+        eventId: associatedEventId,
       );
 
       // Save to database

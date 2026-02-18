@@ -170,11 +170,66 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
   List<ChargeItem> get _chargeItems => widget.controller.state.chargeItems;
   bool get _showOnlyThisEventItems =>
       widget.controller.state.showOnlyThisEventItems;
+  String? get _currentEventId => widget.controller.event.id;
+  EventDetailController get _controller => widget.controller;
+
+  List<ChargeItem> get _focusedChargeItems {
+    if (!_showOnlyThisEventItems || _currentEventId == null) {
+      return _chargeItems;
+    }
+
+    return _chargeItems
+        .where((item) => item.eventId == _currentEventId)
+        .toList();
+  }
+
+  List<ChargeItem> get _displayChargeItems {
+    if (!_showOnlyThisEventItems || _currentEventId == null) {
+      return _chargeItems;
+    }
+
+    final items = List<ChargeItem>.from(_chargeItems);
+    items.sort((a, b) {
+      final aIsCurrentEvent = a.eventId == _currentEventId;
+      final bIsCurrentEvent = b.eventId == _currentEventId;
+      if (aIsCurrentEvent == bIsCurrentEvent) {
+        return a.createdAt.compareTo(b.createdAt);
+      }
+      return aIsCurrentEvent ? -1 : 1;
+    });
+    return items;
+  }
+
+  bool _isDilutedItem(ChargeItem item) {
+    if (!_showOnlyThisEventItems || _currentEventId == null) {
+      return false;
+    }
+    return item.eventId != _currentEventId;
+  }
 
   int get _totalAmount =>
-      _chargeItems.fold(0, (sum, item) => sum + item.itemPrice);
+      _focusedChargeItems.fold(0, (sum, item) => sum + item.itemPrice);
   int get _receivedAmount =>
-      _chargeItems.fold(0, (sum, item) => sum + item.receivedAmount);
+      _focusedChargeItems.fold(0, (sum, item) => sum + item.receivedAmount);
+
+  String _twoDigits(int value) => value.toString().padLeft(2, '0');
+
+  String _formatEventTime(DateTime time) {
+    return '${_twoDigits(time.hour)}:${_twoDigits(time.minute)}';
+  }
+
+  String _formatEventDate(DateTime time) {
+    return '${time.year}-${_twoDigits(time.month)}-${_twoDigits(time.day)}';
+  }
+
+  String _formatCurrentEventTimeRange() {
+    final start = _controller.event.startTime;
+    final end = _controller.event.endTime;
+    final dateText = _formatEventDate(start);
+    final startText = _formatEventTime(start);
+    final endText = end == null ? 'Open end' : _formatEventTime(end);
+    return '$dateText  $startText - $endText';
+  }
 
   void _refreshFromController() {
     if (mounted) {
@@ -205,10 +260,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
       return;
     }
 
-    await widget.controller.addChargeItem(
-      result,
-      associateWithEvent: _showOnlyThisEventItems,
-    );
+    await widget.controller.addChargeItem(result);
     _refreshFromController();
   }
 
@@ -279,6 +331,39 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
             ),
           ),
           Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.secondaryContainer.withValues(
+                  alpha: 0.45,
+                ),
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'This Event Time',
+                    style: theme.textTheme.labelMedium?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    _formatCurrentEventTimeRange(),
+                    style: theme.textTheme.titleSmall?.copyWith(
+                      color: theme.colorScheme.onSecondaryContainer,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          Padding(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             child: Container(
               padding: const EdgeInsets.all(14),
@@ -335,7 +420,9 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
               onChanged: (_) => _toggleFilter(),
               contentPadding: const EdgeInsets.symmetric(horizontal: 8),
               title: Text(
-                _showOnlyThisEventItems ? 'This event only' : 'All items',
+                _showOnlyThisEventItems
+                    ? 'This event focus (others diluted)'
+                    : 'All items',
               ),
             ),
           ),
@@ -351,7 +438,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
             ),
           ),
           Expanded(
-            child: _chargeItems.isEmpty
+            child: _displayChargeItems.isEmpty
                 ? Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -365,106 +452,122 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                   )
                 : ListView.separated(
                     padding: const EdgeInsets.fromLTRB(16, 0, 16, 20),
-                    itemCount: _chargeItems.length,
+                    itemCount: _displayChargeItems.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
                     itemBuilder: (context, index) {
-                      final item = _chargeItems[index];
+                      final item = _displayChargeItems[index];
+                      final isDiluted = _isDilutedItem(item);
                       final remainingAmount =
                           (item.itemPrice - item.receivedAmount) < 0
                           ? 0
                           : (item.itemPrice - item.receivedAmount);
 
-                      return Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(14),
-                          color: theme.colorScheme.surfaceContainerHighest
-                              .withValues(alpha: 0.35),
-                          border: Border.all(
-                            color: item.isPaid
-                                ? theme.colorScheme.primary.withValues(
-                                    alpha: 0.22,
-                                  )
-                                : theme.colorScheme.outlineVariant,
+                      return AnimatedOpacity(
+                        duration: const Duration(milliseconds: 180),
+                        opacity: isDiluted ? 0.35 : 1.0,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(14),
+                            color: theme.colorScheme.surfaceContainerHighest
+                                .withValues(alpha: 0.35),
+                            border: Border.all(
+                              color: item.isPaid
+                                  ? theme.colorScheme.primary.withValues(
+                                      alpha: 0.22,
+                                    )
+                                  : theme.colorScheme.outlineVariant,
+                            ),
                           ),
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
-                          child: Row(
-                            children: [
-                              Checkbox(
-                                value: item.isPaid,
-                                onChanged: (_) => _togglePaidStatus(item),
-                              ),
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                          child: Padding(
+                            padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
+                            child: Row(
+                              children: [
+                                Checkbox(
+                                  value: item.isPaid,
+                                  onChanged: isDiluted
+                                      ? null
+                                      : (_) => _togglePaidStatus(item),
+                                ),
+                                Expanded(
+                                  child: Column(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.itemName,
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        style: theme.textTheme.titleSmall
+                                            ?.copyWith(
+                                              fontWeight: FontWeight.w600,
+                                              decoration: item.isPaid
+                                                  ? TextDecoration.lineThrough
+                                                  : TextDecoration.none,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'NT\$${item.receivedAmount} / NT\$${item.itemPrice}',
+                                        style: theme.textTheme.bodySmall
+                                            ?.copyWith(
+                                              color: item.isPaid
+                                                  ? theme.colorScheme.primary
+                                                  : theme
+                                                        .colorScheme
+                                                        .onSurfaceVariant,
+                                            ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      item.itemName,
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: theme.textTheme.titleSmall
-                                          ?.copyWith(
-                                            fontWeight: FontWeight.w600,
-                                            decoration: item.isPaid
-                                                ? TextDecoration.lineThrough
-                                                : TextDecoration.none,
-                                          ),
-                                    ),
-                                    const SizedBox(height: 4),
-                                    Text(
-                                      'NT\$${item.receivedAmount} / NT\$${item.itemPrice}',
-                                      style: theme.textTheme.bodySmall
+                                      'NT\$${remainingAmount.toString()}',
+                                      style: theme.textTheme.labelLarge
                                           ?.copyWith(
                                             color: item.isPaid
                                                 ? theme.colorScheme.primary
-                                                : theme
-                                                      .colorScheme
-                                                      .onSurfaceVariant,
+                                                : theme.colorScheme.secondary,
+                                            fontWeight: FontWeight.w700,
                                           ),
                                     ),
+                                    if (item.isPaid) const SizedBox(height: 2),
+                                    if (item.isPaid)
+                                      Text(
+                                        l10n.paid,
+                                        style: theme.textTheme.labelSmall
+                                            ?.copyWith(
+                                              color: theme.colorScheme.primary,
+                                            ),
+                                      ),
                                   ],
                                 ),
-                              ),
-                              const SizedBox(width: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.end,
-                                children: [
-                                  Text(
-                                    'NT\$${remainingAmount.toString()}',
-                                    style: theme.textTheme.labelLarge?.copyWith(
-                                      color: item.isPaid
-                                          ? theme.colorScheme.primary
-                                          : theme.colorScheme.secondary,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                const SizedBox(width: 4),
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.edit_rounded,
+                                    size: 20,
                                   ),
-                                  if (item.isPaid) const SizedBox(height: 2),
-                                  if (item.isPaid)
-                                    Text(
-                                      l10n.paid,
-                                      style: theme.textTheme.labelSmall
-                                          ?.copyWith(
-                                            color: theme.colorScheme.primary,
-                                          ),
-                                    ),
-                                ],
-                              ),
-                              const SizedBox(width: 4),
-                              IconButton(
-                                icon: const Icon(Icons.edit_rounded, size: 20),
-                                tooltip: l10n.editChargeItemTitle,
-                                onPressed: () => _editChargeItem(item),
-                              ),
-                              IconButton(
-                                icon: const Icon(
-                                  Icons.delete_outline_rounded,
-                                  size: 20,
+                                  tooltip: l10n.editChargeItemTitle,
+                                  onPressed: isDiluted
+                                      ? null
+                                      : () => _editChargeItem(item),
                                 ),
-                                tooltip: l10n.delete,
-                                onPressed: () => _deleteChargeItem(item),
-                              ),
-                            ],
+                                IconButton(
+                                  icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    size: 20,
+                                  ),
+                                  tooltip: l10n.delete,
+                                  onPressed: isDiluted
+                                      ? null
+                                      : () => _deleteChargeItem(item),
+                                ),
+                              ],
+                            ),
                           ),
                         ),
                       );

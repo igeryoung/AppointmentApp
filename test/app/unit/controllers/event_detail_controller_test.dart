@@ -4,6 +4,7 @@ library;
 import 'dart:convert';
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:schedule_note_app/models/charge_item.dart';
 import 'package:schedule_note_app/models/event.dart';
 import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/models/note.dart';
@@ -803,6 +804,83 @@ void main() {
       expect(controller.state.note, isNull);
       expect(controller.state.isLoadingFromServer, isFalse);
       expect(controller.state.isOffline, isFalse);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-011: addChargeItem() links new item to current event even when all-items filter is active',
+    () async {
+      final controller = buildController();
+      expect(controller.state.showOnlyThisEventItems, isFalse);
+
+      await controller.addChargeItem(
+        ChargeItem(
+          recordUuid: 'ignored-by-controller',
+          itemName: 'X-Ray',
+          itemPrice: 1200,
+        ),
+      );
+
+      final savedItems = await dbService.getChargeItemsByRecordUuid(
+        'record-a1',
+      );
+      expect(savedItems, hasLength(1));
+      expect(savedItems.single.itemName, 'X-Ray');
+      expect(savedItems.single.eventId, 'event-a1');
+
+      await controller.toggleChargeItemsFilter();
+
+      expect(controller.state.showOnlyThisEventItems, isTrue);
+      expect(controller.state.chargeItems, hasLength(1));
+      expect(controller.state.chargeItems.single.itemName, 'X-Ray');
+      expect(controller.state.chargeItems.single.eventId, 'event-a1');
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-012: this-event focus mode keeps all items loaded for UI dilution behavior',
+    () async {
+      final otherEvent = makeEvent(
+        id: 'event-a2',
+        bookUuid: 'book-a',
+        recordUuid: 'record-a1',
+        title: 'Alice',
+        recordNumber: '001',
+        eventTypes: const [EventType.consultation],
+      );
+      await seedEvent(db, event: otherEvent);
+
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-this-event',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Current Event Item',
+          itemPrice: 100,
+        ),
+      );
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-other-event',
+          recordUuid: 'record-a1',
+          eventId: 'event-a2',
+          itemName: 'Other Event Item',
+          itemPrice: 200,
+        ),
+      );
+
+      final controller = buildController();
+      await controller.loadChargeItems();
+      expect(controller.state.chargeItems, hasLength(2));
+
+      await controller.toggleChargeItemsFilter();
+
+      expect(controller.state.showOnlyThisEventItems, isTrue);
+      expect(controller.state.chargeItems, hasLength(2));
+      expect(
+        controller.state.chargeItems.map((item) => item.id),
+        containsAll(<String>['charge-this-event', 'charge-other-event']),
+      );
     },
   );
 }
