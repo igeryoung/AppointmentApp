@@ -11,6 +11,23 @@ import 'test_menu.dart';
 
 /// Helper class for building schedule screen FAB menu
 class ScheduleFabMenuHelper {
+  static const double fabButtonSize = 56;
+  static const double fabSpacing = 12;
+  static const double fabMargin = 16;
+
+  /// Menu width in logical pixels.
+  static double menuWidth() => fabButtonSize;
+
+  /// Menu height based on current visibility/state.
+  static double menuHeight({
+    required bool isMenuVisible,
+    required bool showGoToToday,
+  }) {
+    if (!isMenuVisible) return fabButtonSize;
+    final buttonCount = 5 + (showGoToToday ? 1 : 0);
+    return (buttonCount * fabButtonSize) + ((buttonCount - 1) * fabSpacing);
+  }
+
   /// Build FAB menu widget
   static Widget buildFabMenu({
     required BuildContext context,
@@ -41,15 +58,6 @@ class ScheduleFabMenuHelper {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Toggle FAB to hide menu
-        FloatingActionButton(
-          heroTag: 'toggle_fab_menu',
-          onPressed: onToggleMenu,
-          backgroundColor: Colors.grey.shade600,
-          child: const Icon(Icons.close),
-          tooltip: 'Hide menu',
-        ),
-        const SizedBox(height: 12),
         // Test Time FAB (for testing time change behavior)
         FloatingActionButton(
           heroTag: 'test_time',
@@ -113,6 +121,15 @@ class ScheduleFabMenuHelper {
           backgroundColor: isDrawingMode ? Colors.grey : null,
           child: const Icon(Icons.add),
           tooltip: l10n.createEvent,
+        ),
+        const SizedBox(height: 12),
+        // Toggle FAB to hide menu (kept at bottom to preserve anchor position)
+        FloatingActionButton(
+          heroTag: 'toggle_fab_menu',
+          onPressed: onToggleMenu,
+          backgroundColor: Colors.grey.shade600,
+          child: const Icon(Icons.close),
+          tooltip: 'Hide menu',
         ),
       ],
     );

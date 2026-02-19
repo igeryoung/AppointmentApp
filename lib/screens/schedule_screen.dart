@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -33,8 +34,179 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   late final ScheduleController _controller;
   ModalRoute<dynamic>? _currentRoute;
   Timer? _foregroundSyncTimer;
+  Offset? _fabAnchorPosition;
+  bool _isDraggingFab = false;
 
   static const Duration _foregroundSyncInterval = Duration(seconds: 30);
+
+  Offset _defaultFabAnchorPosition(BoxConstraints constraints) {
+    return Offset(
+      constraints.maxWidth -
+          ScheduleFabMenuHelper.menuWidth() -
+          ScheduleFabMenuHelper.fabMargin,
+      constraints.maxHeight -
+          ScheduleFabMenuHelper.fabButtonSize -
+          ScheduleFabMenuHelper.fabMargin,
+    );
+  }
+
+  double _fabToggleOffsetY({
+    required bool isMenuVisible,
+    required Size menuSize,
+  }) {
+    if (!isMenuVisible) return 0;
+    return menuSize.height - ScheduleFabMenuHelper.fabButtonSize;
+  }
+
+  Offset _clampFabAnchorPosition({
+    required Offset anchorPosition,
+    required BoxConstraints constraints,
+    required Size menuSize,
+    required bool isMenuVisible,
+  }) {
+    final min = ScheduleFabMenuHelper.fabMargin;
+    final maxX = math.max(min, constraints.maxWidth - menuSize.width - min);
+    final offsetY = _fabToggleOffsetY(
+      isMenuVisible: isMenuVisible,
+      menuSize: menuSize,
+    );
+    final minY = min + offsetY;
+    final maxY = math.max(
+      minY,
+      constraints.maxHeight - ScheduleFabMenuHelper.fabButtonSize - min,
+    );
+    return Offset(
+      anchorPosition.dx.clamp(min, maxX).toDouble(),
+      anchorPosition.dy.clamp(minY, maxY).toDouble(),
+    );
+  }
+
+  Offset _currentFabAnchorPosition({
+    required BoxConstraints constraints,
+    required Size menuSize,
+    required bool isMenuVisible,
+  }) {
+    final initial =
+        _fabAnchorPosition ?? _defaultFabAnchorPosition(constraints);
+    return _clampFabAnchorPosition(
+      anchorPosition: initial,
+      constraints: constraints,
+      menuSize: menuSize,
+      isMenuVisible: isMenuVisible,
+    );
+  }
+
+  void _onFabDragUpdate(
+    DragUpdateDetails details,
+    BoxConstraints constraints,
+    Size menuSize,
+    bool isMenuVisible,
+  ) {
+    final current = _currentFabAnchorPosition(
+      constraints: constraints,
+      menuSize: menuSize,
+      isMenuVisible: isMenuVisible,
+    );
+    setState(() {
+      _fabAnchorPosition = _clampFabAnchorPosition(
+        anchorPosition: current + details.delta,
+        constraints: constraints,
+        menuSize: menuSize,
+        isMenuVisible: isMenuVisible,
+      );
+    });
+  }
+
+  void _onFabDragEnd(
+    BoxConstraints constraints,
+    Size menuSize,
+    bool isMenuVisible,
+  ) {
+    final current = _currentFabAnchorPosition(
+      constraints: constraints,
+      menuSize: menuSize,
+      isMenuVisible: isMenuVisible,
+    );
+    final centerX = current.dx + (menuSize.width / 2);
+    final snapLeft = centerX < (constraints.maxWidth / 2);
+    final snappedX = snapLeft
+        ? ScheduleFabMenuHelper.fabMargin
+        : constraints.maxWidth -
+              menuSize.width -
+              ScheduleFabMenuHelper.fabMargin;
+    setState(() {
+      _isDraggingFab = false;
+      _fabAnchorPosition = _clampFabAnchorPosition(
+        anchorPosition: Offset(snappedX, current.dy),
+        constraints: constraints,
+        menuSize: menuSize,
+        isMenuVisible: isMenuVisible,
+      );
+    });
+  }
+
+  Widget _buildDraggableFabMenu(BoxConstraints constraints) {
+    final isMenuVisible = _controller.isFabMenuVisible;
+    final showGoToToday = !(_controller.dateService?.isViewingToday() ?? false);
+    final menuSize = Size(
+      ScheduleFabMenuHelper.menuWidth(),
+      ScheduleFabMenuHelper.menuHeight(
+        isMenuVisible: isMenuVisible,
+        showGoToToday: showGoToToday,
+      ),
+    );
+    final anchorPosition = _currentFabAnchorPosition(
+      constraints: constraints,
+      menuSize: menuSize,
+      isMenuVisible: isMenuVisible,
+    );
+    _fabAnchorPosition = anchorPosition;
+    final top =
+        anchorPosition.dy -
+        _fabToggleOffsetY(isMenuVisible: isMenuVisible, menuSize: menuSize);
+
+    return AnimatedPositioned(
+      duration: _isDraggingFab
+          ? Duration.zero
+          : const Duration(milliseconds: 180),
+      curve: Curves.easeOutCubic,
+      left: anchorPosition.dx,
+      top: top,
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onPanStart: (_) {
+          if (_isDraggingFab) return;
+          setState(() => _isDraggingFab = true);
+        },
+        onPanUpdate: (details) =>
+            _onFabDragUpdate(details, constraints, menuSize, isMenuVisible),
+        onPanEnd: (_) => _onFabDragEnd(constraints, menuSize, isMenuVisible),
+        onPanCancel: () => _onFabDragEnd(constraints, menuSize, isMenuVisible),
+        child: SizedBox(
+          width: menuSize.width,
+          height: menuSize.height,
+          child: Align(
+            alignment: Alignment.topLeft,
+            child: ScheduleFabMenuHelper.buildFabMenu(
+              context: context,
+              isMenuVisible: _controller.isFabMenuVisible,
+              onToggleMenu: _controller.toggleFabMenu,
+              isDrawingMode: _controller.isDrawingMode,
+              isViewingToday: () =>
+                  _controller.dateService?.isViewingToday() ?? false,
+              selectedDate: _controller.selectedDate,
+              saveDrawing: () => _controller.saveDrawing(context),
+              loadDrawing: () => _controller.loadDrawing(),
+              toggleDrawingMode: () => _controller.toggleDrawingMode(context),
+              createEvent: () => _controller.eventService?.createEvent(),
+              bookUuid: widget.book.uuid,
+              onDateChange: _controller.changeDateTo,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -440,61 +612,50 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                           ? state.viewMode
                           : ScheduleDrawing.VIEW_MODE_2DAY;
 
-                      return Stack(
-                        children: [
-                          Column(
+                      return LayoutBuilder(
+                        builder: (context, constraints) {
+                          return Stack(
                             children: [
-                              Expanded(
-                                child: isLoading
-                                    ? const Center(
-                                        child: CircularProgressIndicator(),
-                                      )
-                                    : _build3DayView(
-                                        _controller,
-                                        events,
-                                        showOldEvents,
-                                        showDrawing,
-                                        pendingNextAppointment,
-                                        viewMode,
-                                      ),
-                              ),
-                            ],
-                          ),
-                          if (_controller.isDrawingMode)
-                            Positioned(
-                              top: 0,
-                              left: 0,
-                              right: 0,
-                              child:
-                                  ScheduleDrawingToolbarHelper.buildDrawingToolbar(
-                                    context: context,
-                                    getCanvasKey:
-                                        _controller.getCanvasKeyForCurrentPage,
-                                    onCanvasStateChange: () =>
-                                        _controller.markNeedsBuild(),
-                                    saveDrawing: () =>
-                                        _controller.saveDrawing(context),
+                              Column(
+                                children: [
+                                  Expanded(
+                                    child: isLoading
+                                        ? const Center(
+                                            child: CircularProgressIndicator(),
+                                          )
+                                        : _build3DayView(
+                                            _controller,
+                                            events,
+                                            showOldEvents,
+                                            showDrawing,
+                                            pendingNextAppointment,
+                                            viewMode,
+                                          ),
                                   ),
-                            ),
-                        ],
+                                ],
+                              ),
+                              if (_controller.isDrawingMode)
+                                Positioned(
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  child:
+                                      ScheduleDrawingToolbarHelper.buildDrawingToolbar(
+                                        context: context,
+                                        getCanvasKey: _controller
+                                            .getCanvasKeyForCurrentPage,
+                                        onCanvasStateChange: () =>
+                                            _controller.markNeedsBuild(),
+                                        saveDrawing: () =>
+                                            _controller.saveDrawing(context),
+                                      ),
+                                ),
+                              _buildDraggableFabMenu(constraints),
+                            ],
+                          );
+                        },
                       );
                     },
-                  ),
-                  floatingActionButton: ScheduleFabMenuHelper.buildFabMenu(
-                    context: context,
-                    isMenuVisible: _controller.isFabMenuVisible,
-                    onToggleMenu: _controller.toggleFabMenu,
-                    isDrawingMode: _controller.isDrawingMode,
-                    isViewingToday: () =>
-                        _controller.dateService?.isViewingToday() ?? false,
-                    selectedDate: _controller.selectedDate,
-                    saveDrawing: () => _controller.saveDrawing(context),
-                    loadDrawing: () => _controller.loadDrawing(),
-                    toggleDrawingMode: () =>
-                        _controller.toggleDrawingMode(context),
-                    createEvent: () => _controller.eventService?.createEvent(),
-                    bookUuid: widget.book.uuid,
-                    onDateChange: _controller.changeDateTo,
                   ),
                 ),
               ],
