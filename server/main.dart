@@ -14,6 +14,7 @@ import 'lib/routes/batch_routes.dart';
 import 'lib/routes/dashboard_routes.dart';
 import 'lib/routes/event_routes.dart';
 import 'lib/routes/record_routes.dart';
+import 'lib/routes/charge_item_routes.dart';
 
 void main(List<String> args) async {
   // Load environment variables from .env file
@@ -59,6 +60,10 @@ void main(List<String> args) async {
   // Record routes (validation)
   final recordRoutes = RecordRoutes(db);
   app.mount('/api/records/', recordRoutes.router);
+
+  // Charge item routes
+  final chargeItemRoutes = ChargeItemRoutes(db);
+  app.mount('/api/', chargeItemRoutes.router);
 
   // Book routes
   final bookRoutes = BookRoutes(db);
@@ -217,6 +222,9 @@ void main(List<String> args) async {
   );
   print('   DELETE /api/books/<bookId>/events/<eventId>/note - Delete note');
   print('   POST /api/notes/batch - Batch get notes');
+  print('   GET  /api/records/<recordUuid>/charge-items - Get charge items');
+  print('   POST /api/records/<recordUuid>/charge-items - Save charge item');
+  print('   DELETE /api/charge-items/<chargeItemId> - Delete charge item');
   print('   GET  /api/books/<bookId>/drawings?date=X&viewMode=Y - Get drawing');
   print('   POST /api/books/<bookId>/drawings - Create/update drawing');
   print(

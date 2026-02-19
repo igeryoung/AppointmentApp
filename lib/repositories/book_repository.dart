@@ -37,10 +37,11 @@ abstract class IBookRepository {
   Future<List<Map<String, dynamic>>> listServerBooks({String? searchQuery});
 
   /// Pull complete book data from server to local device
-  /// Includes book + events + notes + drawings
+  /// Includes book + events + notes + drawings by default.
+  /// When [lightImport] is true, only imports book metadata.
   /// Throws if book already exists locally or doesn't exist on server
   /// [bookUuid] - UUID of the book to pull from server
-  Future<void> pullBookFromServer(String bookUuid);
+  Future<void> pullBookFromServer(String bookUuid, {bool lightImport = false});
 
   /// Get book metadata from server without pulling the full data
   /// Useful for checking if a book exists on server or getting version info

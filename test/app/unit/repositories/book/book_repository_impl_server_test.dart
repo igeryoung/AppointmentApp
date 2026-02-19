@@ -262,4 +262,117 @@ void main() {
       expect(inserted.archivedAt, isNull);
     },
   );
+
+  test(
+    'BOOK-UNIT-013: pullBookFromServer() hydrates charge_items from bundle payload',
+    () async {
+      // Arrange
+      await saveCredentials();
+      fakeApiClient!.pullResponse = {
+        'book': {
+          'book_uuid': 'server-book-3',
+          'name': 'Pulled Book 3',
+          'created_at': '2026-02-01T08:00:00Z',
+          'version': 1,
+        },
+        'events': [
+          {
+            'id': 'event-1',
+            'book_uuid': 'server-book-3',
+            'record_uuid': 'record-1',
+            'title': 'Event 1',
+            'name': 'Record 1',
+            'record_number': 'R-1',
+            'phone': '0911111111',
+            'event_types': ['consultation'],
+            'has_charge_items': true,
+            'start_time': '2026-02-01T09:00:00Z',
+            'end_time': '2026-02-01T10:00:00Z',
+            'created_at': '2026-02-01T08:00:00Z',
+            'updated_at': '2026-02-01T08:00:00Z',
+            'is_removed': false,
+            'is_checked': false,
+            'has_note': false,
+            'version': 1,
+            'is_deleted': false,
+          },
+        ],
+        'notes': [],
+        'drawings': [],
+        'chargeItems': [
+          {
+            'id': 'charge-1',
+            'recordUuid': 'record-1',
+            'eventId': 'event-1',
+            'itemName': 'Consult Fee',
+            'itemPrice': 1200,
+            'receivedAmount': 0,
+            'createdAt': '2026-02-01T08:00:00Z',
+            'updatedAt': '2026-02-01T08:00:00Z',
+            'version': 1,
+            'isDeleted': false,
+          },
+        ],
+      };
+      final repository = buildRepository();
+
+      // Act
+      await repository.pullBookFromServer('server-book-3');
+      final rows = await db.query(
+        'charge_items',
+        where: 'record_uuid = ?',
+        whereArgs: ['record-1'],
+      );
+
+      // Assert
+      expect(rows, hasLength(1));
+      expect(rows.single['id'], 'charge-1');
+      expect(rows.single['event_id'], 'event-1');
+      expect(rows.single['item_name'], 'Consult Fee');
+      expect(rows.single['item_price'], 1200);
+      expect(rows.single['is_dirty'], 0);
+      expect(rows.single['is_deleted'], 0);
+    },
+  );
+
+  test(
+    'BOOK-UNIT-014: pullBookFromServer(lightImport) stores only book metadata',
+    () async {
+      // Arrange
+      await saveCredentials();
+      fakeApiClient!.infoResponse = {
+        'bookUuid': 'server-book-light',
+        'name': 'Server Light Book',
+        'createdAt': '2026-02-10T08:00:00Z',
+        'archivedAt': null,
+        'version': 5,
+      };
+      final repository = buildRepository();
+
+      // Act
+      await repository.pullBookFromServer(
+        'server-book-light',
+        lightImport: true,
+      );
+      final inserted = await repository.getByUuid('server-book-light');
+      final eventRows = await db.query(
+        'events',
+        where: 'book_uuid = ?',
+        whereArgs: ['server-book-light'],
+      );
+      final noteRows = await db.query('notes');
+      final drawingRows = await db.query('schedule_drawings');
+      final chargeRows = await db.query('charge_items');
+
+      // Assert
+      expect(fakeApiClient!.infoCalls, 1);
+      expect(fakeApiClient!.pullCalls, 0);
+      expect(inserted, isNotNull);
+      expect(inserted!.name, 'Server Light Book');
+      expect(eventRows, isEmpty);
+      expect(noteRows, isEmpty);
+      expect(drawingRows, isEmpty);
+      expect(chargeRows, isEmpty);
+    },
+  );
 }

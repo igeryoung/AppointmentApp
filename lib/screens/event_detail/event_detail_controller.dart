@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:sqflite/sqflite.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';
@@ -91,6 +92,7 @@ class EventDetailController {
 
       // Step 2: Load initial data (now that ContentService is ready)
       if (!isNew) {
+        await _ensureLocalEventCache();
         await _logLocalEventSnapshot();
         await _refreshEventFromServer();
         await loadNote();
@@ -109,6 +111,51 @@ class EventDetailController {
       );
 
       rethrow; // Let the caller handle showing error to user
+    }
+  }
+
+  Future<void> _ensureLocalEventCache() async {
+    if (isNew || event.id == null) {
+      return;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final db = await prdDb.database;
+    final createdAtSeconds =
+        event.createdAt.toUtc().millisecondsSinceEpoch ~/ 1000;
+    final updatedAtSeconds =
+        event.updatedAt.toUtc().millisecondsSinceEpoch ~/ 1000;
+
+    if (event.recordUuid.isNotEmpty) {
+      final existingRecord = await prdDb.getRecordByUuid(event.recordUuid);
+      if (existingRecord == null) {
+        await db.insert('records', {
+          'record_uuid': event.recordUuid,
+          'record_number': event.recordNumber,
+          'name': event.title.isEmpty ? null : event.title,
+          'phone': null,
+          'created_at': createdAtSeconds,
+          'updated_at': updatedAtSeconds,
+          'version': 1,
+          'is_dirty': 0,
+          'is_deleted': 0,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    }
+
+    final existingEvent = await prdDb.getEventById(event.id!);
+    if (existingEvent == null) {
+      final eventMap = event.toMap();
+      eventMap['is_dirty'] = 0;
+      await db.insert(
+        'events',
+        eventMap,
+        conflictAlgorithm: ConflictAlgorithm.ignore,
+      );
     }
   }
 
@@ -1150,13 +1197,39 @@ class EventDetailController {
     try {
       final prdDb = _dbService as PRDDatabaseService;
 
-      // Always get all items for the record.
-      final chargeItems = await prdDb.getChargeItemsByRecordUuid(
+      var chargeItems = await prdDb.getChargeItemsByRecordUuid(
         event.recordUuid,
       );
+      if (chargeItems.isEmpty && event.hasChargeItems) {
+        await _syncChargeItemsFromServer(prdDb);
+        chargeItems = await prdDb.getChargeItemsByRecordUuid(event.recordUuid);
+      }
 
+      // Always get all items for the record.
       _updateState(_state.copyWith(chargeItems: chargeItems));
     } catch (e) {}
+  }
+
+  Future<void> _syncChargeItemsFromServer(PRDDatabaseService prdDb) async {
+    final contentService = _contentService;
+    if (contentService == null || event.recordUuid.isEmpty) {
+      return;
+    }
+
+    final credentials = await prdDb.getDeviceCredentials();
+    if (credentials == null) {
+      return;
+    }
+
+    final serverItems = await contentService.apiClient.fetchChargeItems(
+      recordUuid: event.recordUuid,
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+    );
+
+    for (final item in serverItems) {
+      await prdDb.applyServerChargeItemChange(item);
+    }
   }
 
   /// Toggle the filter to show all items or only this event's items

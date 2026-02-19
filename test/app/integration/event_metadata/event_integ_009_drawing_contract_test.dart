@@ -146,4 +146,95 @@ void registerEventInteg009({required LiveServerConfig? config}) {
     },
     skip: skipForMissingConfig(config),
   );
+
+  test(
+    'EVENT-INTEG-009B: pulled device can fetch drawings from shared book',
+    () async {
+      final live = config!;
+      final apiClient = ApiClient(baseUrl: live.baseUrl);
+      String? bookUuid;
+
+      try {
+        final deviceB = await registerTemporaryDevice(
+          apiClient: apiClient,
+          config: live,
+          deviceNamePrefix: 'IT drawing reader',
+        );
+        final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+        final createdBook = await createTemporaryBook(
+          apiClient: apiClient,
+          config: live,
+          name: 'IT drawing pull auth $suffix',
+        );
+        bookUuid = pickString(
+          createdBook,
+          keys: const ['bookUuid', 'book_uuid', 'uuid'],
+        );
+
+        final date = DateTime.now().toUtc();
+        final viewMode = ScheduleDrawing.VIEW_MODE_2DAY;
+        final strokes = jsonEncode([
+          {
+            'id': 'stroke-shared',
+            'points': [
+              {'x': 11.0, 'y': 11.0},
+              {'x': 33.0, 'y': 33.0},
+            ],
+            'strokeType': 'pen',
+            'strokeWidth': 2.0,
+            'color': 4278190080,
+          },
+        ]);
+
+        await apiClient.saveDrawing(
+          bookUuid: bookUuid,
+          drawingData: {
+            'date': date.toIso8601String().split('T')[0],
+            'viewMode': viewMode,
+            'strokesData': strokes,
+            'version': 1,
+          },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        // Pull once so device B is in the same book access model used by app.
+        await apiClient.pullBook(
+          bookUuid: bookUuid,
+          deviceId: deviceB.deviceId,
+          deviceToken: deviceB.deviceToken,
+        );
+
+        final fetchedByDeviceB = await apiClient.fetchDrawing(
+          bookUuid: bookUuid,
+          date: date,
+          viewMode: viewMode,
+          deviceId: deviceB.deviceId,
+          deviceToken: deviceB.deviceToken,
+        );
+
+        expect(fetchedByDeviceB, isNotNull);
+        final strokesData =
+            (fetchedByDeviceB!['strokesData'] ??
+                    fetchedByDeviceB['strokes_data'])
+                ?.toString() ??
+            '';
+        expect(strokesData, contains('stroke-shared'));
+      } finally {
+        if (bookUuid != null) {
+          try {
+            await apiClient.deleteBook(
+              bookUuid: bookUuid,
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            );
+          } catch (_) {
+            // Best-effort cleanup.
+          }
+        }
+        apiClient.dispose();
+      }
+    },
+    skip: skipForMissingConfig(config),
+  );
 }

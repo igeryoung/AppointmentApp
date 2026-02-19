@@ -232,7 +232,7 @@ class BookListController extends ChangeNotifier {
   ) async {
     _setState(_state.copyWith(isLoading: true));
     try {
-      await repo.pullBookFromServer(bookUuid);
+      await repo.pullBookFromServer(bookUuid, lightImport: true);
 
       // Refresh the book list to show imported data
       await _loadBooks();

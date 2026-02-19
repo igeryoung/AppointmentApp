@@ -494,6 +494,8 @@ class BookRoutes {
       final notesRaw = (bundle['notes'] as List).cast<Map<String, dynamic>>();
       final drawingsRaw = (bundle['drawings'] as List)
           .cast<Map<String, dynamic>>();
+      final chargeItemsRaw = (bundle['charge_items'] as List? ?? const [])
+          .cast<Map<String, dynamic>>();
 
       final events = eventsRaw.map((e) {
         return {
@@ -548,6 +550,21 @@ class BookRoutes {
         };
       }).toList();
 
+      final chargeItems = chargeItemsRaw.map((c) {
+        return {
+          'id': c['id'],
+          'recordUuid': c['record_uuid'],
+          'eventId': c['event_id'],
+          'itemName': c['item_name'],
+          'itemPrice': c['item_price'],
+          'receivedAmount': c['received_amount'],
+          'createdAt': c['created_at'],
+          'updatedAt': c['updated_at'],
+          'version': c['version'],
+          'isDeleted': c['is_deleted'] == true,
+        };
+      }).toList();
+
       return _json(200, {
         'success': true,
         'bundle': {
@@ -563,6 +580,7 @@ class BookRoutes {
           'events': events,
           'notes': notes,
           'drawings': drawings,
+          'chargeItems': chargeItems,
         },
       });
     } catch (e) {

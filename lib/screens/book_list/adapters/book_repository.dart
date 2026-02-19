@@ -62,7 +62,10 @@ class BookRepository {
   }
 
   /// Pull a server book bundle into local cache
-  Future<void> pullBookFromServer(String bookUuid) async {
-    await _repo.pullBookFromServer(bookUuid);
+  Future<void> pullBookFromServer(
+    String bookUuid, {
+    bool lightImport = false,
+  }) async {
+    await _repo.pullBookFromServer(bookUuid, lightImport: lightImport);
   }
 }

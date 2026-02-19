@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'package:postgres/postgres.dart';
 import '../database/connection.dart';
 
 /// Service for pulling books from server to local device
@@ -138,9 +137,7 @@ class BookPullService {
       FROM books
       WHERE book_uuid = @bookUuid
       ''',
-      parameters: {
-        'bookUuid': bookUuid,
-      },
+      parameters: {'bookUuid': bookUuid},
     );
 
     if (bookResult == null) {
@@ -275,16 +272,60 @@ class BookPullService {
       };
     }).toList();
 
-    // 5. Add device access tracking
+    // 5. Get charge items for records that appear in this book.
+    final chargeItemsResults = await db.queryRows(
+      '''
+      SELECT
+        c.id,
+        c.record_uuid,
+        c.event_id,
+        c.item_name,
+        c.item_price,
+        c.received_amount,
+        c.created_at,
+        c.updated_at,
+        c.version,
+        c.is_deleted
+      FROM charge_items c
+      WHERE c.record_uuid IN (
+        SELECT DISTINCT e.record_uuid
+        FROM events e
+        WHERE e.book_uuid = @bookUuid AND e.is_deleted = false
+      )
+      ORDER BY c.updated_at ASC
+      ''',
+      parameters: {'bookUuid': bookUuid},
+    );
+
+    final chargeItems = chargeItemsResults.map((row) {
+      return {
+        'id': row['id'].toString(),
+        'record_uuid': row['record_uuid'] as String,
+        'event_id': row['event_id']?.toString(),
+        'item_name': row['item_name'] as String,
+        'item_price': row['item_price'] as int,
+        'received_amount': row['received_amount'] as int,
+        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
+        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
+        'version': row['version'] as int,
+        'is_deleted': row['is_deleted'] as bool,
+      };
+    }).toList();
+
+    // 6. Add device access tracking
     await addDeviceAccess(bookUuid, deviceId, 'pulled');
 
-    // 6. Assemble complete book data
+    // 7. Assemble complete book data
     return {
       'book': {
         'book_uuid': bookResult['book_uuid'] as String,
         'name': bookResult['name'] as String,
-        'created_at': (bookResult['created_at'] as DateTime).toUtc().toIso8601String(),
-        'updated_at': (bookResult['updated_at'] as DateTime).toUtc().toIso8601String(),
+        'created_at': (bookResult['created_at'] as DateTime)
+            .toUtc()
+            .toIso8601String(),
+        'updated_at': (bookResult['updated_at'] as DateTime)
+            .toUtc()
+            .toIso8601String(),
         'archived_at': bookResult['archived_at'] != null
             ? (bookResult['archived_at'] as DateTime).toUtc().toIso8601String()
             : null,
@@ -294,6 +335,7 @@ class BookPullService {
       'events': events,
       'notes': notes,
       'drawings': drawings,
+      'charge_items': chargeItems,
     };
   }
 
@@ -319,9 +361,7 @@ class BookPullService {
       FROM books
       WHERE book_uuid = @bookUuid
       ''',
-      parameters: {
-        'bookUuid': bookUuid,
-      },
+      parameters: {'bookUuid': bookUuid},
     );
 
     if (bookResult == null) {
@@ -331,8 +371,12 @@ class BookPullService {
     return {
       'book_uuid': bookResult['book_uuid'] as String,
       'name': bookResult['name'] as String,
-      'created_at': (bookResult['created_at'] as DateTime).toUtc().toIso8601String(),
-      'updated_at': (bookResult['updated_at'] as DateTime).toUtc().toIso8601String(),
+      'created_at': (bookResult['created_at'] as DateTime)
+          .toUtc()
+          .toIso8601String(),
+      'updated_at': (bookResult['updated_at'] as DateTime)
+          .toUtc()
+          .toIso8601String(),
       'archived_at': bookResult['archived_at'] != null
           ? (bookResult['archived_at'] as DateTime).toUtc().toIso8601String()
           : null,
@@ -342,7 +386,11 @@ class BookPullService {
   }
 
   /// Add a device to the access list for a book
-  Future<void> addDeviceAccess(String bookUuid, String deviceId, String accessType) async {
+  Future<void> addDeviceAccess(
+    String bookUuid,
+    String deviceId,
+    String accessType,
+  ) async {
     try {
       await db.query(
         '''
@@ -356,7 +404,9 @@ class BookPullService {
           'accessType': accessType,
         },
       );
-      print('📝 Added device access: Book $bookUuid, Device $deviceId, Type: $accessType');
+      print(
+        '📝 Added device access: Book $bookUuid, Device $deviceId, Type: $accessType',
+      );
     } catch (e) {
       print('⚠️  Failed to add device access: $e');
       // Don't fail the operation if access tracking fails

@@ -257,7 +257,10 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
   }
 
   @override
-  Future<void> pullBookFromServer(String bookUuid) async {
+  Future<void> pullBookFromServer(
+    String bookUuid, {
+    bool lightImport = false,
+  }) async {
     if (_apiClient == null) {
       throw Exception(
         'API client not configured. Book pull requires server connection.',
@@ -273,6 +276,31 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
     }
 
     try {
+      if (lightImport) {
+        final info = await _apiClient.getServerBookInfo(
+          bookUuid: bookUuid,
+          deviceId: credentials.deviceId,
+          deviceToken: credentials.deviceToken,
+        );
+        final localBookUuid = (_pick(info, 'bookUuid', 'book_uuid') ?? bookUuid)
+            .toString();
+        final name = (info['name'] ?? '').toString().trim();
+        if (name.isEmpty) {
+          throw Exception('Server book metadata is missing name');
+        }
+        await insert({
+          'book_uuid': localBookUuid,
+          'name': name,
+          'created_at': _toSeconds(_pick(info, 'createdAt', 'created_at')),
+          'archived_at': _toSecondsOrNull(
+            _pick(info, 'archivedAt', 'archived_at'),
+          ),
+          'version': _pick(info, 'version', 'version') ?? 1,
+          'is_dirty': 0,
+        });
+        return;
+      }
+
       final bookData = await _apiClient.pullBook(
         bookUuid: bookUuid,
         deviceId: credentials.deviceId,
@@ -288,6 +316,10 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
           const [];
       final drawings =
           (bookData['drawings'] as List?)?.cast<Map<String, dynamic>>() ??
+          const [];
+      final chargeItems =
+          (bookData['chargeItems'] as List?)?.cast<Map<String, dynamic>>() ??
+          (bookData['charge_items'] as List?)?.cast<Map<String, dynamic>>() ??
           const [];
 
       await db.transaction((txn) async {
@@ -392,6 +424,31 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
                 _toSeconds(_pick(drawing, 'createdAt', 'created_at')),
             'version': _pick(drawing, 'version', 'version') ?? 1,
             'is_dirty': 0,
+          }, conflictAlgorithm: ConflictAlgorithm.replace);
+        }
+
+        for (final item in chargeItems) {
+          final createdAt = _toSeconds(_pick(item, 'createdAt', 'created_at'));
+          final updatedAt =
+              _toSecondsOrNull(_pick(item, 'updatedAt', 'updated_at')) ??
+              createdAt;
+          await txn.insert('charge_items', {
+            'id': _pick(item, 'id', 'id')?.toString(),
+            'record_uuid':
+                _pick(item, 'recordUuid', 'record_uuid')?.toString() ?? '',
+            'event_id': _pick(item, 'eventId', 'event_id')?.toString(),
+            'item_name': _pick(item, 'itemName', 'item_name')?.toString() ?? '',
+            'item_price': _pick(item, 'itemPrice', 'item_price') ?? 0,
+            'received_amount':
+                _pick(item, 'receivedAmount', 'received_amount') ?? 0,
+            'created_at': createdAt,
+            'updated_at': updatedAt,
+            'synced_at': updatedAt,
+            'version': _pick(item, 'version', 'version') ?? 1,
+            'is_dirty': 0,
+            'is_deleted': _pick(item, 'isDeleted', 'is_deleted') == true
+                ? 1
+                : 0,
           }, conflictAlgorithm: ConflictAlgorithm.replace);
         }
       });
