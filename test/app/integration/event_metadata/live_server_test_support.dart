@@ -15,6 +15,7 @@ class LiveServerConfig {
   final String baseUrl;
   final String deviceId;
   final String deviceToken;
+  final String registrationPassword;
   final String? bookUuid;
   final String? eventId;
   final String? recordUuid;
@@ -24,6 +25,7 @@ class LiveServerConfig {
     required this.baseUrl,
     required this.deviceId,
     required this.deviceToken,
+    required this.registrationPassword,
     this.bookUuid,
     this.eventId,
     this.recordUuid,
@@ -67,6 +69,7 @@ class LiveServerConfig {
     final baseUrl = resolve('SN_TEST_BASE_URL');
     final deviceId = resolve('SN_TEST_DEVICE_ID');
     final deviceToken = resolve('SN_TEST_DEVICE_TOKEN');
+    final registrationPassword = resolve('SN_TEST_REGISTRATION_PASSWORD');
     final bookUuid = resolve('SN_TEST_BOOK_UUID');
     final eventId = resolve('SN_TEST_EVENT_ID');
     final recordUuid = resolve('SN_TEST_RECORD_UUID');
@@ -98,12 +101,25 @@ class LiveServerConfig {
       baseUrl: baseUrl,
       deviceId: deviceId,
       deviceToken: deviceToken,
+      registrationPassword: registrationPassword.isEmpty
+          ? 'password'
+          : registrationPassword,
       bookUuid: bookUuid.isEmpty ? null : bookUuid,
       eventId: eventId.isEmpty ? null : eventId,
       recordUuid: recordUuid.isEmpty ? null : recordUuid,
       autoCleanupFixture: autoCleanupFixture,
     );
   }
+}
+
+class LiveDeviceCredentials {
+  final String deviceId;
+  final String deviceToken;
+
+  const LiveDeviceCredentials({
+    required this.deviceId,
+    required this.deviceToken,
+  });
 }
 
 class ResolvedFixture {
@@ -129,14 +145,30 @@ Future<Map<String, dynamic>> fetchBookScopedRecord({
   required LiveServerConfig config,
   required ResolvedFixture fixture,
 }) async {
+  return fetchBookScopedRecordWithCredentials(
+    httpClient: httpClient,
+    baseUrl: config.baseUrl,
+    bookUuid: fixture.bookUuid,
+    recordUuid: fixture.recordUuid,
+    deviceId: config.deviceId,
+    deviceToken: config.deviceToken,
+  );
+}
+
+Future<Map<String, dynamic>> fetchBookScopedRecordWithCredentials({
+  required http.Client httpClient,
+  required String baseUrl,
+  required String bookUuid,
+  required String recordUuid,
+  required String deviceId,
+  required String deviceToken,
+}) async {
   final response = await httpClient.get(
-    Uri.parse(
-      '${config.baseUrl}/api/books/${fixture.bookUuid}/records/${fixture.recordUuid}',
-    ),
+    Uri.parse('$baseUrl/api/books/$bookUuid/records/$recordUuid'),
     headers: {
       'Content-Type': 'application/json',
-      'X-Device-ID': config.deviceId,
-      'X-Device-Token': config.deviceToken,
+      'X-Device-ID': deviceId,
+      'X-Device-Token': deviceToken,
     },
   );
 
@@ -153,6 +185,30 @@ Future<Map<String, dynamic>> fetchBookScopedRecord({
   }
 
   return record;
+}
+
+Future<LiveDeviceCredentials> registerTemporaryDevice({
+  required ApiClient apiClient,
+  required LiveServerConfig config,
+  String deviceNamePrefix = 'IT second device',
+}) async {
+  final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+  final registration = await apiClient.registerDevice(
+    deviceName: '$deviceNamePrefix $suffix',
+    password: config.registrationPassword,
+    platform: 'ios',
+  );
+
+  return LiveDeviceCredentials(
+    deviceId: pickString(
+      registration,
+      keys: const ['deviceId', 'device_id', 'id'],
+    ),
+    deviceToken: pickString(
+      registration,
+      keys: const ['deviceToken', 'device_token', 'token'],
+    ),
+  );
 }
 
 String pickString(Map<String, dynamic> source, {required List<String> keys}) {
@@ -304,4 +360,11 @@ Map<String, dynamic> buildSingleStrokeNotePayload({
   });
 
   return {'pagesData': pagesData, 'version': version};
+}
+
+Map<String, dynamic> buildNotePayloadFromExisting({
+  required Map<String, dynamic> noteMap,
+  required int version,
+}) {
+  return {'pagesData': noteMap['pages_data'], 'version': version};
 }

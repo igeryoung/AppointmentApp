@@ -808,6 +808,180 @@ void main() {
   );
 
   test(
+    'EVENT-DETAIL-UNIT-013: refreshNoteFromServerInBackground() replaces stale local note with incoming server update',
+    () async {
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(
+        recordUuid: 'record-a1',
+        version: 1,
+      );
+      final controller = buildController();
+      await controller.loadNote();
+
+      controller.updatePages([
+        const [
+          Stroke(
+            id: 'local-stroke-1',
+            eventUuid: 'event-a1',
+            points: [StrokePoint(2, 2), StrokePoint(6, 6)],
+          ),
+        ],
+      ]);
+
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(
+        recordUuid: 'record-a1',
+        version: 3,
+        pages: const [
+          [
+            Stroke(
+              id: 'server-stroke-3',
+              eventUuid: 'event-server',
+              points: [StrokePoint(10, 10), StrokePoint(20, 20)],
+            ),
+          ],
+        ],
+      );
+
+      final applied = await controller.refreshNoteFromServerInBackground();
+
+      expect(applied, isTrue);
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.version, 3);
+      final strokeIds = controller.state.lastKnownPages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(strokeIds, contains('server-stroke-3'));
+      expect(strokeIds, isNot(contains('local-stroke-1')));
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-014: saveEvent(isAutoSave=true) discards stale local note when server version is newer',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(
+        recordUuid: 'record-a1',
+        version: 1,
+      );
+      final controller = buildController();
+      await controller.loadNote();
+
+      controller.updatePages([
+        const [
+          Stroke(
+            id: 'local-unsaved-stroke',
+            eventUuid: 'event-a1',
+            points: [StrokePoint(3, 3), StrokePoint(7, 7)],
+          ),
+        ],
+      ]);
+
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(
+        recordUuid: 'record-a1',
+        version: 5,
+        pages: const [
+          [
+            Stroke(
+              id: 'server-authoritative-stroke',
+              eventUuid: 'event-server',
+              points: [StrokePoint(10, 10), StrokePoint(20, 20)],
+            ),
+          ],
+        ],
+      );
+
+      await controller.saveEvent(isAutoSave: true);
+
+      expect(fakeNoteSyncAdapter.saveCalls, 0);
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.version, 5);
+      final finalStrokeIds = controller.state.lastKnownPages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(finalStrokeIds, contains('server-authoritative-stroke'));
+      expect(finalStrokeIds, isNot(contains('local-unsaved-stroke')));
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-015: auto-save conflict keeps server note without merge retry',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      fakeNoteSyncAdapter.noteByRecordUuid = makeNote(
+        recordUuid: 'record-a1',
+        version: 3,
+        pages: const [
+          [
+            Stroke(
+              id: 'server-v3-stroke',
+              eventUuid: 'event-server-v3',
+              points: [StrokePoint(10, 10), StrokePoint(15, 15)],
+            ),
+          ],
+        ],
+      );
+      final controller = buildController();
+      await controller.loadNote();
+
+      controller.updatePages([
+        const [
+          Stroke(
+            id: 'local-conflict-stroke',
+            eventUuid: 'event-a1',
+            points: [StrokePoint(1, 1), StrokePoint(2, 2)],
+          ),
+        ],
+      ]);
+
+      fakeNoteSyncAdapter.conflictResponsesRemaining = 1;
+      fakeNoteSyncAdapter.conflictServerVersion = 3;
+      fakeNoteSyncAdapter.notesByRecordUuid['record-a1'] = makeNote(
+        recordUuid: 'record-a1',
+        version: 3,
+        pages: const [
+          [
+            Stroke(
+              id: 'server-v3-stroke',
+              eventUuid: 'event-server-v3',
+              points: [StrokePoint(10, 10), StrokePoint(15, 15)],
+            ),
+          ],
+        ],
+      );
+
+      await controller.saveEvent(isAutoSave: true);
+
+      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.version, 3);
+      final finalStrokeIds = controller.state.lastKnownPages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(finalStrokeIds, contains('server-v3-stroke'));
+      expect(finalStrokeIds, isNot(contains('local-conflict-stroke')));
+    },
+  );
+
+  test(
     'EVENT-DETAIL-UNIT-011: addChargeItem() links new item to current event even when all-items filter is active',
     () async {
       final controller = buildController();

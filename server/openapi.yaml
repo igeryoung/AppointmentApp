@@ -728,8 +728,9 @@ paths:
           application/json:
             schema:
               type: object
+              required: [record_uuids]
               properties:
-                eventIds:
+                record_uuids:
                   type: array
                   items:
                     type: string

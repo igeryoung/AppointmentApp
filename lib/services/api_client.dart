@@ -598,7 +598,7 @@ class ApiClient {
 
   /// Batch fetch notes from server
   Future<List<Map<String, dynamic>>> batchFetchNotes({
-    required List<String> eventIds,
+    required List<String> recordUuids,
     required String deviceId,
     required String deviceToken,
   }) async {
@@ -611,7 +611,7 @@ class ApiClient {
               'X-Device-ID': deviceId,
               'X-Device-Token': deviceToken,
             },
-            body: jsonEncode({'eventIds': eventIds}),
+            body: jsonEncode({'record_uuids': recordUuids}),
           )
           .timeout(timeout);
 

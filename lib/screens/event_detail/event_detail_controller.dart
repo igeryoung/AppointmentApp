@@ -218,32 +218,85 @@ class EventDetailController {
         return;
       }
 
-      if (serverNote != null) {
-        _updateState(
-          _state.copyWith(
-            note: serverNote,
-            lastKnownPages: serverNote.pages,
-            erasedStrokesByEvent: serverNote.erasedStrokesByEvent,
-            hasUnsyncedChanges: false,
-            isLoadingFromServer: false,
-            isOffline: false,
-          ),
-        );
-        _noteEditedInSession = false;
+      if (_hasIncomingServerNote(serverNote)) {
+        _applyServerAuthoritativeNote(serverNote);
         return;
-      } else {}
+      }
+
+      _updateState(
+        _state.copyWith(isLoadingFromServer: false, isOffline: false),
+      );
     } catch (e) {
       _updateState(
         _state.copyWith(isLoadingFromServer: false, isOffline: true),
       );
       throw Exception('Failed to load note: Cannot connect to server');
     }
+  }
 
-    _updateState(_state.copyWith(isLoadingFromServer: false));
+  /// Refresh note in background and apply server-authoritative state when changed.
+  Future<bool> refreshNoteFromServerInBackground() async {
+    if (event.id == null || _noteSyncAdapter == null) {
+      return false;
+    }
+
+    try {
+      Note? serverNote;
+      if (event.recordUuid.isNotEmpty) {
+        serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
+          event.bookUuid,
+          event.recordUuid,
+        );
+      }
+
+      if (!_hasIncomingServerNote(serverNote)) {
+        _updateState(_state.copyWith(isOffline: false));
+        return false;
+      }
+
+      _applyServerAuthoritativeNote(serverNote);
+      return true;
+    } catch (e) {
+      _updateState(_state.copyWith(isOffline: true));
+      return false;
+    }
+  }
+
+  bool _hasIncomingServerNote(Note? serverNote) {
+    final localNote = _state.note;
+    if (localNote == null && serverNote == null) {
+      return false;
+    }
+    if (localNote == null || serverNote == null) {
+      return true;
+    }
+    return localNote.version != serverNote.version ||
+        localNote.updatedAt != serverNote.updatedAt ||
+        localNote.recordUuid != serverNote.recordUuid;
+  }
+
+  void _applyServerAuthoritativeNote(
+    Note? serverNote, {
+    bool resetHasChanges = false,
+  }) {
+    _updateState(
+      _state.copyWith(
+        note: serverNote,
+        clearNote: serverNote == null,
+        lastKnownPages: serverNote?.pages ?? const [[]],
+        erasedStrokesByEvent: serverNote?.erasedStrokesByEvent ?? const {},
+        hasUnsyncedChanges: false,
+        hasChanges: resetHasChanges ? false : _state.hasChanges,
+        isLoadingFromServer: false,
+        isOffline: false,
+      ),
+    );
+    _noteEditedInSession = false;
+    _incrementNoteGeneration();
   }
 
   /// Save event with handwriting note
-  Future<Event> saveEvent({Size? canvasSize}) async {
+  Future<Event> saveEvent({Size? canvasSize, bool isAutoSave = false}) async {
     final pages = _state.lastKnownPages;
 
     _updateState(_state.copyWith(isLoading: true));
@@ -376,7 +429,12 @@ class EventDetailController {
 
       // Save handwriting note only when this event actually edited note content.
       if (_shouldSaveNote(pages)) {
-        await saveNoteToServer(savedEvent.id!, pages, canvasSize: canvasSize);
+        await saveNoteToServer(
+          savedEvent.id!,
+          pages,
+          canvasSize: canvasSize,
+          preferIncomingServerNote: isAutoSave,
+        );
       }
       await _syncMetadataToServer(
         eventData: savedEvent,
@@ -405,6 +463,7 @@ class EventDetailController {
     String eventId,
     List<List<Stroke>> pages, {
     Size? canvasSize,
+    bool preferIncomingServerNote = false,
   }) async {
     if (_noteSyncAdapter == null) {
       throw Exception('Cannot save: Services not initialized');
@@ -426,6 +485,20 @@ class EventDetailController {
         eventData.bookUuid,
         eventData.recordUuid,
       );
+    }
+
+    final localBaseVersion = _state.note?.version ?? 0;
+    final hasNewerServerNote = (baseNote?.version ?? 0) > localBaseVersion;
+    final hasServerDeletion =
+        preferIncomingServerNote && baseNote == null && localBaseVersion > 0;
+    if (preferIncomingServerNote && (hasNewerServerNote || hasServerDeletion)) {
+      debugPrint(
+        '[EventDetail] autosave skipped: server note wins '
+        'recordUuid=${eventData.recordUuid} local=$localBaseVersion '
+        'server=${baseNote?.version ?? 0}',
+      );
+      _applyServerAuthoritativeNote(baseNote);
+      return;
     }
 
     final nextVersion = (baseNote?.version ?? 0) + 1;
@@ -468,6 +541,7 @@ class EventDetailController {
       eventId: eventId,
       eventData: eventData,
       noteToSave: noteToSave,
+      allowMergeOnConflict: !preferIncomingServerNote,
     );
     _noteEditedInSession = false;
 
@@ -487,12 +561,26 @@ class EventDetailController {
     required Event eventData,
     required Note noteToSave,
     int retryCount = 0,
+    bool allowMergeOnConflict = true,
   }) async {
     const maxRetries = 2;
 
     try {
       return await _noteSyncAdapter!.saveNote(eventId, noteToSave);
     } on ApiConflictException catch (e) {
+      if (!allowMergeOnConflict) {
+        if (eventData.recordUuid.isNotEmpty) {
+          final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
+            eventData.bookUuid,
+            eventData.recordUuid,
+          );
+          if (serverNote != null) {
+            return serverNote;
+          }
+        }
+        rethrow;
+      }
+
       if (retryCount >= maxRetries) {
         rethrow;
       }
@@ -538,6 +626,7 @@ class EventDetailController {
         eventData: eventData,
         noteToSave: retryNote,
         retryCount: retryCount + 1,
+        allowMergeOnConflict: allowMergeOnConflict,
       );
     }
   }

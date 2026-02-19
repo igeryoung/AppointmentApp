@@ -180,6 +180,12 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   /// Check if redo is available
   bool get canRedo => _redoStack.isNotEmpty;
 
+  /// True while a stroke/erase gesture is currently active on canvas.
+  bool get isStrokeInProgress =>
+      _activePointers.isNotEmpty ||
+      _currentStroke != null ||
+      _strokesBeforeErase != null;
+
   /// Get current canvas version
   int get canvasVersion => _canvasVersion;
 

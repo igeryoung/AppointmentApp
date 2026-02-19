@@ -41,8 +41,13 @@ app.*.map.json
 # Environment variables (contain secrets)
 .env
 .env.local
+.env.integration
+.env.*
 *.env
 !.env.example
+
+# Local generated test reports
+docs/testing/reports/user_pipeline_report_*.md
 
 # SSL Certificates (private keys must not be committed)
 server/certs/

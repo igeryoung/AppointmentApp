@@ -300,8 +300,8 @@ High-confidence legacy/inconsistent areas identified from current code:
 - API client endpoints likely stale vs server routes:
 - `GET /api/books/{bookUuid}/persons/{recordNumber}` exists in client but no matching server route found.
 - charge-item endpoints used in client (`/api/records/{recordUuid}/charge-items`, `/api/charge-items/{id}`) have no matching route implementation in `server/lib/routes/`.
-- Notes batch contract mismatch:
-- client sends `eventIds`; server expects `record_uuids`.
+- Notes batch contract:
+- canonical payload key is `record_uuids` for both client and server.
 - Batch service schema mismatch:
 - `server/lib/services/batch_service.dart` still uses old columns (`books.id`, `events.book_id`, `notes.event_id`) while schema/routes are UUID + record-based.
 - Deprecated UI behavior still referenced:

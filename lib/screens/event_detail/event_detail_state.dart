@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';
@@ -19,7 +18,8 @@ class EventDetailState {
   // Note data
   final Note? note;
   final List<List<Stroke>> lastKnownPages;
-  final Map<String, List<String>> erasedStrokesByEvent; // Track erased strokes per event
+  final Map<String, List<String>>
+  erasedStrokesByEvent; // Track erased strokes per event
 
   // Loading and sync state
   final bool isLoading;
@@ -107,6 +107,7 @@ class EventDetailState {
     Event? newEvent,
     bool clearEndTime = false,
     bool clearNewEvent = false,
+    bool clearNote = false,
   }) {
     return EventDetailState(
       name: name ?? this.name,
@@ -116,7 +117,7 @@ class EventDetailState {
       chargeItems: chargeItems ?? this.chargeItems,
       startTime: startTime ?? this.startTime,
       endTime: clearEndTime ? null : (endTime ?? this.endTime),
-      note: note ?? this.note,
+      note: clearNote ? null : (note ?? this.note),
       lastKnownPages: lastKnownPages ?? this.lastKnownPages,
       erasedStrokesByEvent: erasedStrokesByEvent ?? this.erasedStrokesByEvent,
       isLoading: isLoading ?? this.isLoading,
@@ -126,9 +127,13 @@ class EventDetailState {
       isOffline: isOffline ?? this.isOffline,
       isServicesReady: isServicesReady ?? this.isServicesReady,
       isNameReadOnly: isNameReadOnly ?? this.isNameReadOnly,
-      recordNumberError: clearRecordNumberError ? null : (recordNumberError ?? this.recordNumberError),
-      isValidatingRecordNumber: isValidatingRecordNumber ?? this.isValidatingRecordNumber,
-      showOnlyThisEventItems: showOnlyThisEventItems ?? this.showOnlyThisEventItems,
+      recordNumberError: clearRecordNumberError
+          ? null
+          : (recordNumberError ?? this.recordNumberError),
+      isValidatingRecordNumber:
+          isValidatingRecordNumber ?? this.isValidatingRecordNumber,
+      showOnlyThisEventItems:
+          showOnlyThisEventItems ?? this.showOnlyThisEventItems,
       newEvent: clearNewEvent ? null : (newEvent ?? this.newEvent),
     );
   }

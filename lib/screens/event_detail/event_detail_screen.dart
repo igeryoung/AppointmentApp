@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
@@ -8,7 +10,6 @@ import '../../utils/datetime_picker_utils.dart';
 import '../../utils/event_time_validator.dart';
 import '../../widgets/handwriting_canvas.dart';
 import 'event_detail_controller.dart';
-import 'event_detail_state.dart';
 import 'widgets/status_bar.dart';
 import 'widgets/event_metadata_section.dart';
 import 'widgets/handwriting_section.dart';
@@ -17,7 +18,6 @@ import 'dialogs/confirm_discard_dialog.dart';
 import 'dialogs/delete_event_dialog.dart';
 import 'dialogs/remove_event_dialog.dart';
 import '../../widgets/dialogs/change_time_dialog.dart';
-
 
 /// Event Detail screen with handwriting notes - refactored version
 class EventDetailScreen extends StatefulWidget {
@@ -34,11 +34,15 @@ class EventDetailScreen extends StatefulWidget {
   State<EventDetailScreen> createState() => _EventDetailScreenState();
 }
 
-class _EventDetailScreenState extends State<EventDetailScreen> {
+class _EventDetailScreenState extends State<EventDetailScreen>
+    with WidgetsBindingObserver {
+  static const Duration _notePollInterval = Duration(seconds: 30);
+
   late EventDetailController _controller;
   late TextEditingController _nameController;
   late TextEditingController _phoneController;
-  final GlobalKey<HandwritingCanvasState> _canvasKey = GlobalKey<HandwritingCanvasState>();
+  final GlobalKey<HandwritingCanvasState> _canvasKey =
+      GlobalKey<HandwritingCanvasState>();
 
   // Callback to save current page before final save
   VoidCallback? _saveCurrentPageCallback;
@@ -62,14 +66,21 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
+  Timer? _notePollingTimer;
+  bool _isAppResumed = true;
+  bool _isNoteRefreshInFlight = false;
+  bool _hasDeferredRefreshAfterStroke = false;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     // Initialize text controllers
     _nameController = TextEditingController(text: widget.event.title);
-    _phoneController = TextEditingController(text: ''); // Phone is now on records table
+    _phoneController = TextEditingController(
+      text: '',
+    ); // Phone is now on records table
 
     // Initialize last values for clearing behavior
     _lastNameValue = widget.event.title;
@@ -90,8 +101,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
           // IMPORTANT: Update _lastNameValue BEFORE _nameController.text to prevent
           // the name listener from thinking user typed and clearing record number
           if (_nameController.text != state.name) {
-            _lastNameValue = state.name;  // Update tracking variable first!
-            _nameController.text = state.name;  // Then update controller
+            _lastNameValue = state.name; // Update tracking variable first!
+            _nameController.text = state.name; // Then update controller
           }
 
           // Update phone controller if state changed
@@ -139,11 +150,14 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       await _fetchAllNamesAndRecordNumbers();
       await _controller.initialize();
       _controller.setupConnectivityMonitoring();
+      _startNotePolling();
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Failed to initialize services. Some features may not work. Error: $e'),
+            content: Text(
+              'Failed to initialize services. Some features may not work. Error: $e',
+            ),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -154,12 +168,84 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   @override
   void dispose() {
+    _stopNotePolling();
+    WidgetsBinding.instance.removeObserver(this);
     _nameController.dispose();
     _phoneController.dispose();
     _nameFocusNode.dispose();
     _recordNumberFocusNode.dispose();
     _controller.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      _isAppResumed = true;
+      _startNotePolling();
+      unawaited(_pollLatestNoteFromServer(force: true));
+    } else if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      _isAppResumed = false;
+      _stopNotePolling();
+    }
+  }
+
+  bool get _canPollNote {
+    if (!_isAppResumed) return false;
+    if (widget.isNew) return false;
+    if (!mounted) return false;
+    if (_controller.state.isLoading) return false;
+    return widget.event.recordUuid.isNotEmpty;
+  }
+
+  void _startNotePolling() {
+    _stopNotePolling();
+    if (!_canPollNote) return;
+    _notePollingTimer = Timer.periodic(_notePollInterval, (_) {
+      unawaited(_pollLatestNoteFromServer());
+    });
+  }
+
+  void _stopNotePolling() {
+    _notePollingTimer?.cancel();
+    _notePollingTimer = null;
+  }
+
+  Future<void> _pollLatestNoteFromServer({bool force = false}) async {
+    if (!force && !_canPollNote) {
+      return;
+    }
+    if (_isNoteRefreshInFlight) {
+      return;
+    }
+
+    final canvasState = _canvasKey.currentState;
+    if (!force && canvasState != null && canvasState.isStrokeInProgress) {
+      _hasDeferredRefreshAfterStroke = true;
+      return;
+    }
+
+    _isNoteRefreshInFlight = true;
+    try {
+      await _controller.refreshNoteFromServerInBackground();
+      _hasDeferredRefreshAfterStroke = false;
+    } finally {
+      _isNoteRefreshInFlight = false;
+    }
+  }
+
+  void _flushDeferredNoteRefreshIfReady() {
+    if (!_hasDeferredRefreshAfterStroke) {
+      return;
+    }
+    final canvasState = _canvasKey.currentState;
+    if (canvasState != null && canvasState.isStrokeInProgress) {
+      return;
+    }
+    _hasDeferredRefreshAfterStroke = false;
+    unawaited(_pollLatestNoteFromServer(force: true));
   }
 
   Future<void> _fetchAvailableRecordNumbers() async {
@@ -173,7 +259,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _fetchAllNamesAndRecordNumbers() async {
     final names = await _controller.getAllNamesForAutocomplete();
-    final recordNumbers = await _controller.getAllRecordNumbersForAutocomplete();
+    final recordNumbers = await _controller
+        .getAllRecordNumbersForAutocomplete();
     if (mounted) {
       setState(() {
         _allNames = names;
@@ -204,10 +291,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _onPagesChanged(List<List<Stroke>> pages) {
-
     _controller.updatePages(pages);
-
-    final totalStrokes = pages.fold<int>(0, (sum, page) => sum + page.length);
+    _flushDeferredNoteRefreshIfReady();
   }
 
   Size? _getCanvasSize() => _canvasKey.currentState?.canvasSize;
@@ -215,7 +300,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   Future<void> _saveEvent() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(AppLocalizations.of(context)!.eventNameRequired)),
+        SnackBar(
+          content: Text(AppLocalizations.of(context)!.eventNameRequired),
+        ),
       );
       return;
     }
@@ -267,7 +354,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorSavingEventMessage(e.toString()))),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                context,
+              )!.errorSavingEventMessage(e.toString()),
+            ),
+          ),
         );
       }
     }
@@ -287,7 +380,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorDeletingEventMessage(e.toString()))),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                context,
+              )!.errorDeletingEventMessage(e.toString()),
+            ),
+          ),
         );
       }
     }
@@ -307,7 +406,13 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(AppLocalizations.of(context)!.errorRemovingEventMessage(e.toString()))),
+          SnackBar(
+            content: Text(
+              AppLocalizations.of(
+                context,
+              )!.errorRemovingEventMessage(e.toString()),
+            ),
+          ),
         );
       }
     }
@@ -326,7 +431,11 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     if (result == null) return;
 
     try {
-      await _controller.changeEventTime(result.startTime, result.endTime, result.reason);
+      await _controller.changeEventTime(
+        result.startTime,
+        result.endTime,
+        result.reason,
+      );
 
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -437,7 +546,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     // If end time exists and is now invalid (before start or exceeds 21:00), clear it
     final currentEndTime = _controller.state.endTime;
     if (currentEndTime != null) {
-      final error = EventTimeValidator.validateTimeRange(result, currentEndTime);
+      final error = EventTimeValidator.validateTimeRange(
+        result,
+        currentEndTime,
+      );
       if (error != null) {
         _controller.clearEndTime();
         if (mounted) {
@@ -454,7 +566,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
 
   Future<void> _selectEndTime() async {
     final startTime = _controller.state.startTime;
-    final currentEndTime = _controller.state.endTime ?? startTime.add(const Duration(minutes: 30));
+    final currentEndTime =
+        _controller.state.endTime ?? startTime.add(const Duration(minutes: 30));
 
     // Ensure initial value is on same day as start time
     final adjustedInitial = DateTime(
@@ -502,7 +615,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
         _saveCurrentPageCallback?.call();
 
         // Save the event
-        await _controller.saveEvent(canvasSize: _getCanvasSize());
+        await _controller.saveEvent(
+          canvasSize: _getCanvasSize(),
+          isAutoSave: true,
+        );
 
         if (mounted) {
           // Show success feedback
@@ -578,7 +694,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       _saveCurrentPageCallback?.call();
 
       // Save the event
-      await _controller.saveEvent(canvasSize: _getCanvasSize());
+      await _controller.saveEvent(
+        canvasSize: _getCanvasSize(),
+        isAutoSave: true,
+      );
 
       if (mounted) {
         // Show success feedback
@@ -743,10 +862,7 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                     SizedBox(height: 16),
                     Text(
                       'Processing...',
-                      style: TextStyle(
-                        fontSize: 16,
-                        color: Colors.grey,
-                      ),
+                      style: TextStyle(fontSize: 16, color: Colors.grey),
                     ),
                   ],
                 ),
@@ -783,7 +899,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               phoneController: _phoneController,
                               recordNumber: state.recordNumber,
                               availableRecordNumbers: _availableRecordNumbers,
-                              isRecordNumberFieldEnabled: _nameController.text.trim().isNotEmpty,
+                              isRecordNumberFieldEnabled: _nameController.text
+                                  .trim()
+                                  .isNotEmpty,
                               selectedEventTypes: state.selectedEventTypes,
                               startTime: state.startTime,
                               endTime: state.endTime,
@@ -799,12 +917,17 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                               recordNumberFocusNode: _recordNumberFocusNode,
                               allNames: _allNames,
                               allRecordNumberOptions: _allRecordNumberOptions,
-                              onNameSelected: (name) => _controller.onNameSelected(name),
-                              onRecordNumberSelected: (recordNumber) => _controller.onRecordNumberSelected(recordNumber),
+                              onNameSelected: (name) =>
+                                  _controller.onNameSelected(name),
+                              onRecordNumberSelected: (recordNumber) =>
+                                  _controller.onRecordNumberSelected(
+                                    recordNumber,
+                                  ),
                               isNameReadOnly: state.isNameReadOnly,
                               // Record number validation
                               recordNumberError: state.recordNumberError,
-                              isValidatingRecordNumber: state.isValidatingRecordNumber,
+                              isValidatingRecordNumber:
+                                  state.isValidatingRecordNumber,
                               onRecordNumberBlur: _handleRecordNumberBlur,
                             ),
                           ),
@@ -824,8 +947,8 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
                       Expanded(
                         child: Builder(
                           builder: (context) {
-                            final initialPages = state.note?.pages ?? state.lastKnownPages;
-                            final totalStrokes = initialPages.fold<int>(0, (sum, page) => sum + page.length);
+                            final initialPages =
+                                state.note?.pages ?? state.lastKnownPages;
                             return HandwritingSection(
                               canvasKey: _canvasKey,
                               initialPages: initialPages,
