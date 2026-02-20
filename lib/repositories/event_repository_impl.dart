@@ -1,6 +1,8 @@
 import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/event.dart';
+import '../repositories/device_repository.dart';
+import '../services/api_client.dart';
 import '../services/database/mixins/event_operations_mixin.dart';
 import 'event_repository.dart';
 import 'base_repository.dart';
@@ -9,9 +11,16 @@ import 'base_repository.dart';
 class EventRepositoryImpl extends BaseRepository<Event, String>
     implements IEventRepository {
   final _uuid = const Uuid();
+  final ApiClient? _apiClient;
+  final IDeviceRepository? _deviceRepository;
 
-  EventRepositoryImpl(Future<Database> Function() getDatabaseFn)
-    : super(getDatabaseFn);
+  EventRepositoryImpl(
+    Future<Database> Function() getDatabaseFn, {
+    ApiClient? apiClient,
+    IDeviceRepository? deviceRepository,
+  }) : _apiClient = apiClient,
+       _deviceRepository = deviceRepository,
+       super(getDatabaseFn);
 
   @override
   String get tableName => 'events';
@@ -243,6 +252,17 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
 
   @override
   Future<List<String>> getAllNames(String bookUuid) async {
+    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
+    if (serverEvents != null) {
+      final names = serverEvents
+          .map((event) => event.title.trim())
+          .where((name) => name.isNotEmpty)
+          .toSet()
+          .toList();
+      names.sort();
+      return names;
+    }
+
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
       '''
@@ -273,6 +293,28 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
 
   @override
   Future<List<NameRecordPair>> getAllNameRecordPairs(String bookUuid) async {
+    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
+    if (serverEvents != null) {
+      final pairMap = <String, NameRecordPair>{};
+      for (final event in serverEvents) {
+        final name = event.title.trim();
+        final recordNumber = event.recordNumber.trim();
+        if (name.isEmpty || recordNumber.isEmpty) continue;
+        pairMap['$name::$recordNumber'] = NameRecordPair(
+          name: name,
+          recordNumber: recordNumber,
+        );
+      }
+
+      final pairs = pairMap.values.toList()
+        ..sort((a, b) {
+          final nameCompare = a.name.compareTo(b.name);
+          if (nameCompare != 0) return nameCompare;
+          return a.recordNumber.compareTo(b.recordNumber);
+        });
+      return pairs;
+    }
+
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
       '''
@@ -301,6 +343,22 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     String bookUuid,
     String name,
   ) async {
+    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
+    if (serverEvents != null) {
+      final normalizedName = name.trim().toLowerCase();
+      final recordNumbers = serverEvents
+          .where(
+            (event) =>
+                event.title.trim().toLowerCase().contains(normalizedName),
+          )
+          .map((event) => event.recordNumber.trim())
+          .where((recordNumber) => recordNumber.isNotEmpty)
+          .toSet()
+          .toList();
+      recordNumbers.sort();
+      return recordNumbers;
+    }
+
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
       '''
@@ -323,6 +381,22 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     String name,
     String recordNumber,
   ) async {
+    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
+    if (serverEvents != null) {
+      final normalizedName = name.trim().toLowerCase();
+      final normalizedRecordNumber = recordNumber.trim();
+      final matched =
+          serverEvents
+              .where(
+                (event) =>
+                    event.title.trim().toLowerCase().contains(normalizedName) &&
+                    event.recordNumber.trim() == normalizedRecordNumber,
+              )
+              .toList()
+            ..sort((a, b) => b.startTime.compareTo(a.startTime));
+      return matched;
+    }
+
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
       '''
@@ -361,5 +435,31 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
   @override
   Future<Event?> getByServerId(String serverId) async {
     return getById(serverId);
+  }
+
+  Future<List<Event>?> _fetchAllEventsFromServer(String bookUuid) async {
+    final apiClient = _apiClient;
+    final deviceRepository = _deviceRepository;
+    if (apiClient == null || deviceRepository == null) {
+      return null;
+    }
+
+    final credentials = await deviceRepository.getCredentials();
+    if (credentials == null) {
+      return null;
+    }
+
+    final nowUtc = DateTime.now().toUtc();
+    final serverEvents = await apiClient.fetchEventsByDateRange(
+      bookUuid: bookUuid,
+      startDate: nowUtc.subtract(const Duration(days: 365 * 50)),
+      endDate: nowUtc.add(const Duration(days: 365 * 50)),
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+    );
+
+    return serverEvents
+        .map((event) => Event.fromServerResponse(event))
+        .toList();
   }
 }

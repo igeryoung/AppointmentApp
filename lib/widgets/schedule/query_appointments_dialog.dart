@@ -33,7 +33,8 @@ class _QueryAppointmentsDialog extends StatefulWidget {
   });
 
   @override
-  State<_QueryAppointmentsDialog> createState() => _QueryAppointmentsDialogState();
+  State<_QueryAppointmentsDialog> createState() =>
+      _QueryAppointmentsDialogState();
 }
 
 class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
@@ -56,7 +57,6 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     super.initState();
     nameController = TextEditingController();
     recordNumberController = TextEditingController();
-    _loadAllNames();
     _loadAllNameRecordPairs();
   }
 
@@ -68,29 +68,15 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     super.dispose();
   }
 
-  /// Load all available names for autocomplete
-  Future<void> _loadAllNames() async {
-    try {
-      final names = await widget.eventRepository.getAllNames(widget.bookUuid);
-      setState(() {
-        allNames = names;
-      });
-    } catch (e) {
-      // Silently fail - allNames will remain empty
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorLoadingData)),
-        );
-      }
-    }
-  }
-
   /// Load all available name-record pairs for dropdown
   Future<void> _loadAllNameRecordPairs() async {
     try {
-      final pairs = await widget.eventRepository.getAllNameRecordPairs(widget.bookUuid);
+      final pairs = await widget.eventRepository.getAllNameRecordPairs(
+        widget.bookUuid,
+      );
+      final names = pairs.map((pair) => pair.name).toSet().toList()..sort();
       setState(() {
+        allNames = names;
         allNameRecordPairs = pairs;
         filteredNameRecordPairs = pairs; // Initially show all pairs
       });
@@ -98,9 +84,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       // Silently fail - allNameRecordPairs will remain empty
       if (mounted) {
         final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorLoadingData)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
       }
     }
   }
@@ -170,9 +156,21 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         name,
         selectedRecordNumber!,
       );
+      final normalizedName = name.toLowerCase();
+      final normalizedRecordNumber = selectedRecordNumber!.trim().toLowerCase();
+      final filteredResults =
+          results
+              .where(
+                (event) =>
+                    event.title.trim().toLowerCase().contains(normalizedName) &&
+                    event.recordNumber.trim().toLowerCase() ==
+                        normalizedRecordNumber,
+              )
+              .toList()
+            ..sort((a, b) => b.startTime.compareTo(a.startTime));
 
       setState(() {
-        searchResults = results;
+        searchResults = filteredResults;
         isLoading = false;
         hasSearched = true;
       });
@@ -183,9 +181,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         searchResults = [];
       });
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(l10n.errorSearching)),
-        );
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.errorSearching)));
       }
     }
   }
@@ -196,16 +194,15 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   }
 
   /// Check if search button should be enabled
-  bool get _canSearch => nameController.text.trim().isNotEmpty && selectedRecordNumber != null;
+  bool get _canSearch =>
+      nameController.text.trim().isNotEmpty && selectedRecordNumber != null;
 
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
 
     return Dialog(
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(28.0),
-      ),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28.0)),
       clipBehavior: Clip.antiAlias,
       child: Container(
         width: MediaQuery.of(context).size.width * 0.9,
@@ -241,7 +238,8 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null;
-                        recordNumberController.clear(); // Clear record number field
+                        recordNumberController
+                            .clear(); // Clear record number field
                       });
                       _filterNameRecordPairsByName();
                     },
@@ -254,13 +252,17 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       setState(() {
                         nameError = null;
                         selectedRecordNumber = null;
-                        recordNumberController.clear(); // Clear record number field
+                        recordNumberController
+                            .clear(); // Clear record number field
                       });
 
                       _debounceTimer?.cancel();
-                      _debounceTimer = Timer(const Duration(milliseconds: 500), () {
-                        _filterNameRecordPairsByName();
-                      });
+                      _debounceTimer = Timer(
+                        const Duration(milliseconds: 500),
+                        () {
+                          _filterNameRecordPairsByName();
+                        },
+                      );
                     },
                   ),
                   const SizedBox(height: 16),
@@ -315,9 +317,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
             const Divider(height: 1),
 
             // Results list
-            Expanded(
-              child: _buildResultsList(l10n),
-            ),
+            Expanded(child: _buildResultsList(l10n)),
           ],
         ),
       ),
@@ -521,7 +521,9 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
     if (text.isEmpty) {
       return widget.allNames;
     }
-    return widget.allNames.where((name) => name.toLowerCase().contains(text)).toList();
+    return widget.allNames
+        .where((name) => name.toLowerCase().contains(text))
+        .toList();
   }
 
   void _showOverlay() {
@@ -575,7 +577,10 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
                         _focusNode.unfocus();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 10.0,
+                          horizontal: 12.0,
+                        ),
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
@@ -608,7 +613,10 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
           labelText: widget.labelText,
           errorText: widget.errorText,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
         ),
       ),
     );
@@ -634,10 +642,12 @@ class _RecordNumberAutocompleteField extends StatefulWidget {
   });
 
   @override
-  State<_RecordNumberAutocompleteField> createState() => _RecordNumberAutocompleteFieldState();
+  State<_RecordNumberAutocompleteField> createState() =>
+      _RecordNumberAutocompleteFieldState();
 }
 
-class _RecordNumberAutocompleteFieldState extends State<_RecordNumberAutocompleteField> {
+class _RecordNumberAutocompleteFieldState
+    extends State<_RecordNumberAutocompleteField> {
   final FocusNode _focusNode = FocusNode();
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
@@ -736,7 +746,10 @@ class _RecordNumberAutocompleteFieldState extends State<_RecordNumberAutocomplet
                         _focusNode.unfocus();
                       },
                       child: Container(
-                        padding: const EdgeInsets.symmetric(vertical: 10.0, horizontal: 12.0),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 10.0,
+                          horizontal: 12.0,
+                        ),
                         decoration: BoxDecoration(
                           border: Border(
                             bottom: BorderSide(
@@ -770,7 +783,10 @@ class _RecordNumberAutocompleteFieldState extends State<_RecordNumberAutocomplet
           labelText: widget.labelText,
           errorText: widget.errorText,
           border: const OutlineInputBorder(),
-          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 8,
+          ),
         ),
       ),
     );

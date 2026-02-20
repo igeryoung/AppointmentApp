@@ -53,8 +53,16 @@ Future<void> setupServices({required String serverUrl}) async {
       ),
     );
 
+    getIt.registerLazySingleton<IDeviceRepository>(
+      () => DeviceRepositoryImpl(() => db.database),
+    );
+
     getIt.registerLazySingleton<IEventRepository>(
-      () => EventRepositoryImpl(() => db.database),
+      () => EventRepositoryImpl(
+        () => db.database,
+        apiClient: apiClient,
+        deviceRepository: getIt<IDeviceRepository>(),
+      ),
     );
 
     getIt.registerLazySingleton<INoteRepository>(
@@ -63,10 +71,6 @@ Future<void> setupServices({required String serverUrl}) async {
 
     getIt.registerLazySingleton<IDrawingRepository>(
       () => DrawingRepositoryImpl(() => db.database),
-    );
-
-    getIt.registerLazySingleton<IDeviceRepository>(
-      () => DeviceRepositoryImpl(() => db.database),
     );
   }
 
@@ -98,6 +102,17 @@ Future<void> registerContentServices(ApiClient apiClient) async {
           () => db.database,
           apiClient: apiClient,
           dbService: db,
+        ),
+      );
+
+      if (getIt.isRegistered<IEventRepository>()) {
+        getIt.unregister<IEventRepository>();
+      }
+      getIt.registerLazySingleton<IEventRepository>(
+        () => EventRepositoryImpl(
+          () => db.database,
+          apiClient: apiClient,
+          deviceRepository: getIt<IDeviceRepository>(),
         ),
       );
     }
