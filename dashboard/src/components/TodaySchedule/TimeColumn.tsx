@@ -3,7 +3,7 @@ import {
   SCHEDULE_START_HOUR,
   SLOTS_PER_HOUR,
   TOTAL_SLOTS,
-  TimeSlot
+  TimeSlot,
 } from './types';
 
 interface TimeColumnProps {
@@ -11,43 +11,31 @@ interface TimeColumnProps {
 }
 
 export const TimeColumn: React.FC<TimeColumnProps> = ({ slotHeight }) => {
-  // Generate time slots
   const timeSlots: TimeSlot[] = [];
-  for (let i = 0; i < TOTAL_SLOTS; i++) {
-    const hour = SCHEDULE_START_HOUR + Math.floor(i / SLOTS_PER_HOUR);
-    const minute = (i % SLOTS_PER_HOUR) * 15;
+
+  for (let index = 0; index < TOTAL_SLOTS; index += 1) {
+    const hour = SCHEDULE_START_HOUR + Math.floor(index / SLOTS_PER_HOUR);
+    const minute = (index % SLOTS_PER_HOUR) * 15;
     const label = `${hour}:${minute.toString().padStart(2, '0')}`;
-    timeSlots.push({ hour, minute, label, slotIndex: i });
+    timeSlots.push({ hour, minute, label, slotIndex: index });
   }
 
   return (
-    <div
-      className="time-column"
-      style={{
-        width: '60px',
-        flexShrink: 0,
-        borderRight: '1px solid #e5e7eb',
-      }}
-    >
-      {timeSlots.map((slot) => (
-        <div
-          key={slot.slotIndex}
-          className="time-slot"
-          style={{
-            height: `${slotHeight}px`,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '12px',
-            color: '#6b7280',
-            borderBottom: '0.5px solid #e5e7eb',
-            backgroundColor: slot.minute === 0 ? '#f9fafb' : 'transparent',
-            fontWeight: slot.minute === 0 ? 600 : 400,
-          }}
-        >
-          {slot.label}
-        </div>
-      ))}
+    <div className="time-column">
+      {timeSlots.map((slot) => {
+        const isHour = slot.minute === 0;
+        const isHalfHour = slot.minute === 30;
+
+        return (
+          <div
+            key={slot.slotIndex}
+            className={`time-slot ${isHour ? 'is-hour' : isHalfHour ? 'is-half' : 'is-quarter'}`}
+            style={{ height: `${slotHeight}px` }}
+          >
+            {isHour ? slot.label : isHalfHour ? `${slot.hour}:30` : ''}
+          </div>
+        );
+      })}
     </div>
   );
 };

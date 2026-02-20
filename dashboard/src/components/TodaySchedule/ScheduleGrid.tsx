@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { TimeColumn } from './TimeColumn';
 import { BookColumn } from './BookColumn';
 import { BookWithEvents } from './types';
@@ -14,111 +14,53 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
   slotHeight,
   columnWidth,
 }) => {
-  // Book header height matches BookColumn header
-  const bookHeaderHeight = 44; // 12px padding top + 12px padding bottom + ~20px text height
-
-  // Refs for scroll sync
   const headerScrollRef = useRef<HTMLDivElement>(null);
-  const bodyScrollRef = useRef<HTMLDivElement>(null);
+  const bodyBookScrollRef = useRef<HTMLDivElement>(null);
 
-  // Sync scroll between header and body
   useEffect(() => {
     const headerScroll = headerScrollRef.current;
-    const bodyScroll = bodyScrollRef.current;
+    const bodyBookScroll = bodyBookScrollRef.current;
 
-    if (!headerScroll || !bodyScroll) return;
+    if (!headerScroll || !bodyBookScroll) {
+      return;
+    }
 
-    const syncHeaderScroll = () => {
-      if (bodyScroll && headerScroll.scrollLeft !== bodyScroll.scrollLeft) {
-        bodyScroll.scrollLeft = headerScroll.scrollLeft;
+    const syncHeaderHorizontal = () => {
+      if (bodyBookScroll.scrollLeft !== headerScroll.scrollLeft) {
+        bodyBookScroll.scrollLeft = headerScroll.scrollLeft;
       }
     };
 
-    const syncBodyScroll = () => {
-      if (headerScroll && bodyScroll.scrollLeft !== headerScroll.scrollLeft) {
-        headerScroll.scrollLeft = bodyScroll.scrollLeft;
+    const syncBodyHorizontal = () => {
+      if (headerScroll.scrollLeft !== bodyBookScroll.scrollLeft) {
+        headerScroll.scrollLeft = bodyBookScroll.scrollLeft;
       }
     };
 
-    headerScroll.addEventListener('scroll', syncHeaderScroll);
-    bodyScroll.addEventListener('scroll', syncBodyScroll);
+    headerScroll.addEventListener('scroll', syncHeaderHorizontal);
+    bodyBookScroll.addEventListener('scroll', syncBodyHorizontal);
 
     return () => {
-      headerScroll.removeEventListener('scroll', syncHeaderScroll);
-      bodyScroll.removeEventListener('scroll', syncBodyScroll);
+      headerScroll.removeEventListener('scroll', syncHeaderHorizontal);
+      bodyBookScroll.removeEventListener('scroll', syncBodyHorizontal);
     };
   }, []);
 
   return (
-    <div
-      className="schedule-grid-container"
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        height: '100%',
-      }}
-    >
-      {/* Header row - aligns time column placeholder with book headers */}
-      <div style={{ display: 'flex', flexShrink: 0 }}>
-        {/* Placeholder header for time column - sticky */}
-        <div
-          style={{
-            width: '60px',
-            height: `${bookHeaderHeight}px`,
-            borderRight: '1px solid #e5e7eb',
-            borderBottom: '2px solid #e5e7eb',
-            backgroundColor: '#f8fafc',
-            flexShrink: 0,
-            position: 'sticky',
-            left: 0,
-            zIndex: 20,
-          }}
-        />
+    <div className="schedule-grid">
+      <div className="schedule-grid__header-row">
+        <div className="schedule-grid__time-header">Time</div>
 
-        {/* Book headers container - scrollable */}
-        <div
-          ref={headerScrollRef}
-          style={{
-            display: 'flex',
-            flex: 1,
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            scrollbarWidth: 'none', // Hide scrollbar on header
-            msOverflowStyle: 'none', // Hide scrollbar on IE
-          }}
-        >
+        <div ref={headerScrollRef} className="schedule-grid__book-headers">
           {booksWithEvents.length === 0 ? (
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '12px',
-                color: '#9ca3af',
-                fontSize: '14px',
-                borderBottom: '2px solid #e5e7eb',
-                backgroundColor: '#f8fafc',
-              }}
-            >
-              No books selected
-            </div>
+            <div className="schedule-grid__headers-empty">No books</div>
           ) : (
             booksWithEvents.map((bookData) => (
               <div
                 key={`header-${bookData.bookUuid}`}
-                style={{
-                  width: `${columnWidth}px`,
-                  flexShrink: 0,
-                  borderRight: '1px solid #e5e7eb',
-                  borderBottom: '2px solid #3b82f6',
-                  padding: '12px 8px',
-                  textAlign: 'center',
-                  fontWeight: 600,
-                  fontSize: '14px',
-                  color: '#1e293b',
-                  backgroundColor: '#f8fafc',
-                }}
+                className="schedule-grid__book-header"
+                style={{ width: `${columnWidth}px` }}
+                title={bookData.bookName}
               >
                 {bookData.bookName}
               </div>
@@ -127,66 +69,28 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({
         </div>
       </div>
 
-      {/* Schedule body - time column + book columns */}
-      <div style={{ display: 'flex', flex: 1, minHeight: 0, overflow: 'hidden' }}>
-        {/* Time column - sticky on left */}
-        <div
-          style={{
-            position: 'sticky',
-            left: 0,
-            zIndex: 10,
-            backgroundColor: 'white',
-            flexShrink: 0,
-          }}
-        >
-          <TimeColumn slotHeight={slotHeight} />
-        </div>
+      <div className="schedule-grid__body-viewport">
+        <div className="schedule-grid__body-row">
+          <div className="schedule-grid__time-column-wrap">
+            <TimeColumn slotHeight={slotHeight} />
+          </div>
 
-        {/* Book columns - horizontal scrollable */}
-        <div
-          ref={bodyScrollRef}
-          className="book-columns-scroll"
-          style={{
-            display: 'flex',
-            overflowX: 'auto',
-            overflowY: 'hidden',
-            flex: 1,
-            scrollbarWidth: 'thin',
-            scrollbarColor: '#cbd5e1 #f1f5f9',
-          }}
-        >
-          {booksWithEvents.length === 0 ? (
-            <div
-              style={{
-                flex: 1,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                padding: '48px',
-                color: '#9ca3af',
-                fontSize: '14px',
-                textAlign: 'center',
-              }}
-            >
-              <div>
-                <div style={{ fontSize: '16px', fontWeight: 500, marginBottom: '8px' }}>
-                  No events today
-                </div>
-                <div style={{ fontSize: '14px' }}>
-                  Select books from the dropdown above to view their schedules
-                </div>
+          <div ref={bodyBookScrollRef} className="schedule-grid__book-columns">
+            {booksWithEvents.length === 0 ? (
+              <div className="schedule-grid__empty-state">
+                <h3>No books selected</h3>
               </div>
-            </div>
-          ) : (
-            booksWithEvents.map((bookData) => (
-              <BookColumn
-                key={bookData.bookUuid}
-                events={bookData.events}
-                slotHeight={slotHeight}
-                columnWidth={columnWidth}
-              />
-            ))
-          )}
+            ) : (
+              booksWithEvents.map((bookData) => (
+                <BookColumn
+                  key={bookData.bookUuid}
+                  events={bookData.events}
+                  slotHeight={slotHeight}
+                  columnWidth={columnWidth}
+                />
+              ))
+            )}
+          </div>
         </div>
       </div>
     </div>
