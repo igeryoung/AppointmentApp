@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { RefreshCw, Search } from 'lucide-react';
 import { dashboardAPI } from '../services/api';
@@ -6,50 +6,67 @@ import type { RecordSummary } from '../types';
 import { parseServerDate } from '../utils/date';
 import { formatShortId } from '../utils/id';
 
+const PAGE_SIZE = 30;
+
 export function Records() {
   const navigate = useNavigate();
   const [records, setRecords] = useState<RecordSummary[]>([]);
+  const [totalRecords, setTotalRecords] = useState(0);
+  const [currentPage, setCurrentPage] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState('');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const fetchRecords = async () => {
+  const loadRecords = useCallback(async (page: number, query: string) => {
     try {
       setLoading(true);
       setError(null);
-      const data = await dashboardAPI.getRecords();
+
+      const filters = query ? { searchQuery: query } : undefined;
+      const data = await dashboardAPI.getRecords(
+        filters,
+        { limit: PAGE_SIZE, offset: page * PAGE_SIZE },
+      );
+
+      if (data.total > 0 && page * PAGE_SIZE >= data.total) {
+        setCurrentPage(Math.max(0, Math.ceil(data.total / PAGE_SIZE) - 1));
+        return;
+      }
+
       setRecords(data.records || []);
+      setTotalRecords(data.total);
     } catch (err) {
       console.error('Failed to fetch records:', err);
       setError('Failed to load records. Please try again.');
     } finally {
       setLoading(false);
     }
-  };
-
-  useEffect(() => {
-    fetchRecords();
   }, []);
 
-  const filteredRecords = useMemo(() => {
-    const query = searchQuery.trim().toLowerCase();
-    if (!query) {
-      return records;
-    }
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      const normalizedQuery = searchInput.trim();
+      setSearchQuery(normalizedQuery);
+      setCurrentPage(0);
+    }, 300);
 
-    return records.filter((record) => {
-      const name = record.name?.toLowerCase() ?? '';
-      const recordNumber = record.recordNumber?.toLowerCase() ?? '';
-      const phone = record.phone?.toLowerCase() ?? '';
-      const uuid = record.recordUuid.toLowerCase();
-      return (
-        name.includes(query) ||
-        recordNumber.includes(query) ||
-        phone.includes(query) ||
-        uuid.includes(query)
-      );
-    });
-  }, [records, searchQuery]);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchInput]);
+
+  useEffect(() => {
+    loadRecords(currentPage, searchQuery);
+  }, [currentPage, searchQuery, loadRecords]);
+
+  const totalPages = Math.max(1, Math.ceil(totalRecords / PAGE_SIZE));
+  const hasPreviousPage = currentPage > 0;
+  const hasNextPage = (currentPage + 1) * PAGE_SIZE < totalRecords;
+  const pageStart = totalRecords === 0 ? 0 : currentPage * PAGE_SIZE + 1;
+  const pageEnd = totalRecords === 0 ? 0 : Math.min(totalRecords, (currentPage + 1) * PAGE_SIZE);
+
+  const handleRefresh = () => {
+    loadRecords(currentPage, searchQuery);
+  };
 
   const formatDateTime = (value?: string | null) => {
     const date = parseServerDate(value);
@@ -74,7 +91,7 @@ export function Records() {
 
       <div className="toolbar">
         <div className="toolbar-section">
-          <button onClick={fetchRecords} className="btn btn-primary btn-sm" disabled={loading}>
+          <button onClick={handleRefresh} className="btn btn-primary btn-sm" disabled={loading}>
             <RefreshCw size={16} />
             {loading ? 'Loading...' : 'Refresh'}
           </button>
@@ -96,8 +113,8 @@ export function Records() {
               type="text"
               placeholder="Search by name, record number, phone, or ID..."
               className="input"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               style={{ paddingLeft: '2.5rem' }}
             />
           </div>
@@ -114,7 +131,7 @@ export function Records() {
 
       <div className="card">
         <div className="card-header">
-          <h2 className="card-title">All Records ({filteredRecords.length})</h2>
+          <h2 className="card-title">All Records ({totalRecords})</h2>
         </div>
         <div className="card-body">
           {loading ? (
@@ -122,7 +139,7 @@ export function Records() {
               <div className="spinner"></div>
               <p>Loading records...</p>
             </div>
-          ) : filteredRecords.length === 0 ? (
+          ) : records.length === 0 ? (
             <div style={{ textAlign: 'center', padding: '3rem', color: '#6b7280' }}>
               No records found
             </div>
@@ -143,7 +160,7 @@ export function Records() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredRecords.map((record) => (
+                  {records.map((record) => (
                     <tr
                       key={record.recordUuid}
                       onClick={() => navigate(`/records/${record.recordUuid}`)}
@@ -174,6 +191,35 @@ export function Records() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {!loading && totalRecords > 0 && (
+            <div className="toolbar" style={{ marginTop: '1rem', padding: 0 }}>
+              <div className="toolbar-section">
+                <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                  Showing {pageStart}-{pageEnd} of {totalRecords}
+                </span>
+              </div>
+              <div className="toolbar-section">
+                <button
+                  onClick={() => setCurrentPage((page) => Math.max(0, page - 1))}
+                  className="btn btn-secondary btn-sm"
+                  disabled={!hasPreviousPage || loading}
+                >
+                  Previous
+                </button>
+                <span style={{ color: '#374151', fontSize: '0.875rem' }}>
+                  Page {currentPage + 1} of {totalPages}
+                </span>
+                <button
+                  onClick={() => setCurrentPage((page) => page + 1)}
+                  className="btn btn-secondary btn-sm"
+                  disabled={!hasNextPage || loading}
+                >
+                  Next
+                </button>
+              </div>
             </div>
           )}
         </div>

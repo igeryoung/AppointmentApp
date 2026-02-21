@@ -12,12 +12,9 @@ class DashboardRoutes {
   final String adminPassword;
   final Logger _logger = Logger('DashboardRoutes');
 
-  DashboardRoutes(
-    this.db, {
-    String? adminUsername,
-    String? adminPassword,
-  })  : adminUsername = adminUsername ?? 'admin',
-        adminPassword = adminPassword ?? 'admin123';
+  DashboardRoutes(this.db, {String? adminUsername, String? adminPassword})
+    : adminUsername = adminUsername ?? 'admin',
+      adminPassword = adminPassword ?? 'admin123';
 
   Router get router {
     final router = Router();
@@ -30,15 +27,27 @@ class DashboardRoutes {
     router.get('/devices', _authMiddleware(_getDevices));
     router.get('/books', _authMiddleware(_getBooks));
     router.get('/records', _authMiddleware(_getRecords));
-    router.get('/records/<recordUuid>', (Request request, String recordUuid) async {
-      return _authMiddleware((Request req) => _getRecordDetail(req, recordUuid))(request);
+    router.get('/records/<recordUuid>', (
+      Request request,
+      String recordUuid,
+    ) async {
+      return _authMiddleware(
+        (Request req) => _getRecordDetail(req, recordUuid),
+      )(request);
     });
     router.get('/events', _authMiddleware(_getEvents));
     router.get('/events/<eventId>', (Request request, String eventId) async {
-      return _authMiddleware((Request req) => _getEventDetail(req, eventId))(request);
+      return _authMiddleware((Request req) => _getEventDetail(req, eventId))(
+        request,
+      );
     });
-    router.get('/events/<eventId>/note', (Request request, String eventId) async {
-      return _authMiddleware((Request req) => _getEventNote(req, eventId))(request);
+    router.get('/events/<eventId>/note', (
+      Request request,
+      String eventId,
+    ) async {
+      return _authMiddleware((Request req) => _getEventNote(req, eventId))(
+        request,
+      );
     });
     router.get('/notes', _authMiddleware(_getNotes));
     router.get('/drawings', _authMiddleware(_getDrawings));
@@ -58,10 +67,7 @@ class DashboardRoutes {
       if (body.isEmpty) {
         print('   ❌ Empty request body');
         return Response.badRequest(
-          body: jsonEncode({
-            'success': false,
-            'message': 'Empty request body',
-          }),
+          body: jsonEncode({'success': false, 'message': 'Empty request body'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -91,20 +97,14 @@ class DashboardRoutes {
 
       print('   ❌ Invalid credentials');
       return Response.forbidden(
-        jsonEncode({
-          'success': false,
-          'message': 'Invalid credentials',
-        }),
+        jsonEncode({'success': false, 'message': 'Invalid credentials'}),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
       print('❌ Dashboard login error: $e');
       print('   Stack trace: $stackTrace');
       return Response.internalServerError(
-        body: jsonEncode({
-          'success': false,
-          'message': 'Login failed: $e',
-        }),
+        body: jsonEncode({'success': false, 'message': 'Login failed: $e'}),
         headers: {'Content-Type': 'application/json'},
       );
     }
@@ -139,6 +139,34 @@ class DashboardRoutes {
     return int.tryParse(value.toString()) ?? 0;
   }
 
+  int? _parseLimit(Map<String, String> params, {int max = 200}) {
+    final rawLimit = params['limit'];
+    if (rawLimit == null || rawLimit.trim().isEmpty) {
+      return null;
+    }
+
+    final parsed = int.tryParse(rawLimit);
+    if (parsed == null || parsed <= 0) {
+      return null;
+    }
+
+    return parsed > max ? max : parsed;
+  }
+
+  int _parseOffset(Map<String, String> params) {
+    final rawOffset = params['offset'];
+    if (rawOffset == null || rawOffset.trim().isEmpty) {
+      return 0;
+    }
+
+    final parsed = int.tryParse(rawOffset);
+    if (parsed == null || parsed < 0) {
+      return 0;
+    }
+
+    return parsed;
+  }
+
   /// Convert database rows to JSON-serializable format
   /// Handles DateTime, UUID, and other PostgreSQL-specific types
   List<Map<String, dynamic>> _serializeRows(List<Map<String, dynamic>> rows) {
@@ -162,9 +190,13 @@ class DashboardRoutes {
     if (parts.length == 1) return snakeCase;
 
     return parts[0] +
-           parts.skip(1).map((part) =>
-             part.isEmpty ? '' : part[0].toUpperCase() + part.substring(1)
-           ).join('');
+        parts
+            .skip(1)
+            .map(
+              (part) =>
+                  part.isEmpty ? '' : part[0].toUpperCase() + part.substring(1),
+            )
+            .join('');
   }
 
   /// Convert a value to JSON-serializable format
@@ -173,13 +205,18 @@ class DashboardRoutes {
     if (value is DateTime) {
       // Event timestamps are stored as UTC in DB but PostgreSQL returns them as local DateTime.
       // Normalize to UTC ISO for API consumers (e.g., dashboard).
-      if (column == 'start_time' || column == 'end_time' || column == 'created_at' || column == 'updated_at') {
+      if (column == 'start_time' ||
+          column == 'end_time' ||
+          column == 'created_at' ||
+          column == 'updated_at') {
         return value.toUtc().toIso8601String();
       }
       return value.toUtc().toIso8601String();
     }
     if (value is Map) {
-      return value.map((k, v) => MapEntry(k.toString(), _serializeValue(k.toString(), v)));
+      return value.map(
+        (k, v) => MapEntry(k.toString(), _serializeValue(k.toString(), v)),
+      );
     }
     if (value is List) {
       return value.map((v) => _serializeValue(column, v)).toList();
@@ -233,7 +270,9 @@ class DashboardRoutes {
 
   Future<Map<String, dynamic>> _getDeviceStats() async {
     try {
-      final totalRow = await db.querySingle('SELECT COUNT(*) as count FROM devices');
+      final totalRow = await db.querySingle(
+        'SELECT COUNT(*) as count FROM devices',
+      );
       final activeRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM devices WHERE is_active = true',
       );
@@ -253,7 +292,11 @@ class DashboardRoutes {
         'devices': _serializeRows(deviceRows),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch device stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch device stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -270,8 +313,7 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM books WHERE is_deleted = false AND archived_at IS NOT NULL',
       );
 
-      final bookRows = await db.queryRows(
-        '''
+      final bookRows = await db.queryRows('''
         SELECT
           b.book_uuid, b.device_id, b.name, b.created_at, b.updated_at, b.archived_at,
           COUNT(DISTINCT e.id) as event_count,
@@ -285,8 +327,7 @@ class DashboardRoutes {
         GROUP BY b.book_uuid
         ORDER BY b.created_at DESC
         LIMIT 100
-        ''',
-      );
+        ''');
 
       return {
         'total': _safeInt(totalRow?['count']),
@@ -295,7 +336,11 @@ class DashboardRoutes {
         'books': _serializeRows(bookRows),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch book stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch book stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -312,8 +357,7 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM events WHERE is_deleted = false AND is_removed = true',
       );
 
-      final eventTypeRows = await db.queryRows(
-        '''
+      final eventTypeRows = await db.queryRows('''
         WITH normalized_event_types AS (
           SELECT
             jsonb_array_elements_text(
@@ -329,8 +373,7 @@ class DashboardRoutes {
         FROM normalized_event_types
         GROUP BY normalized_type
         ORDER BY normalized_type
-        ''',
-      );
+        ''');
 
       final byType = <String, int>{};
       for (final row in eventTypeRows) {
@@ -339,8 +382,7 @@ class DashboardRoutes {
         byType[eventType] = count;
       }
 
-      final recentEvents = await db.queryRows(
-        '''
+      final recentEvents = await db.queryRows('''
         SELECT
           e.*,
           r.name,
@@ -352,8 +394,7 @@ class DashboardRoutes {
         WHERE e.is_deleted = false
         ORDER BY e.created_at DESC
         LIMIT 50
-        ''',
-      );
+        ''');
 
       return {
         'total': _safeInt(totalRow?['count']),
@@ -363,7 +404,11 @@ class DashboardRoutes {
         'recent': _serializeRows(recentEvents),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch event stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch event stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -374,14 +419,12 @@ class DashboardRoutes {
         'SELECT COUNT(*) as count FROM notes WHERE is_deleted = false',
       );
 
-      final eventsWithNotesRow = await db.querySingle(
-        '''
+      final eventsWithNotesRow = await db.querySingle('''
         SELECT COUNT(DISTINCT e.id) as count
         FROM events e
         INNER JOIN notes n ON e.record_uuid = n.record_uuid
         WHERE e.is_deleted = false AND n.is_deleted = false
-        ''',
-      );
+        ''');
 
       final totalEventsRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM events WHERE is_deleted = false',
@@ -402,7 +445,11 @@ class DashboardRoutes {
         'recentlyUpdated': _serializeRows(recentNotes),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch note stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch note stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -437,7 +484,11 @@ class DashboardRoutes {
         'recent': _serializeRows(recent),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch drawing stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch drawing stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -455,16 +506,14 @@ class DashboardRoutes {
       final totalSize = _safeInt(sizeRow?['total_size']);
       final totalSizeMB = (totalSize / (1024 * 1024)).toStringAsFixed(2);
 
-      final recent = await db.queryRows(
-        '''
+      final recent = await db.queryRows('''
         SELECT bb.*, b.name as book_name
         FROM book_backups bb
         LEFT JOIN books b ON bb.book_uuid = b.book_uuid
         WHERE bb.is_deleted = false
         ORDER BY bb.created_at DESC
         LIMIT 50
-        ''',
-      );
+        ''');
 
       final restoredRow = await db.querySingle(
         'SELECT COUNT(*) as count FROM book_backups WHERE is_deleted = false AND restored_at IS NOT NULL',
@@ -478,14 +527,20 @@ class DashboardRoutes {
         'restoredCount': _safeInt(restoredRow?['count']),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch backup stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch backup stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
 
   Future<Map<String, dynamic>> _getSyncStatsData() async {
     try {
-      final totalRow = await db.querySingle('SELECT COUNT(*) as count FROM sync_log');
+      final totalRow = await db.querySingle(
+        'SELECT COUNT(*) as count FROM sync_log',
+      );
       final successRow = await db.querySingle(
         "SELECT COUNT(*) as count FROM sync_log WHERE status = 'success'",
       );
@@ -499,15 +554,13 @@ class DashboardRoutes {
       final total = _safeInt(totalRow?['count']);
       final successful = _safeInt(successRow?['count']);
 
-      final recent = await db.queryRows(
-        '''
+      final recent = await db.queryRows('''
         SELECT sl.*, d.device_name
         FROM sync_log sl
         LEFT JOIN devices d ON sl.device_id = d.id
         ORDER BY sl.synced_at DESC
         LIMIT 100
-        ''',
-      );
+        ''');
 
       return {
         'totalOperations': total,
@@ -518,7 +571,11 @@ class DashboardRoutes {
         'recentSyncs': _serializeRows(recent),
       };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch sync stats', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch sync stats',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -530,6 +587,9 @@ class DashboardRoutes {
       final name = params['name'];
       final recordNumber = params['recordNumber'];
       final phone = params['phone'];
+      final searchQuery = params['searchQuery'];
+      final limit = _parseLimit(params);
+      final offset = _parseOffset(params);
 
       final conditions = <String>['r.is_deleted = false'];
       final queryParams = <String, dynamic>{};
@@ -549,10 +609,36 @@ class DashboardRoutes {
         queryParams['phone'] = '%${phone.toLowerCase()}%';
       }
 
-      final whereClause = conditions.join(' AND ');
+      if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+        conditions.add(
+          '('
+          'LOWER(COALESCE(r.name, \'\')) LIKE @searchQuery OR '
+          'LOWER(COALESCE(r.record_number, \'\')) LIKE @searchQuery OR '
+          'LOWER(COALESCE(r.phone, \'\')) LIKE @searchQuery OR '
+          'LOWER(r.record_uuid::text) LIKE @searchQuery'
+          ')',
+        );
+        queryParams['searchQuery'] = '%${searchQuery.trim().toLowerCase()}%';
+      }
 
-      final rows = await db.queryRows(
-        '''
+      final whereClause = conditions.join(' AND ');
+      final countRow = await db.querySingle('''
+        SELECT COUNT(*) as count
+        FROM records r
+        WHERE $whereClause
+        ''', parameters: queryParams);
+      final total = _safeInt(countRow?['count']);
+
+      final paginationClause = limit != null
+          ? 'LIMIT @limit OFFSET @offset'
+          : '';
+      final dataParams = Map<String, dynamic>.from(queryParams);
+      if (limit != null) {
+        dataParams['limit'] = limit;
+        dataParams['offset'] = offset;
+      }
+
+      final rows = await db.queryRows('''
         SELECT
           r.record_uuid,
           r.record_number,
@@ -571,16 +657,24 @@ class DashboardRoutes {
         WHERE $whereClause
         GROUP BY r.record_uuid, r.record_number, r.name, r.phone, r.created_at, r.updated_at, r.version
         ORDER BY r.updated_at DESC
-        ''',
-        parameters: queryParams,
-      );
+        $paginationClause
+        ''', parameters: dataParams);
 
       return Response.ok(
-        jsonEncode({'records': _serializeRows(rows)}),
+        jsonEncode({
+          'records': _serializeRows(rows),
+          'total': total,
+          'limit': limit ?? rows.length,
+          'offset': limit != null ? offset : 0,
+        }),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch records', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch records',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return Response.internalServerError(
         body: jsonEncode({'error': '$e'}),
         headers: {'Content-Type': 'application/json'},
@@ -662,7 +756,11 @@ class DashboardRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch record detail', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch record detail',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return Response.internalServerError(
         body: jsonEncode({'error': '$e'}),
         headers: {'Content-Type': 'application/json'},
@@ -670,14 +768,17 @@ class DashboardRoutes {
     }
   }
 
-  /// Get filtered list of events with optional book, name, record number, and date range filters
-  /// Returns all events sorted by start_time ASC when date range is provided, otherwise created_at DESC
-  Future<List<Map<String, dynamic>>> _getFilteredEvents(
+  /// Get filtered list of events with optional book, name, record number, and date range filters.
+  /// Returns events sorted by start_time ASC when date range is provided, otherwise created_at DESC.
+  /// Supports optional limit/offset pagination.
+  Future<Map<String, dynamic>> _getFilteredEvents(
     String? bookUuid,
     String? name,
     String? recordNumber, {
     DateTime? startDate,
     DateTime? endDate,
+    int? limit,
+    int offset = 0,
   }) async {
     try {
       final conditions = <String>['e.is_deleted = false'];
@@ -709,9 +810,28 @@ class DashboardRoutes {
       }
 
       final whereClause = conditions.join(' AND ');
-      final orderBy = (startDate != null || endDate != null) ? 'e.start_time ASC' : 'e.created_at DESC';
+      final orderBy = (startDate != null || endDate != null)
+          ? 'e.start_time ASC'
+          : 'e.created_at DESC';
+      final countRow = await db.querySingle('''
+        SELECT COUNT(*) as count
+        FROM events e
+        LEFT JOIN records r ON e.record_uuid = r.record_uuid
+        WHERE $whereClause
+        ''', parameters: params);
+      final total = _safeInt(countRow?['count']);
 
-      final query = '''
+      final queryParams = Map<String, dynamic>.from(params);
+      final paginationClause = limit != null
+          ? 'LIMIT @limit OFFSET @offset'
+          : '';
+      if (limit != null) {
+        queryParams['limit'] = limit;
+        queryParams['offset'] = offset;
+      }
+
+      final query =
+          '''
         SELECT
           e.*,
           b.name as book_name,
@@ -724,12 +844,22 @@ class DashboardRoutes {
         LEFT JOIN records r ON e.record_uuid = r.record_uuid
         WHERE $whereClause
         ORDER BY $orderBy
+        $paginationClause
       ''';
 
-      final rows = await db.queryRows(query, parameters: params);
-      return _serializeRows(rows);
+      final rows = await db.queryRows(query, parameters: queryParams);
+      return {
+        'events': _serializeRows(rows),
+        'total': total,
+        'limit': limit ?? rows.length,
+        'offset': limit != null ? offset : 0,
+      };
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch filtered events', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch filtered events',
+        error: e,
+        stackTrace: stackTrace,
+      );
       rethrow;
     }
   }
@@ -774,7 +904,11 @@ class DashboardRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch event detail', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch event detail',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return Response.internalServerError(
         body: jsonEncode({'error': '$e'}),
         headers: {'Content-Type': 'application/json'},
@@ -815,7 +949,11 @@ class DashboardRoutes {
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e, stackTrace) {
-      _logger.error('Failed to fetch event note', error: e, stackTrace: stackTrace);
+      _logger.error(
+        'Failed to fetch event note',
+        error: e,
+        stackTrace: stackTrace,
+      );
       return Response.internalServerError(
         body: jsonEncode({'error': '$e'}),
         headers: {'Content-Type': 'application/json'},
@@ -863,6 +1001,8 @@ class DashboardRoutes {
       final recordNumber = params['recordNumber'];
       final startDateStr = params['startDate'];
       final endDateStr = params['endDate'];
+      final limit = _parseLimit(params);
+      final offset = _parseOffset(params);
 
       // Parse date parameters if provided
       DateTime? startDate;
@@ -875,24 +1015,27 @@ class DashboardRoutes {
       }
 
       // Check if this is a request for the events list (not stats)
-      final wantsList = params.containsKey('bookUuid') ||
-                        params.containsKey('name') ||
-                        params.containsKey('recordNumber') ||
-                        params.containsKey('startDate') ||
-                        params.containsKey('endDate') ||
-                        params.containsKey('list');
+      final wantsList =
+          params.containsKey('bookUuid') ||
+          params.containsKey('name') ||
+          params.containsKey('recordNumber') ||
+          params.containsKey('startDate') ||
+          params.containsKey('endDate') ||
+          params.containsKey('list');
 
       // If requesting list or any filters are provided, return filtered list
       if (wantsList) {
-        final events = await _getFilteredEvents(
+        final eventsResponse = await _getFilteredEvents(
           bookUuid,
           name,
           recordNumber,
           startDate: startDate,
           endDate: endDate,
+          limit: limit,
+          offset: offset,
         );
         return Response.ok(
-          jsonEncode({'events': events}),
+          jsonEncode(eventsResponse),
           headers: {'Content-Type': 'application/json'},
         );
       }

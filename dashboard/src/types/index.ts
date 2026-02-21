@@ -223,6 +223,26 @@ export interface RecordFilters {
   name?: string;
   recordNumber?: string;
   phone?: string;
+  searchQuery?: string;
+}
+
+export interface PaginationOptions {
+  limit?: number;
+  offset?: number;
+}
+
+export interface PaginatedRecordsResponse {
+  records: RecordSummary[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface PaginatedEventsResponse {
+  events: Event[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
 export interface RecordDetailResponse {

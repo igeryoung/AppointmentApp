@@ -10,6 +10,9 @@ import type {
   EventFilters,
   RecordFilters,
   RecordDetailResponse,
+  PaginationOptions,
+  PaginatedRecordsResponse,
+  PaginatedEventsResponse,
 } from '../types';
 import { parseEventTypes } from '../utils/event';
 
@@ -104,9 +107,24 @@ class DashboardAPI {
     return response.data;
   }
 
-  async getRecords(filters?: RecordFilters): Promise<{ records: RecordSummary[] }> {
-    const response = await this.client.get<{ records: RecordSummary[] }>('/records', { params: filters });
-    return response.data;
+  async getRecords(
+    filters?: RecordFilters,
+    pagination?: PaginationOptions,
+  ): Promise<PaginatedRecordsResponse> {
+    const params = { ...filters, ...pagination };
+    const response = await this.client.get<{
+      records: RecordSummary[];
+      total?: number;
+      limit?: number;
+      offset?: number;
+    }>('/records', { params });
+
+    return {
+      records: response.data.records ?? [],
+      total: response.data.total ?? (response.data.records?.length ?? 0),
+      limit: response.data.limit ?? pagination?.limit ?? (response.data.records?.length ?? 0),
+      offset: response.data.offset ?? pagination?.offset ?? 0,
+    };
   }
 
   async getRecordDetail(recordUuid: string): Promise<RecordDetailResponse> {
@@ -143,12 +161,25 @@ class DashboardAPI {
   }
 
   // Events & Notes - New Endpoints
-  async getFilteredEvents(filters: EventFilters): Promise<{ events: Event[] }> {
+  async getFilteredEvents(
+    filters: EventFilters,
+    pagination?: PaginationOptions,
+  ): Promise<PaginatedEventsResponse> {
     // Always include 'list' param to tell backend we want the events list, not stats
-    const params = { ...filters, list: true };
-    const response = await this.client.get<{ events: RawEvent[] }>('/events', { params });
+    const params = { ...filters, ...pagination, list: true };
+    const response = await this.client.get<{
+      events: RawEvent[];
+      total?: number;
+      limit?: number;
+      offset?: number;
+    }>('/events', { params });
+
+    const normalizedEvents = this.normalizeEvents(response.data.events);
     return {
-      events: this.normalizeEvents(response.data.events),
+      events: normalizedEvents,
+      total: response.data.total ?? normalizedEvents.length,
+      limit: response.data.limit ?? pagination?.limit ?? normalizedEvents.length,
+      offset: response.data.offset ?? pagination?.offset ?? 0,
     };
   }
 

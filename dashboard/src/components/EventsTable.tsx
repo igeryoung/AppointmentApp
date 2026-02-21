@@ -10,6 +10,7 @@ interface EventsTableProps {
   events: Event[];
   loading?: boolean;
   title?: string;
+  totalCount?: number;
   emptyMessage?: string;
 }
 
@@ -21,6 +22,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({
   events,
   loading = false,
   title = 'All Events',
+  totalCount,
   emptyMessage = 'No events found',
 }) => {
   const navigate = useNavigate();
@@ -66,7 +68,7 @@ export const EventsTable: React.FC<EventsTableProps> = ({
   return (
     <div className="card">
       <div className="card-header">
-        <h2 className="card-title">{title} ({events.length})</h2>
+        <h2 className="card-title">{title} ({totalCount ?? events.length})</h2>
       </div>
       <div className="card-body">
         <div className="table-container">
