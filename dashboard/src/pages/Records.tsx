@@ -195,26 +195,26 @@ export function Records() {
           )}
 
           {!loading && totalRecords > 0 && (
-            <div className="toolbar" style={{ marginTop: '1rem', padding: 0 }}>
+            <div className="toolbar pagination-toolbar">
               <div className="toolbar-section">
-                <span style={{ color: '#6b7280', fontSize: '0.875rem' }}>
+                <span className="pagination-info">
                   Showing {pageStart}-{pageEnd} of {totalRecords}
                 </span>
               </div>
               <div className="toolbar-section">
                 <button
                   onClick={() => setCurrentPage((page) => Math.max(0, page - 1))}
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-primary btn-sm"
                   disabled={!hasPreviousPage || loading}
                 >
                   Previous
                 </button>
-                <span style={{ color: '#374151', fontSize: '0.875rem' }}>
+                <span className="pagination-page">
                   Page {currentPage + 1} of {totalPages}
                 </span>
                 <button
                   onClick={() => setCurrentPage((page) => page + 1)}
-                  className="btn btn-secondary btn-sm"
+                  className="btn btn-primary btn-sm"
                   disabled={!hasNextPage || loading}
                 >
                   Next

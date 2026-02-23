@@ -480,6 +480,23 @@ code {
   align-items: center;
 }
 
+.pagination-toolbar {
+  margin-top: 1rem;
+  margin-bottom: 0;
+  justify-content: space-between;
+}
+
+.pagination-info {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.pagination-page {
+  color: var(--primary-color);
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
 /* Button */
 .btn {
   padding: 0.5rem 1rem;
@@ -515,6 +532,11 @@ code {
 .btn-sm {
   padding: 0.375rem 0.75rem;
   font-size: 0.813rem;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 /* Input */

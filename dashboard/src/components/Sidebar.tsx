@@ -1,12 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import {
-  LayoutDashboard,
   CalendarDays,
   BookOpen,
   Calendar,
-  Palette,
-  Database,
-  RefreshCw,
   Users,
   FileText,
   LogOut,
@@ -14,15 +10,11 @@ import {
 import { dashboardAPI } from '../services/api';
 
 const navItems = [
-  { path: '/', label: 'Overview', icon: LayoutDashboard },
   { path: '/today', label: 'Today', icon: CalendarDays },
   { path: '/devices', label: 'Devices', icon: Users },
   { path: '/books', label: 'Books', icon: BookOpen },
   { path: '/records', label: 'Records', icon: FileText },
   { path: '/events', label: 'Events & Notes', icon: Calendar },
-  { path: '/drawings', label: 'Drawings', icon: Palette },
-  { path: '/backups', label: 'Backups', icon: Database },
-  { path: '/sync', label: 'Sync Logs', icon: RefreshCw },
 ];
 
 export function Sidebar() {
