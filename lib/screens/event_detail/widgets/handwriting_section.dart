@@ -10,8 +10,10 @@ class HandwritingSection extends StatefulWidget {
   final List<List<Stroke>> initialPages;
   final Function(List<List<Stroke>>) onPagesChanged;
   final void Function(VoidCallback)? onSaveCurrentPageCallbackSet;
+  final void Function(List<List<Stroke>> Function())? onCapturePagesCallbackSet;
   final String? currentEventUuid; // Current event UUID for stroke tracking
-  final void Function(List<String> erasedStrokeIds)? onStrokesErased; // Callback for erased strokes
+  final void Function(List<String> erasedStrokeIds)?
+  onStrokesErased; // Callback for erased strokes
 
   const HandwritingSection({
     super.key,
@@ -19,6 +21,7 @@ class HandwritingSection extends StatefulWidget {
     required this.initialPages,
     required this.onPagesChanged,
     this.onSaveCurrentPageCallbackSet,
+    this.onCapturePagesCallbackSet,
     this.currentEventUuid,
     this.onStrokesErased,
   });
@@ -39,15 +42,26 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   /// This should be called before saveEvent() to ensure current canvas state is captured
   void saveCurrentPage() {
     _saveCurrentPageStrokes();
-    final totalStrokes = _allPages.fold<int>(0, (sum, page) => sum + page.length);
+    final totalStrokes = _allPages.fold<int>(
+      0,
+      (sum, page) => sum + page.length,
+    );
     widget.onPagesChanged(_deepCopyPages(_allPages));
+  }
+
+  List<List<Stroke>> capturePages() {
+    _saveCurrentPageStrokes();
+    return _allPages;
   }
 
   @override
   void initState() {
     super.initState();
     // Initialize pages with deep copy, ensure at least one empty page
-    final initialTotalStrokes = widget.initialPages.fold<int>(0, (sum, page) => sum + page.length);
+    final initialTotalStrokes = widget.initialPages.fold<int>(
+      0,
+      (sum, page) => sum + page.length,
+    );
 
     _allPages = widget.initialPages.isEmpty
         ? [[]]
@@ -55,10 +69,14 @@ class _HandwritingSectionState extends State<HandwritingSection> {
     // Start at the last page (newest, displayed as "page 1")
     _currentPageIndex = _allPages.length - 1;
 
-    final finalTotalStrokes = _allPages.fold<int>(0, (sum, page) => sum + page.length);
+    final finalTotalStrokes = _allPages.fold<int>(
+      0,
+      (sum, page) => sum + page.length,
+    );
 
     // Register the save callback with parent
     widget.onSaveCurrentPageCallbackSet?.call(saveCurrentPage);
+    widget.onCapturePagesCallbackSet?.call(capturePages);
   }
 
   @override
@@ -66,34 +84,43 @@ class _HandwritingSectionState extends State<HandwritingSection> {
     super.didUpdateWidget(oldWidget);
 
     // Check if initialPages changed
-    final oldTotalStrokes = oldWidget.initialPages.fold<int>(0, (sum, page) => sum + page.length);
-    final newTotalStrokes = widget.initialPages.fold<int>(0, (sum, page) => sum + page.length);
-
+    final oldTotalStrokes = oldWidget.initialPages.fold<int>(
+      0,
+      (sum, page) => sum + page.length,
+    );
+    final newTotalStrokes = widget.initialPages.fold<int>(
+      0,
+      (sum, page) => sum + page.length,
+    );
 
     // If data changed, reinitialize
     if (oldWidget.initialPages.length != widget.initialPages.length ||
         oldTotalStrokes != newTotalStrokes) {
-
       _allPages = widget.initialPages.isEmpty
           ? [[]]
           : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
       _currentPageIndex = _allPages.length - 1;
 
-      final finalTotalStrokes = _allPages.fold<int>(0, (sum, page) => sum + page.length);
+      final finalTotalStrokes = _allPages.fold<int>(
+        0,
+        (sum, page) => sum + page.length,
+      );
 
       // Load the new page into canvas
       if (_currentPageIndex >= 0 && _currentPageIndex < _allPages.length) {
-        widget.canvasKey.currentState?.loadStrokes(_allPages[_currentPageIndex]);
+        widget.canvasKey.currentState?.loadStrokes(
+          _allPages[_currentPageIndex],
+        );
       }
-    } else {
-    }
+    } else {}
   }
 
   // Convert array index to display page number (reverse order)
   int get _displayPageNumber => _allPages.length - _currentPageIndex;
 
   // Convert display page number to array index
-  int _displayToArrayIndex(int displayNumber) => _allPages.length - displayNumber;
+  int _displayToArrayIndex(int displayNumber) =>
+      _allPages.length - displayNumber;
 
   // Save current canvas strokes to current page
   void _saveCurrentPageStrokes() {
@@ -125,7 +152,6 @@ class _HandwritingSectionState extends State<HandwritingSection> {
 
     // Notify parent with deep copy
     widget.onPagesChanged(_deepCopyPages(_allPages));
-
   }
 
   // Add a new page (appends to end of array, becomes new "page 1")
@@ -144,7 +170,6 @@ class _HandwritingSectionState extends State<HandwritingSection> {
 
     // Notify parent with deep copy
     widget.onPagesChanged(_deepCopyPages(_allPages));
-
   }
 
   // Navigate to previous page in UI (next in array)
@@ -176,9 +201,7 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        border: Border(
-          top: BorderSide(color: Colors.grey.shade300, width: 1),
-        ),
+        border: Border(top: BorderSide(color: Colors.grey.shade300, width: 1)),
       ),
       child: StatefulBuilder(
         builder: (context, setToolbarState) {
@@ -186,7 +209,8 @@ class _HandwritingSectionState extends State<HandwritingSection> {
           final currentTool = canvasState?.currentTool ?? DrawingTool.pen;
           final currentColor = canvasState?.strokeColor ?? Colors.black;
           final currentWidth = canvasState?.strokeWidth ?? 2.0;
-          final currentHighlighterColor = canvasState?.highlighterColor ?? const Color(0x66FFEB3B);
+          final currentHighlighterColor =
+              canvasState?.highlighterColor ?? const Color(0x66FFEB3B);
           final currentHighlighterWidth = canvasState?.highlighterWidth ?? 10.0;
           final currentEraserRadius = canvasState?.eraserRadius ?? 20.0;
 
@@ -211,11 +235,15 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                       setToolbarState(() {});
                     },
                     onHighlighterTap: () {
-                      widget.canvasKey.currentState?.setTool(DrawingTool.highlighter);
+                      widget.canvasKey.currentState?.setTool(
+                        DrawingTool.highlighter,
+                      );
                       setToolbarState(() {});
                     },
                     onEraserTap: () {
-                      widget.canvasKey.currentState?.setTool(DrawingTool.eraser);
+                      widget.canvasKey.currentState?.setTool(
+                        DrawingTool.eraser,
+                      );
                       setToolbarState(() {});
                     },
                     onExpandCollapseTap: () {
@@ -240,7 +268,9 @@ class _HandwritingSectionState extends State<HandwritingSection> {
                   Expanded(
                     child: HandwritingCanvas(
                       key: widget.canvasKey,
-                      initialStrokes: _allPages.isNotEmpty ? _allPages[_currentPageIndex] : [],
+                      initialStrokes: _allPages.isNotEmpty
+                          ? _allPages[_currentPageIndex]
+                          : [],
                       onStrokesChanged: _onCanvasStrokesChanged,
                       currentEventUuid: widget.currentEventUuid,
                       showOnlyCurrentEvent: _showOnlyCurrentEvent,

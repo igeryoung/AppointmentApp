@@ -265,6 +265,11 @@ void main() {
     );
   }
 
+  Future<void> waitForBackgroundSync() async {
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+    await Future<void>.delayed(const Duration(milliseconds: 10));
+  }
+
   test(
     'EVENT-DETAIL-UNIT-001: saveEvent() syncs event and record metadata to server',
     () async {
@@ -284,6 +289,7 @@ void main() {
       ]);
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
       expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
@@ -312,23 +318,20 @@ void main() {
   );
 
   test(
-    'EVENT-DETAIL-UNIT-002: saveEvent() throws when metadata sync has no device credentials',
+    'EVENT-DETAIL-UNIT-002: saveEvent() returns local success when metadata sync has no device credentials',
     () async {
       final controller = buildController();
       controller.updatePhone('0911222333');
       controller.updateEventTypes(const [EventType.emergency]);
 
-      await expectLater(
-        controller.saveEvent,
-        throwsA(
-          predicate(
-            (error) => error.toString().contains('Device not registered'),
-          ),
-        ),
-      );
+      final savedEvent = await controller.saveEvent();
+      await waitForBackgroundSync();
 
+      expect(savedEvent.id, 'event-a1');
       expect(fakeApiClient.updateEventCalls, 0);
       expect(fakeApiClient.updateRecordCalls, 0);
+      expect(controller.state.hasUnsyncedChanges, isTrue);
+      expect(controller.state.isOffline, isTrue);
     },
   );
 
@@ -361,6 +364,7 @@ void main() {
       ]);
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
       expect(fakeNoteSyncAdapter.saveCalls, 1);
       expect(fakeNoteSyncAdapter.lastSaveEventId, 'event-a1');
@@ -391,7 +395,7 @@ void main() {
   );
 
   test(
-    'EVENT-FLOW-002: saveEvent() marks state offline when metadata sync fails after trigger',
+    'EVENT-FLOW-002: saveEvent() keeps local success and marks state offline when metadata sync fails after trigger',
     () async {
       await dbService.saveDeviceCredentials(
         deviceId: 'device-001',
@@ -409,8 +413,10 @@ void main() {
       controller.updatePhone('0900001234');
       controller.updateEventTypes(const [EventType.emergency]);
 
-      await expectLater(controller.saveEvent, throwsA(isA<ApiException>()));
+      final savedEvent = await controller.saveEvent();
+      await waitForBackgroundSync();
 
+      expect(savedEvent.id, 'event-a1');
       expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 0);
@@ -448,8 +454,9 @@ void main() {
       controller.updateRecordNumber('001');
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
-      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 1);
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 0);
       expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
@@ -489,6 +496,7 @@ void main() {
       controller.updateRecordNumber('001');
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
@@ -574,6 +582,7 @@ void main() {
       controller.updateRecordNumber('001');
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
@@ -627,6 +636,7 @@ void main() {
       controller.updateRecordNumber('');
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.createEventCalls, 1);
@@ -671,6 +681,7 @@ void main() {
       controller.updateRecordNumber('NEW-001');
 
       await controller.saveEvent();
+      await waitForBackgroundSync();
 
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
@@ -716,6 +727,7 @@ void main() {
       ]);
 
       final createdEvent = await createController.saveEvent();
+      await waitForBackgroundSync();
       expect(createdEvent.id, 'event-create-reenter-1');
       expect(createdEvent.recordNumber, isEmpty);
       expect(createdEvent.recordUuid, isNotEmpty);
@@ -747,6 +759,7 @@ void main() {
       reopenController.updateName('Alice');
       reopenController.updateRecordNumber('001');
       final updatedEvent = await reopenController.saveEvent();
+      await waitForBackgroundSync();
 
       expect(updatedEvent.recordNumber, '001');
       expect(updatedEvent.recordUuid, 'record-a1');
@@ -899,6 +912,7 @@ void main() {
       );
 
       await controller.saveEvent(isAutoSave: true);
+      await waitForBackgroundSync();
 
       expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(controller.state.note, isNotNull);
@@ -967,6 +981,7 @@ void main() {
       );
 
       await controller.saveEvent(isAutoSave: true);
+      await waitForBackgroundSync();
 
       expect(fakeNoteSyncAdapter.saveCalls, 1);
       expect(controller.state.note, isNotNull);

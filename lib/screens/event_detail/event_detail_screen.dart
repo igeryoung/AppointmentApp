@@ -5,6 +5,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
+import '../../services/save_sync_notifier.dart';
 import '../../services/service_locator.dart';
 import '../../utils/datetime_picker_utils.dart';
 import '../../utils/event_time_validator.dart';
@@ -43,9 +44,6 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   late TextEditingController _phoneController;
   final GlobalKey<HandwritingCanvasState> _canvasKey =
       GlobalKey<HandwritingCanvasState>();
-
-  // Callback to save current page before final save
-  VoidCallback? _saveCurrentPageCallback;
 
   // Track the last checked record number to prevent dialog loop
   String? _lastCheckedRecordNumber;
@@ -297,6 +295,45 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   Size? _getCanvasSize() => _canvasKey.currentState?.canvasSize;
 
+  Future<void> _runSaveInBackground({
+    required bool isAutoSave,
+    required Size? canvasSize,
+  }) async {
+    try {
+      await _controller.saveEvent(
+        canvasSize: canvasSize,
+        isAutoSave: isAutoSave,
+      );
+    } catch (error) {
+      SaveSyncNotifier.instance.notifyFailure(
+        SaveSyncFailure(
+          bookUuid: widget.event.bookUuid,
+          eventId: widget.event.id,
+          errorMessage: '本地儲存失敗: $error',
+          occurredAt: DateTime.now(),
+        ),
+      );
+    }
+  }
+
+  void _saveInBackgroundAndPop({required bool isAutoSave}) {
+    final capturedCanvasSize = _getCanvasSize();
+
+    if (mounted) {
+      Navigator.pop(context, true);
+    }
+
+    // Let route pop animation complete before kicking off background save work.
+    unawaited(
+      Future<void>.delayed(const Duration(milliseconds: 800), () {
+        return _runSaveInBackground(
+          isAutoSave: isAutoSave,
+          canvasSize: capturedCanvasSize,
+        );
+      }),
+    );
+  }
+
   Future<void> _saveEvent() async {
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -318,52 +355,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
       return;
     }
 
-    try {
-      // Ensure current canvas state is saved before reading pages
-      _saveCurrentPageCallback?.call();
-
-      // Save is handled by the controller which already has the latest pages
-      // from onPagesChanged callbacks
-      await _controller.saveEvent(canvasSize: _getCanvasSize());
-
-      if (mounted) {
-        // Show success feedback
-        final isOffline = _controller.state.isOffline;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isOffline
-                        ? 'Saved locally (offline - will sync when online)'
-                        : 'Saved locally (syncing to server...)',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        Navigator.pop(context, true);
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              AppLocalizations.of(
-                context,
-              )!.errorSavingEventMessage(e.toString()),
-            ),
-          ),
-        );
-      }
-    }
+    _saveInBackgroundAndPop(isAutoSave: false);
   }
 
   Future<void> _deleteEvent() async {
@@ -610,61 +602,8 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     // For NEW events with a name (even without changes), auto-save
     // This handles the case where data is pre-filled from "schedule next appointment"
     if (widget.isNew && hasName) {
-      try {
-        // Save current canvas state
-        _saveCurrentPageCallback?.call();
-
-        // Save the event
-        await _controller.saveEvent(
-          canvasSize: _getCanvasSize(),
-          isAutoSave: true,
-        );
-
-        if (mounted) {
-          // Show success feedback
-          final isOffline = _controller.state.isOffline;
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Row(
-                children: [
-                  const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      isOffline
-                          ? 'Saved locally (offline - will sync when online)'
-                          : 'Saved locally (syncing to server...)',
-                    ),
-                  ),
-                ],
-              ),
-              backgroundColor: Colors.green,
-              duration: const Duration(seconds: 2),
-            ),
-          );
-
-          // Navigate back with result=true to trigger schedule reload
-          Navigator.pop(context, true);
-        }
-
-        return false; // Prevent default pop (we already popped manually)
-      } catch (e) {
-        if (mounted) {
-          // Show error but still navigate back
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Error saving: ${e.toString()}'),
-              backgroundColor: Colors.red,
-              duration: const Duration(seconds: 3),
-            ),
-          );
-
-          // Navigate back with result=true to trigger schedule reload (data might be partially saved)
-          Navigator.pop(context, true);
-        }
-
-        return false; // Prevent default pop (we already popped manually)
-      }
+      _saveInBackgroundAndPop(isAutoSave: true);
+      return false; // Prevent default pop (we already popped manually)
     }
 
     // For NEW events without a name, allow default pop without saving
@@ -689,61 +628,8 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     }
 
     // For EXISTING events with changes and a name, auto-save
-    try {
-      // Save current canvas state
-      _saveCurrentPageCallback?.call();
-
-      // Save the event
-      await _controller.saveEvent(
-        canvasSize: _getCanvasSize(),
-        isAutoSave: true,
-      );
-
-      if (mounted) {
-        // Show success feedback
-        final isOffline = _controller.state.isOffline;
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Row(
-              children: [
-                const Icon(Icons.check_circle, color: Colors.white, size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    isOffline
-                        ? 'Saved locally (offline - will sync when online)'
-                        : 'Saved locally (syncing to server...)',
-                  ),
-                ),
-              ],
-            ),
-            backgroundColor: Colors.green,
-            duration: const Duration(seconds: 2),
-          ),
-        );
-
-        // Navigate back with result=true to trigger schedule reload
-        Navigator.pop(context, true);
-      }
-
-      return false; // Prevent default pop (we already popped manually)
-    } catch (e) {
-      if (mounted) {
-        // Show error but still navigate back
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error saving: ${e.toString()}'),
-            backgroundColor: Colors.red,
-            duration: const Duration(seconds: 3),
-          ),
-        );
-
-        // Navigate back with result=true to trigger schedule reload (data might be partially saved)
-        Navigator.pop(context, true);
-      }
-
-      return false; // Prevent default pop (we already popped manually)
-    }
+    _saveInBackgroundAndPop(isAutoSave: true);
+    return false; // Prevent default pop (we already popped manually)
   }
 
   @override
@@ -953,9 +839,6 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                               canvasKey: _canvasKey,
                               initialPages: initialPages,
                               onPagesChanged: _onPagesChanged,
-                              onSaveCurrentPageCallbackSet: (callback) {
-                                _saveCurrentPageCallback = callback;
-                              },
                               currentEventUuid: widget.event.id,
                               onStrokesErased: (erasedStrokeIds) {
                                 _controller.onStrokesErased(erasedStrokeIds);

@@ -12,6 +12,7 @@ import '../../services/database/prd_database_service.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
 import '../../services/server_config_service.dart';
+import '../../services/save_sync_notifier.dart';
 import 'event_detail_state.dart';
 import 'adapters/connectivity_watcher.dart';
 import 'adapters/server_health_checker.dart';
@@ -343,8 +344,12 @@ class EventDetailController {
   }
 
   /// Save event with handwriting note
-  Future<Event> saveEvent({Size? canvasSize, bool isAutoSave = false}) async {
-    final pages = _state.lastKnownPages;
+  Future<Event> saveEvent({
+    Size? canvasSize,
+    bool isAutoSave = false,
+    List<List<Stroke>>? pagesOverride,
+  }) async {
+    final pages = pagesOverride ?? _state.lastKnownPages;
 
     _updateState(_state.copyWith(isLoading: true));
 
@@ -381,6 +386,7 @@ class EventDetailController {
           final existingNote = await _fetchExistingNoteForRecordNumber(
             recordNumber: recordNumberText,
             name: nameText,
+            allowServerLookup: false,
           );
           if (existingNote != null && existingNote.isNotEmpty) {
             // Load existing note (safety: never lose existing patient data)
@@ -392,8 +398,12 @@ class EventDetailController {
             );
             // Loaded existing note only; do not save unless user edited note in this session.
             _noteEditedInSession = false;
-            await _syncMetadataToServer(
+            _startAsyncServerSync(
               eventData: savedEvent,
+              pages: pages,
+              shouldSaveNote: false,
+              canvasSize: canvasSize,
+              preferIncomingServerNote: isAutoSave,
               name: nameText,
               recordNumber: recordNumberText,
               phone: phoneText.isEmpty ? null : phoneText,
@@ -403,7 +413,7 @@ class EventDetailController {
               _state.copyWith(
                 isLoading: false,
                 hasChanges: false,
-                hasUnsyncedChanges: false,
+                hasUnsyncedChanges: true,
               ),
             );
             return savedEvent;
@@ -438,6 +448,7 @@ class EventDetailController {
           final existingNote = await _fetchExistingNoteForRecordNumber(
             recordNumber: recordNumberText,
             name: nameText,
+            allowServerLookup: false,
           );
           if (existingNote != null &&
               existingNote.isNotEmpty &&
@@ -451,8 +462,12 @@ class EventDetailController {
             );
             // Loaded existing note only; do not save unless user edited note in this session.
             _noteEditedInSession = false;
-            await _syncMetadataToServer(
+            _startAsyncServerSync(
               eventData: savedEvent,
+              pages: pages,
+              shouldSaveNote: false,
+              canvasSize: canvasSize,
+              preferIncomingServerNote: isAutoSave,
               name: nameText,
               recordNumber: recordNumberText,
               phone: phoneText.isEmpty ? null : phoneText,
@@ -462,7 +477,7 @@ class EventDetailController {
               _state.copyWith(
                 isLoading: false,
                 hasChanges: false,
-                hasUnsyncedChanges: false,
+                hasUnsyncedChanges: true,
               ),
             );
             return savedEvent;
@@ -474,17 +489,14 @@ class EventDetailController {
         }
       }
 
-      // Save handwriting note only when this event actually edited note content.
-      if (_shouldSaveNote(pages)) {
-        await saveNoteToServer(
-          savedEvent.id!,
-          pages,
-          canvasSize: canvasSize,
-          preferIncomingServerNote: isAutoSave,
-        );
-      }
-      await _syncMetadataToServer(
+      final shouldSaveNote = _shouldSaveNote(pages);
+
+      _startAsyncServerSync(
         eventData: savedEvent,
+        pages: pages,
+        shouldSaveNote: shouldSaveNote,
+        canvasSize: canvasSize,
+        preferIncomingServerNote: isAutoSave,
         name: nameText,
         recordNumber: recordNumberText,
         phone: phoneText.isEmpty ? null : phoneText,
@@ -494,7 +506,7 @@ class EventDetailController {
         _state.copyWith(
           isLoading: false,
           hasChanges: false,
-          hasUnsyncedChanges: false,
+          hasUnsyncedChanges: true,
         ),
       );
 
@@ -511,6 +523,7 @@ class EventDetailController {
     List<List<Stroke>> pages, {
     Size? canvasSize,
     bool preferIncomingServerNote = false,
+    bool updateStateOnSuccess = true,
   }) async {
     if (_noteSyncAdapter == null) {
       throw Exception('Cannot save: Services not initialized');
@@ -592,15 +605,102 @@ class EventDetailController {
     );
     _noteEditedInSession = false;
 
-    // Update UI state on success
-    _updateState(
-      _state.copyWith(
-        note: savedNote,
-        hasChanges: false,
-        hasUnsyncedChanges: false,
-        lastKnownPages: savedNote.pages,
+    if (updateStateOnSuccess) {
+      // Update UI state on success
+      _updateState(
+        _state.copyWith(
+          note: savedNote,
+          hasChanges: false,
+          hasUnsyncedChanges: false,
+          lastKnownPages: savedNote.pages,
+        ),
+      );
+    }
+  }
+
+  void _startAsyncServerSync({
+    required Event eventData,
+    required List<List<Stroke>> pages,
+    required bool shouldSaveNote,
+    required Size? canvasSize,
+    required bool preferIncomingServerNote,
+    required String name,
+    required String recordNumber,
+    required String? phone,
+    required bool allowCreateOnMissingEvent,
+  }) {
+    unawaited(
+      _runAsyncServerSync(
+        eventData: eventData,
+        pages: pages,
+        shouldSaveNote: shouldSaveNote,
+        canvasSize: canvasSize,
+        preferIncomingServerNote: preferIncomingServerNote,
+        name: name,
+        recordNumber: recordNumber,
+        phone: phone,
+        allowCreateOnMissingEvent: allowCreateOnMissingEvent,
       ),
     );
+  }
+
+  Future<void> _runAsyncServerSync({
+    required Event eventData,
+    required List<List<Stroke>> pages,
+    required bool shouldSaveNote,
+    required Size? canvasSize,
+    required bool preferIncomingServerNote,
+    required String name,
+    required String recordNumber,
+    required String? phone,
+    required bool allowCreateOnMissingEvent,
+  }) async {
+    try {
+      if (eventData.id == null) {
+        throw Exception('Cannot sync metadata: Event ID is missing');
+      }
+
+      if (shouldSaveNote) {
+        await saveNoteToServer(
+          eventData.id!,
+          pages,
+          canvasSize: canvasSize,
+          preferIncomingServerNote: preferIncomingServerNote,
+          updateStateOnSuccess: true,
+        );
+      }
+
+      // Keep existing sync order: note first, metadata second.
+      await _syncMetadataToServer(
+        eventData: eventData,
+        name: name,
+        recordNumber: recordNumber,
+        phone: phone,
+        allowCreateOnMissingEvent: allowCreateOnMissingEvent,
+      );
+
+      _updateState(
+        _state.copyWith(hasUnsyncedChanges: false, isOffline: false),
+      );
+    } catch (e) {
+      final message = _buildAsyncSyncErrorMessage(e);
+      SaveSyncNotifier.instance.notifyFailure(
+        SaveSyncFailure(
+          bookUuid: eventData.bookUuid,
+          eventId: eventData.id,
+          errorMessage: message,
+          occurredAt: DateTime.now(),
+        ),
+      );
+      _updateState(_state.copyWith(hasUnsyncedChanges: true, isOffline: true));
+    }
+  }
+
+  String _buildAsyncSyncErrorMessage(Object error) {
+    if (error is ApiException) {
+      return '${error.message} (status: ${error.statusCode ?? 'unknown'})';
+    }
+    return error.toString();
   }
 
   Future<Note> _saveNoteWithConflictRetry({
@@ -1424,6 +1524,7 @@ class EventDetailController {
   Future<Note?> _fetchExistingNoteForRecordNumber({
     required String recordNumber,
     String? name,
+    bool allowServerLookup = true,
   }) async {
     final trimmedRecordNumber = recordNumber.trim();
     if (trimmedRecordNumber.isEmpty) {
@@ -1450,7 +1551,15 @@ class EventDetailController {
       return null;
     }
 
-    if (_noteSyncAdapter != null) {
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      final localNote = await prdDb.getNoteByRecordUuid(recordUuid);
+      if (localNote != null && localNote.isNotEmpty) {
+        return localNote;
+      }
+    }
+
+    if (allowServerLookup && _noteSyncAdapter != null) {
       try {
         final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
           event.bookUuid,

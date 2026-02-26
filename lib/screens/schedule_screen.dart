@@ -10,6 +10,7 @@ import '../models/book.dart';
 import '../models/event.dart';
 import '../models/schedule_drawing.dart';
 import '../services/database_service_interface.dart';
+import '../services/save_sync_notifier.dart';
 import '../services/service_locator.dart';
 import '../utils/schedule/schedule_layout_utils.dart';
 import '../widgets/schedule/drawing_toolbar.dart';
@@ -34,6 +35,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   late final ScheduleController _controller;
   ModalRoute<dynamic>? _currentRoute;
   Timer? _foregroundSyncTimer;
+  StreamSubscription<SaveSyncFailure>? _saveSyncFailureSubscription;
   Offset? _fabAnchorPosition;
   bool _isDraggingFab = false;
 
@@ -219,6 +221,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       contextProvider: () => context,
     );
     _controller.initialize(context);
+    _saveSyncFailureSubscription = SaveSyncNotifier.instance.failures.listen(
+      _onAsyncSaveSyncFailure,
+    );
   }
 
   @override
@@ -237,10 +242,37 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   @override
   void dispose() {
     _stopForegroundSync();
+    _saveSyncFailureSubscription?.cancel();
     appRouteObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _controller.dispose();
     super.dispose();
+  }
+
+  void _onAsyncSaveSyncFailure(SaveSyncFailure failure) {
+    if (!mounted) return;
+    if (failure.bookUuid != widget.book.uuid) return;
+    final route = ModalRoute.of(context);
+    if (route?.isCurrent != true) return;
+
+    unawaited(
+      showDialog<void>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('同步失敗'),
+          content: Text(
+            '已本地儲存，但同步到伺服器失敗。\n\n'
+            '錯誤：${failure.errorMessage}',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('確定'),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   @override
