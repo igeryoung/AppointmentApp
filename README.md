@@ -67,9 +67,22 @@ Run integration tests:
 flutter test integration_test/
 ```
 
+Use Supabase as backend database (recommended architecture):
+```bash
+# in /Users/yangping/Studio/side-project/scheduleNote/.env
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_KEY=<service-role-or-secret-key>
+```
+
+Then run the API server from `/Users/yangping/Studio/side-project/scheduleNote/server`
+and connect the app to your server URL via the setup screen.
+
+Before starting server, run in Supabase SQL editor:
+- `/Users/yangping/Studio/side-project/scheduleNote/server/schema.sql`
+
 Run live server metadata smoke test (auto-create fixture IDs):
 ```bash
-SN_TEST_BASE_URL=http://localhost:8080 \
+SN_TEST_BASE_URL=https://<your-server-base-url> \
 SN_TEST_DEVICE_ID=<device-id> \
 SN_TEST_DEVICE_TOKEN=<device-token> \
 dart run tool/create_event_metadata_fixture.dart

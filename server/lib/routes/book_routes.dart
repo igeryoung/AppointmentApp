@@ -58,6 +58,15 @@ class BookRoutes {
     );
   }
 
+  Map<String, dynamic>? _first(dynamic data) {
+    if (data is List && data.isNotEmpty) {
+      final row = data.first;
+      if (row is Map<String, dynamic>) return row;
+      if (row is Map) return Map<String, dynamic>.from(row);
+    }
+    return null;
+  }
+
   bool _toBool(dynamic value, {bool defaultValue = false}) {
     if (value == null) return defaultValue;
     if (value is bool) return value;
@@ -117,16 +126,19 @@ class BookRoutes {
     return parsed.isUtc ? parsed : parsed.toUtc();
   }
 
+  String? _toIsoUtc(dynamic value) {
+    final parsed = _parseTimestamp(value);
+    return parsed?.toIso8601String();
+  }
+
   Map<String, dynamic> _bookResponse(Map<String, dynamic> row) {
     return {
       'bookUuid': row['book_uuid'],
       'name': row['name'],
       'deviceId': row['device_id'],
-      'createdAt': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-      'updatedAt': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-      'archivedAt': row['archived_at'] != null
-          ? (row['archived_at'] as DateTime).toUtc().toIso8601String()
-          : null,
+      'createdAt': _toIsoUtc(row['created_at']),
+      'updatedAt': _toIsoUtc(row['updated_at']),
+      'archivedAt': _toIsoUtc(row['archived_at']),
       'version': row['version'],
       'isDeleted': row['is_deleted'] == true,
     };
@@ -143,12 +155,10 @@ class BookRoutes {
       'hasChargeItems': row['has_charge_items'] == true,
       'isChecked': row['is_checked'] == true,
       'hasNote': row['has_note'] == true,
-      'startTime': (row['start_time'] as DateTime).toUtc().toIso8601String(),
-      'endTime': row['end_time'] != null
-          ? (row['end_time'] as DateTime).toUtc().toIso8601String()
-          : null,
-      'createdAt': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-      'updatedAt': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
+      'startTime': _toIsoUtc(row['start_time']),
+      'endTime': _toIsoUtc(row['end_time']),
+      'createdAt': _toIsoUtc(row['created_at']),
+      'updatedAt': _toIsoUtc(row['updated_at']),
       'isRemoved': row['is_removed'] == true,
       'removalReason': row['removal_reason'],
       'originalEventId': row['original_event_id']?.toString(),
@@ -181,14 +191,23 @@ class BookRoutes {
         });
       }
 
-      final row = await db.querySingle(
-        '''
-        INSERT INTO books (book_uuid, device_id, name, created_at, updated_at, synced_at, version, is_deleted)
-        VALUES (uuid_generate_v4(), @deviceId, @name, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, false)
-        RETURNING book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted
-        ''',
-        parameters: {'deviceId': auth['deviceId'], 'name': name},
-      );
+      final now = DateTime.now().toUtc().toIso8601String();
+      final inserted = await db.client
+          .from('books')
+          .insert({
+            'device_id': auth['deviceId'],
+            'name': name,
+            'created_at': now,
+            'updated_at': now,
+            'synced_at': now,
+            'version': 1,
+            'is_deleted': false,
+          })
+          .select(
+            'book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted',
+          )
+          .limit(1);
+      final row = _first(inserted);
 
       if (row == null) {
         return _json(500, {
@@ -197,17 +216,12 @@ class BookRoutes {
         });
       }
 
-      await db.query(
-        '''
-        INSERT INTO book_device_access (book_uuid, device_id, access_type, created_at)
-        VALUES (@bookUuid, @deviceId, 'owner', CURRENT_TIMESTAMP)
-        ON CONFLICT (book_uuid, device_id) DO NOTHING
-        ''',
-        parameters: {
-          'bookUuid': row['book_uuid'],
-          'deviceId': auth['deviceId'],
-        },
-      );
+      await db.client.from('book_device_access').upsert({
+        'book_uuid': row['book_uuid'],
+        'device_id': auth['deviceId'],
+        'access_type': 'owner',
+        'created_at': now,
+      }, onConflict: 'book_uuid,device_id');
 
       return _json(200, {'success': true, 'book': _bookResponse(row)});
     } catch (e) {
@@ -343,20 +357,31 @@ class BookRoutes {
         });
       }
 
-      final row = await db.querySingle(
-        '''
-        UPDATE books
-        SET
-          name = @name,
-          updated_at = CURRENT_TIMESTAMP,
-          synced_at = CURRENT_TIMESTAMP,
-          version = version + 1
-        WHERE book_uuid = @bookUuid
-          AND is_deleted = false
-        RETURNING book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted
-        ''',
-        parameters: {'bookUuid': bookUuid, 'name': name},
-      );
+      final currentRows = await db.client
+          .from('books')
+          .select('version')
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .limit(1);
+      final current = _first(currentRows);
+      if (current == null) {
+        return _json(404, {'success': false, 'message': 'Book not found'});
+      }
+      final rowList = await db.client
+          .from('books')
+          .update({
+            'name': name,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'synced_at': DateTime.now().toUtc().toIso8601String(),
+            'version': ((current['version'] as num?)?.toInt() ?? 1) + 1,
+          })
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .select(
+            'book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted',
+          )
+          .limit(1);
+      final row = _first(rowList);
 
       if (row == null) {
         return _json(404, {'success': false, 'message': 'Book not found'});
@@ -389,21 +414,34 @@ class BookRoutes {
         return _json(404, {'success': false, 'message': 'Book not found'});
       }
 
-      final row = await db.querySingle(
-        '''
-        UPDATE books
-        SET
-          archived_at = CURRENT_TIMESTAMP,
-          updated_at = CURRENT_TIMESTAMP,
-          synced_at = CURRENT_TIMESTAMP,
-          version = version + 1
-        WHERE book_uuid = @bookUuid
-          AND is_deleted = false
-          AND archived_at IS NULL
-        RETURNING book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted
-        ''',
-        parameters: {'bookUuid': bookUuid},
-      );
+      final currentRows = await db.client
+          .from('books')
+          .select('version, archived_at')
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .limit(1);
+      final current = _first(currentRows);
+      if (current == null || current['archived_at'] != null) {
+        return _json(404, {
+          'success': false,
+          'message': 'Book not found or already archived',
+        });
+      }
+      final rowList = await db.client
+          .from('books')
+          .update({
+            'archived_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'synced_at': DateTime.now().toUtc().toIso8601String(),
+            'version': ((current['version'] as num?)?.toInt() ?? 1) + 1,
+          })
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .select(
+            'book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted',
+          )
+          .limit(1);
+      final row = _first(rowList);
 
       if (row == null) {
         return _json(404, {
@@ -439,20 +477,29 @@ class BookRoutes {
         return _json(404, {'success': false, 'message': 'Book not found'});
       }
 
-      final row = await db.querySingle(
-        '''
-        UPDATE books
-        SET
-          is_deleted = true,
-          updated_at = CURRENT_TIMESTAMP,
-          synced_at = CURRENT_TIMESTAMP,
-          version = version + 1
-        WHERE book_uuid = @bookUuid
-          AND is_deleted = false
-        RETURNING book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted
-        ''',
-        parameters: {'bookUuid': bookUuid},
-      );
+      final currentRows = await db.client
+          .from('books')
+          .select('version')
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .limit(1);
+      final current = _first(currentRows);
+      if (current == null) {
+        return _json(404, {'success': false, 'message': 'Book not found'});
+      }
+      final rowList = await db.client
+          .from('books')
+          .update({
+            'is_deleted': true,
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'synced_at': DateTime.now().toUtc().toIso8601String(),
+            'version': ((current['version'] as num?)?.toInt() ?? 1) + 1,
+          })
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .select('book_uuid')
+          .limit(1);
+      final row = _first(rowList);
 
       if (row == null) {
         return _json(404, {'success': false, 'message': 'Book not found'});
@@ -606,32 +653,60 @@ class BookRoutes {
     String? name,
     String? phone,
   }) async {
-    final row = await db.querySingle(
-      '''
-      INSERT INTO records (record_uuid, record_number, name, phone, created_at, updated_at, synced_at, version, is_deleted)
-      VALUES (@recordUuid, @recordNumber, @name, @phone, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, false)
-      ON CONFLICT (record_uuid) DO UPDATE
-      SET
-        record_number = COALESCE(NULLIF(@recordNumber, ''), records.record_number),
-        name = COALESCE(@name, records.name),
-        phone = COALESCE(@phone, records.phone),
-        updated_at = CURRENT_TIMESTAMP,
-        synced_at = CURRENT_TIMESTAMP
-      RETURNING record_uuid, record_number, name, phone
-      ''',
-      parameters: {
-        'recordUuid': recordUuid,
-        'recordNumber': recordNumber ?? '',
-        'name': name,
-        'phone': phone,
-      },
-    );
-    return row ??
+    final existingRows = await db.client
+        .from('records')
+        .select('record_uuid, record_number, name, phone')
+        .eq('record_uuid', recordUuid)
+        .limit(1);
+    final existing = _first(existingRows);
+    if (existing == null) {
+      final insertedRows = await db.client
+          .from('records')
+          .insert({
+            'record_uuid': recordUuid,
+            'record_number': recordNumber ?? '',
+            'name': name,
+            'phone': phone,
+            'created_at': DateTime.now().toUtc().toIso8601String(),
+            'updated_at': DateTime.now().toUtc().toIso8601String(),
+            'synced_at': DateTime.now().toUtc().toIso8601String(),
+            'version': 1,
+            'is_deleted': false,
+          })
+          .select('record_uuid, record_number, name, phone')
+          .limit(1);
+      return _first(insertedRows) ??
+          {
+            'record_uuid': recordUuid,
+            'record_number': recordNumber ?? '',
+            'name': name,
+            'phone': phone,
+          };
+    }
+
+    final mergedRecordNumber = (recordNumber ?? '').trim().isNotEmpty
+        ? recordNumber
+        : existing['record_number'];
+    final mergedName = name ?? existing['name'];
+    final mergedPhone = phone ?? existing['phone'];
+    final updatedRows = await db.client
+        .from('records')
+        .update({
+          'record_number': mergedRecordNumber,
+          'name': mergedName,
+          'phone': mergedPhone,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+          'synced_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('record_uuid', recordUuid)
+        .select('record_uuid, record_number, name, phone')
+        .limit(1);
+    return _first(updatedRows) ??
         {
           'record_uuid': recordUuid,
-          'record_number': recordNumber ?? '',
-          'name': name,
-          'phone': phone,
+          'record_number': mergedRecordNumber,
+          'name': mergedName,
+          'phone': mergedPhone,
         };
   }
 

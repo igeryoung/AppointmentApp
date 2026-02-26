@@ -319,12 +319,12 @@ class NoteRoutes {
       }
 
       // Look up event to get record_uuid
-      final event = await db.querySingle(
-        'SELECT record_uuid FROM events WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false',
-        parameters: {'eventId': eventId, 'bookUuid': bookUuid},
+      final recordUuid = await noteService.getRecordUuidByEvent(
+        bookUuid: bookUuid,
+        eventId: eventId,
       );
 
-      if (event == null) {
+      if (recordUuid == null) {
         reqLog.complete(404, data: {'error': 'EVENT_NOT_FOUND'});
         return Response.notFound(jsonEncode({
           'success': false,
@@ -335,7 +335,6 @@ class NoteRoutes {
         }), headers: {'Content-Type': 'application/json'});
       }
 
-      final recordUuid = event['record_uuid'] as String;
       final note = await noteService.getNoteByRecordUuid(recordUuid);
       if (note == null) {
         _logger.info('Note not found for event', data: {
@@ -426,15 +425,15 @@ class NoteRoutes {
       }
 
       // Look up event to get record_uuid
-      var event = await db.querySingle(
-        'SELECT record_uuid FROM events WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false',
-        parameters: {'eventId': eventId, 'bookUuid': bookUuid},
+      String? recordUuid = await noteService.getRecordUuidByEvent(
+        bookUuid: bookUuid,
+        eventId: eventId,
       );
 
       // If event not found, try to create it from eventData
-      if (event == null && eventData != null) {
-        final recordUuid = await _getOrCreateRecord(eventData);
-        if (recordUuid == null) {
+      if (recordUuid == null && eventData != null) {
+        final resolvedRecordUuid = await _getOrCreateRecord(eventData);
+        if (resolvedRecordUuid == null) {
           return Response.badRequest(body: jsonEncode({
             'success': false,
             'error': 'INVALID_EVENT_DATA',
@@ -444,11 +443,16 @@ class NoteRoutes {
         }
 
         // Create the event
-        await _createEvent(eventId: eventId, bookUuid: bookUuid, recordUuid: recordUuid, eventData: eventData);
-        event = {'record_uuid': recordUuid};
+        await _createEvent(
+          eventId: eventId,
+          bookUuid: bookUuid,
+          recordUuid: resolvedRecordUuid,
+          eventData: eventData,
+        );
+        recordUuid = resolvedRecordUuid;
       }
 
-      if (event == null) {
+      if (recordUuid == null) {
         return Response.notFound(jsonEncode({
           'success': false,
           'error': 'EVENT_NOT_FOUND',
@@ -457,8 +461,6 @@ class NoteRoutes {
           'bookUuid': bookUuid,
         }), headers: {'Content-Type': 'application/json'});
       }
-
-      final recordUuid = event['record_uuid'] as String;
 
       final result = await noteService.createOrUpdateNoteForRecord(
         recordUuid: recordUuid,
@@ -558,12 +560,12 @@ class NoteRoutes {
       }
 
       // Look up event to get record_uuid
-      final event = await db.querySingle(
-        'SELECT record_uuid FROM events WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false',
-        parameters: {'eventId': eventId, 'bookUuid': bookUuid},
+      final recordUuid = await noteService.getRecordUuidByEvent(
+        bookUuid: bookUuid,
+        eventId: eventId,
       );
 
-      if (event == null) {
+      if (recordUuid == null) {
         return Response.notFound(jsonEncode({
           'success': false,
           'error': 'EVENT_NOT_FOUND',
@@ -573,7 +575,6 @@ class NoteRoutes {
         }), headers: {'Content-Type': 'application/json'});
       }
 
-      final recordUuid = event['record_uuid'] as String;
       final deleted = await noteService.deleteNoteByRecordUuid(recordUuid);
       if (deleted) {
         return Response.ok(jsonEncode({'success': true, 'message': 'Note deleted'}),
@@ -597,29 +598,7 @@ class NoteRoutes {
 
   /// Helper: Get or create record from eventData
   Future<String?> _getOrCreateRecord(Map<String, dynamic> eventData) async {
-    // If record_uuid is provided directly, use it
-    final recordUuid = eventData['record_uuid'] as String?;
-    if (recordUuid != null && recordUuid.isNotEmpty) {
-      // Check if record exists, if not create it
-      final existing = await db.querySingle(
-        'SELECT record_uuid FROM records WHERE record_uuid = @recordUuid',
-        parameters: {'recordUuid': recordUuid},
-      );
-      if (existing != null) {
-        return recordUuid;
-      }
-      // Create record with provided uuid
-      final recordNumber = eventData['record_number'] as String? ?? '';
-      final title = eventData['title'] as String? ?? '';
-      await db.query(
-        '''INSERT INTO records (record_uuid, record_number, name)
-           VALUES (@recordUuid, @recordNumber, @name)
-           ON CONFLICT (record_uuid) DO NOTHING''',
-        parameters: {'recordUuid': recordUuid, 'recordNumber': recordNumber, 'name': title},
-      );
-      return recordUuid;
-    }
-    return null;
+    return noteService.getOrCreateRecordFromEventData(eventData);
   }
 
   /// Helper: Create event from eventData
@@ -629,34 +608,11 @@ class NoteRoutes {
     required String recordUuid,
     required Map<String, dynamic> eventData,
   }) async {
-    final title = eventData['title'] as String? ?? '';
-    final eventTypes = eventData['event_types'] as String? ?? '["other"]';
-    final hasChargeItems = eventData['has_charge_items'] == 1 || eventData['has_charge_items'] == true;
-
-    // Parse timestamps (client sends seconds since epoch)
-    final startTimeSeconds = eventData['start_time'] as int?;
-    final endTimeSeconds = eventData['end_time'] as int?;
-    final startTime = startTimeSeconds != null
-        ? DateTime.fromMillisecondsSinceEpoch(startTimeSeconds * 1000, isUtc: true)
-        : DateTime.now().toUtc();
-    final endTime = endTimeSeconds != null
-        ? DateTime.fromMillisecondsSinceEpoch(endTimeSeconds * 1000, isUtc: true)
-        : null;
-
-    await db.query(
-      '''INSERT INTO events (id, book_uuid, record_uuid, title, event_types, has_charge_items, start_time, end_time)
-         VALUES (@id, @bookUuid, @recordUuid, @title, @eventTypes, @hasChargeItems, @startTime, @endTime)
-         ON CONFLICT (id) DO NOTHING''',
-      parameters: {
-        'id': eventId,
-        'bookUuid': bookUuid,
-        'recordUuid': recordUuid,
-        'title': title,
-        'eventTypes': eventTypes,
-        'hasChargeItems': hasChargeItems,
-        'startTime': startTime.toIso8601String(),
-        'endTime': endTime?.toIso8601String(),
-      },
+    await noteService.createEventIfAbsent(
+      eventId: eventId,
+      bookUuid: bookUuid,
+      recordUuid: recordUuid,
+      eventData: eventData,
     );
   }
 

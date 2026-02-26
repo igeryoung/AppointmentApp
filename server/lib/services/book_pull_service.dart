@@ -1,48 +1,49 @@
 import 'dart:convert';
+
 import '../database/connection.dart';
 
-/// Service for pulling books from server to local device
-///
-/// Supports one-way sync (Server → Local) with complete book data
+/// Service for pulling books from server to local device.
 class BookPullService {
   final DatabaseConnection db;
 
   BookPullService(this.db);
 
-  /// Format timestamps that represent user-facing schedule times.
-  /// Always returns a UTC ISO string so clients don't double-apply timezone offsets.
-  String _formatUserTimestamp(DateTime dateTime) {
-    final utc = dateTime.isUtc
-        ? dateTime
-        : DateTime.utc(
-            dateTime.year,
-            dateTime.month,
-            dateTime.day,
-            dateTime.hour,
-            dateTime.minute,
-            dateTime.second,
-            dateTime.millisecond,
-            dateTime.microsecond,
-          );
-    return utc.toIso8601String();
+  DateTime _asUtc(dynamic value) {
+    if (value is DateTime) return value.isUtc ? value : value.toUtc();
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null) return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    return parsed.isUtc ? parsed : parsed.toUtc();
+  }
+
+  List<Map<String, dynamic>> _rows(dynamic data) {
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Map<String, dynamic>? _first(dynamic data) {
+    final rows = _rows(data);
+    if (rows.isEmpty) return null;
+    return rows.first;
   }
 
   bool _toBool(dynamic value) {
     if (value is bool) return value;
-    if (value is int) return value != 0;
     if (value is num) return value != 0;
     if (value is String) {
       final normalized = value.trim().toLowerCase();
       return normalized == 'true' || normalized == '1';
     }
-    return value == true;
+    return false;
   }
 
   String _normalizeEventTypes(dynamic value) {
     if (value == null) return '[]';
     if (value is String) {
       final trimmed = value.trim();
-      return trimmed.isEmpty ? '[]' : value;
+      return trimmed.isEmpty ? '[]' : trimmed;
     }
     try {
       return jsonEncode(value);
@@ -57,280 +58,202 @@ class BookPullService {
       if (decoded is List && decoded.isNotEmpty) {
         return decoded.first.toString();
       }
-    } catch (_) {
-      // Fall through to default.
-    }
+    } catch (_) {}
     return 'other';
   }
 
-  /// List all books with optional search by name
-  ///
-  /// Returns all books (including archived) from the entire server store
-  /// No longer filtered by device_id - shows all books
-  /// Optional [searchQuery] filters books by name (case-insensitive)
   Future<List<Map<String, dynamic>>> listBooksForDevice(
     String deviceId, {
     String? searchQuery,
   }) async {
-    String query = '''
-      SELECT
-        book_uuid,
-        name,
-        created_at,
-        updated_at,
-        archived_at,
-        version,
-        is_deleted,
-        device_id
-      FROM books
-      WHERE 1=1
-    ''';
+    final _ = deviceId;
 
-    Map<String, dynamic> parameters = {};
+    var query = db.client
+        .from('books')
+        .select(
+          'book_uuid, name, created_at, updated_at, archived_at, version, is_deleted, device_id',
+        );
 
-    // Add search filter if provided
-    if (searchQuery != null && searchQuery.isNotEmpty) {
-      query += ' AND LOWER(name) LIKE @searchQuery';
-      parameters['searchQuery'] = '%${searchQuery.toLowerCase()}%';
+    if (searchQuery != null && searchQuery.trim().isNotEmpty) {
+      query = query.ilike('name', '%${searchQuery.trim()}%');
     }
 
-    query += ' ORDER BY created_at DESC';
+    final results = await query.order('created_at', ascending: false);
 
-    final results = await db.queryRows(query, parameters: parameters);
-
-    return results.map((row) {
+    return _rows(results).map((row) {
       return {
         'book_uuid': row['book_uuid'] as String,
         'name': row['name'] as String,
-        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
+        'created_at': _asUtc(row['created_at']).toIso8601String(),
+        'updated_at': _asUtc(row['updated_at']).toIso8601String(),
         'archived_at': row['archived_at'] != null
-            ? (row['archived_at'] as DateTime).toUtc().toIso8601String()
+            ? _asUtc(row['archived_at']).toIso8601String()
             : null,
-        'version': row['version'] as int,
-        'is_deleted': row['is_deleted'] as bool,
+        'version': (row['version'] as num?)?.toInt() ?? 1,
+        'is_deleted': _toBool(row['is_deleted']),
         'device_id': row['device_id'] as String,
       };
     }).toList();
   }
 
-  /// Get complete book data (book + events + notes + drawings)
-  ///
-  /// Returns all data needed to recreate the book locally
-  /// No longer filtered by device_id - any authenticated device can pull any book
-  /// Throws if book doesn't exist
   Future<Map<String, dynamic>> getCompleteBookData(
     String bookUuid,
     String deviceId,
   ) async {
-    // 1. Verify book exists (no longer checking device ownership)
-    final bookResult = await db.querySingle(
-      '''
-      SELECT
-        book_uuid,
-        name,
-        created_at,
-        updated_at,
-        archived_at,
-        version,
-        is_deleted
-      FROM books
-      WHERE book_uuid = @bookUuid
-      ''',
-      parameters: {'bookUuid': bookUuid},
-    );
-
-    if (bookResult == null) {
+    final bookRows = await db.client
+        .from('books')
+        .select(
+          'book_uuid, name, created_at, updated_at, archived_at, version, is_deleted',
+        )
+        .eq('book_uuid', bookUuid)
+        .limit(1);
+    final book = _first(bookRows);
+    if (book == null) {
       throw Exception('Book not found: $bookUuid');
     }
 
-    // 2. Get all events for the book
-    final eventsResults = await db.queryRows(
-      '''
-      SELECT
-        e.id,
-        e.book_uuid,
-        e.record_uuid,
-        e.title,
-        r.name,
-        r.record_number,
-        r.phone,
-        e.event_types,
-        e.has_charge_items,
-        e.is_checked,
-        e.has_note,
-        e.start_time,
-        e.end_time,
-        e.created_at,
-        e.updated_at,
-        e.is_removed,
-        e.removal_reason,
-        e.original_event_id,
-        e.new_event_id,
-        e.version,
-        e.is_deleted
-      FROM events e
-      LEFT JOIN records r ON r.record_uuid = e.record_uuid
-      WHERE e.book_uuid = @bookUuid
-      ORDER BY e.start_time ASC
-      ''',
-      parameters: {'bookUuid': bookUuid},
-    );
+    final eventRowsRaw = await db.client
+        .from('events')
+        .select(
+          'id, book_uuid, record_uuid, title, event_types, has_charge_items, is_checked, has_note, '
+          'start_time, end_time, created_at, updated_at, is_removed, removal_reason, '
+          'original_event_id, new_event_id, version, is_deleted',
+        )
+        .eq('book_uuid', bookUuid)
+        .order('start_time', ascending: true);
+    final eventRows = _rows(eventRowsRaw);
 
-    final events = eventsResults.map((row) {
+    final recordUuids = eventRows
+        .map((e) => (e['record_uuid'] ?? '').toString())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final recordsById = <String, Map<String, dynamic>>{};
+    if (recordUuids.isNotEmpty) {
+      final recordsRaw = await db.client
+          .from('records')
+          .select('record_uuid, name, record_number, phone')
+          .inFilter('record_uuid', recordUuids);
+      for (final row in _rows(recordsRaw)) {
+        recordsById[row['record_uuid'].toString()] = row;
+      }
+    }
+
+    final events = eventRows.map((row) {
+      final record = recordsById[row['record_uuid'].toString()];
       final eventTypes = _normalizeEventTypes(row['event_types']);
       return {
         'id': row['id'] as String,
         'book_uuid': row['book_uuid'] as String,
         'record_uuid': row['record_uuid'] as String,
         'title': row['title'] as String,
-        'name': (row['name'] as String?) ?? (row['title'] as String),
-        'record_number': row['record_number'] as String?,
-        'phone': row['phone'] as String?,
+        'name': (record?['name'] as String?) ?? (row['title'] as String),
+        'record_number': record?['record_number'] as String?,
+        'phone': record?['phone'] as String?,
         'event_type': _primaryEventType(eventTypes),
         'event_types': eventTypes,
         'has_charge_items': _toBool(row['has_charge_items']),
         'is_checked': _toBool(row['is_checked']),
         'has_note': _toBool(row['has_note']),
-        'start_time': _formatUserTimestamp(row['start_time'] as DateTime),
+        'start_time': _asUtc(row['start_time']).toIso8601String(),
         'end_time': row['end_time'] != null
-            ? _formatUserTimestamp(row['end_time'] as DateTime)
+            ? _asUtc(row['end_time']).toIso8601String()
             : null,
-        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-        'is_removed': row['is_removed'] as bool,
+        'created_at': _asUtc(row['created_at']).toIso8601String(),
+        'updated_at': _asUtc(row['updated_at']).toIso8601String(),
+        'is_removed': _toBool(row['is_removed']),
         'removal_reason': row['removal_reason'] as String?,
         'original_event_id': row['original_event_id'] as String?,
         'new_event_id': row['new_event_id'] as String?,
-        'version': row['version'] as int,
-        'is_deleted': row['is_deleted'] as bool,
+        'version': (row['version'] as num?)?.toInt() ?? 1,
+        'is_deleted': _toBool(row['is_deleted']),
       };
     }).toList();
 
-    // 3. Get all notes for events in this book
-    final notesResults = await db.queryRows(
-      '''
-      SELECT DISTINCT
-        n.id,
-        n.record_uuid,
-        n.pages_data,
-        n.created_at,
-        n.updated_at,
-        n.version,
-        n.is_deleted
-      FROM notes n
-      INNER JOIN events e ON n.record_uuid = e.record_uuid
-      WHERE e.book_uuid = @bookUuid
-      ORDER BY n.created_at ASC
-      ''',
-      parameters: {'bookUuid': bookUuid},
-    );
+    final notes = <Map<String, dynamic>>[];
+    if (recordUuids.isNotEmpty) {
+      final notesRaw = await db.client
+          .from('notes')
+          .select(
+            'id, record_uuid, pages_data, created_at, updated_at, version, is_deleted',
+          )
+          .inFilter('record_uuid', recordUuids)
+          .order('created_at', ascending: true);
+      for (final row in _rows(notesRaw)) {
+        notes.add({
+          'id': row['id'] as String,
+          'record_uuid': row['record_uuid'] as String,
+          'pages_data': row['pages_data'] as String?,
+          'created_at': _asUtc(row['created_at']).toIso8601String(),
+          'updated_at': _asUtc(row['updated_at']).toIso8601String(),
+          'version': (row['version'] as num?)?.toInt() ?? 1,
+          'is_deleted': _toBool(row['is_deleted']),
+        });
+      }
+    }
 
-    final notes = notesResults.map((row) {
-      return {
-        'id': row['id'] as String,
-        'record_uuid': row['record_uuid'] as String,
-        'pages_data': row['pages_data'] as String?,
-        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-        'version': row['version'] as int,
-        'is_deleted': row['is_deleted'] as bool,
-      };
-    }).toList();
+    final drawingsRaw = await db.client
+        .from('schedule_drawings')
+        .select(
+          'id, book_uuid, date, view_mode, strokes_data, created_at, updated_at, version, is_deleted',
+        )
+        .eq('book_uuid', bookUuid)
+        .order('date', ascending: true);
 
-    // 4. Get all schedule drawings for the book
-    final drawingsResults = await db.queryRows(
-      '''
-      SELECT
-        id,
-        book_uuid,
-        date,
-        view_mode,
-        strokes_data,
-        created_at,
-        updated_at,
-        version,
-        is_deleted
-      FROM schedule_drawings
-      WHERE book_uuid = @bookUuid
-      ORDER BY date ASC, view_mode ASC
-      ''',
-      parameters: {'bookUuid': bookUuid},
-    );
-
-    final drawings = drawingsResults.map((row) {
+    final drawings = _rows(drawingsRaw).map((row) {
       return {
         'id': row['id'] as int,
         'book_uuid': row['book_uuid'] as String,
-        'date': _formatUserTimestamp(row['date'] as DateTime),
-        'view_mode': row['view_mode'] as int,
+        'date': _asUtc(row['date']).toIso8601String(),
+        'view_mode': (row['view_mode'] as num?)?.toInt() ?? 0,
         'strokes_data': row['strokes_data'] as String?,
-        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-        'version': row['version'] as int,
-        'is_deleted': row['is_deleted'] as bool,
+        'created_at': _asUtc(row['created_at']).toIso8601String(),
+        'updated_at': _asUtc(row['updated_at']).toIso8601String(),
+        'version': (row['version'] as num?)?.toInt() ?? 1,
+        'is_deleted': _toBool(row['is_deleted']),
       };
     }).toList();
 
-    // 5. Get charge items for records that appear in this book.
-    final chargeItemsResults = await db.queryRows(
-      '''
-      SELECT
-        c.id,
-        c.record_uuid,
-        c.event_id,
-        c.item_name,
-        c.item_price,
-        c.received_amount,
-        c.created_at,
-        c.updated_at,
-        c.version,
-        c.is_deleted
-      FROM charge_items c
-      WHERE c.record_uuid IN (
-        SELECT DISTINCT e.record_uuid
-        FROM events e
-        WHERE e.book_uuid = @bookUuid AND e.is_deleted = false
-      )
-      ORDER BY c.updated_at ASC
-      ''',
-      parameters: {'bookUuid': bookUuid},
-    );
+    final chargeItems = <Map<String, dynamic>>[];
+    if (recordUuids.isNotEmpty) {
+      final chargeItemsRaw = await db.client
+          .from('charge_items')
+          .select(
+            'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+          )
+          .inFilter('record_uuid', recordUuids)
+          .order('updated_at', ascending: true);
 
-    final chargeItems = chargeItemsResults.map((row) {
-      return {
-        'id': row['id'].toString(),
-        'record_uuid': row['record_uuid'] as String,
-        'event_id': row['event_id']?.toString(),
-        'item_name': row['item_name'] as String,
-        'item_price': row['item_price'] as int,
-        'received_amount': row['received_amount'] as int,
-        'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-        'version': row['version'] as int,
-        'is_deleted': row['is_deleted'] as bool,
-      };
-    }).toList();
+      for (final row in _rows(chargeItemsRaw)) {
+        chargeItems.add({
+          'id': row['id'].toString(),
+          'record_uuid': row['record_uuid'] as String,
+          'event_id': row['event_id']?.toString(),
+          'item_name': row['item_name'] as String,
+          'item_price': (row['item_price'] as num?)?.toInt() ?? 0,
+          'received_amount': (row['received_amount'] as num?)?.toInt() ?? 0,
+          'created_at': _asUtc(row['created_at']).toIso8601String(),
+          'updated_at': _asUtc(row['updated_at']).toIso8601String(),
+          'version': (row['version'] as num?)?.toInt() ?? 1,
+          'is_deleted': _toBool(row['is_deleted']),
+        });
+      }
+    }
 
-    // 6. Add device access tracking
     await addDeviceAccess(bookUuid, deviceId, 'pulled');
 
-    // 7. Assemble complete book data
     return {
       'book': {
-        'book_uuid': bookResult['book_uuid'] as String,
-        'name': bookResult['name'] as String,
-        'created_at': (bookResult['created_at'] as DateTime)
-            .toUtc()
-            .toIso8601String(),
-        'updated_at': (bookResult['updated_at'] as DateTime)
-            .toUtc()
-            .toIso8601String(),
-        'archived_at': bookResult['archived_at'] != null
-            ? (bookResult['archived_at'] as DateTime).toUtc().toIso8601String()
+        'book_uuid': book['book_uuid'] as String,
+        'name': book['name'] as String,
+        'created_at': _asUtc(book['created_at']).toIso8601String(),
+        'updated_at': _asUtc(book['updated_at']).toIso8601String(),
+        'archived_at': book['archived_at'] != null
+            ? _asUtc(book['archived_at']).toIso8601String()
             : null,
-        'version': bookResult['version'] as int,
-        'is_deleted': bookResult['is_deleted'] as bool,
+        'version': (book['version'] as num?)?.toInt() ?? 1,
+        'is_deleted': _toBool(book['is_deleted']),
       },
       'events': events,
       'notes': notes,
@@ -339,77 +262,52 @@ class BookPullService {
     };
   }
 
-  /// Get book metadata only (without events/notes/drawings)
-  ///
-  /// Useful for checking if a book exists or getting version info
-  /// No longer filtered by device_id - any authenticated device can access
-  /// Throws if book doesn't exist
   Future<Map<String, dynamic>> getBookMetadata(
     String bookUuid,
     String deviceId,
   ) async {
-    final bookResult = await db.querySingle(
-      '''
-      SELECT
-        book_uuid,
-        name,
-        created_at,
-        updated_at,
-        archived_at,
-        version,
-        is_deleted
-      FROM books
-      WHERE book_uuid = @bookUuid
-      ''',
-      parameters: {'bookUuid': bookUuid},
-    );
+    final _ = deviceId;
 
-    if (bookResult == null) {
+    final bookRows = await db.client
+        .from('books')
+        .select(
+          'book_uuid, name, created_at, updated_at, archived_at, version, is_deleted',
+        )
+        .eq('book_uuid', bookUuid)
+        .limit(1);
+
+    final book = _first(bookRows);
+    if (book == null) {
       throw Exception('Book not found: $bookUuid');
     }
 
     return {
-      'book_uuid': bookResult['book_uuid'] as String,
-      'name': bookResult['name'] as String,
-      'created_at': (bookResult['created_at'] as DateTime)
-          .toUtc()
-          .toIso8601String(),
-      'updated_at': (bookResult['updated_at'] as DateTime)
-          .toUtc()
-          .toIso8601String(),
-      'archived_at': bookResult['archived_at'] != null
-          ? (bookResult['archived_at'] as DateTime).toUtc().toIso8601String()
+      'book_uuid': book['book_uuid'] as String,
+      'name': book['name'] as String,
+      'created_at': _asUtc(book['created_at']).toIso8601String(),
+      'updated_at': _asUtc(book['updated_at']).toIso8601String(),
+      'archived_at': book['archived_at'] != null
+          ? _asUtc(book['archived_at']).toIso8601String()
           : null,
-      'version': bookResult['version'] as int,
-      'is_deleted': bookResult['is_deleted'] as bool,
+      'version': (book['version'] as num?)?.toInt() ?? 1,
+      'is_deleted': _toBool(book['is_deleted']),
     };
   }
 
-  /// Add a device to the access list for a book
   Future<void> addDeviceAccess(
     String bookUuid,
     String deviceId,
     String accessType,
   ) async {
     try {
-      await db.query(
-        '''
-        INSERT INTO book_device_access (book_uuid, device_id, access_type, created_at)
-        VALUES (@bookUuid, @deviceId, @accessType, CURRENT_TIMESTAMP)
-        ON CONFLICT (book_uuid, device_id) DO NOTHING
-        ''',
-        parameters: {
-          'bookUuid': bookUuid,
-          'deviceId': deviceId,
-          'accessType': accessType,
-        },
-      );
-      print(
-        '📝 Added device access: Book $bookUuid, Device $deviceId, Type: $accessType',
-      );
+      await db.client.from('book_device_access').upsert({
+        'book_uuid': bookUuid,
+        'device_id': deviceId,
+        'access_type': accessType,
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'book_uuid,device_id');
     } catch (e) {
-      print('⚠️  Failed to add device access: $e');
-      // Don't fail the operation if access tracking fails
+      print('⚠️ Failed to add device access: $e');
     }
   }
 }

@@ -11,55 +11,66 @@ String? _getEnvValue(String key) {
   return _envOverride?[key] ?? Platform.environment[key];
 }
 
-/// Database configuration for PostgreSQL connection
+/// Supabase-only database configuration.
 class DatabaseConfig {
-  final String host;
-  final int port;
-  final String database;
-  final String username;
-  final String password;
+  final String? supabaseUrl;
+  final String? supabaseKey;
   final int maxConnections;
 
   const DatabaseConfig({
-    required this.host,
-    required this.port,
-    required this.database,
-    required this.username,
-    required this.password,
+    required this.supabaseUrl,
+    required this.supabaseKey,
     this.maxConnections = 10,
   });
 
-  /// Development configuration
+  bool get useSupabaseSdk =>
+      (supabaseUrl ?? '').trim().isNotEmpty &&
+      (supabaseKey ?? '').trim().isNotEmpty;
+
+  /// Development configuration (same as production in SDK-only mode).
   factory DatabaseConfig.development() {
-    return DatabaseConfig(
-      host: _getEnv('DB_HOST', 'localhost'),
-      port: int.parse(_getEnv('DB_PORT', '5433')),
-      database: _getEnv('DB_NAME', 'schedule_note_dev'),
-      username: _getEnv('DB_USER', 'postgres'),
-      password: _requireEnv('DB_PASSWORD'),
-      maxConnections: int.parse(_getEnv('DB_MAX_CONNECTIONS', '5')),
-    );
+    return _fromEnvironment();
   }
 
-  /// Production configuration (read from environment variables)
+  /// Production configuration (same as development in SDK-only mode).
   factory DatabaseConfig.production() {
+    return _fromEnvironment();
+  }
+
+  static DatabaseConfig _fromEnvironment() {
+    final supabaseUrl = _requireEnv('SUPABASE_URL');
+    final supabaseKey = _requireEnv('SUPABASE_KEY');
+
+    if (supabaseKey.trim().startsWith('sb_publishable_')) {
+      throw Exception(
+        'SUPABASE_KEY is a publishable key. '
+        'Backend must use service_role/secret key.',
+      );
+    }
+
+    final uri = Uri.tryParse(supabaseUrl);
+    if (uri == null || uri.scheme != 'https' || uri.host.trim().isEmpty) {
+      throw Exception(
+        'SUPABASE_URL must be a valid https URL, e.g. '
+        'https://<project-ref>.supabase.co',
+      );
+    }
+
+    final maxConnections = int.tryParse(
+      (_getEnvValue('SUPABASE_MAX_CONNECTIONS') ?? '').trim(),
+    );
+
     return DatabaseConfig(
-      host: _getEnv('DB_HOST', 'localhost'),
-      port: int.parse(_getEnv('DB_PORT', '5432')),
-      database: _getEnv('DB_NAME', 'schedule_note'),
-      username: _getEnv('DB_USER', 'postgres'),
-      password: _requireEnv('DB_PASSWORD'),
-      maxConnections: int.parse(_getEnv('DB_MAX_CONNECTIONS', '10')),
+      supabaseUrl: supabaseUrl,
+      supabaseKey: supabaseKey,
+      maxConnections: (maxConnections == null || maxConnections <= 0)
+          ? 10
+          : maxConnections,
     );
   }
 
-  static String _getEnv(String key, String defaultValue) {
-    return _getEnvValue(key) ?? defaultValue;
-  }
-
-  /// Get required environment variable - throws if not set
   static String _requireEnv(String key) {
-    final value = _getEnvValue(key);
+    final value = _getEnvValue(key)?.trim();
     if (value == null || value.isEmpty) {
       throw Exception('Required environment variable $key is not set');
     }
@@ -68,7 +79,8 @@ class DatabaseConfig {
 
   @override
   String toString() {
-    return 'DatabaseConfig(host: $host, port: $port, database: $database, user: $username)';
+    final url = supabaseUrl ?? '<unset>';
+    return 'DatabaseConfig(mode: supabase-sdk, url: $url)';
   }
 }
 
@@ -94,8 +106,11 @@ class ServerConfig {
     // Development: SSL is optional, defaults to enabled with self-signed certs
     final enableSSL = _getEnvValue('ENABLE_SSL') != 'false'; // Default: true
     return ServerConfig(
-      host: _getEnvValue('SERVER_HOST') ?? '0.0.0.0', // Bind to all interfaces for physical device access
-      port: int.parse(_getEnvValue('SERVER_PORT') ?? (enableSSL ? '8443' : '8080')),
+      host: _getEnvValue('SERVER_HOST') ??
+          '0.0.0.0', // Bind to all interfaces for physical device access
+      port: int.parse(
+        _getEnvValue('SERVER_PORT') ?? (enableSSL ? '8443' : '8080'),
+      ),
       isDevelopment: true,
       enableSSL: enableSSL,
       certPath: _getEnvValue('SSL_CERT_PATH') ?? 'certs/cert.pem',

@@ -18,25 +18,27 @@ class NoteOperationResult {
   });
 
   NoteOperationResult.success(Map<String, dynamic> note)
-      : success = true,
-        note = note,
-        hasConflict = false,
-        serverVersion = null,
-        serverNote = null;
+    : success = true,
+      note = note,
+      hasConflict = false,
+      serverVersion = null,
+      serverNote = null;
 
-  NoteOperationResult.conflict({required int serverVersion, required Map<String, dynamic> serverNote})
-      : success = false,
-        note = null,
-        hasConflict = true,
-        serverVersion = serverVersion,
-        serverNote = serverNote;
+  NoteOperationResult.conflict({
+    required int serverVersion,
+    required Map<String, dynamic> serverNote,
+  }) : success = false,
+       note = null,
+       hasConflict = true,
+       serverVersion = serverVersion,
+       serverNote = serverNote;
 
   NoteOperationResult.notFound()
-      : success = false,
-        note = null,
-        hasConflict = false,
-        serverVersion = null,
-        serverNote = null;
+    : success = false,
+      note = null,
+      hasConflict = false,
+      serverVersion = null,
+      serverNote = null;
 }
 
 class NoteService {
@@ -44,81 +46,147 @@ class NoteService {
 
   NoteService(this.db);
 
-  Future<bool> verifyDeviceAccess(String deviceId, String token) async {
-    try {
-      final row = await db.querySingle(
-        'SELECT id FROM devices WHERE id = @id AND device_token = @token AND is_active = true',
-        parameters: {'id': deviceId, 'token': token},
-      );
-      return row != null;
-    } catch (e) {
-      return false;
+  DateTime _asUtc(dynamic value) {
+    if (value is DateTime) return value.isUtc ? value : value.toUtc();
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null)
+      return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    return parsed.isUtc ? parsed : parsed.toUtc();
+  }
+
+  Map<String, dynamic>? _first(dynamic data) {
+    if (data is List && data.isNotEmpty) {
+      final row = data.first;
+      if (row is Map<String, dynamic>) return row;
+      if (row is Map) return Map<String, dynamic>.from(row);
     }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _rows(dynamic data) {
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  Future<bool> verifyDeviceAccess(String deviceId, String token) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final rows = await db.client
+            .from('devices')
+            .select('id, device_token, is_active')
+            .eq('id', deviceId)
+            .limit(1);
+        final row = _first(rows);
+        if (row == null) return false;
+        final active = row['is_active'] == true;
+        final matchedToken = (row['device_token'] ?? '').toString() == token;
+        return active && matchedToken;
+      } catch (_) {
+        if (attempt == 2) return false;
+        await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
+      }
+    }
+    return false;
   }
 
   Future<bool> verifyBookOwnership(String deviceId, String bookUuid) async {
     try {
-      final row = await db.querySingle('''
-        SELECT b.book_uuid FROM books b
-        LEFT JOIN book_device_access a ON a.book_uuid = b.book_uuid AND a.device_id = @deviceId
-        WHERE b.book_uuid = @bookUuid AND b.is_deleted = false
-          AND (b.device_id = @deviceId OR a.device_id IS NOT NULL)
-      ''', parameters: {'bookUuid': bookUuid, 'deviceId': deviceId});
+      final existingBook = await db.client
+          .from('books')
+          .select('book_uuid, device_id')
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .limit(1);
+      final bookRow = _first(existingBook);
+      if (bookRow == null) {
+        return false;
+      }
 
-      if (row != null) return true;
-
-      final bookRow = await db.querySingle(
-        'SELECT device_id FROM books WHERE book_uuid = @bookUuid AND is_deleted = false',
-        parameters: {'bookUuid': bookUuid},
-      );
-
-      if (bookRow != null) {
-        await db.query('''
-          INSERT INTO book_device_access (book_uuid, device_id, access_type, created_at)
-          VALUES (@bookUuid, @deviceId, 'pulled', CURRENT_TIMESTAMP)
-          ON CONFLICT (book_uuid, device_id) DO NOTHING
-        ''', parameters: {'bookUuid': bookUuid, 'deviceId': deviceId});
+      if (bookRow['device_id']?.toString() == deviceId) {
         return true;
       }
 
-      return false;
-    } catch (e) {
+      final ownedRows = await db.client
+          .from('books')
+          .select('book_uuid')
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .eq('device_id', deviceId)
+          .limit(1);
+      if (_first(ownedRows) != null) return true;
+
+      final accessRows = await db.client
+          .from('book_device_access')
+          .select('book_uuid')
+          .eq('book_uuid', bookUuid)
+          .eq('device_id', deviceId)
+          .limit(1);
+      if (_first(accessRows) != null) return true;
+
+      await db.client.from('book_device_access').upsert({
+        'book_uuid': bookUuid,
+        'device_id': deviceId,
+        'access_type': 'pulled',
+        'created_at': DateTime.now().toUtc().toIso8601String(),
+      }, onConflict: 'book_uuid,device_id');
+      return true;
+    } catch (_) {
       return false;
     }
   }
 
   Future<bool> verifyEventInBook(String eventId, String bookUuid) async {
     try {
-      final row = await db.querySingle(
-        'SELECT id FROM events WHERE id = @eventId AND book_uuid = @bookUuid AND is_deleted = false',
-        parameters: {'eventId': eventId, 'bookUuid': bookUuid},
-      );
-      return row != null;
-    } catch (e) {
+      final rows = await db.client
+          .from('events')
+          .select('id')
+          .eq('id', eventId)
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .limit(1);
+      return _first(rows) != null;
+    } catch (_) {
       return false;
     }
   }
 
+  Future<String?> getRecordUuidByEvent({
+    required String bookUuid,
+    required String eventId,
+  }) async {
+    final rows = await db.client
+        .from('events')
+        .select('record_uuid')
+        .eq('id', eventId)
+        .eq('book_uuid', bookUuid)
+        .eq('is_deleted', false)
+        .limit(1);
+    final row = _first(rows);
+    return row?['record_uuid']?.toString();
+  }
+
   Future<Map<String, dynamic>?> getNoteByRecordUuid(String recordUuid) async {
-    try {
-      final row = await db.querySingle('''
-        SELECT id, record_uuid, pages_data, created_at, updated_at, version
-        FROM notes WHERE record_uuid = @recordUuid AND is_deleted = false
-      ''', parameters: {'recordUuid': recordUuid});
+    final rows = await db.client
+        .from('notes')
+        .select('id, record_uuid, pages_data, created_at, updated_at, version')
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false)
+        .limit(1);
 
-      if (row == null) return null;
+    final row = _first(rows);
+    if (row == null) return null;
 
-      return {
-        'id': row['id'],
-        'record_uuid': row['record_uuid'],
-        'pages_data': row['pages_data'],
-        'created_at': (row['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
-        'version': row['version'],
-      };
-    } catch (e) {
-      rethrow;
-    }
+    return {
+      'id': row['id'],
+      'record_uuid': row['record_uuid'],
+      'pages_data': row['pages_data'],
+      'created_at': _asUtc(row['created_at']).toIso8601String(),
+      'updated_at': _asUtc(row['updated_at']).toIso8601String(),
+      'version': (row['version'] as num?)?.toInt() ?? 1,
+    };
   }
 
   Future<NoteOperationResult> createOrUpdateNoteForRecord({
@@ -127,147 +195,291 @@ class NoteService {
     int? expectedVersion,
   }) async {
     try {
-      final result = await db.querySingle('''
-        INSERT INTO notes (record_uuid, pages_data, version, created_at, updated_at, synced_at)
-        VALUES (@recordUuid, @pagesData, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-        ON CONFLICT (record_uuid) DO UPDATE
-        SET pages_data = EXCLUDED.pages_data,
-            updated_at = CURRENT_TIMESTAMP,
-            synced_at = CURRENT_TIMESTAMP,
-            version = notes.version + 1
-        WHERE (CAST(@expectedVersion AS INTEGER) IS NULL OR notes.version = CAST(@expectedVersion AS INTEGER))
-          AND notes.is_deleted = false
-        RETURNING id, record_uuid, pages_data, created_at, updated_at, version
-      ''', parameters: {
-        'recordUuid': recordUuid,
-        'pagesData': pagesData,
-        'expectedVersion': expectedVersion,
-      });
+      final allRows = await db.client
+          .from('notes')
+          .select(
+            'id, record_uuid, pages_data, created_at, updated_at, version, is_deleted',
+          )
+          .eq('record_uuid', recordUuid)
+          .limit(1);
 
-      if (result != null) {
-        final note = {
-          'id': result['id'],
-          'record_uuid': result['record_uuid'],
-          'pages_data': result['pages_data'],
-          'created_at': (result['created_at'] as DateTime).toIso8601String(),
-          'updated_at': (result['updated_at'] as DateTime).toIso8601String(),
-          'version': result['version'],
-        };
+      final existing = _first(allRows);
+      Map<String, dynamic> saved;
 
-        // Update has_note flag per event based on strokes created by that event
-        final decoded = jsonDecode(pagesData);
-        final pages = (decoded is Map ? decoded['pages'] : decoded) as List? ?? [];
-        final erasedByEvent = decoded is Map ? (decoded['erasedStrokesByEvent'] as Map<String, dynamic>? ?? {}) : <String, dynamic>{};
-
-        // Build map of stroke IDs by eventUuid
-        final strokesByEvent = <String, Set<String>>{};
-        for (final page in pages) {
-          for (final stroke in page as List) {
-            final eventUuid = stroke['event_uuid'] as String?;
-            final strokeId = stroke['id'] as String?;
-            if (eventUuid != null && strokeId != null) {
-              strokesByEvent.putIfAbsent(eventUuid, () => <String>{}).add(strokeId);
-            }
-          }
+      if (existing == null) {
+        final inserted = await db.client
+            .from('notes')
+            .insert({
+              'record_uuid': recordUuid,
+              'pages_data': pagesData,
+              'version': 1,
+              'created_at': DateTime.now().toUtc().toIso8601String(),
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+              'synced_at': DateTime.now().toUtc().toIso8601String(),
+              'is_deleted': false,
+            })
+            .select(
+              'id, record_uuid, pages_data, created_at, updated_at, version',
+            )
+            .limit(1);
+        final row = _first(inserted);
+        if (row == null) return NoteOperationResult.notFound();
+        saved = row;
+      } else {
+        final isDeleted = existing['is_deleted'] == true;
+        if (isDeleted) {
+          return NoteOperationResult.notFound();
         }
 
-        // Get all events for this record
-        final events = await db.queryRows(
-          'SELECT id FROM events WHERE record_uuid = @recordUuid AND is_deleted = false',
-          parameters: {'recordUuid': recordUuid},
-        );
-
-        // Update has_note for each event
-        for (final event in events) {
-          final eventId = event['id'].toString();
-          final eventStrokes = strokesByEvent[eventId] ?? <String>{};
-          final erasedStrokes = Set<String>.from((erasedByEvent[eventId] as List?)?.map((e) => e.toString()) ?? []);
-
-          final hasNote = eventStrokes.any((strokeId) => !erasedStrokes.contains(strokeId));
-
-          await db.query(
-            'UPDATE events SET has_note = @hasNote WHERE id = @eventId',
-            parameters: {'hasNote': hasNote, 'eventId': eventId},
+        final serverVersion = (existing['version'] as num?)?.toInt() ?? 1;
+        if (expectedVersion != null && serverVersion != expectedVersion) {
+          return NoteOperationResult.conflict(
+            serverVersion: serverVersion,
+            serverNote: {
+              'id': existing['id'],
+              'record_uuid': existing['record_uuid'],
+              'pages_data': existing['pages_data'],
+              'created_at': _asUtc(existing['created_at']).toIso8601String(),
+              'updated_at': _asUtc(existing['updated_at']).toIso8601String(),
+              'version': serverVersion,
+            },
           );
         }
 
-        return NoteOperationResult.success(note);
+        final updated = await db.client
+            .from('notes')
+            .update({
+              'pages_data': pagesData,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+              'synced_at': DateTime.now().toUtc().toIso8601String(),
+              'version': serverVersion + 1,
+              'is_deleted': false,
+            })
+            .eq('id', existing['id'])
+            .select(
+              'id, record_uuid, pages_data, created_at, updated_at, version',
+            )
+            .limit(1);
+        final row = _first(updated);
+        if (row == null) return NoteOperationResult.notFound();
+        saved = row;
       }
 
-      final currentNote = await db.querySingle(
-        'SELECT id, record_uuid, pages_data, created_at, updated_at, version, is_deleted FROM notes WHERE record_uuid = @recordUuid',
-        parameters: {'recordUuid': recordUuid},
-      );
-
-      if (currentNote == null || currentNote['is_deleted'] == true) {
-        return NoteOperationResult.notFound();
+      // Update has_note per event based on per-event strokes and erase map.
+      dynamic decoded;
+      try {
+        decoded = jsonDecode(pagesData);
+      } catch (_) {
+        decoded = <String, dynamic>{'pages': <dynamic>[]};
       }
 
-      final serverNote = {
-        'id': currentNote['id'],
-        'record_uuid': currentNote['record_uuid'],
-        'pages_data': currentNote['pages_data'],
-        'created_at': (currentNote['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (currentNote['updated_at'] as DateTime).toIso8601String(),
-        'version': currentNote['version'],
-      };
+      final pages =
+          (decoded is Map ? decoded['pages'] : decoded) as List? ?? [];
+      final erasedByEvent = decoded is Map
+          ? (decoded['erasedStrokesByEvent'] as Map<String, dynamic>? ??
+                <String, dynamic>{})
+          : <String, dynamic>{};
 
-      return NoteOperationResult.conflict(
-        serverVersion: currentNote['version'] as int,
-        serverNote: serverNote,
-      );
+      final strokesByEvent = <String, Set<String>>{};
+      for (final page in pages) {
+        if (page is! List) continue;
+        for (final stroke in page) {
+          if (stroke is! Map) continue;
+          final eventUuid = stroke['event_uuid']?.toString();
+          final strokeId = stroke['id']?.toString();
+          if (eventUuid != null && eventUuid.isNotEmpty && strokeId != null) {
+            strokesByEvent
+                .putIfAbsent(eventUuid, () => <String>{})
+                .add(strokeId);
+          }
+        }
+      }
+
+      final eventsRows = await db.client
+          .from('events')
+          .select('id')
+          .eq('record_uuid', recordUuid)
+          .eq('is_deleted', false);
+
+      for (final event in _rows(eventsRows)) {
+        final eventId = event['id'].toString();
+        final eventStrokes = strokesByEvent[eventId] ?? <String>{};
+        final erasedStrokes = Set<String>.from(
+          (erasedByEvent[eventId] as List?)?.map((e) => e.toString()) ??
+              const <String>[],
+        );
+        final hasNote = eventStrokes.any((id) => !erasedStrokes.contains(id));
+
+        await db.client
+            .from('events')
+            .update({
+              'has_note': hasNote,
+              'updated_at': DateTime.now().toUtc().toIso8601String(),
+            })
+            .eq('id', eventId);
+      }
+
+      return NoteOperationResult.success({
+        'id': saved['id'],
+        'record_uuid': saved['record_uuid'],
+        'pages_data': saved['pages_data'],
+        'created_at': _asUtc(saved['created_at']).toIso8601String(),
+        'updated_at': _asUtc(saved['updated_at']).toIso8601String(),
+        'version': (saved['version'] as num?)?.toInt() ?? 1,
+      });
     } catch (e) {
       rethrow;
     }
   }
 
   Future<bool> deleteNoteByRecordUuid(String recordUuid) async {
-    try {
-      final result = await db.querySingle('''
-        UPDATE notes SET is_deleted = true, updated_at = CURRENT_TIMESTAMP, synced_at = CURRENT_TIMESTAMP
-        WHERE record_uuid = @recordUuid AND is_deleted = false
-        RETURNING id
-      ''', parameters: {'recordUuid': recordUuid});
+    final existingRows = await db.client
+        .from('notes')
+        .select('id')
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false)
+        .limit(1);
 
-      if (result != null) {
-        await db.query(
-          'UPDATE events SET has_note = false WHERE record_uuid = @recordUuid',
-          parameters: {'recordUuid': recordUuid},
-        );
-      }
+    final existing = _first(existingRows);
+    if (existing == null) return false;
 
-      return result != null;
-    } catch (e) {
-      rethrow;
-    }
+    await db.client
+        .from('notes')
+        .update({
+          'is_deleted': true,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+          'synced_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('id', existing['id']);
+
+    await db.client
+        .from('events')
+        .update({
+          'has_note': false,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('record_uuid', recordUuid);
+
+    return true;
   }
 
   Future<List<Map<String, dynamic>>> batchGetNotesByRecordUuids({
     required List<String> recordUuids,
   }) async {
-    if (recordUuids.isEmpty) return [];
+    if (recordUuids.isEmpty) return const [];
 
-    try {
-      final rows = await db.queryRows('''
-        SELECT n.id, n.record_uuid, n.pages_data, n.created_at, n.updated_at, n.version
-        FROM notes n
-        INNER JOIN records r ON n.record_uuid = r.record_uuid
-        WHERE n.record_uuid = ANY(@recordUuids)
-          AND n.is_deleted = false
-          AND r.is_deleted = false
-        ORDER BY n.record_uuid
-      ''', parameters: {'recordUuids': recordUuids});
+    final notesRows = await db.client
+        .from('notes')
+        .select('id, record_uuid, pages_data, created_at, updated_at, version')
+        .inFilter('record_uuid', recordUuids)
+        .eq('is_deleted', false)
+        .order('record_uuid', ascending: true);
 
-      return rows.map((row) => {
-        'id': row['id'],
-        'record_uuid': row['record_uuid'],
-        'pages_data': row['pages_data'],
-        'created_at': (row['created_at'] as DateTime).toIso8601String(),
-        'updated_at': (row['updated_at'] as DateTime).toIso8601String(),
-        'version': row['version'],
-      }).toList();
-    } catch (e) {
-      rethrow;
+    return _rows(notesRows)
+        .map(
+          (row) => {
+            'id': row['id'],
+            'record_uuid': row['record_uuid'],
+            'pages_data': row['pages_data'],
+            'created_at': _asUtc(row['created_at']).toIso8601String(),
+            'updated_at': _asUtc(row['updated_at']).toIso8601String(),
+            'version': (row['version'] as num?)?.toInt() ?? 1,
+          },
+        )
+        .toList();
+  }
+
+  Future<String?> getOrCreateRecordFromEventData(
+    Map<String, dynamic> eventData,
+  ) async {
+    final recordUuid = eventData['record_uuid']?.toString().trim();
+    if (recordUuid == null || recordUuid.isEmpty) return null;
+
+    final existingRows = await db.client
+        .from('records')
+        .select('record_uuid')
+        .eq('record_uuid', recordUuid)
+        .limit(1);
+    if (_first(existingRows) != null) {
+      return recordUuid;
     }
+
+    final recordNumber = (eventData['record_number'] ?? '').toString();
+    final name = (eventData['title'] ?? '').toString();
+
+    await db.client.from('records').insert({
+      'record_uuid': recordUuid,
+      'record_number': recordNumber,
+      'name': name,
+      'created_at': DateTime.now().toUtc().toIso8601String(),
+      'updated_at': DateTime.now().toUtc().toIso8601String(),
+      'synced_at': DateTime.now().toUtc().toIso8601String(),
+      'version': 1,
+      'is_deleted': false,
+    });
+
+    return recordUuid;
+  }
+
+  Future<void> createEventIfAbsent({
+    required String eventId,
+    required String bookUuid,
+    required String recordUuid,
+    required Map<String, dynamic> eventData,
+  }) async {
+    final existingRows = await db.client
+        .from('events')
+        .select('id')
+        .eq('id', eventId)
+        .limit(1);
+    if (_first(existingRows) != null) return;
+
+    final title = (eventData['title'] ?? '').toString();
+    final eventTypesRaw = eventData['event_types'];
+    final eventTypes = eventTypesRaw is String
+        ? eventTypesRaw
+        : jsonEncode(eventTypesRaw ?? ['other']);
+    final hasChargeItems =
+        eventData['has_charge_items'] == true ||
+        eventData['has_charge_items'] == 1;
+
+    final startTimeSeconds = int.tryParse(
+      (eventData['start_time'] ?? '').toString(),
+    );
+    final endTimeSeconds = int.tryParse(
+      (eventData['end_time'] ?? '').toString(),
+    );
+    final now = DateTime.now().toUtc();
+    final startTime = startTimeSeconds != null
+        ? DateTime.fromMillisecondsSinceEpoch(
+            startTimeSeconds * 1000,
+            isUtc: true,
+          )
+        : now;
+    final endTime = endTimeSeconds != null
+        ? DateTime.fromMillisecondsSinceEpoch(
+            endTimeSeconds * 1000,
+            isUtc: true,
+          )
+        : null;
+
+    await db.client.from('events').insert({
+      'id': eventId,
+      'book_uuid': bookUuid,
+      'record_uuid': recordUuid,
+      'title': title,
+      'event_types': eventTypes,
+      'has_charge_items': hasChargeItems,
+      'start_time': startTime.toIso8601String(),
+      'end_time': endTime?.toIso8601String(),
+      'created_at': now.toIso8601String(),
+      'updated_at': now.toIso8601String(),
+      'synced_at': now.toIso8601String(),
+      'version': 1,
+      'is_deleted': false,
+      'is_removed': false,
+      'is_checked': false,
+      'has_note': false,
+    });
   }
 }

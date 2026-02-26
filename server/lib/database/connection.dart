@@ -1,32 +1,24 @@
-import 'package:postgres/postgres.dart';
+import 'package:supabase/supabase.dart';
+
 import '../config/database_config.dart';
 
-/// PostgreSQL connection pool manager
+/// Database connection manager backed by Supabase SDK.
+///
+/// New code should use [client] directly with table/query-builder operations.
 class DatabaseConnection {
   static DatabaseConnection? _instance;
-  late final Pool _pool;
   final DatabaseConfig config;
+  late final SupabaseClient _client;
 
   DatabaseConnection._internal(this.config) {
-    _pool = Pool.withEndpoints(
-      [
-        Endpoint(
-          host: config.host,
-          port: config.port,
-          database: config.database,
-          username: config.username,
-          password: config.password,
-        ),
-      ],
-      settings: PoolSettings(
-        maxConnectionCount: config.maxConnections,
-        maxConnectionAge: const Duration(hours: 1),
-        sslMode: SslMode.disable, // Enable in production
-      ),
-    );
+    if (!config.useSupabaseSdk) {
+      throw Exception(
+        'Supabase SDK mode requires SUPABASE_URL and SUPABASE_KEY in .env',
+      );
+    }
+    _client = SupabaseClient(config.supabaseUrl!, config.supabaseKey!);
   }
 
-  /// Get singleton instance
   factory DatabaseConnection({DatabaseConfig? config}) {
     _instance ??= DatabaseConnection._internal(
       config ?? DatabaseConfig.development(),
@@ -34,91 +26,61 @@ class DatabaseConnection {
     return _instance!;
   }
 
-  /// Get connection pool
-  Pool get pool => _pool;
+  SupabaseClient get client => _client;
 
-  /// Execute a query with parameters
-  Future<Result> query(
-    String sql, {
-    Map<String, dynamic>? parameters,
-  }) async {
-    try {
-      return await _pool.execute(
-        Sql.named(sql),
-        parameters: parameters,
-      );
-    } catch (e) {
-      print('❌ Database query error: $e');
-      print('   SQL: $sql');
-      print('   Parameters: $parameters');
-      rethrow;
-    }
+  /// Legacy SQL interfaces are intentionally disabled.
+  Future<void> query(String sql, {Map<String, dynamic>? parameters}) async {
+    throw UnsupportedError(
+      'Raw SQL path disabled. Migrate this call to Supabase query builder. SQL: $sql',
+    );
   }
 
-  /// Execute a query and return rows
+  /// Legacy SQL interfaces are intentionally disabled.
   Future<List<Map<String, dynamic>>> queryRows(
     String sql, {
     Map<String, dynamic>? parameters,
   }) async {
-    final result = await query(sql, parameters: parameters);
-    return result.map((row) => row.toColumnMap()).toList();
+    throw UnsupportedError(
+      'Raw SQL path disabled. Migrate this call to Supabase query builder. SQL: $sql',
+    );
   }
 
-  /// Execute a query and return single row or null
+  /// Legacy SQL interfaces are intentionally disabled.
   Future<Map<String, dynamic>?> querySingle(
     String sql, {
     Map<String, dynamic>? parameters,
   }) async {
-    final result = await query(sql, parameters: parameters);
-    if (result.isEmpty) return null;
-    return result.first.toColumnMap();
+    throw UnsupportedError(
+      'Raw SQL path disabled. Migrate this call to Supabase query builder. SQL: $sql',
+    );
   }
 
-  /// Execute within a transaction
-  Future<T> transaction<T>(
-    Future<T> Function(Session) callback,
-  ) async {
-    return await _pool.withConnection((connection) async {
-      return await connection.runTx((session) async {
-        return await callback(session);
-      });
-    });
+  /// No-op compatibility wrapper.
+  Future<T> transaction<T>(Future<T> Function() callback) async {
+    return callback();
   }
 
-  /// Close the connection pool
-  Future<void> close() async {
-    await _pool.close();
-  }
+  Future<void> close() async {}
 
-  /// Health check - verify database connectivity
+  /// Health check using a minimal table query.
   Future<bool> healthCheck() async {
     try {
-      final result = await querySingle('SELECT 1 as health');
-      return result != null && result['health'] == 1;
+      await _client.from('devices').select('id').limit(1);
+      return true;
     } catch (e) {
       print('❌ Database health check failed: $e');
       return false;
     }
   }
 
-  /// Run migrations from SQL file
   Future<void> runMigrations(String migrationSql) async {
-    try {
-      print('🔄 Running database migrations...');
-      final statements = migrationSql.split(';').where((s) => s.trim().isNotEmpty);
-
-      for (final statement in statements) {
-        await query(statement.trim());
-      }
-
-      print('✅ Migrations completed successfully');
-    } catch (e) {
-      print('❌ Migration failed: $e');
-      rethrow;
-    }
+    final _ = migrationSql;
+    throw UnsupportedError(
+      'Server-side migrations via raw SQL are disabled in SDK-only mode. '
+      'Run SQL in Supabase SQL editor instead.',
+    );
   }
 
-  /// Reset instance (for testing)
   static void resetInstance() {
     _instance = null;
   }

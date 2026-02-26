@@ -20,61 +20,115 @@ class ChargeItemRoutes {
     return r;
   }
 
-  Future<bool> _verifyDeviceAccess(String deviceId, String token) async {
-    try {
-      final row = await db.querySingle(
-        'SELECT id FROM devices WHERE id = @id AND device_token = @token AND is_active = true',
-        parameters: {'id': deviceId, 'token': token},
-      );
-      return row != null;
-    } catch (_) {
-      return false;
+  Map<String, dynamic>? _first(dynamic data) {
+    if (data is List && data.isNotEmpty) {
+      final row = data.first;
+      if (row is Map<String, dynamic>) return row;
+      if (row is Map) return Map<String, dynamic>.from(row);
     }
+    return null;
+  }
+
+  List<Map<String, dynamic>> _rows(dynamic data) {
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
+  DateTime _asUtc(dynamic value) {
+    if (value is DateTime) return value.isUtc ? value : value.toUtc();
+    final parsed = DateTime.tryParse(value?.toString() ?? '');
+    if (parsed == null)
+      return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    return parsed.isUtc ? parsed : parsed.toUtc();
+  }
+
+  Future<bool> _verifyDeviceAccess(String deviceId, String token) async {
+    for (var attempt = 0; attempt < 3; attempt++) {
+      try {
+        final rows = await db.client
+            .from('devices')
+            .select('id, device_token, is_active')
+            .eq('id', deviceId)
+            .limit(1);
+        final row = _first(rows);
+        if (row == null) return false;
+        final active = row['is_active'] == true;
+        return active && row['device_token']?.toString() == token;
+      } catch (_) {
+        if (attempt == 2) return false;
+        await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
+      }
+    }
+    return false;
+  }
+
+  Future<Set<String>> _accessibleBookUuids(String deviceId) async {
+    final ownedRows = await db.client
+        .from('books')
+        .select('book_uuid')
+        .eq('device_id', deviceId)
+        .eq('is_deleted', false);
+
+    final accessRows = await db.client
+        .from('book_device_access')
+        .select('book_uuid')
+        .eq('device_id', deviceId);
+
+    final result = <String>{};
+    for (final row in _rows(ownedRows)) {
+      final uuid = row['book_uuid']?.toString();
+      if (uuid != null && uuid.isNotEmpty) result.add(uuid);
+    }
+    for (final row in _rows(accessRows)) {
+      final uuid = row['book_uuid']?.toString();
+      if (uuid != null && uuid.isNotEmpty) result.add(uuid);
+    }
+    return result;
   }
 
   Future<bool> _verifyRecordAccess(String deviceId, String recordUuid) async {
     try {
-      final row = await db.querySingle(
-        '''
-        SELECT 1
-        FROM events e
-        INNER JOIN books b ON b.book_uuid = e.book_uuid
-        LEFT JOIN book_device_access a ON a.book_uuid = b.book_uuid AND a.device_id = @deviceId
-        WHERE e.record_uuid = @recordUuid
-          AND e.is_deleted = false
-          AND b.is_deleted = false
-          AND (b.device_id = @deviceId OR a.device_id IS NOT NULL)
-        LIMIT 1
-        ''',
-        parameters: {'deviceId': deviceId, 'recordUuid': recordUuid},
-      );
-      return row != null;
+      final accessibleBooks = await _accessibleBookUuids(deviceId);
+      if (accessibleBooks.isEmpty) return false;
+
+      final eventRows = await db.client
+          .from('events')
+          .select('book_uuid')
+          .eq('record_uuid', recordUuid)
+          .eq('is_deleted', false);
+
+      for (final row in _rows(eventRows)) {
+        final bookUuid = row['book_uuid']?.toString();
+        if (bookUuid != null && accessibleBooks.contains(bookUuid)) {
+          return true;
+        }
+      }
+      return false;
     } catch (_) {
       return false;
     }
   }
 
   Future<void> _refreshEventChargeFlags(String recordUuid) async {
-    final hasItemsRow = await db.querySingle(
-      '''
-      SELECT EXISTS(
-        SELECT 1 FROM charge_items
-        WHERE record_uuid = @recordUuid AND is_deleted = false
-      ) AS has_items
-      ''',
-      parameters: {'recordUuid': recordUuid},
-    );
-    final hasItems =
-        hasItemsRow?['has_items'] == true || hasItemsRow?['has_items'] == 1;
+    final rows = await db.client
+        .from('charge_items')
+        .select('id')
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false)
+        .limit(1);
+    final hasItems = _first(rows) != null;
 
-    await db.query(
-      '''
-      UPDATE events
-      SET has_charge_items = @hasItems
-      WHERE record_uuid = @recordUuid AND is_deleted = false
-      ''',
-      parameters: {'recordUuid': recordUuid, 'hasItems': hasItems},
-    );
+    await db.client
+        .from('events')
+        .update({
+          'has_charge_items': hasItems,
+          'updated_at': DateTime.now().toUtc().toIso8601String(),
+        })
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false);
   }
 
   int _toInt(dynamic value, {int fallback = 0}) {
@@ -99,26 +153,30 @@ class ChargeItemRoutes {
   }
 
   Map<String, dynamic> _serializeChargeItem(Map<String, dynamic> row) {
+    final createdAt = _asUtc(row['created_at']).toIso8601String();
+    final updatedAt = _asUtc(row['updated_at']).toIso8601String();
+    final isDeleted = row['is_deleted'] == true || row['is_deleted'] == 1;
+
     return {
       'id': row['id'],
       'recordUuid': row['record_uuid'],
       'eventId': row['event_id'],
       'itemName': row['item_name'],
-      'itemPrice': row['item_price'],
-      'receivedAmount': row['received_amount'],
-      'createdAt': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-      'updatedAt': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-      'version': row['version'],
-      'isDeleted': row['is_deleted'] == true || row['is_deleted'] == 1,
+      'itemPrice': _toInt(row['item_price']),
+      'receivedAmount': _toInt(row['received_amount']),
+      'createdAt': createdAt,
+      'updatedAt': updatedAt,
+      'version': _toInt(row['version'], fallback: 1),
+      'isDeleted': isDeleted,
       // snake_case compatibility
       'record_uuid': row['record_uuid'],
       'event_id': row['event_id'],
       'item_name': row['item_name'],
-      'item_price': row['item_price'],
-      'received_amount': row['received_amount'],
-      'created_at': (row['created_at'] as DateTime).toUtc().toIso8601String(),
-      'updated_at': (row['updated_at'] as DateTime).toUtc().toIso8601String(),
-      'is_deleted': row['is_deleted'] == true || row['is_deleted'] == 1,
+      'item_price': _toInt(row['item_price']),
+      'received_amount': _toInt(row['received_amount']),
+      'created_at': createdAt,
+      'updated_at': updatedAt,
+      'is_deleted': isDeleted,
     };
   }
 
@@ -163,18 +221,16 @@ class ChargeItemRoutes {
         );
       }
 
-      final rows = await db.queryRows(
-        '''
-        SELECT id, record_uuid, event_id, item_name, item_price, received_amount,
-               created_at, updated_at, version, is_deleted
-        FROM charge_items
-        WHERE record_uuid = @recordUuid AND is_deleted = false
-        ORDER BY updated_at DESC
-        ''',
-        parameters: {'recordUuid': recordUuid},
-      );
+      final rows = await db.client
+          .from('charge_items')
+          .select(
+            'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+          )
+          .eq('record_uuid', recordUuid)
+          .eq('is_deleted', false)
+          .order('updated_at', ascending: false);
 
-      final items = rows.map(_serializeChargeItem).toList();
+      final items = _rows(rows).map(_serializeChargeItem).toList();
       return Response.ok(
         jsonEncode({
           'success': true,
@@ -239,7 +295,12 @@ class ChargeItemRoutes {
       final json = jsonDecode(body) as Map<String, dynamic>;
 
       final id = (json['id'] ?? '').toString().trim();
-      final eventId = (json['eventId'] ?? json['event_id'])?.toString();
+      final rawEventId = (json['eventId'] ?? json['event_id'])
+          ?.toString()
+          .trim();
+      final eventId = (rawEventId == null || rawEventId.isEmpty)
+          ? null
+          : rawEventId;
       final itemName = (json['itemName'] ?? json['item_name'] ?? '')
           .toString()
           .trim();
@@ -266,66 +327,116 @@ class ChargeItemRoutes {
         );
       }
 
-      final result = await db.querySingle(
-        '''
-        INSERT INTO charge_items (
-          id, record_uuid, event_id, item_name, item_price, received_amount,
-          created_at, updated_at, synced_at, version, is_deleted
-        )
-        VALUES (
-          COALESCE(NULLIF(@id, '')::uuid, uuid_generate_v4()),
-          @recordUuid, @eventId, @itemName, @itemPrice, @receivedAmount,
-          CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP, 1, @isDeleted
-        )
-        ON CONFLICT (id) DO UPDATE
-        SET
-          event_id = COALESCE(@eventId::uuid, charge_items.event_id),
-          item_name = @itemName,
-          item_price = @itemPrice,
-          received_amount = @receivedAmount,
-          updated_at = CURRENT_TIMESTAMP,
-          synced_at = CURRENT_TIMESTAMP,
-          version = charge_items.version + 1,
-          is_deleted = @isDeleted
-        WHERE (CAST(@expectedVersion AS INTEGER) IS NULL OR charge_items.version = CAST(@expectedVersion AS INTEGER))
-          AND charge_items.record_uuid = @recordUuid
-        RETURNING
-          id, record_uuid, event_id, item_name, item_price, received_amount,
-          created_at, updated_at, version, is_deleted
-        ''',
-        parameters: {
-          'id': id,
-          'recordUuid': recordUuid,
-          'eventId': eventId,
-          'itemName': itemName,
-          'itemPrice': itemPrice,
-          'receivedAmount': receivedAmount,
-          'expectedVersion': expectedVersion,
-          'isDeleted': isDeleted,
-        },
-      );
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      Map<String, dynamic>? result;
+
+      if (id.isEmpty) {
+        final inserted = await db.client
+            .from('charge_items')
+            .insert({
+              'record_uuid': recordUuid,
+              'event_id': eventId,
+              'item_name': itemName,
+              'item_price': itemPrice,
+              'received_amount': receivedAmount,
+              'created_at': nowIso,
+              'updated_at': nowIso,
+              'synced_at': nowIso,
+              'version': 1,
+              'is_deleted': isDeleted,
+            })
+            .select(
+              'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+            )
+            .limit(1);
+        result = _first(inserted);
+      } else {
+        final existingRows = await db.client
+            .from('charge_items')
+            .select(
+              'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+            )
+            .eq('id', id)
+            .limit(1);
+        final existing = _first(existingRows);
+
+        if (existing == null) {
+          final inserted = await db.client
+              .from('charge_items')
+              .insert({
+                'id': id,
+                'record_uuid': recordUuid,
+                'event_id': eventId,
+                'item_name': itemName,
+                'item_price': itemPrice,
+                'received_amount': receivedAmount,
+                'created_at': nowIso,
+                'updated_at': nowIso,
+                'synced_at': nowIso,
+                'version': 1,
+                'is_deleted': isDeleted,
+              })
+              .select(
+                'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+              )
+              .limit(1);
+          result = _first(inserted);
+        } else {
+          if (existing['record_uuid']?.toString() != recordUuid) {
+            return Response(
+              409,
+              body: jsonEncode({
+                'success': false,
+                'conflict': true,
+                'message': 'Charge item version conflict',
+                'serverVersion': existing['version'],
+                'chargeItem': _serializeChargeItem(existing),
+              }),
+              headers: {'Content-Type': 'application/json'},
+            );
+          }
+
+          final serverVersion = _toInt(existing['version'], fallback: 1);
+          if (expectedVersion != null && serverVersion != expectedVersion) {
+            return Response(
+              409,
+              body: jsonEncode({
+                'success': false,
+                'conflict': true,
+                'message': 'Charge item version conflict',
+                'serverVersion': serverVersion,
+                'chargeItem': _serializeChargeItem(existing),
+              }),
+              headers: {'Content-Type': 'application/json'},
+            );
+          }
+
+          final updated = await db.client
+              .from('charge_items')
+              .update({
+                'event_id': eventId ?? existing['event_id'],
+                'item_name': itemName,
+                'item_price': itemPrice,
+                'received_amount': receivedAmount,
+                'updated_at': nowIso,
+                'synced_at': nowIso,
+                'version': serverVersion + 1,
+                'is_deleted': isDeleted,
+              })
+              .eq('id', id)
+              .select(
+                'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+              )
+              .limit(1);
+          result = _first(updated);
+        }
+      }
 
       if (result == null) {
-        final current = await db.querySingle(
-          '''
-          SELECT id, record_uuid, event_id, item_name, item_price, received_amount,
-                 created_at, updated_at, version, is_deleted
-          FROM charge_items
-          WHERE id = @id::uuid
-          ''',
-          parameters: {'id': id},
-        );
-
-        return Response(
-          409,
+        return Response.internalServerError(
           body: jsonEncode({
             'success': false,
-            'conflict': true,
-            'message': 'Charge item version conflict',
-            'serverVersion': current?['version'],
-            'chargeItem': current == null
-                ? null
-                : _serializeChargeItem(current),
+            'message': 'Failed to save charge item',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -385,14 +496,12 @@ class ChargeItemRoutes {
         );
       }
 
-      final existing = await db.querySingle(
-        '''
-        SELECT id, record_uuid, is_deleted
-        FROM charge_items
-        WHERE id = @id::uuid
-        ''',
-        parameters: {'id': chargeItemId},
-      );
+      final existingRows = await db.client
+          .from('charge_items')
+          .select('id, record_uuid, version, is_deleted')
+          .eq('id', chargeItemId)
+          .limit(1);
+      final existing = _first(existingRows);
       if (existing == null) {
         return Response.notFound(
           jsonEncode({'success': false, 'message': 'Charge item not found'}),
@@ -411,18 +520,18 @@ class ChargeItemRoutes {
         );
       }
 
-      await db.query(
-        '''
-        UPDATE charge_items
-        SET
-          is_deleted = true,
-          updated_at = CURRENT_TIMESTAMP,
-          synced_at = CURRENT_TIMESTAMP,
-          version = version + 1
-        WHERE id = @id::uuid
-        ''',
-        parameters: {'id': chargeItemId},
-      );
+      final nowIso = DateTime.now().toUtc().toIso8601String();
+      final currentVersion = _toInt(existing['version'], fallback: 1);
+
+      await db.client
+          .from('charge_items')
+          .update({
+            'is_deleted': true,
+            'updated_at': nowIso,
+            'synced_at': nowIso,
+            'version': currentVersion + 1,
+          })
+          .eq('id', chargeItemId);
 
       await _refreshEventChargeFlags(recordUuid);
       return Response.ok(

@@ -7,7 +7,7 @@ import '../services/drawing_service.dart';
 /// Router for schedule drawing endpoints following Server-Store pattern
 ///
 /// Provides on-demand access to schedule drawings using composite key:
-/// (book_id, date, view_mode)
+/// (book_uuid, date, view_mode)
 ///
 /// - GET individual drawing
 /// - POST create/update drawing with optimistic locking
@@ -94,7 +94,9 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId');
+        print(
+          '❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -106,7 +108,9 @@ class DrawingRoutes {
 
       // Verify book ownership
       if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
-        print('❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
+        print(
+          '❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -121,10 +125,7 @@ class DrawingRoutes {
 
       // Return 200 with null if drawing doesn't exist (not an error)
       return Response.ok(
-        jsonEncode({
-          'success': true,
-          'drawing': drawing,
-        }),
+        jsonEncode({'success': true, 'drawing': drawing}),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
@@ -166,10 +167,7 @@ class DrawingRoutes {
 
       if (bookUuid.isEmpty) {
         return Response.badRequest(
-          body: jsonEncode({
-            'success': false,
-            'message': 'Invalid bookId',
-          }),
+          body: jsonEncode({'success': false, 'message': 'Invalid bookId'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -209,7 +207,9 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] POST /api/books/$bookUuid/drawings - Invalid device credentials: deviceId=$deviceId');
+        print(
+          '❌ [403] POST /api/books/$bookUuid/drawings - Invalid device credentials: deviceId=$deviceId',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -221,7 +221,9 @@ class DrawingRoutes {
 
       // Verify book ownership
       if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
-        print('❌ [403] POST /api/books/$bookUuid/drawings - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid, date=$date, viewMode=$viewMode');
+        print(
+          '❌ [403] POST /api/books/$bookUuid/drawings - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid, date=$date, viewMode=$viewMode',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -341,7 +343,9 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId');
+        print(
+          '❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Invalid device credentials: deviceId=$deviceId',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -353,7 +357,9 @@ class DrawingRoutes {
 
       // Verify book ownership
       if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
-        print('❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
+        print(
+          '❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -364,22 +370,20 @@ class DrawingRoutes {
       }
 
       // Delete the drawing
-      final deleted = await drawingService.deleteDrawing(bookUuid, date, viewMode);
+      final deleted = await drawingService.deleteDrawing(
+        bookUuid,
+        date,
+        viewMode,
+      );
 
       if (deleted) {
         return Response.ok(
-          jsonEncode({
-            'success': true,
-            'message': 'Drawing deleted',
-          }),
+          jsonEncode({'success': true, 'message': 'Drawing deleted'}),
           headers: {'Content-Type': 'application/json'},
         );
       } else {
         return Response.notFound(
-          jsonEncode({
-            'success': false,
-            'message': 'Drawing not found',
-          }),
+          jsonEncode({'success': false, 'message': 'Drawing not found'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
@@ -442,7 +446,10 @@ class DrawingRoutes {
       final startDate = json['startDate'] as String?;
       final endDate = json['endDate'] as String?;
 
-      if (bookUuid == null || bookUuid.isEmpty || startDate == null || endDate == null) {
+      if (bookUuid == null ||
+          bookUuid.isEmpty ||
+          startDate == null ||
+          endDate == null) {
         return Response.badRequest(
           body: jsonEncode({
             'success': false,
@@ -454,7 +461,9 @@ class DrawingRoutes {
 
       // Verify device credentials
       if (!await drawingService.verifyDeviceAccess(deviceId, deviceToken)) {
-        print('❌ [403] POST /api/drawings/batch - Invalid device credentials: deviceId=$deviceId');
+        print(
+          '❌ [403] POST /api/drawings/batch - Invalid device credentials: deviceId=$deviceId',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -466,7 +475,9 @@ class DrawingRoutes {
 
       // Verify book ownership
       if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
-        print('❌ [403] POST /api/drawings/batch - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid');
+        print(
+          '❌ [403] POST /api/drawings/batch - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid',
+        );
         return Response.forbidden(
           jsonEncode({
             'success': false,

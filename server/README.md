@@ -1,26 +1,23 @@
 # Schedule Note Server
 
-PostgreSQL-based API server built with Dart Shelf.
+Supabase SDK-based API server built with Dart Shelf.
 
 ## Quick Start
 
 ```bash
-# 1. Install PostgreSQL (if not installed)
-brew install postgresql@15  # macOS
-brew services start postgresql@15
-
-# 2. Create database
-psql postgres -c "CREATE DATABASE schedule_note_dev;"
-
-# 3. Configure environment (copy from .env.example to ../.env)
+# 1. Configure environment (copy from .env.example to ../.env)
 cp ../.env.example ../.env
-# Edit ../.env and set DB_PASSWORD=postgres (or your password)
+# Set SUPABASE_URL and SUPABASE_KEY (service_role key)
 
-# 4. Install dependencies
+# 2. Install dependencies
 dart pub get
 
-# 5. Run migrations and start server
-dart run main.dart --dev --migrate
+# 3. In Supabase SQL editor, run:
+#    - server/schema.sql
+#    - docs/security/supabase/rls_best_practice.sql (optional hardening)
+
+# 4. Start server
+dart run main.dart --dev
 ```
 
 Server starts on `http://localhost:8080`
@@ -35,9 +32,6 @@ dart run main.dart --dev
 
 # Run server (production)
 dart run main.dart
-
-# Run with migrations
-dart run main.dart --dev --migrate
 
 # Run integration tests
 ./test_notes_api.sh
@@ -81,13 +75,21 @@ See `doc/Server-Store/` for Server-Store API implementation details.
 ## Configuration
 
 **Environment variables** (see `../.env.example`):
-- `DB_PASSWORD` - **Required** - Database password
-- `DB_HOST` - Database host (default: localhost)
-- `DB_PORT` - Database port (default: 5433 dev, 5432 prod)
-- `DB_NAME` - Database name (default: schedule_note_dev)
-- `DB_USER` - Database user (default: postgres)
+- `SUPABASE_URL` - Project URL, e.g. `https://<project-ref>.supabase.co`
+- `SUPABASE_KEY` - **Backend key (service_role / secret key)**. Never expose to frontend.
 - `SERVER_PORT` - Server port (default: 8080)
 - `ENABLE_SSL` - Enable HTTPS (default: true)
+
+**Supabase SDK example**:
+```bash
+SUPABASE_URL=https://<project-ref>.supabase.co
+SUPABASE_KEY=<service-role-or-secret-key>
+```
+
+Client architecture note:
+- Flutter app talks only to this API server.
+- This server talks to Supabase via SDK (`SUPABASE_URL` + `SUPABASE_KEY`).
+- Do not place backend keys in the frontend app.
 
 **Never commit `.env` to git!**
 
@@ -107,7 +109,7 @@ See `doc/Server-Store/` for Server-Store API implementation details.
 - `is_deleted` - Soft delete flag (never hard delete)
 - `device_id` - Device that created/last modified record
 
-See `migrations/*.sql` for complete schema.
+Schema source: `server/schema.sql`.
 
 ## Troubleshooting
 
@@ -120,25 +122,10 @@ lsof -ti:8080 | xargs kill -9
 lsof -i:8080
 ```
 
-**Server won't start - "Postgres.app rejected trust authentication"**
-- Open Postgres.app → Preferences → Network
-- Allow connections without password (development only)
-- Or configure password auth in `pg_hba.conf`
-
 **Connection refused**
 ```bash
-# Check PostgreSQL is running
-brew services list  # macOS
-psql -l             # Test connection
-```
-
-**Migration fails**
-```bash
-# Verify database exists
-psql -l | grep schedule_note
-
-# Check permissions
-psql schedule_note_dev -c "SELECT 1;"
+# Check server process and local port
+lsof -i:8080
 ```
 
 **API returns 403 Forbidden**

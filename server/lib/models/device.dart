@@ -27,13 +27,30 @@ class Device {
   Map<String, dynamic> toJson() => _$DeviceToJson(this);
 
   factory Device.fromDatabase(Map<String, dynamic> row) {
+    DateTime _asUtcDateTime(dynamic value) {
+      if (value is DateTime) return value.isUtc ? value : value.toUtc();
+      final parsed = DateTime.tryParse(value?.toString() ?? '');
+      if (parsed == null) {
+        return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+      }
+      return parsed.isUtc ? parsed : parsed.toUtc();
+    }
+
+    DateTime? _asUtcDateTimeOrNull(dynamic value) {
+      if (value == null) return null;
+      if (value is DateTime) return value.isUtc ? value : value.toUtc();
+      final parsed = DateTime.tryParse(value.toString());
+      if (parsed == null) return null;
+      return parsed.isUtc ? parsed : parsed.toUtc();
+    }
+
     return Device(
       id: row['id'].toString(),
       deviceName: row['device_name'] as String,
       deviceToken: row['device_token'] as String,
       platform: row['platform'] as String?,
-      registeredAt: row['registered_at'] as DateTime,
-      lastSyncAt: row['last_sync_at'] as DateTime?,
+      registeredAt: _asUtcDateTime(row['registered_at']),
+      lastSyncAt: _asUtcDateTimeOrNull(row['last_sync_at']),
       isActive: row['is_active'] as bool? ?? true,
     );
   }

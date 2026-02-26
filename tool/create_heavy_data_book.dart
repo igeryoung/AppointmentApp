@@ -14,6 +14,7 @@ const int _defaultEventsPerSlot = 3;
 const double _defaultRecordRatio = 0.5;
 const int _defaultTimezoneOffsetHours = 8;
 const double _defaultOpenEndRate = 0.35;
+const int _defaultHeavyBulkChunkSize = 200;
 
 // Requirement: 80% notes are heavy (300~500 strokes per page), 20% empty.
 const double _defaultRichNoteRatio = 0.8;
@@ -247,6 +248,56 @@ Future<Map<String, dynamic>> _postJson200({
   final decoded = jsonDecode(response.body);
   if (decoded is Map<String, dynamic>) return decoded;
   throw StateError('Unexpected response payload for ${uri.path}');
+}
+
+Map<String, dynamic> _eventCreateBodyFromPlan(_EventPlan event) {
+  return <String, dynamic>{
+    'id': event.eventId,
+    'record_uuid': event.recordUuid,
+    'title': event.title,
+    'record_number': event.recordNumber,
+    'record_name': event.recordName,
+    'record_phone': event.recordPhone,
+    'event_types': event.eventTypes,
+    // Keep false on creation; charge-item API updates this flag
+    // consistently once real charge rows are inserted.
+    'has_charge_items': false,
+    'start_time': event.startTimeUtc.millisecondsSinceEpoch ~/ 1000,
+    'end_time': event.endTimeUtc?.millisecondsSinceEpoch == null
+        ? null
+        : event.endTimeUtc!.millisecondsSinceEpoch ~/ 1000,
+  };
+}
+
+Future<bool> _postHeavyTestEventsBulk({
+  required http.Client client,
+  required String baseUrl,
+  required String bookUuid,
+  required List<Map<String, dynamic>> events,
+  required String deviceId,
+  required String deviceToken,
+}) async {
+  final uri = Uri.parse('$baseUrl/api/books/$bookUuid/heavy-test/events/bulk');
+  final response = await _postJsonRaw(
+    client: client,
+    uri: uri,
+    body: <String, dynamic>{'events': events},
+    deviceId: deviceId,
+    deviceToken: deviceToken,
+    timeout: const Duration(seconds: 90),
+  );
+
+  if (response.statusCode == 404) {
+    return false;
+  }
+
+  if (response.statusCode != 200) {
+    throw StateError(
+      'POST ${uri.path} failed: ${response.statusCode} ${response.body}',
+    );
+  }
+
+  return true;
 }
 
 String _pickString(Map<String, dynamic> map, {required List<String> keys}) {
@@ -600,6 +651,11 @@ Future<void> main() async {
     fallback: _defaultChargeRecordRatio,
   ).clamp(0.0, 1.0);
   final seedRaw = _resolveValue(key: 'SN_HEAVY_RANDOM_SEED', fileEnv: fileEnv);
+  final heavyBulkChunkSize = _resolveInt(
+    key: 'SN_HEAVY_BULK_CHUNK_SIZE',
+    fileEnv: fileEnv,
+    fallback: _defaultHeavyBulkChunkSize,
+  );
   final randomSeed = seedRaw.isEmpty
       ? DateTime.now().millisecondsSinceEpoch
       : (int.tryParse(seedRaw) ?? DateTime.now().millisecondsSinceEpoch);
@@ -632,6 +688,11 @@ Future<void> main() async {
   }
   if (eventsPerSlot <= 0 || eventsPerSlot > 12) {
     stderr.writeln('SN_HEAVY_EVENTS_PER_SLOT must be between 1 and 12.');
+    exitCode = 64;
+    return;
+  }
+  if (heavyBulkChunkSize <= 0 || heavyBulkChunkSize > 500) {
+    stderr.writeln('SN_HEAVY_BULK_CHUNK_SIZE must be between 1 and 500.');
     exitCode = 64;
     return;
   }
@@ -770,33 +831,59 @@ Future<void> main() async {
           .add(eventId);
     }
 
-    for (var i = 0; i < eventPlans.length; i++) {
-      final event = eventPlans[i];
-      await _postJson200(
-        client: client,
-        uri: Uri.parse('$baseUrl/api/books/$bookUuid/events'),
-        body: <String, dynamic>{
-          'id': event.eventId,
-          'record_uuid': event.recordUuid,
-          'title': event.title,
-          'record_number': event.recordNumber,
-          'record_name': event.recordName,
-          'record_phone': event.recordPhone,
-          'event_types': event.eventTypes,
-          // Keep false on creation; charge-item API updates this flag
-          // consistently once real charge rows are inserted.
-          'has_charge_items': false,
-          'start_time': event.startTimeUtc.millisecondsSinceEpoch ~/ 1000,
-          'end_time': event.endTimeUtc?.millisecondsSinceEpoch == null
-              ? null
-              : event.endTimeUtc!.millisecondsSinceEpoch ~/ 1000,
-        },
-        deviceId: deviceId,
-        deviceToken: deviceToken,
-      );
+    final eventBodies = eventPlans
+        .map((event) => _eventCreateBodyFromPlan(event))
+        .toList();
+    var bulkEndpointAvailable = true;
+    var eventCreatedCount = 0;
 
-      if ((i + 1) % 200 == 0 || i + 1 == eventPlans.length) {
-        stdout.writeln('  events created: ${i + 1}/${eventPlans.length}');
+    for (
+      var start = 0;
+      start < eventBodies.length;
+      start += heavyBulkChunkSize
+    ) {
+      final end = min(start + heavyBulkChunkSize, eventBodies.length);
+      final chunkBodies = eventBodies.sublist(start, end);
+
+      if (bulkEndpointAvailable) {
+        final bulkUsed = await _postHeavyTestEventsBulk(
+          client: client,
+          baseUrl: baseUrl,
+          bookUuid: bookUuid,
+          events: chunkBodies,
+          deviceId: deviceId,
+          deviceToken: deviceToken,
+        );
+
+        if (bulkUsed) {
+          eventCreatedCount += chunkBodies.length;
+        } else {
+          bulkEndpointAvailable = false;
+          stdout.writeln(
+            '  heavy-test bulk endpoint unavailable, '
+            'falling back to single-event POST.',
+          );
+        }
+      }
+
+      if (!bulkEndpointAvailable) {
+        for (final body in chunkBodies) {
+          await _postJson200(
+            client: client,
+            uri: Uri.parse('$baseUrl/api/books/$bookUuid/events'),
+            body: body,
+            deviceId: deviceId,
+            deviceToken: deviceToken,
+          );
+          eventCreatedCount++;
+        }
+      }
+
+      if (eventCreatedCount % 200 == 0 ||
+          eventCreatedCount == eventPlans.length) {
+        stdout.writeln(
+          '  events created: $eventCreatedCount/${eventPlans.length}',
+        );
       }
     }
 
