@@ -920,6 +920,7 @@ class ApiClient {
   /// Create a new book on the server
   Future<Map<String, dynamic>> createBook({
     required String name,
+    required String bookPassword,
     required String deviceId,
     required String deviceToken,
   }) async {
@@ -932,7 +933,7 @@ class ApiClient {
               'X-Device-ID': deviceId,
               'X-Device-Token': deviceToken,
             },
-            body: jsonEncode({'name': name}),
+            body: jsonEncode({'name': name, 'bookPassword': bookPassword}),
           )
           .timeout(timeout);
 
@@ -1014,6 +1015,7 @@ class ApiClient {
   /// from canonical endpoint.
   Future<Map<String, dynamic>> pullBook({
     required String bookUuid,
+    required String bookPassword,
     required String deviceId,
     required String deviceToken,
   }) async {
@@ -1025,6 +1027,7 @@ class ApiClient {
               'Content-Type': 'application/json',
               'X-Device-ID': deviceId,
               'X-Device-Token': deviceToken,
+              'X-Book-Password': bookPassword,
             },
           )
           .timeout(timeout);
@@ -1044,6 +1047,12 @@ class ApiClient {
           statusCode: response.statusCode,
           responseBody: response.body,
         );
+      } else if (response.statusCode == 403) {
+        throw ApiException(
+          'Invalid book password',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
       } else {
         throw ApiException(
           'Pull book failed: ${response.statusCode}',
@@ -1059,6 +1068,7 @@ class ApiClient {
   /// Get book metadata
   Future<Map<String, dynamic>> getServerBookInfo({
     required String bookUuid,
+    required String bookPassword,
     required String deviceId,
     required String deviceToken,
   }) async {
@@ -1070,6 +1080,7 @@ class ApiClient {
               'Content-Type': 'application/json',
               'X-Device-ID': deviceId,
               'X-Device-Token': deviceToken,
+              'X-Book-Password': bookPassword,
             },
           )
           .timeout(timeout);
@@ -1086,6 +1097,12 @@ class ApiClient {
       } else if (response.statusCode == 404) {
         throw ApiException(
           'Book not found or does not belong to this device',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      } else if (response.statusCode == 403) {
+        throw ApiException(
+          'Invalid book password',
           statusCode: response.statusCode,
           responseBody: response.body,
         );

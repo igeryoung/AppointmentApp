@@ -17,6 +17,7 @@ void registerEventInteg007({required LiveServerConfig? config}) {
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final created = await apiClient.createBook(
           name: 'IT book contract $suffix',
+          bookPassword: live.bookPassword,
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
@@ -75,6 +76,7 @@ void registerEventInteg007({required LiveServerConfig? config}) {
 
         final bundle = await apiClient.pullBook(
           bookUuid: bookUuid,
+          bookPassword: live.bookPassword,
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
@@ -117,6 +119,7 @@ void registerEventInteg007({required LiveServerConfig? config}) {
         await expectLater(
           () => apiClient.getServerBookInfo(
             bookUuid: bookUuid!,
+            bookPassword: live.bookPassword,
             deviceId: live.deviceId,
             deviceToken: live.deviceToken,
           ),

@@ -8,6 +8,7 @@ import 'dialogs/rename_book_dialog.dart';
 import 'dialogs/archive_book_confirm_dialog.dart';
 import 'dialogs/delete_book_confirm_dialog.dart';
 import 'dialogs/import_server_book_dialog.dart';
+import 'dialogs/book_password_dialog.dart';
 import 'dialogs/server_settings_dialog.dart';
 import '../../l10n/app_localizations.dart';
 import '../../services/api_client.dart';
@@ -84,9 +85,13 @@ class BookListController extends ChangeNotifier {
       );
       return;
     }
-    final name = await CreateBookDialog.show(context);
-    if (name != null && name.isNotEmpty) {
-      await createBook(context: context, name: name);
+    final input = await CreateBookDialog.show(context);
+    if (input != null && input.name.isNotEmpty) {
+      await createBook(
+        context: context,
+        name: input.name,
+        password: input.password,
+      );
     }
   }
 
@@ -94,12 +99,13 @@ class BookListController extends ChangeNotifier {
   Future<void> createBook({
     required BuildContext context,
     required String name,
+    required String password,
   }) async {
     _setState(_state.copyWith(isLoading: true));
 
     try {
       // Create book on server and locally (server is the source of truth)
-      await repo.create(name);
+      await repo.create(name, password: password);
       await _loadBooks();
     } catch (e) {
       _setState(_state.copyWith(isLoading: false));
@@ -241,7 +247,19 @@ class BookListController extends ChangeNotifier {
         );
 
         if (selectedBookUuid != null && selectedBookUuid.isNotEmpty) {
-          await _importBookFromServer(context, selectedBookUuid);
+          final password = await BookPasswordDialog.show(
+            context,
+            title: 'Enter Book Password',
+            description: 'Required to import this book from server.',
+          );
+          if (password == null || password.isEmpty) {
+            return;
+          }
+          await _importBookFromServer(
+            context,
+            selectedBookUuid,
+            password: password,
+          );
         }
       }
     } catch (e) {
@@ -256,11 +274,16 @@ class BookListController extends ChangeNotifier {
   /// Import book from server
   Future<void> _importBookFromServer(
     BuildContext context,
-    String bookUuid,
-  ) async {
+    String bookUuid, {
+    required String password,
+  }) async {
     _setState(_state.copyWith(isLoading: true));
     try {
-      await repo.pullBookFromServer(bookUuid, lightImport: true);
+      await repo.pullBookFromServer(
+        bookUuid,
+        password: password,
+        lightImport: true,
+      );
 
       // Refresh the book list to show imported data
       await _loadBooks();
@@ -269,19 +292,105 @@ class BookListController extends ChangeNotifier {
         SnackBarUtils.showSuccess(context, 'Book imported successfully');
       }
     } catch (e) {
+      final isPasswordError =
+          _isInvalidBookPasswordError(e) || _isForbiddenImportError(e);
+      final isAlreadyExistsError = _isBookAlreadyExistsError(e);
+      final message = _buildImportErrorMessage(e);
       _setState(
         _state.copyWith(
           isLoading: false,
-          errorMessage: 'Failed to import book: $e',
+          errorMessage: (isPasswordError || isAlreadyExistsError)
+              ? null
+              : message,
         ),
       );
       if (context.mounted) {
-        SnackBarUtils.showError(context, 'Failed to import book: $e');
+        if (isPasswordError) {
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: const Text('密碼錯誤'),
+                content: const Text('您輸入的簿冊密碼不正確，請重新輸入後再試一次。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('確定'),
+                  ),
+                ],
+              );
+            },
+          );
+          return;
+        }
+        if (isAlreadyExistsError) {
+          await showDialog<void>(
+            context: context,
+            builder: (dialogContext) {
+              return AlertDialog(
+                title: const Text('簿冊已存在'),
+                content: const Text('此簿冊已在本機，無法重複匯入。'),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(dialogContext).pop(),
+                    child: const Text('確定'),
+                  ),
+                ],
+              );
+            },
+          );
+          return;
+        }
+        SnackBarUtils.showError(context, message);
       }
     }
   }
 
+  bool _isInvalidBookPasswordError(Object error) {
+    if (error is ApiException) {
+      if (error.statusCode != 403) return false;
+      final bodyText = (error.responseBody ?? '').toLowerCase();
+      final messageText = error.message.toLowerCase();
+      return bodyText.contains('invalid_book_password') ||
+          bodyText.contains('book password') ||
+          messageText.contains('book password');
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('invalid_book_password') ||
+        text.contains('invalid book password') ||
+        text.contains('book password');
+  }
+
+  bool _isForbiddenImportError(Object error) {
+    if (error is ApiException) {
+      return error.statusCode == 403;
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('403');
+  }
+
+  bool _isBookAlreadyExistsError(Object error) {
+    if (error is ApiException) {
+      if (error.statusCode == 409) return true;
+      final bodyText = (error.responseBody ?? '').toLowerCase();
+      final messageText = error.message.toLowerCase();
+      return bodyText.contains('already exists') ||
+          bodyText.contains('already exists locally') ||
+          messageText.contains('already exists') ||
+          messageText.contains('already exists locally');
+    }
+    final text = error.toString().toLowerCase();
+    return text.contains('already exists') ||
+        text.contains('already exists locally');
+  }
+
   String _buildImportErrorMessage(Object error) {
+    if (_isBookAlreadyExistsError(error)) {
+      return 'Import failed: this book already exists on this device.';
+    }
+    if (_isInvalidBookPasswordError(error) || _isForbiddenImportError(error)) {
+      return 'Import failed: invalid book password.';
+    }
     if (error is ApiException) {
       final code = error.statusCode;
       if (code == 404) {

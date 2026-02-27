@@ -20,10 +20,8 @@ class BookListCubit extends Cubit<BookListState> {
   final IBookRepository _bookRepository;
   final BookOrderService _bookOrderService;
 
-  BookListCubit(
-    this._bookRepository,
-    this._bookOrderService,
-  ) : super(const BookListInitial());
+  BookListCubit(this._bookRepository, this._bookOrderService)
+    : super(const BookListInitial());
 
   // ===================
   // Load Operations
@@ -53,15 +51,22 @@ class BookListCubit extends Cubit<BookListState> {
 
   /// Create a new book
   /// Returns the created book on success
-  Future<Book?> createBook(String name) async {
+  Future<Book?> createBook(String name, {required String password}) async {
     if (name.trim().isEmpty) {
       emit(const BookListError('Book name cannot be empty'));
+      return null;
+    }
+    if (password.trim().isEmpty) {
+      emit(const BookListError('Book password cannot be empty'));
       return null;
     }
 
     try {
       // Create book in repository
-      final newBook = await _bookRepository.create(name.trim());
+      final newBook = await _bookRepository.create(
+        name.trim(),
+        password: password.trim(),
+      );
 
       // Reload books to update UI
       await loadBooks();
@@ -79,7 +84,6 @@ class BookListCubit extends Cubit<BookListState> {
 
   /// Update book details (rename)
   Future<void> updateBook(Book book, {String? newName}) async {
-
     if (newName != null && newName.trim().isEmpty) {
       emit(const BookListError('Book name cannot be empty'));
       return;
@@ -87,14 +91,11 @@ class BookListCubit extends Cubit<BookListState> {
 
     try {
       // Update book in repository
-      final updatedBook = book.copyWith(
-        name: newName?.trim() ?? book.name,
-      );
+      final updatedBook = book.copyWith(name: newName?.trim() ?? book.name);
       await _bookRepository.update(updatedBook);
 
       // Reload books to update UI
       await loadBooks();
-
     } catch (e) {
       emit(BookListError('Failed to update book: $e'));
     }
@@ -111,7 +112,6 @@ class BookListCubit extends Cubit<BookListState> {
 
       // Reload books to update UI
       await loadBooks();
-
     } catch (e) {
       emit(BookListError('Failed to archive book: $e'));
     }
@@ -128,7 +128,6 @@ class BookListCubit extends Cubit<BookListState> {
 
       // Reload books to update UI
       await loadBooks();
-
     } catch (e) {
       emit(BookListError('Failed to delete book: $e'));
     }

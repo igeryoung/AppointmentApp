@@ -20,8 +20,8 @@ class BookRepository {
   }
 
   /// Create a new book
-  Future<void> create(String name) async {
-    await _repo.create(name);
+  Future<void> create(String name, {required String password}) async {
+    await _repo.create(name, password: password);
   }
 
   /// Update an existing book
@@ -64,8 +64,13 @@ class BookRepository {
   /// Pull a server book bundle into local cache
   Future<void> pullBookFromServer(
     String bookUuid, {
+    required String password,
     bool lightImport = false,
   }) async {
-    await _repo.pullBookFromServer(bookUuid, lightImport: lightImport);
+    await _repo.pullBookFromServer(
+      bookUuid,
+      password: password,
+      lightImport: lightImport,
+    );
   }
 }

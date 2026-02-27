@@ -12,6 +12,7 @@ class _FakeApiClient extends ApiClient {
   _FakeApiClient() : super(baseUrl: 'http://fake.local');
 
   int createBookCalls = 0;
+  String? lastBookPassword;
   Map<String, dynamic> createBookResponse = {
     'success': true,
     'uuid': 'server-book-uuid',
@@ -21,10 +22,12 @@ class _FakeApiClient extends ApiClient {
   @override
   Future<Map<String, dynamic>> createBook({
     required String name,
+    required String bookPassword,
     required String deviceId,
     required String deviceToken,
   }) async {
     createBookCalls += 1;
+    lastBookPassword = bookPassword;
     return createBookResponse;
   }
 }
@@ -67,7 +70,7 @@ void main() {
       );
 
       // Act
-      final action = () => repository.create('New Book');
+      final action = () => repository.create('New Book', password: 'book-pass');
 
       // Assert
       await expectLater(
@@ -104,7 +107,7 @@ void main() {
     );
 
     // Act
-    final created = await repository.create('My Book');
+    final created = await repository.create('My Book', password: 'book-pass');
     final row = await db.query(
       'books',
       where: 'book_uuid = ?',
@@ -114,6 +117,7 @@ void main() {
 
     // Assert
     expect(fakeApiClient!.createBookCalls, 1);
+    expect(fakeApiClient!.lastBookPassword, 'book-pass');
     expect(created.uuid, 'uuid-from-server-001');
     expect(created.name, 'My Book');
     expect(row.length, 1);
@@ -129,9 +133,22 @@ void main() {
     );
 
     // Act
-    final action = () => repository.create('   ');
+    final action = () => repository.create('   ', password: 'book-pass');
 
     // Assert
+    await expectLater(action, throwsA(isA<ArgumentError>()));
+    expect(fakeApiClient!.createBookCalls, 0);
+  });
+
+  test('BOOK-UNIT-015: create() rejects empty book password', () async {
+    final repository = BookRepositoryImpl(
+      () => dbService.database,
+      apiClient: fakeApiClient,
+      dbService: dbService,
+    );
+
+    final action = () => repository.create('My Book', password: '   ');
+
     await expectLater(action, throwsA(isA<ArgumentError>()));
     expect(fakeApiClient!.createBookCalls, 0);
   });

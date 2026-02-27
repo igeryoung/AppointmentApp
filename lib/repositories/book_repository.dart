@@ -14,7 +14,7 @@ abstract class IBookRepository {
   /// Create a new book
   /// Returns the created book with server-generated UUID
   /// Requires server connection (fails if offline)
-  Future<Book> create(String name);
+  Future<Book> create(String name, {required String password});
 
   /// Update an existing book
   /// Returns the updated book
@@ -41,10 +41,17 @@ abstract class IBookRepository {
   /// When [lightImport] is true, only imports book metadata.
   /// Throws if book already exists locally or doesn't exist on server
   /// [bookUuid] - UUID of the book to pull from server
-  Future<void> pullBookFromServer(String bookUuid, {bool lightImport = false});
+  Future<void> pullBookFromServer(
+    String bookUuid, {
+    required String password,
+    bool lightImport = false,
+  });
 
   /// Get book metadata from server without pulling the full data
   /// Useful for checking if a book exists on server or getting version info
   /// [bookUuid] - UUID of the book to check
-  Future<Map<String, dynamic>?> getServerBookInfo(String bookUuid);
+  Future<Map<String, dynamic>?> getServerBookInfo(
+    String bookUuid, {
+    required String password,
+  });
 }

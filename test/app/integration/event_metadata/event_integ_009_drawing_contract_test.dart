@@ -201,6 +201,7 @@ void registerEventInteg009({required LiveServerConfig? config}) {
         // Pull once so device B is in the same book access model used by app.
         await apiClient.pullBook(
           bookUuid: bookUuid,
+          bookPassword: live.bookPassword,
           deviceId: deviceB.deviceId,
           deviceToken: deviceB.deviceToken,
         );

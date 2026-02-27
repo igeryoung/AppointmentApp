@@ -70,6 +70,7 @@ Future<void> main() async {
 
   final uuid = const Uuid();
   final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+  final bookPassword = 'fixture-book-password';
   final client = _buildClient(baseUrl);
 
   try {
@@ -77,6 +78,7 @@ Future<void> main() async {
       client: client,
       baseUrl: baseUrl,
       name: 'IT metadata fixture $suffix',
+      bookPassword: bookPassword,
       deviceId: deviceId,
       deviceToken: deviceToken,
     );
@@ -120,6 +122,7 @@ SN_TEST_BOOK_UUID=$bookUuid
 SN_TEST_EVENT_ID=$eventId
 SN_TEST_RECORD_UUID=$recordUuid
 SN_TEST_FIXTURE_AUTO_CLEANUP=1
+SN_TEST_BOOK_PASSWORD=$bookPassword
 ''';
     await file.writeAsString(content);
 
@@ -160,6 +163,7 @@ Future<Map<String, dynamic>> _createBook({
   required http.Client client,
   required String baseUrl,
   required String name,
+  required String bookPassword,
   required String deviceId,
   required String deviceToken,
 }) async {
@@ -171,7 +175,7 @@ Future<Map<String, dynamic>> _createBook({
           'X-Device-ID': deviceId,
           'X-Device-Token': deviceToken,
         },
-        body: jsonEncode({'name': name}),
+        body: jsonEncode({'name': name, 'bookPassword': bookPassword}),
       )
       .timeout(const Duration(seconds: 20));
 

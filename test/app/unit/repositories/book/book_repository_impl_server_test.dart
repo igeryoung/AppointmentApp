@@ -22,10 +22,12 @@ class _FakeBookServerApiClient extends ApiClient {
   String? lastPullDeviceId;
   String? lastPullDeviceToken;
   String? lastPullBookUuid;
+  String? lastPullBookPassword;
 
   String? lastInfoDeviceId;
   String? lastInfoDeviceToken;
   String? lastInfoBookUuid;
+  String? lastInfoBookPassword;
 
   List<Map<String, dynamic>> listResponse = const [];
   Map<String, dynamic> pullResponse = {
@@ -66,11 +68,13 @@ class _FakeBookServerApiClient extends ApiClient {
   @override
   Future<Map<String, dynamic>> pullBook({
     required String bookUuid,
+    required String bookPassword,
     required String deviceId,
     required String deviceToken,
   }) async {
     pullCalls += 1;
     lastPullBookUuid = bookUuid;
+    lastPullBookPassword = bookPassword;
     lastPullDeviceId = deviceId;
     lastPullDeviceToken = deviceToken;
     if (pullError != null) throw pullError!;
@@ -80,11 +84,13 @@ class _FakeBookServerApiClient extends ApiClient {
   @override
   Future<Map<String, dynamic>> getServerBookInfo({
     required String bookUuid,
+    required String bookPassword,
     required String deviceId,
     required String deviceToken,
   }) async {
     infoCalls += 1;
     lastInfoBookUuid = bookUuid;
+    lastInfoBookPassword = bookPassword;
     lastInfoDeviceId = deviceId;
     lastInfoDeviceToken = deviceToken;
     if (infoError != null) throw infoError!;
@@ -193,7 +199,10 @@ void main() {
       final repository = buildRepository();
 
       // Act
-      final result = await repository.getServerBookInfo('missing-book');
+      final result = await repository.getServerBookInfo(
+        'missing-book',
+        password: 'book-pass',
+      );
 
       // Assert
       expect(fakeApiClient!.infoCalls, 1);
@@ -215,7 +224,8 @@ void main() {
       final repository = buildRepository();
 
       // Act
-      final action = () => repository.pullBookFromServer('local-book-1');
+      final action = () =>
+          repository.pullBookFromServer('local-book-1', password: 'book-pass');
 
       // Assert
       await expectLater(
@@ -249,12 +259,16 @@ void main() {
       final repository = buildRepository();
 
       // Act
-      await repository.pullBookFromServer('server-book-2');
+      await repository.pullBookFromServer(
+        'server-book-2',
+        password: 'book-pass',
+      );
       final inserted = await repository.getByUuid('server-book-2');
 
       // Assert
       expect(fakeApiClient!.pullCalls, 1);
       expect(fakeApiClient!.lastPullBookUuid, 'server-book-2');
+      expect(fakeApiClient!.lastPullBookPassword, 'book-pass');
       expect(fakeApiClient!.lastPullDeviceId, 'device-001');
       expect(fakeApiClient!.lastPullDeviceToken, 'token-001');
       expect(inserted, isNotNull);
@@ -317,7 +331,10 @@ void main() {
       final repository = buildRepository();
 
       // Act
-      await repository.pullBookFromServer('server-book-3');
+      await repository.pullBookFromServer(
+        'server-book-3',
+        password: 'book-pass',
+      );
       final rows = await db.query(
         'charge_items',
         where: 'record_uuid = ?',
@@ -352,6 +369,7 @@ void main() {
       // Act
       await repository.pullBookFromServer(
         'server-book-light',
+        password: 'book-pass',
         lightImport: true,
       );
       final inserted = await repository.getByUuid('server-book-light');
@@ -366,6 +384,7 @@ void main() {
 
       // Assert
       expect(fakeApiClient!.infoCalls, 1);
+      expect(fakeApiClient!.lastInfoBookPassword, 'book-pass');
       expect(fakeApiClient!.pullCalls, 0);
       expect(inserted, isNotNull);
       expect(inserted!.name, 'Server Light Book');

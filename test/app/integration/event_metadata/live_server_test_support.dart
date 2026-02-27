@@ -8,6 +8,7 @@ import 'package:uuid/uuid.dart';
 const String liveServerSkipReason =
     'Set SN_TEST_BASE_URL, SN_TEST_DEVICE_ID, SN_TEST_DEVICE_TOKEN '
     '(env or .env.integration). '
+    'Optional: SN_TEST_BOOK_PASSWORD for password-protected book pull tests. '
     'Optionally set SN_TEST_BOOK_UUID, SN_TEST_EVENT_ID, SN_TEST_RECORD_UUID '
     'to use existing fixture; otherwise test auto-creates temporary data.';
 
@@ -16,6 +17,7 @@ class LiveServerConfig {
   final String deviceId;
   final String deviceToken;
   final String registrationPassword;
+  final String bookPassword;
   final String? bookUuid;
   final String? eventId;
   final String? recordUuid;
@@ -26,6 +28,7 @@ class LiveServerConfig {
     required this.deviceId,
     required this.deviceToken,
     required this.registrationPassword,
+    required this.bookPassword,
     this.bookUuid,
     this.eventId,
     this.recordUuid,
@@ -70,6 +73,7 @@ class LiveServerConfig {
     final deviceId = resolve('SN_TEST_DEVICE_ID');
     final deviceToken = resolve('SN_TEST_DEVICE_TOKEN');
     final registrationPassword = resolve('SN_TEST_REGISTRATION_PASSWORD');
+    final bookPassword = resolve('SN_TEST_BOOK_PASSWORD');
     final bookUuid = resolve('SN_TEST_BOOK_UUID');
     final eventId = resolve('SN_TEST_EVENT_ID');
     final recordUuid = resolve('SN_TEST_RECORD_UUID');
@@ -104,6 +108,7 @@ class LiveServerConfig {
       registrationPassword: registrationPassword.isEmpty
           ? 'password'
           : registrationPassword,
+      bookPassword: bookPassword.isEmpty ? 'book-password' : bookPassword,
       bookUuid: bookUuid.isEmpty ? null : bookUuid,
       eventId: eventId.isEmpty ? null : eventId,
       recordUuid: recordUuid.isEmpty ? null : recordUuid,
@@ -267,6 +272,7 @@ Future<ResolvedFixture> resolveFixture({
 
   final createdBook = await apiClient.createBook(
     name: 'IT metadata $suffix',
+    bookPassword: config.bookPassword,
     deviceId: config.deviceId,
     deviceToken: config.deviceToken,
   );
@@ -329,6 +335,7 @@ Future<Map<String, dynamic>> createTemporaryBook({
 }) async {
   final createdBook = await apiClient.createBook(
     name: name,
+    bookPassword: config.bookPassword,
     deviceId: config.deviceId,
     deviceToken: config.deviceToken,
   );

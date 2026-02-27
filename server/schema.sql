@@ -20,6 +20,7 @@ CREATE TABLE IF NOT EXISTS public.books
     book_uuid uuid NOT NULL DEFAULT uuid_generate_v4(),
     device_id uuid NOT NULL,
     name text COLLATE pg_catalog."default" NOT NULL,
+    book_password_hash text COLLATE pg_catalog."default",
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     archived_at timestamp with time zone,
@@ -31,6 +32,9 @@ CREATE TABLE IF NOT EXISTS public.books
 
 COMMENT ON TABLE public.books
     IS 'Top-level schedule/record book, keyed by UUID.';
+
+COMMENT ON COLUMN public.books.book_password_hash
+    IS 'SHA-256 hash of the per-book pull password.';
 
 CREATE TABLE IF NOT EXISTS public.charge_items
 (

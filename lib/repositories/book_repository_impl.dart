@@ -117,10 +117,14 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
       value == null ? null : _toSeconds(value);
 
   @override
-  Future<Book> create(String name) async {
+  Future<Book> create(String name, {required String password}) async {
     final trimmedName = name.trim();
     if (trimmedName.isEmpty) {
       throw ArgumentError('Book name cannot be empty');
+    }
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      throw ArgumentError('Book password cannot be empty');
     }
 
     if (_apiClient == null) {
@@ -135,6 +139,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
     try {
       final response = await _apiClient.createBook(
         name: trimmedName,
+        bookPassword: trimmedPassword,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
@@ -259,6 +264,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
   @override
   Future<void> pullBookFromServer(
     String bookUuid, {
+    required String password,
     bool lightImport = false,
   }) async {
     if (_apiClient == null) {
@@ -267,6 +273,10 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
       );
     }
     final credentials = await _requireCredentials('pulling books');
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      throw ArgumentError('Book password cannot be empty');
+    }
 
     final existingBook = await getByUuid(bookUuid);
     if (existingBook != null) {
@@ -279,6 +289,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
       if (lightImport) {
         final info = await _apiClient.getServerBookInfo(
           bookUuid: bookUuid,
+          bookPassword: trimmedPassword,
           deviceId: credentials.deviceId,
           deviceToken: credentials.deviceToken,
         );
@@ -303,6 +314,7 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
 
       final bookData = await _apiClient.pullBook(
         bookUuid: bookUuid,
+        bookPassword: trimmedPassword,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
@@ -453,22 +465,33 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
         }
       });
     } catch (e) {
+      if (e is ApiException) {
+        rethrow;
+      }
       throw Exception('Failed to pull book from server: $e');
     }
   }
 
   @override
-  Future<Map<String, dynamic>?> getServerBookInfo(String bookUuid) async {
+  Future<Map<String, dynamic>?> getServerBookInfo(
+    String bookUuid, {
+    required String password,
+  }) async {
     if (_apiClient == null) {
       throw Exception(
         'API client not configured. Server operations require configuration.',
       );
     }
     final credentials = await _requireCredentials('accessing server books');
+    final trimmedPassword = password.trim();
+    if (trimmedPassword.isEmpty) {
+      throw ArgumentError('Book password cannot be empty');
+    }
 
     try {
       return await _apiClient.getServerBookInfo(
         bookUuid: bookUuid,
+        bookPassword: trimmedPassword,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );

@@ -216,9 +216,11 @@ paths:
           application/json:
             schema:
               type: object
-              required: [name]
+              required: [name, bookPassword]
               properties:
                 name:
+                  type: string
+                bookPassword:
                   type: string
       responses:
         '200':
@@ -256,9 +258,17 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: X-Book-Password
+          in: header
+          required: false
+          description: Required for password-protected books.
+          schema:
+            type: string
       responses:
         '200':
           description: Book metadata
+        '403':
+          description: Invalid book password
         '404':
           description: Book not found
     patch:
@@ -338,9 +348,17 @@ paths:
           schema:
             type: string
             format: uuid
+        - name: X-Book-Password
+          in: header
+          required: false
+          description: Required for password-protected books.
+          schema:
+            type: string
       responses:
         '200':
           description: Bundle loaded
+        '403':
+          description: Invalid book password
         '404':
           description: Book not found
 

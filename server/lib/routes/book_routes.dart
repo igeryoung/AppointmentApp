@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
@@ -138,6 +139,51 @@ class BookRoutes {
     return parsed?.toIso8601String();
   }
 
+  String _hashBookPassword(String password) {
+    return sha256.convert(utf8.encode(password)).toString();
+  }
+
+  String _readBookPasswordFromHeader(Request request) {
+    return request.headers['x-book-password']?.trim() ?? '';
+  }
+
+  Future<Map<String, dynamic>?> _loadBookPasswordRow(String bookUuid) async {
+    final rows = await db.client
+        .from('books')
+        .select('book_uuid, book_password_hash, is_deleted')
+        .eq('book_uuid', bookUuid)
+        .limit(1);
+    return _first(rows);
+  }
+
+  Future<Response?> _requireValidBookPassword(
+    Request request,
+    String bookUuid,
+  ) async {
+    final book = await _loadBookPasswordRow(bookUuid);
+    if (book == null || book['is_deleted'] == true) {
+      return _json(404, {'success': false, 'message': 'Book not found'});
+    }
+
+    final storedHash = (book['book_password_hash'] ?? '').toString().trim();
+    if (storedHash.isEmpty) {
+      // Backward compatibility for old books created before password rollout.
+      return null;
+    }
+
+    final providedPassword = _readBookPasswordFromHeader(request);
+    if (providedPassword.isEmpty ||
+        _hashBookPassword(providedPassword) != storedHash) {
+      return _json(403, {
+        'success': false,
+        'message': 'Invalid book password',
+        'error': 'INVALID_BOOK_PASSWORD',
+      });
+    }
+
+    return null;
+  }
+
   Map<String, dynamic> _bookResponse(Map<String, dynamic> row) {
     return {
       'bookUuid': row['book_uuid'],
@@ -198,10 +244,18 @@ class BookRoutes {
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
       final name = (json['name'] as String?)?.trim() ?? '';
+      final password =
+          ((json['bookPassword'] ?? json['password']) as String?)?.trim() ?? '';
       if (name.isEmpty) {
         return _json(400, {
           'success': false,
           'message': 'Book name is required',
+        });
+      }
+      if (password.isEmpty) {
+        return _json(400, {
+          'success': false,
+          'message': 'Book password is required',
         });
       }
 
@@ -211,6 +265,7 @@ class BookRoutes {
           .insert({
             'device_id': auth['deviceId'],
             'name': name,
+            'book_password_hash': _hashBookPassword(password),
             'created_at': now,
             'updated_at': now,
             'synced_at': now,
@@ -239,6 +294,16 @@ class BookRoutes {
 
       return _json(200, {'success': true, 'book': _bookResponse(row)});
     } catch (e) {
+      final errorText = e.toString().toLowerCase();
+      if (errorText.contains('book_password_hash') &&
+          errorText.contains('column')) {
+        return _json(500, {
+          'success': false,
+          'message':
+              'Database migration required: missing books.book_password_hash column',
+          'error': 'DB_MIGRATION_REQUIRED',
+        });
+      }
       return _json(500, {
         'success': false,
         'message': 'Failed to create book: $e',
@@ -306,6 +371,14 @@ class BookRoutes {
           'success': false,
           'message': 'Invalid device credentials',
         });
+      }
+
+      final passwordValidation = await _requireValidBookPassword(
+        request,
+        bookUuid,
+      );
+      if (passwordValidation != null) {
+        return passwordValidation;
       }
 
       final canAccess = await _noteService.verifyBookOwnership(
@@ -557,6 +630,14 @@ class BookRoutes {
           'success': false,
           'message': 'Invalid device credentials',
         });
+      }
+
+      final passwordValidation = await _requireValidBookPassword(
+        request,
+        bookUuid,
+      );
+      if (passwordValidation != null) {
+        return passwordValidation;
       }
 
       final canAccess = await _noteService.verifyBookOwnership(
