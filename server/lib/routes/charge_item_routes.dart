@@ -6,6 +6,9 @@ import 'package:shelf_router/shelf_router.dart';
 import '../database/connection.dart';
 
 class ChargeItemRoutes {
+  static const String _roleRead = 'read';
+  static const String _roleWrite = 'write';
+
   final DatabaseConnection db;
 
   ChargeItemRoutes(this.db);
@@ -63,6 +66,33 @@ class ChargeItemRoutes {
       }
     }
     return false;
+  }
+
+  String _normalizeRole(dynamic value) {
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized == _roleRead) return _roleRead;
+    if (normalized == _roleWrite) return _roleWrite;
+    return _roleWrite;
+  }
+
+  Future<String> _getDeviceRole(String deviceId) async {
+    try {
+      final rows = await db.client
+          .from('devices')
+          .select('device_role')
+          .eq('id', deviceId)
+          .limit(1);
+      final row = _first(rows);
+      if (row == null) return _roleWrite;
+      return _normalizeRole(row['device_role']);
+    } catch (_) {
+      return _roleWrite;
+    }
+  }
+
+  Future<bool> _canDeviceWrite(String deviceId) async {
+    final role = await _getDeviceRole(deviceId);
+    return role == _roleWrite;
   }
 
   Future<Set<String>> _accessibleBookUuids(String deviceId) async {
@@ -220,6 +250,16 @@ class ChargeItemRoutes {
           headers: {'Content-Type': 'application/json'},
         );
       }
+      if (!await _canDeviceWrite(deviceId)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Read-only device cannot modify charge items',
+            'error': 'READ_ONLY_DEVICE',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       final rows = await db.client
           .from('charge_items')
@@ -277,6 +317,16 @@ class ChargeItemRoutes {
           jsonEncode({
             'success': false,
             'message': 'Invalid device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      if (!await _canDeviceWrite(deviceId)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Read-only device cannot modify charge items',
+            'error': 'READ_ONLY_DEVICE',
           }),
           headers: {'Content-Type': 'application/json'},
         );

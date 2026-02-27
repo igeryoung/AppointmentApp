@@ -68,9 +68,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                     _currentStep == _SetupStep.url
                         ? l10n.serverSetupSubtitle
                         : l10n.deviceRegistrationSubtitle,
-                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                          color: Colors.grey[600],
-                        ),
+                    style: Theme.of(
+                      context,
+                    ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
                     textAlign: TextAlign.center,
                   ),
                   const SizedBox(height: 32),
@@ -257,12 +257,15 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       // Save device credentials WITH server URL
       final deviceId = response['deviceId'] as String;
       final deviceToken = response['deviceToken'] as String;
+      final deviceRole =
+          (response['deviceRole'] as String?)?.toLowerCase() ?? 'read';
       await dbService.saveDeviceCredentials(
         deviceId: deviceId,
         deviceToken: deviceToken,
         deviceName: deviceName,
         serverUrl: serverUrl,
         platform: platform,
+        deviceRole: deviceRole,
       );
 
       // Now setup all services with the correct server URL
@@ -271,9 +274,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       // Navigate to main app
       if (mounted) {
         Navigator.of(context).pushReplacement(
-          MaterialPageRoute(
-            builder: (context) => const BookListScreen(),
-          ),
+          MaterialPageRoute(builder: (context) => const BookListScreen()),
         );
       }
     } on ApiException catch (e) {

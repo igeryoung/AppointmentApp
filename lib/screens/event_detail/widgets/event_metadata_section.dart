@@ -40,6 +40,7 @@ class EventMetadataSection extends StatelessWidget {
   final ValueChanged<String>? onNameSelected;
   final ValueChanged<String>? onRecordNumberSelected;
   final bool isNameReadOnly;
+  final bool isReadOnlyMode;
 
   const EventMetadataSection({
     super.key,
@@ -73,6 +74,7 @@ class EventMetadataSection extends StatelessWidget {
     this.onNameSelected,
     this.onRecordNumberSelected,
     this.isNameReadOnly = false,
+    this.isReadOnlyMode = false,
   });
 
   /// Filter record number options based on current name
@@ -213,13 +215,14 @@ class EventMetadataSection extends StatelessWidget {
                     controller: nameController,
                     labelText: l10n.eventName,
                     allNames: allNames,
-                    isReadOnly: isNameReadOnly,
+                    isReadOnly: isNameReadOnly || isReadOnlyMode,
                     onNameSelected: onNameSelected,
                   ),
                   const SizedBox(height: 8),
                   // Phone field
                   TextField(
                     controller: phoneController,
+                    readOnly: isReadOnlyMode,
                     decoration: InputDecoration(
                       labelText: l10n.phone,
                       border: const OutlineInputBorder(),
@@ -242,7 +245,7 @@ class EventMetadataSection extends StatelessWidget {
                   _RecordNumberAutocomplete(
                     value: recordNumber,
                     allRecordNumberOptions: _getFilteredRecordNumberOptions(),
-                    isEnabled: true, // Always enabled for new behavior
+                    isEnabled: !isReadOnlyMode,
                     labelText: l10n.recordNumber,
                     onRecordNumberSelected: onRecordNumberSelected,
                     onRecordNumberChanged: onRecordNumberChanged,
@@ -258,17 +261,19 @@ class EventMetadataSection extends StatelessWidget {
                   const SizedBox(height: 8),
                   // Event Type field
                   InkWell(
-                    onTap: () async {
-                      final result = await showChangeEventTypeDialog(
-                        context,
-                        event.copyWith(eventTypes: selectedEventTypes),
-                        EventTypeLocalizations.commonEventTypes,
-                        EventTypeLocalizations.getLocalizedEventType,
-                      );
-                      if (result != null) {
-                        onEventTypesChanged(result);
-                      }
-                    },
+                    onTap: isReadOnlyMode
+                        ? null
+                        : () async {
+                            final result = await showChangeEventTypeDialog(
+                              context,
+                              event.copyWith(eventTypes: selectedEventTypes),
+                              EventTypeLocalizations.commonEventTypes,
+                              EventTypeLocalizations.getLocalizedEventType,
+                            );
+                            if (result != null) {
+                              onEventTypesChanged(result);
+                            }
+                          },
                     child: InputDecorator(
                       decoration: InputDecoration(
                         labelText: l10n.eventType,
@@ -321,7 +326,7 @@ class EventMetadataSection extends StatelessWidget {
                           style: const TextStyle(fontSize: 11),
                         ),
                         trailing: const Icon(Icons.access_time, size: 18),
-                        onTap: onStartTimeTap,
+                        onTap: isReadOnlyMode ? null : onStartTimeTap,
                       ),
                     ),
                   ),
@@ -344,7 +349,10 @@ class EventMetadataSection extends StatelessWidget {
                             ),
                             if (endTime != null) ...[
                               const SizedBox(width: 4),
-                              _buildClearEndTimeButton(onClearEndTime),
+                              _buildClearEndTimeButton(
+                                onClearEndTime,
+                                isReadOnlyMode,
+                              ),
                             ],
                           ],
                         ),
@@ -358,7 +366,7 @@ class EventMetadataSection extends StatelessWidget {
                           style: const TextStyle(fontSize: 11),
                         ),
                         trailing: const Icon(Icons.access_time, size: 18),
-                        onTap: onEndTimeTap,
+                        onTap: isReadOnlyMode ? null : onEndTimeTap,
                       ),
                     ),
                   ),
@@ -377,7 +385,7 @@ class EventMetadataSection extends StatelessWidget {
                         ).format(startTime),
                       ),
                       trailing: const Icon(Icons.access_time),
-                      onTap: onStartTimeTap,
+                      onTap: isReadOnlyMode ? null : onStartTimeTap,
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -388,7 +396,10 @@ class EventMetadataSection extends StatelessWidget {
                           Text(l10n.endTime),
                           if (endTime != null) ...[
                             const SizedBox(width: 4),
-                            _buildClearEndTimeButton(onClearEndTime),
+                            _buildClearEndTimeButton(
+                              onClearEndTime,
+                              isReadOnlyMode,
+                            ),
                           ],
                         ],
                       ),
@@ -401,7 +412,7 @@ class EventMetadataSection extends StatelessWidget {
                             : 'Open-ended',
                       ),
                       trailing: const Icon(Icons.access_time),
-                      onTap: onEndTimeTap,
+                      onTap: isReadOnlyMode ? null : onEndTimeTap,
                     ),
                   ),
                 ],
@@ -451,7 +462,10 @@ class EventMetadataSection extends StatelessWidget {
 
   /// Compact clear button used inside the end time rows so the tile height
   /// remains stable when the optional action is shown.
-  Widget _buildClearEndTimeButton(VoidCallback onClearEndTime) {
+  Widget _buildClearEndTimeButton(
+    VoidCallback onClearEndTime,
+    bool isReadOnlyMode,
+  ) {
     return SizedBox(
       width: 24,
       height: 24,
@@ -460,7 +474,7 @@ class EventMetadataSection extends StatelessWidget {
         shape: const CircleBorder(),
         child: InkWell(
           borderRadius: BorderRadius.circular(12),
-          onTap: onClearEndTime,
+          onTap: isReadOnlyMode ? null : onClearEndTime,
           child: const Center(child: Icon(Icons.clear, size: 16)),
         ),
       ),

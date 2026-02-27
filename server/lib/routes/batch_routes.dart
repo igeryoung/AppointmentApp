@@ -99,12 +99,14 @@ class BatchRoutes {
       final bodyString = await request.readAsString();
       final body = jsonDecode(bodyString) as Map<String, dynamic>;
 
-      final notes = (body['notes'] as List<dynamic>?)
+      final notes =
+          (body['notes'] as List<dynamic>?)
               ?.map((e) => e as Map<String, dynamic>)
               .toList() ??
           [];
 
-      final drawings = (body['drawings'] as List<dynamic>?)
+      final drawings =
+          (body['drawings'] as List<dynamic>?)
               ?.map((e) => e as Map<String, dynamic>)
               .toList() ??
           [];
@@ -116,7 +118,8 @@ class BatchRoutes {
           413,
           body: jsonEncode({
             'success': false,
-            'message': 'Payload too large: maximum 1000 items allowed (got $totalItems)',
+            'message':
+                'Payload too large: maximum 1000 items allowed (got $totalItems)',
           }),
           headers: {'Content-Type': 'application/json'},
         );
@@ -132,18 +135,18 @@ class BatchRoutes {
 
       if (result.success) {
         return Response.ok(
-          jsonEncode({
-            'success': true,
-            'results': result.results,
-          }),
+          jsonEncode({'success': true, 'results': result.results}),
           headers: {'Content-Type': 'application/json'},
         );
       } else {
         // Determine appropriate status code from error message
         int statusCode = 400;
-        if (result.errorMessage?.contains('Invalid device credentials') == true) {
+        if (result.errorMessage?.contains('Invalid device credentials') ==
+            true) {
           statusCode = 403;
         } else if (result.errorMessage?.contains('Unauthorized') == true) {
+          statusCode = 403;
+        } else if (result.errorMessage?.contains('Read-only device') == true) {
           statusCode = 403;
         } else if (result.errorMessage?.contains('Version conflict') == true) {
           statusCode = 409;

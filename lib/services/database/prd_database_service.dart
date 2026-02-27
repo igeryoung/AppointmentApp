@@ -55,20 +55,26 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 26,
+      version: 27,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
         if (oldVersion < 23) {
           await db.close();
           final databasesPath = await getDatabasesPath();
-          final dbName = kDebugMode ? 'prd_schedule_test.db' : 'prd_schedule.db';
+          final dbName = kDebugMode
+              ? 'prd_schedule_test.db'
+              : 'prd_schedule.db';
           await deleteDatabase(join(databasesPath, dbName));
-          throw Exception('Database reset for v23 migration. Please restart the app.');
+          throw Exception(
+            'Database reset for v23 migration. Please restart the app.',
+          );
         }
         // v24: Change unique index from record_number to (name, record_number)
         if (oldVersion == 23 && newVersion >= 24) {
-          await db.execute('DROP INDEX IF EXISTS idx_records_record_number_unique');
+          await db.execute(
+            'DROP INDEX IF EXISTS idx_records_record_number_unique',
+          );
           await db.execute('''
             CREATE UNIQUE INDEX idx_records_name_record_number_unique
             ON records(name, record_number) WHERE record_number <> ''
@@ -99,14 +105,33 @@ class PRDDatabaseService
           ''');
 
           // Create indexes
-          await db.execute('CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)');
-          await db.execute('CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)');
+          await db.execute(
+            'CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)',
+          );
+          await db.execute(
+            'CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)',
+          );
         }
         // v26: Add missing columns to schedule_drawings table for caching
         if (oldVersion < 26) {
-          await db.execute('ALTER TABLE schedule_drawings ADD COLUMN synced_at INTEGER');
-          await db.execute('ALTER TABLE schedule_drawings ADD COLUMN cached_at INTEGER');
-          await db.execute('ALTER TABLE schedule_drawings ADD COLUMN cache_hit_count INTEGER DEFAULT 0');
+          await db.execute(
+            'ALTER TABLE schedule_drawings ADD COLUMN synced_at INTEGER',
+          );
+          await db.execute(
+            'ALTER TABLE schedule_drawings ADD COLUMN cached_at INTEGER',
+          );
+          await db.execute(
+            'ALTER TABLE schedule_drawings ADD COLUMN cache_hit_count INTEGER DEFAULT 0',
+          );
+        }
+        // v27: Persist device role for read/write permission mode
+        if (oldVersion < 27) {
+          await db.execute(
+            "ALTER TABLE device_info ADD COLUMN device_role TEXT NOT NULL DEFAULT 'write'",
+          );
+          await db.execute(
+            "UPDATE device_info SET device_role = 'write' WHERE device_role IS NULL OR TRIM(device_role) = ''",
+          );
         }
       },
     );
@@ -235,6 +260,7 @@ class PRDDatabaseService
         device_id TEXT UNIQUE NOT NULL,
         device_token TEXT NOT NULL,
         device_name TEXT NOT NULL,
+        device_role TEXT NOT NULL DEFAULT 'read',
         platform TEXT,
         registered_at INTEGER NOT NULL,
         server_url TEXT
@@ -254,12 +280,22 @@ class PRDDatabaseService
     // Indexes
     await db.execute('CREATE INDEX idx_records_name ON records(name)');
     await db.execute('CREATE INDEX idx_events_book_uuid ON events(book_uuid)');
-    await db.execute('CREATE INDEX idx_events_record_uuid ON events(record_uuid)');
-    await db.execute('CREATE INDEX idx_events_start_time ON events(book_uuid, start_time)');
+    await db.execute(
+      'CREATE INDEX idx_events_record_uuid ON events(record_uuid)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_events_start_time ON events(book_uuid, start_time)',
+    );
     await db.execute('CREATE INDEX idx_notes_record ON notes(record_uuid)');
-    await db.execute('CREATE INDEX idx_drawings_book ON schedule_drawings(book_uuid, date, view_mode)');
-    await db.execute('CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)');
-    await db.execute('CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)');
+    await db.execute(
+      'CREATE INDEX idx_drawings_book ON schedule_drawings(book_uuid, date, view_mode)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_charge_items_record_uuid ON charge_items(record_uuid)',
+    );
+    await db.execute(
+      'CREATE INDEX idx_charge_items_event_id ON charge_items(event_id)',
+    );
   }
 
   @override
@@ -295,25 +331,34 @@ class PRDDatabaseService
   @override
   Future<List<String>> getAllRecordNumbers(String bookUuid) async {
     final db = await database;
-    final results = await db.rawQuery('''
+    final results = await db.rawQuery(
+      '''
       SELECT DISTINCT e.record_number
       FROM events e
       WHERE e.book_uuid = ? AND e.record_number != ''
       ORDER BY e.record_number ASC
-    ''', [bookUuid]);
+    ''',
+      [bookUuid],
+    );
     return results.map((r) => r['record_number'] as String).toList();
   }
 
   @override
-  Future<List<String>> getRecordNumbersByName(String bookUuid, String name) async {
+  Future<List<String>> getRecordNumbersByName(
+    String bookUuid,
+    String name,
+  ) async {
     final db = await database;
-    final results = await db.rawQuery('''
+    final results = await db.rawQuery(
+      '''
       SELECT DISTINCT e.record_number
       FROM events e
       INNER JOIN records r ON e.record_uuid = r.record_uuid
       WHERE e.book_uuid = ? AND LOWER(r.name) = LOWER(?) AND e.record_number != ''
       ORDER BY e.record_number ASC
-    ''', [bookUuid, name]);
+    ''',
+      [bookUuid, name],
+    );
     return results.map((r) => r['record_number'] as String).toList();
   }
 
@@ -324,13 +369,16 @@ class PRDDatabaseService
     String recordNumber,
   ) async {
     final db = await database;
-    final results = await db.rawQuery('''
+    final results = await db.rawQuery(
+      '''
       SELECT e.*
       FROM events e
       INNER JOIN records r ON e.record_uuid = r.record_uuid
       WHERE e.book_uuid = ? AND LOWER(r.name) = LOWER(?) AND e.record_number = ?
       ORDER BY e.start_time ASC
-    ''', [bookUuid, name, recordNumber]);
+    ''',
+      [bookUuid, name, recordNumber],
+    );
     return results.map((r) => Event.fromMap(r)).toList();
   }
 
@@ -368,30 +416,42 @@ class PRDDatabaseService
   /// Get all unique names in a book (for autocomplete)
   Future<List<String>> getAllNamesInBook(String bookUuid) async {
     final db = await database;
-    final results = await db.rawQuery('''
+    final results = await db.rawQuery(
+      '''
       SELECT DISTINCT r.name
       FROM events e
       INNER JOIN records r ON e.record_uuid = r.record_uuid
       WHERE e.book_uuid = ? AND r.name IS NOT NULL AND r.name != ''
       ORDER BY r.name ASC
-    ''', [bookUuid]);
+    ''',
+      [bookUuid],
+    );
     return results.map((r) => r['name'] as String).toList();
   }
 
   /// Get all record numbers with names (for autocomplete)
-  Future<List<Map<String, String>>> getAllRecordNumbersWithNames(String bookUuid) async {
+  Future<List<Map<String, String>>> getAllRecordNumbersWithNames(
+    String bookUuid,
+  ) async {
     final db = await database;
-    final results = await db.rawQuery('''
+    final results = await db.rawQuery(
+      '''
       SELECT DISTINCT r.record_number, r.name
       FROM events e
       INNER JOIN records r ON e.record_uuid = r.record_uuid
       WHERE e.book_uuid = ? AND r.record_number != ''
       ORDER BY r.record_number ASC
-    ''', [bookUuid]);
-    return results.map((r) => {
-      'recordNumber': r['record_number'] as String,
-      'name': (r['name'] as String?) ?? '',
-    }).toList();
+    ''',
+      [bookUuid],
+    );
+    return results
+        .map(
+          (r) => {
+            'recordNumber': r['record_number'] as String,
+            'name': (r['name'] as String?) ?? '',
+          },
+        )
+        .toList();
   }
 
   /// Get name by record number
@@ -410,7 +470,9 @@ class PRDDatabaseService
 
   /// Get record data (name, phone) by record number
   /// @deprecated Use getRecordByNameAndRecordNumber instead for accurate matching
-  Future<Map<String, String?>?> getRecordDataByRecordNumber(String recordNumber) async {
+  Future<Map<String, String?>?> getRecordDataByRecordNumber(
+    String recordNumber,
+  ) async {
     final record = await getRecordByRecordNumber(recordNumber);
     if (record == null) return null;
     return {
@@ -437,7 +499,10 @@ class PRDDatabaseService
   }
 
   /// Find existing note for a record by name AND record_number
-  Future<Note?> findNoteByNameAndRecordNumber(String name, String recordNumber) async {
+  Future<Note?> findNoteByNameAndRecordNumber(
+    String name,
+    String recordNumber,
+  ) async {
     if (recordNumber.isEmpty || name.isEmpty) return null;
     final record = await getRecordByNameAndRecordNumber(name, recordNumber);
     if (record == null || record.recordUuid == null) return null;
@@ -448,7 +513,10 @@ class PRDDatabaseService
   Future<void> applyServerDrawingChange(Map<String, dynamic> data) async {
     final db = await database;
     final bookUuid = data['book_uuid'] as String;
-    final date = DateTime.fromMillisecondsSinceEpoch((data['date'] as int) * 1000, isUtc: true);
+    final date = DateTime.fromMillisecondsSinceEpoch(
+      (data['date'] as int) * 1000,
+      isUtc: true,
+    );
     final viewMode = data['view_mode'] as int;
     final normalizedDate = DateTime(date.year, date.month, date.day);
 
@@ -460,8 +528,10 @@ class PRDDatabaseService
       'date': normalizedDate.millisecondsSinceEpoch ~/ 1000,
       'view_mode': viewMode,
       'strokes_data': data['strokes_data'],
-      'created_at': data['created_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      'updated_at': data['updated_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'created_at':
+          data['created_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'updated_at':
+          data['updated_at'] ?? DateTime.now().millisecondsSinceEpoch ~/ 1000,
       'version': data['version'] ?? 1,
       'is_dirty': 0, // Server data is clean
     };
@@ -471,7 +541,11 @@ class PRDDatabaseService
         'schedule_drawings',
         drawingData,
         where: 'book_uuid = ? AND date = ? AND view_mode = ?',
-        whereArgs: [bookUuid, normalizedDate.millisecondsSinceEpoch ~/ 1000, viewMode],
+        whereArgs: [
+          bookUuid,
+          normalizedDate.millisecondsSinceEpoch ~/ 1000,
+          viewMode,
+        ],
       );
     } else {
       await db.insert('schedule_drawings', drawingData);

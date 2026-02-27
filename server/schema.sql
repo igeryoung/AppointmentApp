@@ -62,12 +62,14 @@ CREATE TABLE IF NOT EXISTS public.devices
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
     device_name text COLLATE pg_catalog."default" NOT NULL,
     device_token text COLLATE pg_catalog."default" NOT NULL,
+    device_role text COLLATE pg_catalog."default" NOT NULL DEFAULT 'read'::text,
     platform text COLLATE pg_catalog."default",
     registered_at timestamp with time zone NOT NULL DEFAULT now(),
     last_sync_at timestamp with time zone,
     is_active boolean NOT NULL DEFAULT true,
     CONSTRAINT devices_pkey PRIMARY KEY (id),
-    CONSTRAINT devices_device_token_key UNIQUE (device_token)
+    CONSTRAINT devices_device_token_key UNIQUE (device_token),
+    CONSTRAINT devices_device_role_check CHECK (device_role = ANY (ARRAY['read'::text, 'write'::text]))
 );
 
 COMMENT ON TABLE public.devices

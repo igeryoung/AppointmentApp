@@ -4,11 +4,15 @@ import 'package:sqflite/sqflite.dart';
 class DeviceCredentials {
   final String deviceId;
   final String deviceToken;
+  final String deviceRole;
 
   const DeviceCredentials({
     required this.deviceId,
     required this.deviceToken,
+    this.deviceRole = 'write',
   });
+
+  bool get isReadOnly => deviceRole.toLowerCase() == 'read';
 }
 
 /// Mixin providing Device Info operations for PRDDatabaseService
@@ -35,6 +39,7 @@ mixin DeviceInfoOperationsMixin {
     return DeviceCredentials(
       deviceId: row['device_id'] as String,
       deviceToken: row['device_token'] as String,
+      deviceRole: (row['device_role'] as String?) ?? 'write',
     );
   }
 
@@ -45,20 +50,18 @@ mixin DeviceInfoOperationsMixin {
     required String deviceName,
     required String serverUrl,
     String? platform,
+    String deviceRole = 'read',
   }) async {
     final db = await database;
-    await db.insert(
-      'device_info',
-      {
-        'id': 1,
-        'device_id': deviceId,
-        'device_token': deviceToken,
-        'device_name': deviceName,
-        'server_url': serverUrl,
-        'platform': platform,
-        'registered_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      },
-      conflictAlgorithm: ConflictAlgorithm.replace,
-    );
+    await db.insert('device_info', {
+      'id': 1,
+      'device_id': deviceId,
+      'device_token': deviceToken,
+      'device_name': deviceName,
+      'device_role': deviceRole,
+      'server_url': serverUrl,
+      'platform': platform,
+      'registered_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
 }

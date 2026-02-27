@@ -51,12 +51,19 @@ SET search_path = public
 AS $$
   SELECT EXISTS (
     SELECT 1
+    FROM public.devices d
+    WHERE d.id = auth.uid()
+      AND COALESCE(d.device_role, 'write') = 'write'
+  )
+  AND (
+    EXISTS (
+    SELECT 1
     FROM public.books b
     WHERE b.book_uuid = p_book_uuid
       AND b.is_deleted = false
       AND b.device_id = auth.uid()
-  )
-  OR EXISTS (
+    )
+    OR EXISTS (
     SELECT 1
     FROM public.book_device_access a
     JOIN public.books b ON b.book_uuid = a.book_uuid
@@ -64,6 +71,7 @@ AS $$
       AND a.device_id = auth.uid()
       AND a.access_type IN ('owner', 'editor')
       AND b.is_deleted = false
+    )
   );
 $$;
 

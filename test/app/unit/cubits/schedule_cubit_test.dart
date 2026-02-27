@@ -130,10 +130,12 @@ class _FakeDeviceRepository implements IDeviceRepository {
     required String deviceToken,
     required String deviceName,
     String? platform,
+    String deviceRole = 'read',
   }) async {
     credentials = DeviceCredentials(
       deviceId: deviceId,
       deviceToken: deviceToken,
+      deviceRole: deviceRole,
     );
   }
 }

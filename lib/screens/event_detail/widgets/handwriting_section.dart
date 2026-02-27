@@ -14,6 +14,7 @@ class HandwritingSection extends StatefulWidget {
   final String? currentEventUuid; // Current event UUID for stroke tracking
   final void Function(List<String> erasedStrokeIds)?
   onStrokesErased; // Callback for erased strokes
+  final bool isReadOnlyMode;
 
   const HandwritingSection({
     super.key,
@@ -24,6 +25,7 @@ class HandwritingSection extends StatefulWidget {
     this.onCapturePagesCallbackSet,
     this.currentEventUuid,
     this.onStrokesErased,
+    this.isReadOnlyMode = false,
   });
 
   @override
@@ -220,100 +222,127 @@ class _HandwritingSectionState extends State<HandwritingSection> {
               Column(
                 children: [
                   // Toolbar with page navigation
-                  HandwritingToolbar(
-                    currentTool: currentTool,
-                    isControlPanelExpanded: _isControlPanelExpanded,
-                    // Page navigation
-                    currentPageNumber: _displayPageNumber,
-                    totalPages: _allPages.length,
-                    onAddPrependPage: _addPrependPage,
-                    onPreviousPage: _navigatePrevious,
-                    onNextPage: _navigateNext,
-                    // Tool selection
-                    onPenTap: () {
-                      widget.canvasKey.currentState?.setTool(DrawingTool.pen);
-                      setToolbarState(() {});
-                    },
-                    onHighlighterTap: () {
-                      widget.canvasKey.currentState?.setTool(
-                        DrawingTool.highlighter,
-                      );
-                      setToolbarState(() {});
-                    },
-                    onEraserTap: () {
-                      widget.canvasKey.currentState?.setTool(
-                        DrawingTool.eraser,
-                      );
-                      setToolbarState(() {});
-                    },
-                    onExpandCollapseTap: () {
-                      setState(() {
-                        _isControlPanelExpanded = !_isControlPanelExpanded;
-                      });
-                    },
-                    onUndo: () => widget.canvasKey.currentState?.undo(),
-                    onRedo: () => widget.canvasKey.currentState?.redo(),
-                    onClear: () => widget.canvasKey.currentState?.clear(),
-                    // View mode toggle
-                    showOnlyCurrentEvent: _showOnlyCurrentEvent,
-                    onToggleViewMode: widget.currentEventUuid != null
-                        ? () {
-                            setState(() {
-                              _showOnlyCurrentEvent = !_showOnlyCurrentEvent;
-                            });
-                          }
-                        : null,
-                  ),
+                  if (widget.isReadOnlyMode)
+                    Container(
+                      height: 40,
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      alignment: Alignment.centerLeft,
+                      color: Colors.grey.shade100,
+                      child: const Row(
+                        children: [
+                          Icon(Icons.visibility_outlined, size: 16),
+                          SizedBox(width: 8),
+                          Text(
+                            'Read-only note view',
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    HandwritingToolbar(
+                      currentTool: currentTool,
+                      isControlPanelExpanded: _isControlPanelExpanded,
+                      // Page navigation
+                      currentPageNumber: _displayPageNumber,
+                      totalPages: _allPages.length,
+                      onAddPrependPage: _addPrependPage,
+                      onPreviousPage: _navigatePrevious,
+                      onNextPage: _navigateNext,
+                      // Tool selection
+                      onPenTap: () {
+                        widget.canvasKey.currentState?.setTool(DrawingTool.pen);
+                        setToolbarState(() {});
+                      },
+                      onHighlighterTap: () {
+                        widget.canvasKey.currentState?.setTool(
+                          DrawingTool.highlighter,
+                        );
+                        setToolbarState(() {});
+                      },
+                      onEraserTap: () {
+                        widget.canvasKey.currentState?.setTool(
+                          DrawingTool.eraser,
+                        );
+                        setToolbarState(() {});
+                      },
+                      onExpandCollapseTap: () {
+                        setState(() {
+                          _isControlPanelExpanded = !_isControlPanelExpanded;
+                        });
+                      },
+                      onUndo: () => widget.canvasKey.currentState?.undo(),
+                      onRedo: () => widget.canvasKey.currentState?.redo(),
+                      onClear: () => widget.canvasKey.currentState?.clear(),
+                      // View mode toggle
+                      showOnlyCurrentEvent: _showOnlyCurrentEvent,
+                      onToggleViewMode: widget.currentEventUuid != null
+                          ? () {
+                              setState(() {
+                                _showOnlyCurrentEvent = !_showOnlyCurrentEvent;
+                              });
+                            }
+                          : null,
+                    ),
                   // Canvas takes remaining space
                   Expanded(
-                    child: HandwritingCanvas(
-                      key: widget.canvasKey,
-                      initialStrokes: _allPages.isNotEmpty
-                          ? _allPages[_currentPageIndex]
-                          : [],
-                      onStrokesChanged: _onCanvasStrokesChanged,
-                      currentEventUuid: widget.currentEventUuid,
-                      showOnlyCurrentEvent: _showOnlyCurrentEvent,
-                      onStrokesErased: widget.onStrokesErased,
+                    child: IgnorePointer(
+                      ignoring: widget.isReadOnlyMode,
+                      child: HandwritingCanvas(
+                        key: widget.canvasKey,
+                        initialStrokes: _allPages.isNotEmpty
+                            ? _allPages[_currentPageIndex]
+                            : [],
+                        onStrokesChanged: widget.isReadOnlyMode
+                            ? null
+                            : _onCanvasStrokesChanged,
+                        currentEventUuid: widget.currentEventUuid,
+                        showOnlyCurrentEvent: _showOnlyCurrentEvent,
+                        onStrokesErased: widget.onStrokesErased,
+                      ),
                     ),
                   ),
                 ],
               ),
               // Overlaying control panel
-              Positioned(
-                top: 48, // Below toolbar
-                left: 0,
-                right: 0,
-                child: HandwritingControlPanel(
-                  isExpanded: _isControlPanelExpanded,
-                  currentTool: currentTool,
-                  currentColor: currentColor,
-                  currentWidth: currentWidth,
-                  currentHighlighterColor: currentHighlighterColor,
-                  currentHighlighterWidth: currentHighlighterWidth,
-                  currentEraserRadius: currentEraserRadius,
-                  onWidthChanged: (value) {
-                    widget.canvasKey.currentState?.setStrokeWidth(value);
-                    setToolbarState(() {});
-                  },
-                  onHighlighterWidthChanged: (value) {
-                    widget.canvasKey.currentState?.setHighlighterWidth(value);
-                    setToolbarState(() {});
-                  },
-                  onEraserRadiusChanged: (value) {
-                    widget.canvasKey.currentState?.setEraserRadius(value);
-                    setToolbarState(() {});
-                  },
-                  onColorSelected: (color) {
-                    widget.canvasKey.currentState?.setStrokeColor(color);
-                    setToolbarState(() {});
-                  },
-                  onHighlighterColorSelected: (color) {
-                    widget.canvasKey.currentState?.setHighlighterColor(color);
-                    setToolbarState(() {});
-                  },
+              if (!widget.isReadOnlyMode)
+                Positioned(
+                  top: 48, // Below toolbar
+                  left: 0,
+                  right: 0,
+                  child: HandwritingControlPanel(
+                    isExpanded: _isControlPanelExpanded,
+                    currentTool: currentTool,
+                    currentColor: currentColor,
+                    currentWidth: currentWidth,
+                    currentHighlighterColor: currentHighlighterColor,
+                    currentHighlighterWidth: currentHighlighterWidth,
+                    currentEraserRadius: currentEraserRadius,
+                    onWidthChanged: (value) {
+                      widget.canvasKey.currentState?.setStrokeWidth(value);
+                      setToolbarState(() {});
+                    },
+                    onHighlighterWidthChanged: (value) {
+                      widget.canvasKey.currentState?.setHighlighterWidth(value);
+                      setToolbarState(() {});
+                    },
+                    onEraserRadiusChanged: (value) {
+                      widget.canvasKey.currentState?.setEraserRadius(value);
+                      setToolbarState(() {});
+                    },
+                    onColorSelected: (color) {
+                      widget.canvasKey.currentState?.setStrokeColor(color);
+                      setToolbarState(() {});
+                    },
+                    onHighlighterColorSelected: (color) {
+                      widget.canvasKey.currentState?.setHighlighterColor(color);
+                      setToolbarState(() {});
+                    },
+                  ),
                 ),
-              ),
             ],
           );
         },

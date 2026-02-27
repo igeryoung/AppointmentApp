@@ -11,5 +11,6 @@ abstract class IDeviceRepository {
     required String deviceToken,
     required String deviceName,
     String? platform,
+    String deviceRole = 'read',
   });
 }

@@ -13,6 +13,7 @@ class BookListView extends StatelessWidget {
   final void Function(Book) onRename;
   final void Function(Book) onArchive;
   final void Function(Book) onDelete;
+  final bool isReadOnlyDevice;
 
   const BookListView({
     super.key,
@@ -23,6 +24,7 @@ class BookListView extends StatelessWidget {
     required this.onRename,
     required this.onArchive,
     required this.onDelete,
+    this.isReadOnlyDevice = false,
   });
 
   @override
@@ -33,23 +35,41 @@ class BookListView extends StatelessWidget {
 
     return RefreshIndicator(
       onRefresh: onRefresh,
-      child: ReorderableListView.builder(
-        padding: const EdgeInsets.all(16),
-        itemCount: books.length,
-        onReorder: onReorder,
-        proxyDecorator: _proxyDecorator,
-        itemBuilder: (context, index) {
-          final book = books[index];
-          return BookCard(
-            key: ValueKey(book.uuid),
-            book: book,
-            onTap: () => onTap(book),
-            onRename: () => onRename(book),
-            onArchive: () => onArchive(book),
-            onDelete: () => onDelete(book),
-          );
-        },
-      ),
+      child: isReadOnlyDevice
+          ? ListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: books.length,
+              itemBuilder: (context, index) {
+                final book = books[index];
+                return BookCard(
+                  key: ValueKey(book.uuid),
+                  book: book,
+                  onTap: () => onTap(book),
+                  onRename: () => onRename(book),
+                  onArchive: () => onArchive(book),
+                  onDelete: () => onDelete(book),
+                  isReadOnlyDevice: true,
+                );
+              },
+            )
+          : ReorderableListView.builder(
+              padding: const EdgeInsets.all(16),
+              itemCount: books.length,
+              onReorder: onReorder,
+              proxyDecorator: _proxyDecorator,
+              itemBuilder: (context, index) {
+                final book = books[index];
+                return BookCard(
+                  key: ValueKey(book.uuid),
+                  book: book,
+                  onTap: () => onTap(book),
+                  onRename: () => onRename(book),
+                  onArchive: () => onArchive(book),
+                  onDelete: () => onDelete(book),
+                  isReadOnlyDevice: false,
+                );
+              },
+            ),
     );
   }
 

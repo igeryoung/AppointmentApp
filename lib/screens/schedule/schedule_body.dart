@@ -19,6 +19,7 @@ class ScheduleBody extends StatefulWidget {
   final bool showOldEvents;
   final bool showDrawing;
   final bool isDrawingMode;
+  final bool isReadOnlyMode;
   final GlobalKey<HandwritingCanvasState> canvasKey;
   final ScheduleDrawing? currentDrawing;
   final TransformationController transformationController;
@@ -45,6 +46,7 @@ class ScheduleBody extends StatefulWidget {
     required this.showOldEvents,
     required this.showDrawing,
     required this.isDrawingMode,
+    this.isReadOnlyMode = false,
     required this.canvasKey,
     required this.currentDrawing,
     required this.transformationController,
@@ -357,6 +359,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                 dates: widget.dates,
                                 slotHeight: slotHeight,
                                 isDrawingMode: widget.isDrawingMode,
+                                isReadOnlyMode: widget.isReadOnlyMode,
                                 selectedEventForMenu:
                                     widget.selectedEventForMenu,
                                 hoveredDropStartTime: _hoveredDropStartTime,
@@ -376,7 +379,10 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                     widget.onShowEventContextMenu,
                                 onLongPressDragStart:
                                     (event, globalPosition, originBounds) {
-                                      if (widget.isDrawingMode) return;
+                                      if (widget.isDrawingMode ||
+                                          widget.isReadOnlyMode) {
+                                        return;
+                                      }
                                       _startLongPressDrag(
                                         event,
                                         globalPosition,
@@ -388,7 +394,10 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                       );
                                     },
                                 onLongPressDragUpdate: (event, globalPosition) {
-                                  if (widget.isDrawingMode) return;
+                                  if (widget.isDrawingMode ||
+                                      widget.isReadOnlyMode) {
+                                    return;
+                                  }
                                   _updateLongPressDrag(
                                     event,
                                     globalPosition,
@@ -399,7 +408,10 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                   );
                                 },
                                 onLongPressDragEnd: (event, globalPosition) {
-                                  if (widget.isDrawingMode) return;
+                                  if (widget.isDrawingMode ||
+                                      widget.isReadOnlyMode) {
+                                    return;
+                                  }
                                   _endLongPressDrag(
                                     event,
                                     globalPosition,
@@ -410,7 +422,10 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                   );
                                 },
                                 onLongPressDragCancel: (event) {
-                                  if (widget.isDrawingMode) return;
+                                  if (widget.isDrawingMode ||
+                                      widget.isReadOnlyMode) {
+                                    return;
+                                  }
                                   _cancelLongPressDrag(event);
                                 },
                                 draggingEvent: _longPressDraggingEvent,
@@ -434,7 +449,8 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                         onStrokesChanged: widget.onDrawingStrokesChanged,
                       ),
                       // Context menu overlay
-                      if (widget.selectedEventForMenu != null &&
+                      if (!widget.isReadOnlyMode &&
+                          widget.selectedEventForMenu != null &&
                           resolvedMenuPosition != null &&
                           widget.onChangeType != null &&
                           widget.onChangeTime != null &&

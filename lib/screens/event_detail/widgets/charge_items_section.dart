@@ -12,6 +12,7 @@ class ChargeItemsSection extends StatelessWidget {
   final EventDetailController controller;
   final bool hasRecordUuid;
   final bool showOnlyThisEventItems;
+  final bool isReadOnlyMode;
 
   const ChargeItemsSection({
     super.key,
@@ -19,6 +20,7 @@ class ChargeItemsSection extends StatelessWidget {
     required this.controller,
     required this.hasRecordUuid,
     required this.showOnlyThisEventItems,
+    this.isReadOnlyMode = false,
   });
 
   int get _totalAmount =>
@@ -52,6 +54,7 @@ class ChargeItemsSection extends StatelessWidget {
                     child: _ChargeItemsPopup(
                       controller: controller,
                       hasRecordUuid: hasRecordUuid,
+                      isReadOnlyMode: isReadOnlyMode,
                     ),
                   ),
                 ),
@@ -156,10 +159,12 @@ class ChargeItemsSection extends StatelessWidget {
 class _ChargeItemsPopup extends StatefulWidget {
   final EventDetailController controller;
   final bool hasRecordUuid;
+  final bool isReadOnlyMode;
 
   const _ChargeItemsPopup({
     required this.controller,
     required this.hasRecordUuid,
+    this.isReadOnlyMode = false,
   });
 
   @override
@@ -431,7 +436,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
             child: SizedBox(
               width: double.infinity,
               child: FilledButton.icon(
-                onPressed: _addChargeItem,
+                onPressed: widget.isReadOnlyMode ? null : _addChargeItem,
                 icon: const Icon(Icons.add_rounded),
                 label: Text(l10n.addChargeItem),
               ),
@@ -484,7 +489,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                               children: [
                                 Checkbox(
                                   value: item.isPaid,
-                                  onChanged: isDiluted
+                                  onChanged: widget.isReadOnlyMode || isDiluted
                                       ? null
                                       : (_) => _togglePaidStatus(item),
                                 ),
@@ -552,7 +557,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                     size: 20,
                                   ),
                                   tooltip: l10n.editChargeItemTitle,
-                                  onPressed: isDiluted
+                                  onPressed: widget.isReadOnlyMode || isDiluted
                                       ? null
                                       : () => _editChargeItem(item),
                                 ),
@@ -562,7 +567,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                     size: 20,
                                   ),
                                   tooltip: l10n.delete,
-                                  onPressed: isDiluted
+                                  onPressed: widget.isReadOnlyMode || isDiluted
                                       ? null
                                       : () => _deleteChargeItem(item),
                                 ),

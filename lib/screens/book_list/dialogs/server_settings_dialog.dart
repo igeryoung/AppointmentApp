@@ -242,12 +242,15 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
       // Save device credentials with server URL
       final deviceId = response['deviceId'] as String;
       final deviceToken = response['deviceToken'] as String;
+      final deviceRole =
+          (response['deviceRole'] as String?)?.toLowerCase() ?? 'read';
       await dbService.saveDeviceCredentials(
         deviceId: deviceId,
         deviceToken: deviceToken,
         deviceName: deviceName,
         serverUrl: serverUrl,
         platform: platform,
+        deviceRole: deviceRole,
       );
 
       // Clean up and return URL

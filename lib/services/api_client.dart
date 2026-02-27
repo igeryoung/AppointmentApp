@@ -1189,6 +1189,23 @@ class ApiClient {
   // Device Registration API
   // ===================
 
+  /// Fetch the current device role from server.
+  Future<String?> fetchDeviceRole({required String deviceId}) async {
+    try {
+      final response = await _client
+          .get(Uri.parse('$baseUrl/api/devices/$deviceId'))
+          .timeout(timeout);
+      if (response.statusCode != 200) return null;
+
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      final role = (json['deviceRole'] ?? json['device_role'])?.toString();
+      if (role == null || role.trim().isEmpty) return null;
+      return role.toLowerCase();
+    } catch (_) {
+      return null;
+    }
+  }
+
   /// Check if a device is registered on the server
   Future<bool> checkDeviceRegistration({required String deviceId}) async {
     try {

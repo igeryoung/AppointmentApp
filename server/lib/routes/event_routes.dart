@@ -120,8 +120,9 @@ class EventRoutes {
 
   Future<Response?> _authorizeBookAccess(
     Request request,
-    String bookUuid,
-  ) async {
+    String bookUuid, {
+    bool requireWrite = false,
+  }) async {
     final deviceId = request.headers['x-device-id'];
     final deviceToken = request.headers['x-device-token'];
 
@@ -143,7 +144,22 @@ class EventRoutes {
       );
     }
 
-    if (!await _noteService.verifyBookOwnership(deviceId, bookUuid)) {
+    final hasAccess = await _noteService.verifyBookAccess(
+      deviceId,
+      bookUuid,
+      requireWrite: requireWrite,
+    );
+    if (!hasAccess) {
+      if (requireWrite && !await _noteService.canDeviceWrite(deviceId)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Read-only device cannot modify events',
+            'error': 'READ_ONLY_DEVICE',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
       return Response.forbidden(
         jsonEncode({
           'success': false,
@@ -614,7 +630,11 @@ class EventRoutes {
     String bookUuid,
   ) async {
     try {
-      final authError = await _authorizeBookAccess(request, bookUuid);
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
       if (authError != null) return authError;
 
       final body = await request.readAsString();
@@ -697,7 +717,11 @@ class EventRoutes {
 
   Future<Response> _createEvent(Request request, String bookUuid) async {
     try {
-      final authError = await _authorizeBookAccess(request, bookUuid);
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
       if (authError != null) return authError;
 
       final body = await request.readAsString();
@@ -739,7 +763,11 @@ class EventRoutes {
     String eventId,
   ) async {
     try {
-      final authError = await _authorizeBookAccess(request, bookUuid);
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
       if (authError != null) return authError;
 
       final body = await request.readAsString();
@@ -862,7 +890,11 @@ class EventRoutes {
     String eventId,
   ) async {
     try {
-      final authError = await _authorizeBookAccess(request, bookUuid);
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
       if (authError != null) return authError;
 
       final body = await request.readAsString();
@@ -921,7 +953,11 @@ class EventRoutes {
     String eventId,
   ) async {
     try {
-      final authError = await _authorizeBookAccess(request, bookUuid);
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
       if (authError != null) return authError;
 
       final existingRows = await db.client
@@ -972,7 +1008,11 @@ class EventRoutes {
     String eventId,
   ) async {
     try {
-      final authError = await _authorizeBookAccess(request, bookUuid);
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
       if (authError != null) return authError;
 
       final body = await request.readAsString();

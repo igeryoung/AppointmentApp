@@ -45,6 +45,13 @@ class BookListController extends ChangeNotifier {
   Future<void> _loadBooks() async {
     _setState(_state.copyWith(isLoading: true));
     try {
+      try {
+        await deviceReg.refreshDeviceRoleFromServer();
+      } catch (_) {}
+      final credentials = await deviceReg.getCredentials();
+      final role = (credentials?['deviceRole'] as String?)?.toLowerCase();
+      final isReadOnly = credentials?['isReadOnly'] == true || role == 'read';
+
       final books = await repo.getAll();
       final savedOrder = await order.loadOrder();
       final orderedBooks = order.applyOrder(books, savedOrder);
@@ -53,6 +60,7 @@ class BookListController extends ChangeNotifier {
         _state.copyWith(
           books: orderedBooks,
           isLoading: false,
+          isReadOnlyDevice: isReadOnly,
           errorMessage: null,
         ),
       );
@@ -60,6 +68,7 @@ class BookListController extends ChangeNotifier {
       _setState(
         _state.copyWith(
           isLoading: false,
+          isReadOnlyDevice: false,
           errorMessage: 'Error loading books: $e',
         ),
       );
@@ -68,6 +77,13 @@ class BookListController extends ChangeNotifier {
 
   /// Show create book dialog and create book if confirmed
   Future<void> promptCreate(BuildContext context) async {
+    if (_state.isReadOnlyDevice) {
+      SnackBarUtils.showInfo(
+        context,
+        'Read-only mode: book creation is disabled',
+      );
+      return;
+    }
     final name = await CreateBookDialog.show(context);
     if (name != null && name.isNotEmpty) {
       await createBook(context: context, name: name);
@@ -96,6 +112,10 @@ class BookListController extends ChangeNotifier {
 
   /// Show rename dialog and rename book if confirmed
   Future<void> promptRename(BuildContext context, Book book) async {
+    if (_state.isReadOnlyDevice) {
+      SnackBarUtils.showInfo(context, 'Read-only mode: rename is disabled');
+      return;
+    }
     final newName = await RenameBookDialog.show(context, book: book);
     if (newName != null && newName != book.name) {
       await renameBook(context: context, book: book, newName: newName);
@@ -123,6 +143,10 @@ class BookListController extends ChangeNotifier {
 
   /// Show archive confirmation and archive book if confirmed
   Future<void> promptArchive(BuildContext context, Book book) async {
+    if (_state.isReadOnlyDevice) {
+      SnackBarUtils.showInfo(context, 'Read-only mode: archive is disabled');
+      return;
+    }
     final confirmed = await ArchiveBookConfirmDialog.show(context, book: book);
     if (confirmed == true) {
       await archiveBook(context: context, book: book);
@@ -149,6 +173,10 @@ class BookListController extends ChangeNotifier {
 
   /// Show delete confirmation and delete book if confirmed
   Future<void> promptDelete(BuildContext context, Book book) async {
+    if (_state.isReadOnlyDevice) {
+      SnackBarUtils.showInfo(context, 'Read-only mode: delete is disabled');
+      return;
+    }
     final confirmed = await DeleteBookConfirmDialog.show(context, book: book);
     if (confirmed == true) {
       await deleteBook(context: context, book: book);

@@ -10,6 +10,7 @@ class ScheduleTimeGrid extends StatelessWidget {
   final List<DateTime> dates;
   final double slotHeight;
   final bool isDrawingMode;
+  final bool isReadOnlyMode;
   final Event? selectedEventForMenu;
   final DateTime? hoveredDropStartTime;
   final void Function(DateTime startTime) onCreateEvent;
@@ -21,6 +22,7 @@ class ScheduleTimeGrid extends StatelessWidget {
     required this.dates,
     required this.slotHeight,
     required this.isDrawingMode,
+    this.isReadOnlyMode = false,
     required this.selectedEventForMenu,
     required this.hoveredDropStartTime,
     required this.onCreateEvent,
@@ -101,8 +103,9 @@ class ScheduleTimeGrid extends StatelessWidget {
 
     return Expanded(
       child: DragTarget<Event>(
-        onWillAcceptWithDetails: (details) => !isDrawingMode,
+        onWillAcceptWithDetails: (details) => !isDrawingMode && !isReadOnlyMode,
         onAcceptWithDetails: (details) {
+          if (isReadOnlyMode) return;
           final newStartTime = DateTime(
             date.year,
             date.month,
@@ -129,6 +132,7 @@ class ScheduleTimeGrid extends StatelessWidget {
               if (selectedEventForMenu != null) {
                 onCloseEventMenu();
               } else {
+                if (isReadOnlyMode) return;
                 final startTime = DateTime(
                   date.year,
                   date.month,

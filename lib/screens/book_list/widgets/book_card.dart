@@ -11,6 +11,7 @@ class BookCard extends StatelessWidget {
   final VoidCallback onRename;
   final VoidCallback onArchive;
   final VoidCallback onDelete;
+  final bool isReadOnlyDevice;
 
   const BookCard({
     super.key,
@@ -19,6 +20,7 @@ class BookCard extends StatelessWidget {
     required this.onRename,
     required this.onArchive,
     required this.onDelete,
+    this.isReadOnlyDevice = false,
   });
 
   @override
@@ -32,7 +34,9 @@ class BookCard extends StatelessWidget {
         leading: _buildLeadingIcon(context),
         title: _buildTitle(context),
         subtitle: _buildSubtitle(context, l10n),
-        trailing: _buildPopupMenu(context, l10n),
+        trailing: isReadOnlyDevice
+            ? const Icon(Icons.chevron_right_rounded)
+            : _buildPopupMenu(context, l10n),
         onTap: book.isArchived ? null : onTap,
       ),
     );
@@ -50,9 +54,7 @@ class BookCard extends StatelessWidget {
       ),
       child: Icon(
         book.isArchived ? Icons.archive : Icons.book,
-        color: book.isArchived
-            ? Colors.grey
-            : Theme.of(context).primaryColor,
+        color: book.isArchived ? Colors.grey : Theme.of(context).primaryColor,
       ),
     );
   }
@@ -61,10 +63,10 @@ class BookCard extends StatelessWidget {
     return Text(
       book.name,
       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            fontWeight: FontWeight.w600,
-            decoration: book.isArchived ? TextDecoration.lineThrough : null,
-            color: book.isArchived ? Colors.grey : null,
-          ),
+        fontWeight: FontWeight.w600,
+        decoration: book.isArchived ? TextDecoration.lineThrough : null,
+        color: book.isArchived ? Colors.grey : null,
+      ),
     );
   }
 
@@ -74,16 +76,16 @@ class BookCard extends StatelessWidget {
       children: [
         Text(
           '${l10n.createdLabel}${DateFormatUtils.formatDate(book.createdAt, context)}',
-          style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                color: Colors.grey[600],
-              ),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
         ),
         if (book.isArchived && book.archivedAt != null)
           Text(
             '${l10n.archivedLabel}${DateFormatUtils.formatDate(book.archivedAt!, context)}',
-            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Colors.grey[500],
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodySmall?.copyWith(color: Colors.grey[500]),
           ),
       ],
     );
@@ -127,10 +129,7 @@ class BookCard extends StatelessWidget {
           value: 'delete',
           child: ListTile(
             leading: const Icon(Icons.delete, color: Colors.red),
-            title: Text(
-              l10n.delete,
-              style: const TextStyle(color: Colors.red),
-            ),
+            title: Text(l10n.delete, style: const TextStyle(color: Colors.red)),
             contentPadding: EdgeInsets.zero,
           ),
         ),

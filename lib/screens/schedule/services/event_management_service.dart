@@ -83,6 +83,7 @@ class EventManagementService {
 
   /// Date service for navigating to different dates
   final ScheduleDateService dateService;
+  final bool isReadOnlyMode;
 
   EventManagementService({
     required IDatabaseService dbService,
@@ -100,6 +101,7 @@ class EventManagementService {
     required this.onSyncEvent,
     required this.onSetPendingNextAppointment,
     required this.dateService,
+    this.isReadOnlyMode = false,
   }) : _dbService = dbService,
        _bookUuid = bookUuid;
 
@@ -117,6 +119,9 @@ class EventManagementService {
     String? phone,
     List<EventType>? eventTypes,
   }) async {
+    if (isReadOnlyMode) {
+      return;
+    }
     final now = TimeService.instance.now();
     final defaultStartTime =
         startTime ??
@@ -143,7 +148,11 @@ class EventManagementService {
     );
 
     final result = await onNavigate(
-      EventDetailScreen(event: newEvent, isNew: true),
+      EventDetailScreen(
+        event: newEvent,
+        isNew: true,
+        isReadOnlyMode: isReadOnlyMode,
+      ),
     );
 
     if (result == true) {
@@ -154,7 +163,11 @@ class EventManagementService {
   /// Edit an existing event
   Future<void> editEvent(Event event) async {
     final result = await onNavigate(
-      EventDetailScreen(event: event, isNew: false),
+      EventDetailScreen(
+        event: event,
+        isNew: false,
+        isReadOnlyMode: isReadOnlyMode,
+      ),
     );
 
     if (result == true) {
@@ -167,6 +180,7 @@ class EventManagementService {
     Event originalEvent,
     BuildContext context,
   ) async {
+    if (isReadOnlyMode) return;
     // Show dialog to get days and event type
     final result = await showScheduleNextAppointmentDialog(
       context,
@@ -212,6 +226,7 @@ class EventManagementService {
 
   /// Toggle event checked status
   Future<void> toggleEventChecked(Event event, bool isChecked) async {
+    if (isReadOnlyMode) return;
     try {
       final updatedEvent = event.copyWith(
         isChecked: isChecked,
@@ -242,6 +257,7 @@ class EventManagementService {
     Event event,
     BuildContext context,
   ) async {
+    if (isReadOnlyMode) return;
     if (action == 'changeType') {
       await changeEventType(event, context);
       closeEventMenu();
@@ -259,6 +275,7 @@ class EventManagementService {
 
   /// Change event types (multi-select)
   Future<void> changeEventType(Event event, BuildContext context) async {
+    if (isReadOnlyMode) return;
     final eventTypes = [
       EventType.consultation,
       EventType.surgery,
@@ -318,6 +335,7 @@ class EventManagementService {
     Event event,
     BuildContext context,
   ) async {
+    if (isReadOnlyMode) return;
     final result = await ChangeTimeDialog.show(
       context,
       initialStartTime: event.startTime,
@@ -358,6 +376,7 @@ class EventManagementService {
     Event event,
     BuildContext context,
   ) async {
+    if (isReadOnlyMode) return;
     final l10n = AppLocalizations.of(context)!;
 
     // Show reason dialog
@@ -494,6 +513,7 @@ class EventManagementService {
     Event event,
     BuildContext context,
   ) async {
+    if (isReadOnlyMode) return;
     final l10n = AppLocalizations.of(context)!;
 
     final confirmed = await showDialog<bool>(
@@ -543,6 +563,7 @@ class EventManagementService {
     DateTime newStartTime,
     BuildContext context,
   ) async {
+    if (isReadOnlyMode) return;
     // Check if time actually changed
     if (event.startTime.year == newStartTime.year &&
         event.startTime.month == newStartTime.month &&

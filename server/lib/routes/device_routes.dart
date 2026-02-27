@@ -11,6 +11,8 @@ import '../models/device.dart';
 
 /// Router for device management endpoints.
 class DeviceRoutes {
+  static const String _defaultDeviceRole = 'read';
+
   final DatabaseConnection db;
   final _uuid = const Uuid();
 
@@ -59,6 +61,7 @@ class DeviceRoutes {
         'id': deviceId,
         'device_name': registerRequest.deviceName,
         'device_token': deviceToken,
+        'device_role': _defaultDeviceRole,
         'platform': registerRequest.platform,
         'registered_at': DateTime.now().toUtc().toIso8601String(),
         'is_active': true,
@@ -70,8 +73,10 @@ class DeviceRoutes {
         message: 'Device registered successfully',
       );
 
+      final responseJson = response.toJson()
+        ..['deviceRole'] = _defaultDeviceRole;
       return Response.ok(
-        jsonEncode(response.toJson()),
+        jsonEncode(responseJson),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {
@@ -102,8 +107,10 @@ class DeviceRoutes {
       }
 
       final device = Device.fromDatabase(row);
+      final deviceRole = (row['device_role'] ?? _defaultDeviceRole).toString();
+      final payload = device.toJson()..['deviceRole'] = deviceRole;
       return Response.ok(
-        jsonEncode(device.toJson()),
+        jsonEncode(payload),
         headers: {'Content-Type': 'application/json'},
       );
     } catch (e) {

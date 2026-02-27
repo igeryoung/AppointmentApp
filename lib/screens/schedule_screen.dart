@@ -22,8 +22,13 @@ import 'schedule/schedule_controller.dart';
 /// Schedule screen supporting 2-day and 3-day views
 class ScheduleScreen extends StatefulWidget {
   final Book book;
+  final bool isReadOnlyMode;
 
-  const ScheduleScreen({super.key, required this.book});
+  const ScheduleScreen({
+    super.key,
+    required this.book,
+    this.isReadOnlyMode = false,
+  });
 
   @override
   State<ScheduleScreen> createState() => _ScheduleScreenState();
@@ -148,6 +153,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
   }
 
   Widget _buildDraggableFabMenu(BoxConstraints constraints) {
+    if (widget.isReadOnlyMode) {
+      return const SizedBox.shrink();
+    }
     final isMenuVisible = _controller.isFabMenuVisible;
     final showGoToToday = !(_controller.dateService?.isViewingToday() ?? false);
     final menuSize = Size(
@@ -219,6 +227,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       book: widget.book,
       dbService: _dbService,
       contextProvider: () => context,
+      isReadOnlyMode: widget.isReadOnlyMode,
     );
     _controller.initialize(context);
     _saveSyncFailureSubscription = SaveSyncNotifier.instance.failures.listen(
@@ -350,7 +359,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
             onPopInvokedWithResult: (bool didPop, dynamic result) async {
               if (didPop) return;
 
-              if (_controller.isDrawingMode) {
+              if (!widget.isReadOnlyMode && _controller.isDrawingMode) {
                 await _controller.saveDrawing(context);
               }
 
@@ -579,6 +588,12 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                           final showDrawing = state is ScheduleLoaded
                               ? state.showDrawing
                               : true;
+                          if (widget.isReadOnlyMode) {
+                            return const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 6),
+                              child: Icon(Icons.lock_outline, size: 20),
+                            );
+                          }
                           return IconButton(
                             icon: Icon(
                               showDrawing ? Icons.brush : Icons.brush_outlined,
@@ -650,6 +665,42 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                             children: [
                               Column(
                                 children: [
+                                  if (widget.isReadOnlyMode)
+                                    Container(
+                                      width: double.infinity,
+                                      margin: const EdgeInsets.fromLTRB(
+                                        12,
+                                        8,
+                                        12,
+                                        0,
+                                      ),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 12,
+                                        vertical: 8,
+                                      ),
+                                      decoration: BoxDecoration(
+                                        color: Colors.blue.shade50,
+                                        borderRadius: BorderRadius.circular(10),
+                                        border: Border.all(
+                                          color: Colors.blue.shade200,
+                                        ),
+                                      ),
+                                      child: const Row(
+                                        children: [
+                                          Icon(Icons.lock_outline, size: 16),
+                                          SizedBox(width: 8),
+                                          Expanded(
+                                            child: Text(
+                                              'Read-only mode: editing, drag, and handwriting are disabled.',
+                                              style: TextStyle(
+                                                fontSize: 12,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ),
+                                    ),
                                   Expanded(
                                     child: isLoading
                                         ? const Center(
@@ -666,7 +717,8 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                                   ),
                                 ],
                               ),
-                              if (_controller.isDrawingMode)
+                              if (!widget.isReadOnlyMode &&
+                                  _controller.isDrawingMode)
                                 Positioned(
                                   top: 0,
                                   left: 0,
@@ -722,15 +774,19 @@ class _ScheduleScreenState extends State<ScheduleScreen>
       showOldEvents: showOldEvents,
       showDrawing: showDrawing,
       isDrawingMode: controller.isDrawingMode,
+      isReadOnlyMode: widget.isReadOnlyMode,
       canvasKey: controller.getCanvasKeyForCurrentPage(),
       currentDrawing: controller.drawingService?.currentDrawing,
       transformationController: controller.transformationController,
       getEventTypeColor: (context, eventType) =>
           controller.eventService?.getEventTypeColor(eventType) ?? Colors.grey,
       onEditEvent: (event) => controller.eventService?.editEvent(event),
-      onShowEventContextMenu: (event, position) =>
-          controller.eventService?.showEventContextMenu(event, position),
+      onShowEventContextMenu: (event, position) {
+        if (widget.isReadOnlyMode) return;
+        controller.eventService?.showEventContextMenu(event, position);
+      },
       onCreateEvent: (startTime) {
+        if (widget.isReadOnlyMode) return;
         controller.eventService?.createEvent(
           startTime: startTime,
           name: pendingNextAppointment?.name,
@@ -742,23 +798,30 @@ class _ScheduleScreenState extends State<ScheduleScreen>
           context.read<ScheduleCubit>().clearPendingNextAppointment();
         }
       },
-      onEventDrop: (event, newStartTime) => controller.eventService
-          ?.handleEventDrop(event, newStartTime, context),
+      onEventDrop: (event, newStartTime) {
+        if (widget.isReadOnlyMode) return;
+        controller.eventService?.handleEventDrop(event, newStartTime, context);
+      },
       onCloseEventMenu: () => controller.eventService?.closeEventMenu(),
       onDrawingStrokesChanged: () {
+        if (widget.isReadOnlyMode) return;
         controller.markNeedsBuild();
         controller.scheduleSaveDrawing();
       },
       selectedEventForMenu: controller.eventService?.selectedEventForMenu,
       menuPosition: controller.eventService?.menuPosition,
-      onChangeType: controller.eventService?.selectedEventForMenu != null
+      onChangeType:
+          !widget.isReadOnlyMode &&
+              controller.eventService?.selectedEventForMenu != null
           ? () => controller.eventService?.handleMenuAction(
               'changeType',
               controller.eventService!.selectedEventForMenu!,
               context,
             )
           : null,
-      onChangeTime: controller.eventService?.selectedEventForMenu != null
+      onChangeTime:
+          !widget.isReadOnlyMode &&
+              controller.eventService?.selectedEventForMenu != null
           ? () => controller.eventService?.handleMenuAction(
               'changeTime',
               controller.eventService!.selectedEventForMenu!,
@@ -766,27 +829,34 @@ class _ScheduleScreenState extends State<ScheduleScreen>
             )
           : null,
       onScheduleNextAppointment:
-          controller.eventService?.selectedEventForMenu != null
+          !widget.isReadOnlyMode &&
+              controller.eventService?.selectedEventForMenu != null
           ? () => controller.eventService?.scheduleNextAppointment(
               controller.eventService!.selectedEventForMenu!,
               context,
             )
           : null,
-      onRemove: controller.eventService?.selectedEventForMenu != null
+      onRemove:
+          !widget.isReadOnlyMode &&
+              controller.eventService?.selectedEventForMenu != null
           ? () => controller.eventService?.handleMenuAction(
               'remove',
               controller.eventService!.selectedEventForMenu!,
               context,
             )
           : null,
-      onDelete: controller.eventService?.selectedEventForMenu != null
+      onDelete:
+          !widget.isReadOnlyMode &&
+              controller.eventService?.selectedEventForMenu != null
           ? () => controller.eventService?.handleMenuAction(
               'delete',
               controller.eventService!.selectedEventForMenu!,
               context,
             )
           : null,
-      onCheckedChanged: controller.eventService?.selectedEventForMenu != null
+      onCheckedChanged:
+          !widget.isReadOnlyMode &&
+              controller.eventService?.selectedEventForMenu != null
           ? (isChecked) => controller.eventService?.toggleEventChecked(
               controller.eventService!.selectedEventForMenu!,
               isChecked,

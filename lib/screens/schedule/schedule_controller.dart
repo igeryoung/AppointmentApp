@@ -24,6 +24,7 @@ class ScheduleController extends ChangeNotifier {
     required this.book,
     required IDatabaseService dbService,
     required this.contextProvider,
+    this.isReadOnlyMode = false,
   }) : _dbService = dbService {
     assert(
       book.uuid.isNotEmpty,
@@ -34,6 +35,7 @@ class ScheduleController extends ChangeNotifier {
   final Book book;
   final IDatabaseService _dbService;
   final BuildContext Function() contextProvider;
+  final bool isReadOnlyMode;
 
   final TransformationController transformationController =
       TransformationController();
@@ -246,6 +248,7 @@ class ScheduleController extends ChangeNotifier {
       onSetPendingNextAppointment: (pending) =>
           context.read<ScheduleCubit>().setPendingNextAppointment(pending),
       dateService: _dateService!,
+      isReadOnlyMode: isReadOnlyMode,
     );
 
     _dateService?.startPeriodicCheck();
@@ -280,7 +283,7 @@ class ScheduleController extends ChangeNotifier {
       _dateService?.checkAndHandleDateChange();
     } else if (state == AppLifecycleState.paused ||
         state == AppLifecycleState.inactive) {
-      if (_isDrawingMode) {
+      if (!isReadOnlyMode && _isDrawingMode) {
         await saveDrawing(context);
       }
     }

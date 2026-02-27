@@ -107,7 +107,7 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+      if (!await drawingService.verifyBookAccess(deviceId, bookUuid)) {
         print(
           '❌ [403] GET /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid',
         );
@@ -220,7 +220,22 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+      final hasWriteAccess = await drawingService.verifyBookAccess(
+        deviceId,
+        bookUuid,
+        requireWrite: true,
+      );
+      if (!hasWriteAccess) {
+        if (!await drawingService.canDeviceWrite(deviceId)) {
+          return Response.forbidden(
+            jsonEncode({
+              'success': false,
+              'message': 'Read-only device cannot modify drawings',
+              'error': 'READ_ONLY_DEVICE',
+            }),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
         print(
           '❌ [403] POST /api/books/$bookUuid/drawings - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid, date=$date, viewMode=$viewMode',
         );
@@ -356,7 +371,22 @@ class DrawingRoutes {
       }
 
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+      final hasWriteAccess = await drawingService.verifyBookAccess(
+        deviceId,
+        bookUuid,
+        requireWrite: true,
+      );
+      if (!hasWriteAccess) {
+        if (!await drawingService.canDeviceWrite(deviceId)) {
+          return Response.forbidden(
+            jsonEncode({
+              'success': false,
+              'message': 'Read-only device cannot modify drawings',
+              'error': 'READ_ONLY_DEVICE',
+            }),
+            headers: {'Content-Type': 'application/json'},
+          );
+        }
         print(
           '❌ [403] DELETE /api/books/$bookUuid/drawings?date=$date&viewMode=$viewMode - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid',
         );
@@ -473,8 +503,20 @@ class DrawingRoutes {
         );
       }
 
+      final canWrite = await drawingService.canDeviceWrite(deviceId);
+      if (!canWrite) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Read-only device cannot use drawings batch endpoint',
+            'error': 'READ_ONLY_DEVICE',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
       // Verify book ownership
-      if (!await drawingService.verifyBookOwnership(deviceId, bookUuid)) {
+      if (!await drawingService.verifyBookAccess(deviceId, bookUuid)) {
         print(
           '❌ [403] POST /api/drawings/batch - Unauthorized access to book: deviceId=$deviceId, bookUuid=$bookUuid',
         );

@@ -26,6 +26,14 @@ class DeviceRegistrationAdapter {
     return credentials != null;
   }
 
+  String _normalizeRole(String? role, {String fallback = 'read'}) {
+    final normalized = role?.trim().toLowerCase() ?? '';
+    if (normalized == 'read' || normalized == 'write') {
+      return normalized;
+    }
+    return fallback;
+  }
+
   /// Register device with server
   Future<void> register({
     required String baseUrl,
@@ -47,6 +55,10 @@ class DeviceRegistrationAdapter {
       // Save device credentials with server URL
       final deviceId = response['deviceId'] as String;
       final deviceToken = response['deviceToken'] as String;
+      final deviceRole = _normalizeRole(
+        response['deviceRole']?.toString(),
+        fallback: 'read',
+      );
 
       await _dbService.saveDeviceCredentials(
         deviceId: deviceId,
@@ -54,7 +66,34 @@ class DeviceRegistrationAdapter {
         deviceName: actualDeviceName,
         serverUrl: baseUrl,
         platform: actualPlatform,
+        deviceRole: deviceRole,
       );
+    } finally {
+      apiClient.dispose();
+    }
+  }
+
+  /// Refresh device role from server and persist locally.
+  Future<void> refreshDeviceRoleFromServer() async {
+    final credentials = await _dbService.getDeviceCredentials();
+    if (credentials == null) return;
+
+    final db = await _dbService.database;
+    final rows = await db.query('device_info', where: 'id = 1', limit: 1);
+    if (rows.isEmpty) return;
+    final row = rows.first;
+    final serverUrl = row['server_url'] as String?;
+    if (serverUrl == null || serverUrl.trim().isEmpty) return;
+
+    final apiClient = ApiClient(baseUrl: serverUrl);
+    try {
+      final role = await apiClient.fetchDeviceRole(
+        deviceId: credentials.deviceId,
+      );
+      if (role == null) return;
+      await db.update('device_info', {
+        'device_role': _normalizeRole(role, fallback: credentials.deviceRole),
+      }, where: 'id = 1');
     } finally {
       apiClient.dispose();
     }
@@ -68,6 +107,8 @@ class DeviceRegistrationAdapter {
     return {
       'deviceId': credentials.deviceId,
       'deviceToken': credentials.deviceToken,
+      'deviceRole': credentials.deviceRole,
+      'isReadOnly': credentials.isReadOnly,
     };
   }
 }

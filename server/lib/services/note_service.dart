@@ -42,6 +42,9 @@ class NoteOperationResult {
 }
 
 class NoteService {
+  static const String roleRead = 'read';
+  static const String roleWrite = 'write';
+
   final DatabaseConnection db;
 
   NoteService(this.db);
@@ -93,7 +96,50 @@ class NoteService {
   }
 
   Future<bool> verifyBookOwnership(String deviceId, String bookUuid) async {
+    return verifyBookAccess(deviceId, bookUuid);
+  }
+
+  String _normalizeDeviceRole(dynamic value, {String fallback = roleWrite}) {
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized == roleRead) return roleRead;
+    if (normalized == roleWrite) return roleWrite;
+    return fallback;
+  }
+
+  Future<String> getDeviceRole(String deviceId) async {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      try {
+        final rows = await db.client
+            .from('devices')
+            .select('device_role')
+            .eq('id', deviceId)
+            .limit(1);
+        final row = _first(rows);
+        if (row == null) return roleWrite;
+        return _normalizeDeviceRole(row['device_role']);
+      } catch (_) {
+        if (attempt == 1) return roleWrite;
+        await Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)));
+      }
+    }
+    return roleWrite;
+  }
+
+  Future<bool> canDeviceWrite(String deviceId) async {
+    final role = await getDeviceRole(deviceId);
+    return role == roleWrite;
+  }
+
+  Future<bool> verifyBookAccess(
+    String deviceId,
+    String bookUuid, {
+    bool requireWrite = false,
+  }) async {
     try {
+      if (requireWrite && !await canDeviceWrite(deviceId)) {
+        return false;
+      }
+
       final existingBook = await db.client
           .from('books')
           .select('book_uuid, device_id')

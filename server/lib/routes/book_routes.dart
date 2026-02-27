@@ -47,7 +47,12 @@ class BookRoutes {
     }
     final valid = await _noteService.verifyDeviceAccess(deviceId, deviceToken);
     if (!valid) return null;
-    return {'deviceId': deviceId, 'deviceToken': deviceToken};
+    final role = await _noteService.getDeviceRole(deviceId);
+    return {
+      'deviceId': deviceId,
+      'deviceToken': deviceToken,
+      'deviceRole': role,
+    };
   }
 
   Response _json(int statusCode, Map<String, dynamic> body) {
@@ -57,6 +62,8 @@ class BookRoutes {
       headers: {'Content-Type': 'application/json'},
     );
   }
+
+  bool _isReadOnlyRole(String? role) => role == NoteService.roleRead;
 
   Map<String, dynamic>? _first(dynamic data) {
     if (data is List && data.isNotEmpty) {
@@ -178,6 +185,13 @@ class BookRoutes {
         return _json(401, {
           'success': false,
           'message': 'Invalid device credentials',
+        });
+      }
+      if (_isReadOnlyRole(auth['deviceRole'])) {
+        return _json(403, {
+          'success': false,
+          'message': 'Read-only device cannot create books',
+          'error': 'READ_ONLY_DEVICE',
         });
       }
 
@@ -338,6 +352,13 @@ class BookRoutes {
           'message': 'Invalid device credentials',
         });
       }
+      if (_isReadOnlyRole(auth['deviceRole'])) {
+        return _json(403, {
+          'success': false,
+          'message': 'Read-only device cannot rename books',
+          'error': 'READ_ONLY_DEVICE',
+        });
+      }
 
       final canAccess = await _noteService.verifyBookOwnership(
         auth['deviceId']!,
@@ -405,6 +426,13 @@ class BookRoutes {
           'message': 'Invalid device credentials',
         });
       }
+      if (_isReadOnlyRole(auth['deviceRole'])) {
+        return _json(403, {
+          'success': false,
+          'message': 'Read-only device cannot archive books',
+          'error': 'READ_ONLY_DEVICE',
+        });
+      }
 
       final canAccess = await _noteService.verifyBookOwnership(
         auth['deviceId']!,
@@ -466,6 +494,13 @@ class BookRoutes {
         return _json(401, {
           'success': false,
           'message': 'Invalid device credentials',
+        });
+      }
+      if (_isReadOnlyRole(auth['deviceRole'])) {
+        return _json(403, {
+          'success': false,
+          'message': 'Read-only device cannot delete books',
+          'error': 'READ_ONLY_DEVICE',
         });
       }
 

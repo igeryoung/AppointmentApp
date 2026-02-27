@@ -26,6 +26,7 @@ class _FakeDeviceRepository implements IDeviceRepository {
     required String deviceToken,
     required String deviceName,
     String? platform,
+    String deviceRole = 'read',
   }) async {}
 }
 

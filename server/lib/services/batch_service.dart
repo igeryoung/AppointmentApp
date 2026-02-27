@@ -64,6 +64,10 @@ class BatchService {
     return _noteService.verifyBookOwnership(deviceId, bookUuid);
   }
 
+  Future<bool> _canDeviceWrite(String deviceId) {
+    return _noteService.canDeviceWrite(deviceId);
+  }
+
   Future<bool> _verifyEventInBook(String eventId, String bookUuid) {
     return _noteService.verifyEventInBook(eventId, bookUuid);
   }
@@ -187,6 +191,13 @@ class BatchService {
       final hasAccess = await _verifyDeviceAccess(deviceId, deviceToken);
       if (!hasAccess) {
         return BatchSaveResult.failure('Invalid device credentials');
+      }
+
+      final canWrite = await _canDeviceWrite(deviceId);
+      if (!canWrite) {
+        return BatchSaveResult.failure(
+          'Read-only device cannot save batch data',
+        );
       }
 
       if (notes.isEmpty && drawings.isEmpty) {

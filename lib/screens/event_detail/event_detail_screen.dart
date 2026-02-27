@@ -24,11 +24,13 @@ import '../../widgets/dialogs/change_time_dialog.dart';
 class EventDetailScreen extends StatefulWidget {
   final Event event;
   final bool isNew;
+  final bool isReadOnlyMode;
 
   const EventDetailScreen({
     super.key,
     required this.event,
     required this.isNew,
+    this.isReadOnlyMode = false,
   });
 
   @override
@@ -335,6 +337,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<void> _saveEvent() async {
+    if (widget.isReadOnlyMode) {
+      return;
+    }
     if (_nameController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
@@ -359,6 +364,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<void> _deleteEvent() async {
+    if (widget.isReadOnlyMode) return;
     if (widget.isNew) return;
 
     final confirmed = await DeleteEventDialog.show(context);
@@ -385,6 +391,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<void> _removeEvent() async {
+    if (widget.isReadOnlyMode) return;
     if (widget.isNew) return;
 
     final reason = await RemoveEventDialog.show(context);
@@ -411,6 +418,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<void> _changeEventTime() async {
+    if (widget.isReadOnlyMode) return;
     if (widget.isNew) return;
 
     final l10n = AppLocalizations.of(context)!;
@@ -586,6 +594,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<bool> _onWillPop() async {
+    if (widget.isReadOnlyMode) {
+      return true;
+    }
     final hasName = _nameController.text.trim().isNotEmpty;
 
     // Block auto-save if there's a record number validation error
@@ -641,7 +652,11 @@ class _EventDetailScreenState extends State<EventDetailScreen>
       onWillPop: _onWillPop,
       child: Scaffold(
         appBar: AppBar(
-          title: Text(widget.isNew ? l10n.newEvent : l10n.editEvent),
+          title: Text(
+            widget.isReadOnlyMode
+                ? 'View Event'
+                : (widget.isNew ? l10n.newEvent : l10n.editEvent),
+          ),
           actions: [
             // Sync status indicators in AppBar
             if (state.hasUnsyncedChanges)
@@ -664,7 +679,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   size: 24,
                 ),
               ),
-            if (!widget.isNew && !widget.event.isRemoved) ...[
+            if (!widget.isReadOnlyMode &&
+                !widget.isNew &&
+                !widget.event.isRemoved) ...[
               PopupMenuButton<String>(
                 enabled: !state.isLoading,
                 onSelected: (value) {
@@ -761,6 +778,35 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
                   return Column(
                     children: [
+                      if (widget.isReadOnlyMode)
+                        Container(
+                          width: double.infinity,
+                          margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(color: Colors.blue.shade200),
+                          ),
+                          child: const Row(
+                            children: [
+                              Icon(Icons.visibility_outlined, size: 16),
+                              SizedBox(width: 8),
+                              Expanded(
+                                child: Text(
+                                  'Read-only mode: data editing and handwriting are disabled.',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
                       // Status bar
                       EventDetailStatusBar(
                         hasUnsyncedChanges: state.hasUnsyncedChanges,
@@ -810,6 +856,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                                     recordNumber,
                                   ),
                               isNameReadOnly: state.isNameReadOnly,
+                              isReadOnlyMode: widget.isReadOnlyMode,
                               // Record number validation
                               recordNumberError: state.recordNumberError,
                               isValidatingRecordNumber:
@@ -827,6 +874,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                           controller: _controller,
                           hasRecordUuid: widget.event.recordUuid.isNotEmpty,
                           showOnlyThisEventItems: state.showOnlyThisEventItems,
+                          isReadOnlyMode: widget.isReadOnlyMode,
                         ),
                       ),
                       // Handwriting section
@@ -840,6 +888,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                               initialPages: initialPages,
                               onPagesChanged: _onPagesChanged,
                               currentEventUuid: widget.event.id,
+                              isReadOnlyMode: widget.isReadOnlyMode,
                               onStrokesErased: (erasedStrokeIds) {
                                 _controller.onStrokesErased(erasedStrokeIds);
                               },

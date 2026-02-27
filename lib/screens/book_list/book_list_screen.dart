@@ -65,29 +65,65 @@ class _BookListScreenState extends State<BookListScreen> {
                             ),
                           ],
                         ),
+                      if (state.isReadOnlyDevice) _buildReadOnlyBanner(context),
                       Expanded(
                         child: BookListView(
                           books: state.books,
                           onRefresh: controller.reload,
                           onReorder: controller.reorderBooks,
-                          onTap: _openSchedule,
+                          onTap: (book) => _openSchedule(
+                            book,
+                            readOnly: state.isReadOnlyDevice,
+                          ),
                           onRename: (book) =>
                               controller.promptRename(context, book),
                           onArchive: (book) =>
                               controller.promptArchive(context, book),
                           onDelete: (book) =>
                               controller.promptDelete(context, book),
+                          isReadOnlyDevice: state.isReadOnlyDevice,
                         ),
                       ),
                     ],
                   ),
-            floatingActionButton: FloatingActionButton(
-              onPressed: () => controller.promptCreate(context),
-              tooltip: AppLocalizations.of(context)!.createNewBook,
-              child: const Icon(Icons.add),
-            ),
+            floatingActionButton: state.isReadOnlyDevice
+                ? null
+                : FloatingActionButton(
+                    onPressed: () => controller.promptCreate(context),
+                    tooltip: AppLocalizations.of(context)!.createNewBook,
+                    child: const Icon(Icons.add),
+                  ),
           );
         },
+      ),
+    );
+  }
+
+  Widget _buildReadOnlyBanner(BuildContext context) {
+    final theme = Theme.of(context);
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(14),
+        color: theme.colorScheme.secondaryContainer.withValues(alpha: 0.5),
+        border: Border.all(
+          color: theme.colorScheme.secondary.withValues(alpha: 0.35),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.visibility_rounded, color: theme.colorScheme.secondary),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text(
+              'Read mode active: view-only access, edit actions are disabled.',
+              style: theme.textTheme.bodyMedium?.copyWith(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -121,13 +157,13 @@ class _BookListScreenState extends State<BookListScreen> {
   }
 
   /// Open schedule screen for a book
-  void _openSchedule(Book book) {
+  void _openSchedule(Book book, {required bool readOnly}) {
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => BlocProvider(
           create: (context) => getIt<ScheduleCubit>()..initialize(book.uuid),
-          child: ScheduleScreen(book: book),
+          child: ScheduleScreen(book: book, isReadOnlyMode: readOnly),
         ),
       ),
     );
