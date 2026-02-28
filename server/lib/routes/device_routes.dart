@@ -22,6 +22,7 @@ class DeviceRoutes {
     final router = Router();
     router.post('/register', _registerDevice);
     router.get('/<deviceId>', _getDevice);
+    router.delete('/<deviceId>', _deleteDevice);
     router.post('/sync-time', _updateSyncTime);
     return router;
   }
@@ -152,6 +153,60 @@ class DeviceRoutes {
         body: jsonEncode({
           'success': false,
           'message': 'Failed to update sync time: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> _deleteDevice(Request request, String deviceId) async {
+    try {
+      final headerDeviceId = request.headers['X-Device-ID']?.trim() ?? '';
+      final deviceToken = request.headers['X-Device-Token']?.trim() ?? '';
+
+      if (headerDeviceId.isEmpty || deviceToken.isEmpty) {
+        return Response(
+          401,
+          body: jsonEncode({
+            'success': false,
+            'message': 'Missing device credentials',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (headerDeviceId != deviceId) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Device may only delete itself',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      if (!await _verifyDeviceToken(deviceId, deviceToken)) {
+        return Response.forbidden(
+          jsonEncode({'success': false, 'message': 'Invalid device token'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      await db.client
+          .from('book_device_access')
+          .delete()
+          .eq('device_id', deviceId);
+      await db.client.from('devices').delete().eq('id', deviceId);
+
+      return Response.ok(
+        jsonEncode({'success': true, 'message': 'Device deleted successfully'}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to delete device: $e',
         }),
         headers: {'Content-Type': 'application/json'},
       );

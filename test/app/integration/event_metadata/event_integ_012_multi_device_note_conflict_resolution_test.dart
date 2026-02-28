@@ -11,13 +11,37 @@ void registerEventInteg012({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final uuid = const Uuid();
+      final readDevice = live.readCredentials;
       String? bookUuid;
+      LiveDeviceCredentials? deviceB;
 
       try {
-        final deviceB = await registerTemporaryDevice(
+        final fixture = await resolveFixture(
           apiClient: apiClient,
           config: live,
+          requireWrite: false,
         );
+
+        await expectReadOnlyDeviceFailure(
+          () => apiClient.saveNote(
+            bookUuid: fixture.bookUuid,
+            eventId: fixture.eventId,
+            noteData: buildSingleStrokeNotePayload(
+              eventId: fixture.eventId,
+              version: 1,
+            ),
+            deviceId: readDevice.deviceId,
+            deviceToken: readDevice.deviceToken,
+          ),
+        );
+
+        deviceB = await provisionTemporaryDevice(
+          apiClient: apiClient,
+          config: live,
+          deviceRole: liveDeviceRoleWrite,
+          deviceNamePrefix: 'IT note writer',
+        );
+        final secondaryDevice = deviceB;
 
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
@@ -53,6 +77,14 @@ void registerEventInteg012({required LiveServerConfig? config}) {
           deviceToken: live.deviceToken,
         );
 
+        await apiClient.grantBookAccess(
+          bookUuid: bookUuid,
+          targetDeviceId: secondaryDevice.deviceId,
+          accessType: liveDeviceRoleWrite,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
         await apiClient.saveNote(
           bookUuid: bookUuid,
           eventId: eventId,
@@ -64,8 +96,8 @@ void registerEventInteg012({required LiveServerConfig? config}) {
         final noteSeenByDeviceB = await apiClient.fetchNote(
           bookUuid: bookUuid,
           eventId: eventId,
-          deviceId: deviceB.deviceId,
-          deviceToken: deviceB.deviceToken,
+          deviceId: secondaryDevice.deviceId,
+          deviceToken: secondaryDevice.deviceToken,
         );
         expect(noteSeenByDeviceB, isNotNull);
         expect(noteSeenByDeviceB!.version, greaterThanOrEqualTo(1));
@@ -89,8 +121,8 @@ void registerEventInteg012({required LiveServerConfig? config}) {
               eventId: '${eventId}_deviceB_stale',
               version: 2,
             ),
-            deviceId: deviceB.deviceId,
-            deviceToken: deviceB.deviceToken,
+            deviceId: secondaryDevice.deviceId,
+            deviceToken: secondaryDevice.deviceToken,
           ),
           throwsA(
             isA<ApiConflictException>().having(
@@ -104,8 +136,8 @@ void registerEventInteg012({required LiveServerConfig? config}) {
         final afterConflict = await apiClient.fetchNote(
           bookUuid: bookUuid,
           eventId: eventId,
-          deviceId: deviceB.deviceId,
-          deviceToken: deviceB.deviceToken,
+          deviceId: secondaryDevice.deviceId,
+          deviceToken: secondaryDevice.deviceToken,
         );
         expect(afterConflict, isNotNull);
         expect(afterConflict!.version, greaterThanOrEqualTo(2));
@@ -118,8 +150,8 @@ void registerEventInteg012({required LiveServerConfig? config}) {
           bookUuid: bookUuid,
           eventId: eventId,
           noteData: retryPayload,
-          deviceId: deviceB.deviceId,
-          deviceToken: deviceB.deviceToken,
+          deviceId: secondaryDevice.deviceId,
+          deviceToken: secondaryDevice.deviceToken,
         );
 
         final finalNote = await apiClient.fetchNote(
@@ -144,6 +176,14 @@ void registerEventInteg012({required LiveServerConfig? config}) {
           } catch (_) {
             // Best-effort cleanup.
           }
+        }
+        try {
+          await cleanupTemporaryDevice(
+            apiClient: apiClient,
+            credentials: deviceB,
+          );
+        } catch (_) {
+          // Best-effort cleanup.
         }
         apiClient.dispose();
       }

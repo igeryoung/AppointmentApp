@@ -1,6 +1,7 @@
 import 'dart:convert';
 
 import '../database/connection.dart';
+import 'book_access_service.dart';
 
 class NoteOperationResult {
   final bool success;
@@ -46,8 +47,11 @@ class NoteService {
   static const String roleWrite = 'write';
 
   final DatabaseConnection db;
+  late final BookAccessService _bookAccessService;
 
-  NoteService(this.db);
+  NoteService(this.db) {
+    _bookAccessService = BookAccessService(db);
+  }
 
   DateTime _asUtc(dynamic value) {
     if (value is DateTime) return value.isUtc ? value : value.toUtc();
@@ -136,49 +140,11 @@ class NoteService {
     bool requireWrite = false,
   }) async {
     try {
-      if (requireWrite && !await canDeviceWrite(deviceId)) {
-        return false;
-      }
-
-      final existingBook = await db.client
-          .from('books')
-          .select('book_uuid, device_id')
-          .eq('book_uuid', bookUuid)
-          .eq('is_deleted', false)
-          .limit(1);
-      final bookRow = _first(existingBook);
-      if (bookRow == null) {
-        return false;
-      }
-
-      if (bookRow['device_id']?.toString() == deviceId) {
-        return true;
-      }
-
-      final ownedRows = await db.client
-          .from('books')
-          .select('book_uuid')
-          .eq('book_uuid', bookUuid)
-          .eq('is_deleted', false)
-          .eq('device_id', deviceId)
-          .limit(1);
-      if (_first(ownedRows) != null) return true;
-
-      final accessRows = await db.client
-          .from('book_device_access')
-          .select('book_uuid')
-          .eq('book_uuid', bookUuid)
-          .eq('device_id', deviceId)
-          .limit(1);
-      if (_first(accessRows) != null) return true;
-
-      await db.client.from('book_device_access').upsert({
-        'book_uuid': bookUuid,
-        'device_id': deviceId,
-        'access_type': 'pulled',
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'book_uuid,device_id');
-      return true;
+      return _bookAccessService.verifyBookAccess(
+        deviceId,
+        bookUuid,
+        requireWrite: requireWrite,
+      );
     } catch (_) {
       return false;
     }

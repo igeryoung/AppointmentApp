@@ -12,9 +12,41 @@ void registerEventInteg009({required LiveServerConfig? config}) {
     () async {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
+      final readDevice = live.readCredentials;
       String? bookUuid;
 
       try {
+        final fixture = await resolveFixture(
+          apiClient: apiClient,
+          config: live,
+          requireWrite: false,
+        );
+        final fixtureDate = DateTime.now().toUtc();
+        const fixtureViewMode = ScheduleDrawing.VIEW_MODE_3DAY;
+
+        await expectReadOnlyDeviceFailure(
+          () => apiClient.saveDrawing(
+            bookUuid: fixture.bookUuid,
+            drawingData: {
+              'date': fixtureDate.toIso8601String().split('T')[0],
+              'viewMode': fixtureViewMode,
+              'strokesData': jsonEncode(const []),
+              'version': 1,
+            },
+            deviceId: readDevice.deviceId,
+            deviceToken: readDevice.deviceToken,
+          ),
+        );
+        await expectReadOnlyDeviceFailure(
+          () => apiClient.deleteDrawing(
+            bookUuid: fixture.bookUuid,
+            date: fixtureDate,
+            viewMode: fixtureViewMode,
+            deviceId: readDevice.deviceId,
+            deviceToken: readDevice.deviceToken,
+          ),
+        );
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,
@@ -155,11 +187,82 @@ void registerEventInteg009({required LiveServerConfig? config}) {
       String? bookUuid;
 
       try {
-        final deviceB = await registerTemporaryDevice(
+        final readerDevice = live.readCredentials;
+        final fixture = await resolveFixture(
           apiClient: apiClient,
           config: live,
-          deviceNamePrefix: 'IT drawing reader',
+          requireWrite: false,
         );
+        final fixtureDate = DateTime.now().toUtc();
+        final fixtureViewMode = ScheduleDrawing.VIEW_MODE_2DAY;
+
+        await apiClient.saveDrawing(
+          bookUuid: fixture.bookUuid,
+          drawingData: {
+            'date': fixtureDate.toIso8601String().split('T')[0],
+            'viewMode': fixtureViewMode,
+            'strokesData': jsonEncode(const [
+              {
+                'id': 'fixture-stroke',
+                'points': [
+                  {'x': 12.0, 'y': 12.0},
+                  {'x': 36.0, 'y': 36.0},
+                ],
+                'strokeType': 'pen',
+                'strokeWidth': 2.0,
+                'color': 4278190080,
+              },
+            ]),
+            'version': 1,
+          },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        await apiClient.pullBook(
+          bookUuid: fixture.bookUuid,
+          bookPassword: live.bookPassword,
+          deviceId: readerDevice.deviceId,
+          deviceToken: readerDevice.deviceToken,
+        );
+
+        final fetchedEvent = await apiClient.fetchEvent(
+          bookUuid: fixture.bookUuid,
+          eventId: fixture.eventId,
+          deviceId: readerDevice.deviceId,
+          deviceToken: readerDevice.deviceToken,
+        );
+        expect(fetchedEvent, isNotNull);
+
+        final fetchedSharedDrawing = await apiClient.fetchDrawing(
+          bookUuid: fixture.bookUuid,
+          date: fixtureDate,
+          viewMode: fixtureViewMode,
+          deviceId: readerDevice.deviceId,
+          deviceToken: readerDevice.deviceToken,
+        );
+        expect(fetchedSharedDrawing, isNotNull);
+        final fixtureStrokesData =
+            (fetchedSharedDrawing!['strokesData'] ??
+                    fetchedSharedDrawing['strokes_data'])
+                ?.toString() ??
+            '';
+        expect(fixtureStrokesData, contains('fixture-stroke'));
+
+        await expectReadOnlyDeviceFailure(
+          () => apiClient.saveDrawing(
+            bookUuid: fixture.bookUuid,
+            drawingData: {
+              'date': fixtureDate.toIso8601String().split('T')[0],
+              'viewMode': fixtureViewMode,
+              'strokesData': jsonEncode(const []),
+              'version': 2,
+            },
+            deviceId: readerDevice.deviceId,
+            deviceToken: readerDevice.deviceToken,
+          ),
+        );
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,
@@ -202,16 +305,16 @@ void registerEventInteg009({required LiveServerConfig? config}) {
         await apiClient.pullBook(
           bookUuid: bookUuid,
           bookPassword: live.bookPassword,
-          deviceId: deviceB.deviceId,
-          deviceToken: deviceB.deviceToken,
+          deviceId: readerDevice.deviceId,
+          deviceToken: readerDevice.deviceToken,
         );
 
         final fetchedByDeviceB = await apiClient.fetchDrawing(
           bookUuid: bookUuid,
           date: date,
           viewMode: viewMode,
-          deviceId: deviceB.deviceId,
-          deviceToken: deviceB.deviceToken,
+          deviceId: readerDevice.deviceId,
+          deviceToken: readerDevice.deviceToken,
         );
 
         expect(fetchedByDeviceB, isNotNull);

@@ -30,27 +30,42 @@ Default mode is `--full`.
 5. Drawing behaviors.
 6. Event-detail trigger -> server -> return -> update.
 7. App bootstrap widget path.
-8. Live fixture provision (`create book -> create event`).
+8. Live fixture provision (`create write device -> create read device -> create shared book/event`).
 9. Live server feature contract roundtrip verification.
    - Event metadata + note continuity contracts.
    - Book CRUD/archive/bundle contracts.
    - Drawing save/update/delete contracts.
    - Device session/credential gating contracts.
+10. Live fixture and registered-device cleanup.
 
 ## Live Server Requirements
 
-For `--server` and `--full`, these variables are required:
+For `--server` and `--full`, this variable is required:
 
 - `SN_TEST_BASE_URL`
-- `SN_TEST_DEVICE_ID`
-- `SN_TEST_DEVICE_TOKEN`
+
+Optional:
+
+- `SN_TEST_REGISTRATION_PASSWORD` (defaults to `password`)
+- `SN_TEST_BOOK_PASSWORD`
+- `SN_TEST_ALLOW_BAD_CERT`
+
+The pipeline provisions two temporary live-test devices for each run through the dedicated fixture API: one `write` device and one `read` device. It then creates one shared fixture book/event for those devices, runs the smoke suite with explicit role coverage, and finally deletes only the exact fixture record/book/device IDs created for that run.
 
 Resolution order:
 1. process environment
 2. `SN_TEST_ENV_FILE`
 3. `.env.integration`
 
-If missing, pipeline fails by design.
+If `SN_TEST_BASE_URL` is missing, pipeline fails by design.
+
+For direct live-test runs outside the pipeline:
+
+```bash
+dart run tool/create_event_metadata_fixture.dart
+flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact
+dart run tool/clean_event_metadata_fixture.dart
+```
 
 ## Report Output
 

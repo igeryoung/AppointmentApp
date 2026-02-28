@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../database/connection.dart';
+import '../services/book_access_service.dart';
 import '../services/book_pull_service.dart';
 import '../services/note_service.dart';
 
@@ -22,10 +23,12 @@ class BookRoutes {
   final DatabaseConnection db;
   late final BookPullService _pullService;
   late final NoteService _noteService;
+  late final BookAccessService _bookAccessService;
 
   BookRoutes(this.db) {
     _pullService = BookPullService(db);
     _noteService = NoteService(db);
+    _bookAccessService = BookAccessService(db);
   }
 
   Router get router {
@@ -36,6 +39,7 @@ class BookRoutes {
     router.patch('/<bookUuid>', _updateBook);
     router.post('/<bookUuid>/archive', _archiveBook);
     router.delete('/<bookUuid>', _deleteBook);
+    router.post('/<bookUuid>/access', _grantBookAccess);
     router.get('/<bookUuid>/bundle', _getBookBundle);
     return router;
   }
@@ -65,6 +69,35 @@ class BookRoutes {
   }
 
   bool _isReadOnlyRole(String? role) => role == NoteService.roleRead;
+
+  Future<bool> _hasWriteAccess({
+    required String deviceId,
+    required String bookUuid,
+  }) async {
+    return _bookAccessService.verifyBookAccess(
+      deviceId,
+      bookUuid,
+      requireWrite: true,
+    );
+  }
+
+  Future<void> _ensureReadAccess({
+    required String deviceId,
+    required String bookUuid,
+  }) async {
+    final existing = await db.client
+        .from('book_device_access')
+        .select('access_type')
+        .eq('book_uuid', bookUuid)
+        .eq('device_id', deviceId)
+        .limit(1);
+    if (_first(existing) != null) return;
+    await _bookAccessService.grantBookAccess(
+      bookUuid: bookUuid,
+      deviceId: deviceId,
+      accessType: BookAccessService.accessRead,
+    );
+  }
 
   Map<String, dynamic>? _first(dynamic data) {
     if (data is List && data.isNotEmpty) {
@@ -386,7 +419,10 @@ class BookRoutes {
         bookUuid,
       );
       if (!canAccess) {
-        return _json(404, {'success': false, 'message': 'Book not found'});
+        await _ensureReadAccess(
+          deviceId: auth['deviceId']!,
+          bookUuid: bookUuid,
+        );
       }
 
       final book = await _pullService.getBookMetadata(
@@ -425,20 +461,16 @@ class BookRoutes {
           'message': 'Invalid device credentials',
         });
       }
-      if (_isReadOnlyRole(auth['deviceRole'])) {
-        return _json(403, {
-          'success': false,
-          'message': 'Read-only device cannot rename books',
-          'error': 'READ_ONLY_DEVICE',
-        });
-      }
-
-      final canAccess = await _noteService.verifyBookOwnership(
-        auth['deviceId']!,
-        bookUuid,
+      final canAccess = await _hasWriteAccess(
+        deviceId: auth['deviceId']!,
+        bookUuid: bookUuid,
       );
       if (!canAccess) {
-        return _json(404, {'success': false, 'message': 'Book not found'});
+        return _json(403, {
+          'success': false,
+          'message': 'Book is not writable for this device',
+          'error': 'READ_ONLY_BOOK',
+        });
       }
 
       final body = await request.readAsString();
@@ -499,20 +531,16 @@ class BookRoutes {
           'message': 'Invalid device credentials',
         });
       }
-      if (_isReadOnlyRole(auth['deviceRole'])) {
-        return _json(403, {
-          'success': false,
-          'message': 'Read-only device cannot archive books',
-          'error': 'READ_ONLY_DEVICE',
-        });
-      }
-
-      final canAccess = await _noteService.verifyBookOwnership(
-        auth['deviceId']!,
-        bookUuid,
+      final canAccess = await _hasWriteAccess(
+        deviceId: auth['deviceId']!,
+        bookUuid: bookUuid,
       );
       if (!canAccess) {
-        return _json(404, {'success': false, 'message': 'Book not found'});
+        return _json(403, {
+          'success': false,
+          'message': 'Book is not writable for this device',
+          'error': 'READ_ONLY_BOOK',
+        });
       }
 
       final currentRows = await db.client
@@ -569,20 +597,16 @@ class BookRoutes {
           'message': 'Invalid device credentials',
         });
       }
-      if (_isReadOnlyRole(auth['deviceRole'])) {
-        return _json(403, {
-          'success': false,
-          'message': 'Read-only device cannot delete books',
-          'error': 'READ_ONLY_DEVICE',
-        });
-      }
-
-      final canAccess = await _noteService.verifyBookOwnership(
-        auth['deviceId']!,
-        bookUuid,
+      final canAccess = await _hasWriteAccess(
+        deviceId: auth['deviceId']!,
+        bookUuid: bookUuid,
       );
       if (!canAccess) {
-        return _json(404, {'success': false, 'message': 'Book not found'});
+        return _json(403, {
+          'success': false,
+          'message': 'Book is not writable for this device',
+          'error': 'READ_ONLY_BOOK',
+        });
       }
 
       final currentRows = await db.client
@@ -645,7 +669,10 @@ class BookRoutes {
         bookUuid,
       );
       if (!canAccess) {
-        return _json(404, {'success': false, 'message': 'Book not found'});
+        await _ensureReadAccess(
+          deviceId: auth['deviceId']!,
+          bookUuid: bookUuid,
+        );
       }
 
       final bundle = await _pullService.getCompleteBookData(
@@ -753,6 +780,75 @@ class BookRoutes {
       return _json(500, {
         'success': false,
         'message': 'Failed to load book bundle: $e',
+      });
+    }
+  }
+
+  Future<Response> _grantBookAccess(Request request, String bookUuid) async {
+    try {
+      final auth = await _auth(request);
+      if (auth == null) {
+        return _json(401, {
+          'success': false,
+          'message': 'Invalid device credentials',
+        });
+      }
+
+      final hasWriteAccess = await _hasWriteAccess(
+        deviceId: auth['deviceId']!,
+        bookUuid: bookUuid,
+      );
+      if (!hasWriteAccess) {
+        return _json(403, {
+          'success': false,
+          'message': 'Book is not writable for this device',
+          'error': 'READ_ONLY_BOOK',
+        });
+      }
+
+      final body = await request.readAsString();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final targetDeviceId = (json['targetDeviceId'] as String?)?.trim() ?? '';
+      final accessType =
+          (json['accessType'] as String?)?.trim().toLowerCase() ?? '';
+      if (targetDeviceId.isEmpty ||
+          (accessType != BookAccessService.accessRead &&
+              accessType != BookAccessService.accessWrite)) {
+        return _json(400, {
+          'success': false,
+          'message': 'targetDeviceId and accessType(read|write) are required',
+        });
+      }
+
+      final targetRows = await db.client
+          .from('devices')
+          .select('id')
+          .eq('id', targetDeviceId)
+          .eq('is_active', true)
+          .limit(1);
+      if (_first(targetRows) == null) {
+        return _json(404, {
+          'success': false,
+          'message': 'Target device not found',
+        });
+      }
+
+      await _bookAccessService.grantBookAccess(
+        bookUuid: bookUuid,
+        deviceId: targetDeviceId,
+        accessType: accessType,
+      );
+
+      return _json(200, {
+        'success': true,
+        'bookUuid': bookUuid,
+        'targetDeviceId': targetDeviceId,
+        'accessType': accessType,
+      });
+    } catch (e) {
+      return _json(500, {
+        'success': false,
+        'message': 'Failed to grant book access: $e',
       });
     }
   }

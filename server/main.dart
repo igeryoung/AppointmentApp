@@ -15,6 +15,7 @@ import 'lib/routes/dashboard_routes.dart';
 import 'lib/routes/event_routes.dart';
 import 'lib/routes/record_routes.dart';
 import 'lib/routes/charge_item_routes.dart';
+import 'lib/routes/test_fixture_routes.dart';
 
 void main(List<String> args) async {
   // Load environment variables from .env file
@@ -98,6 +99,9 @@ void main(List<String> args) async {
     adminPassword: dashboardPassword,
   );
   app.mount('/api/dashboard/', dashboardRoutes.router);
+
+  final testFixtureRoutes = TestFixtureRoutes(db);
+  app.mount('/api/test-fixtures/', testFixtureRoutes.router);
 
   // Health check endpoint
   app.get('/health', (Request request) async {

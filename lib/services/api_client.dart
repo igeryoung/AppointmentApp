@@ -1149,6 +1149,39 @@ class ApiClient {
     );
   }
 
+  Future<Map<String, dynamic>> grantBookAccess({
+    required String bookUuid,
+    required String targetDeviceId,
+    required String accessType,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/books/$bookUuid/access'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode({
+            'targetDeviceId': targetDeviceId,
+            'accessType': accessType,
+          }),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Grant book access failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
+
+    return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
   Future<Map<String, dynamic>> archiveBook({
     required String bookUuid,
     required String deviceId,
@@ -1273,6 +1306,62 @@ class ApiClient {
       }
     } catch (e) {
       rethrow;
+    }
+  }
+
+  /// Register a fixture-scoped device with an explicit role for live tests.
+  Future<Map<String, dynamic>> registerFixtureDevice({
+    required String deviceName,
+    required String password,
+    required String deviceRole,
+    String? platform,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/test-fixtures/devices/register'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'deviceName': deviceName,
+            'deviceRole': deviceRole,
+            'platform': platform,
+            'password': password,
+          }),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Fixture device registration failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  /// Delete a registered device using its own credentials.
+  Future<void> deleteDevice({
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .delete(
+          Uri.parse('$baseUrl/api/devices/$deviceId'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Delete device failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
     }
   }
 }

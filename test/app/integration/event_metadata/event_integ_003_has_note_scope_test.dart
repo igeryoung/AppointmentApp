@@ -11,9 +11,45 @@ void registerEventInteg003({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final uuid = const Uuid();
+      final deviceRole = await resolveLiveDeviceRole(
+        apiClient: apiClient,
+        config: live,
+      );
       String? bookUuid;
 
       try {
+        if (isReadOnlyDeviceRole(deviceRole)) {
+          final fixture = await resolveFixture(
+            apiClient: apiClient,
+            config: live,
+            deviceRole: deviceRole,
+          );
+          final startA = DateTime.now().toUtc().add(
+            const Duration(minutes: 20),
+          );
+          final endA = startA.add(const Duration(minutes: 30));
+          await expectReadOnlyDeviceFailure(
+            () => apiClient.createEvent(
+              bookUuid: fixture.bookUuid,
+              eventData: {
+                'id': uuid.v4(),
+                'record_uuid': uuid.v4(),
+                'title': 'IT read-only create event',
+                'record_number':
+                    'READONLY-${DateTime.now().millisecondsSinceEpoch}',
+                'record_name': 'IT ReadOnly',
+                'record_phone': null,
+                'event_types': const ['consultation'],
+                'start_time': startA.millisecondsSinceEpoch ~/ 1000,
+                'end_time': endA.millisecondsSinceEpoch ~/ 1000,
+              },
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            ),
+          );
+          return;
+        }
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,

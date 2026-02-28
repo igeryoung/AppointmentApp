@@ -11,9 +11,31 @@ void registerEventInteg004({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final uuid = const Uuid();
+      final deviceRole = await resolveLiveDeviceRole(
+        apiClient: apiClient,
+        config: live,
+      );
       String? bookUuid;
 
       try {
+        if (isReadOnlyDeviceRole(deviceRole)) {
+          final fixture = await resolveFixture(
+            apiClient: apiClient,
+            config: live,
+            deviceRole: deviceRole,
+          );
+          await expectReadOnlyDeviceFailure(
+            () => apiClient.updateEvent(
+              bookUuid: fixture.bookUuid,
+              eventId: fixture.eventId,
+              eventData: {'title': 'IT read-only update'},
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            ),
+          );
+          return;
+        }
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,

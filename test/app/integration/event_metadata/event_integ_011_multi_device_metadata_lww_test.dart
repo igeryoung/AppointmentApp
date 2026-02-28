@@ -14,12 +14,16 @@ void registerEventInteg011({required LiveServerConfig? config}) {
       final httpClient = HttpClientFactory.createClient();
       final uuid = const Uuid();
       String? bookUuid;
+      LiveDeviceCredentials? deviceB;
 
       try {
-        final deviceB = await registerTemporaryDevice(
+        deviceB = await provisionTemporaryDevice(
           apiClient: apiClient,
           config: live,
+          deviceRole: liveDeviceRoleWrite,
+          deviceNamePrefix: 'IT metadata writer',
         );
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,
@@ -51,6 +55,14 @@ void registerEventInteg011({required LiveServerConfig? config}) {
             'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
             'end_time': endTime.millisecondsSinceEpoch ~/ 1000,
           },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        await apiClient.grantBookAccess(
+          bookUuid: bookUuid,
+          targetDeviceId: deviceB.deviceId,
+          accessType: liveDeviceRoleWrite,
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
@@ -94,6 +106,14 @@ void registerEventInteg011({required LiveServerConfig? config}) {
           } catch (_) {
             // Best-effort cleanup.
           }
+        }
+        try {
+          await cleanupTemporaryDevice(
+            apiClient: apiClient,
+            credentials: deviceB,
+          );
+        } catch (_) {
+          // Best-effort cleanup.
         }
         httpClient.close();
         apiClient.dispose();

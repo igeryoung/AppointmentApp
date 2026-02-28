@@ -11,32 +11,79 @@ void registerEventInteg001({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final httpClient = HttpClientFactory.createClient();
+      final deviceRole = await resolveLiveDeviceRole(
+        apiClient: apiClient,
+        config: live,
+      );
 
       ResolvedFixture? fixture;
       List<String> originalEventTypes = const [];
       String? originalPhone;
 
       try {
-        fixture = await resolveFixture(apiClient: apiClient, config: live);
+        fixture = await resolveFixture(
+          apiClient: apiClient,
+          config: live,
+          deviceRole: deviceRole,
+        );
+        final resolvedFixture = fixture!;
 
         final originalEvent = await apiClient.fetchEvent(
-          bookUuid: fixture.bookUuid,
-          eventId: fixture.eventId,
+          bookUuid: resolvedFixture.bookUuid,
+          eventId: resolvedFixture.eventId,
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
         expect(originalEvent, isNotNull);
 
-        if (!fixture.isTemporary && !live.autoCleanupFixture) {
-          originalEventTypes = parseEventTypes(
-            originalEvent!['event_types'] ?? originalEvent['eventTypes'],
+        originalEventTypes = parseEventTypes(
+          originalEvent!['event_types'] ?? originalEvent['eventTypes'],
+        );
+        final originalRecord = await fetchBookScopedRecord(
+          httpClient: httpClient,
+          config: live,
+          fixture: resolvedFixture,
+        );
+        originalPhone = originalRecord['phone']?.toString();
+
+        if (isReadOnlyDeviceRole(deviceRole)) {
+          await expectReadOnlyDeviceFailure(
+            () => apiClient.updateEvent(
+              bookUuid: resolvedFixture.bookUuid,
+              eventId: resolvedFixture.eventId,
+              eventData: {
+                'eventTypes': const ['surgery', 'followUp'],
+              },
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            ),
           );
-          final originalRecord = await fetchBookScopedRecord(
+
+          final unchangedEvent = await apiClient.fetchEvent(
+            bookUuid: resolvedFixture.bookUuid,
+            eventId: resolvedFixture.eventId,
+            deviceId: live.deviceId,
+            deviceToken: live.deviceToken,
+          );
+          expect(unchangedEvent, isNotNull);
+          expect(
+            parseEventTypes(
+              unchangedEvent!['event_types'] ?? unchangedEvent['eventTypes'],
+            ).toSet(),
+            equals(originalEventTypes.toSet()),
+          );
+
+          final unchangedRecord = await fetchBookScopedRecord(
             httpClient: httpClient,
             config: live,
-            fixture: fixture,
+            fixture: resolvedFixture,
           );
-          originalPhone = originalRecord['phone']?.toString();
+          expect(unchangedRecord['phone']?.toString(), originalPhone);
+          return;
+        }
+
+        if (!resolvedFixture.isTemporary && !live.autoCleanupFixture) {
+          // Persist original shared-fixture state so the test can restore it.
         }
 
         final targetEventTypes =
@@ -49,22 +96,22 @@ void registerEventInteg001({required LiveServerConfig? config}) {
             '09${(DateTime.now().millisecondsSinceEpoch % 100000000).toString().padLeft(8, '0')}';
 
         await apiClient.updateEvent(
-          bookUuid: fixture.bookUuid,
-          eventId: fixture.eventId,
+          bookUuid: resolvedFixture.bookUuid,
+          eventId: resolvedFixture.eventId,
           eventData: {'eventTypes': targetEventTypes},
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
         await apiClient.updateRecord(
-          recordUuid: fixture.recordUuid,
+          recordUuid: resolvedFixture.recordUuid,
           recordData: {'phone': targetPhone},
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
 
         final refreshedEvent = await apiClient.fetchEvent(
-          bookUuid: fixture.bookUuid,
-          eventId: fixture.eventId,
+          bookUuid: resolvedFixture.bookUuid,
+          eventId: resolvedFixture.eventId,
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );
@@ -78,7 +125,7 @@ void registerEventInteg001({required LiveServerConfig? config}) {
         final refreshedRecord = await fetchBookScopedRecord(
           httpClient: httpClient,
           config: live,
-          fixture: fixture,
+          fixture: resolvedFixture,
         );
         expect(refreshedRecord['phone'], targetPhone);
       } finally {

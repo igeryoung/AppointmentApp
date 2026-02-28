@@ -1,21 +1,37 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:schedule_note_app/services/api_client.dart';
 import 'package:uuid/uuid.dart';
 
 const String liveServerSkipReason =
-    'Set SN_TEST_BASE_URL, SN_TEST_DEVICE_ID, SN_TEST_DEVICE_TOKEN '
-    '(env or .env.integration). '
-    'Optional: SN_TEST_BOOK_PASSWORD for password-protected book pull tests. '
-    'Optionally set SN_TEST_BOOK_UUID, SN_TEST_EVENT_ID, SN_TEST_RECORD_UUID '
-    'to use existing fixture; otherwise test auto-creates temporary data.';
+    'Set SN_TEST_BASE_URL and provision live test credentials via '
+    'tool/create_event_metadata_fixture.dart. '
+    'Required fixture vars: SN_TEST_WRITE_DEVICE_ID / '
+    'SN_TEST_WRITE_DEVICE_TOKEN / SN_TEST_READ_DEVICE_ID / '
+    'SN_TEST_READ_DEVICE_TOKEN / SN_TEST_BOOK_UUID / SN_TEST_EVENT_ID / '
+    'SN_TEST_RECORD_UUID. Optional: SN_TEST_BOOK_PASSWORD.';
+const String liveDeviceRoleRead = 'read';
+const String liveDeviceRoleWrite = 'write';
+
+class LiveDeviceCredentials {
+  final String deviceId;
+  final String deviceToken;
+
+  const LiveDeviceCredentials({
+    required this.deviceId,
+    required this.deviceToken,
+  });
+}
 
 class LiveServerConfig {
   final String baseUrl;
   final String deviceId;
   final String deviceToken;
+  final String readDeviceId;
+  final String readDeviceToken;
   final String registrationPassword;
   final String bookPassword;
   final String? bookUuid;
@@ -27,6 +43,8 @@ class LiveServerConfig {
     required this.baseUrl,
     required this.deviceId,
     required this.deviceToken,
+    required this.readDeviceId,
+    required this.readDeviceToken,
     required this.registrationPassword,
     required this.bookPassword,
     this.bookUuid,
@@ -34,6 +52,14 @@ class LiveServerConfig {
     this.recordUuid,
     required this.autoCleanupFixture,
   });
+
+  LiveDeviceCredentials get writeCredentials =>
+      LiveDeviceCredentials(deviceId: deviceId, deviceToken: deviceToken);
+
+  LiveDeviceCredentials get readCredentials => LiveDeviceCredentials(
+    deviceId: readDeviceId,
+    deviceToken: readDeviceToken,
+  );
 
   static Map<String, String> _loadEnvFile(String path) {
     final file = File(path);
@@ -70,8 +96,14 @@ class LiveServerConfig {
     }
 
     final baseUrl = resolve('SN_TEST_BASE_URL');
-    final deviceId = resolve('SN_TEST_DEVICE_ID');
-    final deviceToken = resolve('SN_TEST_DEVICE_TOKEN');
+    final writeDeviceId = resolve('SN_TEST_WRITE_DEVICE_ID').isNotEmpty
+        ? resolve('SN_TEST_WRITE_DEVICE_ID')
+        : resolve('SN_TEST_DEVICE_ID');
+    final writeDeviceToken = resolve('SN_TEST_WRITE_DEVICE_TOKEN').isNotEmpty
+        ? resolve('SN_TEST_WRITE_DEVICE_TOKEN')
+        : resolve('SN_TEST_DEVICE_TOKEN');
+    final readDeviceId = resolve('SN_TEST_READ_DEVICE_ID');
+    final readDeviceToken = resolve('SN_TEST_READ_DEVICE_TOKEN');
     final registrationPassword = resolve('SN_TEST_REGISTRATION_PASSWORD');
     final bookPassword = resolve('SN_TEST_BOOK_PASSWORD');
     final bookUuid = resolve('SN_TEST_BOOK_UUID');
@@ -86,7 +118,11 @@ class LiveServerConfig {
         autoCleanupRaw == 'yes' ||
         autoCleanupRaw == 'on';
 
-    if (baseUrl.isEmpty || deviceId.isEmpty || deviceToken.isEmpty) {
+    if (baseUrl.isEmpty ||
+        writeDeviceId.isEmpty ||
+        writeDeviceToken.isEmpty ||
+        readDeviceId.isEmpty ||
+        readDeviceToken.isEmpty) {
       return null;
     }
 
@@ -103,8 +139,10 @@ class LiveServerConfig {
 
     return LiveServerConfig(
       baseUrl: baseUrl,
-      deviceId: deviceId,
-      deviceToken: deviceToken,
+      deviceId: writeDeviceId,
+      deviceToken: writeDeviceToken,
+      readDeviceId: readDeviceId,
+      readDeviceToken: readDeviceToken,
       registrationPassword: registrationPassword.isEmpty
           ? 'password'
           : registrationPassword,
@@ -115,16 +153,6 @@ class LiveServerConfig {
       autoCleanupFixture: autoCleanupFixture,
     );
   }
-}
-
-class LiveDeviceCredentials {
-  final String deviceId;
-  final String deviceToken;
-
-  const LiveDeviceCredentials({
-    required this.deviceId,
-    required this.deviceToken,
-  });
 }
 
 class ResolvedFixture {
@@ -143,6 +171,59 @@ class ResolvedFixture {
 
 Object skipForMissingConfig(LiveServerConfig? config) {
   return config == null ? liveServerSkipReason : false;
+}
+
+bool isReadOnlyDeviceRole(String? role) {
+  return role?.trim().toLowerCase() == liveDeviceRoleRead;
+}
+
+Future<String> resolveLiveDeviceRole({
+  required ApiClient apiClient,
+  required LiveServerConfig config,
+  String? deviceId,
+}) async {
+  final role = await apiClient.fetchDeviceRole(
+    deviceId: deviceId ?? config.deviceId,
+  );
+  return (role == null || role.trim().isEmpty)
+      ? liveDeviceRoleWrite
+      : role.trim().toLowerCase();
+}
+
+Matcher isReadOnlyDeviceApiException() {
+  return isA<ApiException>()
+      .having((e) => e.statusCode, 'statusCode', 403)
+      .having(
+        (e) => (e.responseBody ?? '').toLowerCase(),
+        'responseBody',
+        anyOf(contains('read_only_device'), contains('read-only device')),
+      );
+}
+
+Matcher isReadOnlyBookApiException() {
+  return isA<ApiException>()
+      .having((e) => e.statusCode, 'statusCode', 403)
+      .having(
+        (e) => (e.responseBody ?? '').toLowerCase(),
+        'responseBody',
+        anyOf(
+          contains('read_only_book'),
+          contains('read-only book'),
+          contains('not writable'),
+        ),
+      );
+}
+
+Future<void> expectReadOnlyDeviceFailure(
+  Future<dynamic> Function() action,
+) async {
+  await expectLater(action, throwsA(isReadOnlyDeviceApiException()));
+}
+
+Future<void> expectReadOnlyBookFailure(
+  Future<dynamic> Function() action,
+) async {
+  await expectLater(action, throwsA(isReadOnlyBookApiException()));
 }
 
 Future<Map<String, dynamic>> fetchBookScopedRecord({
@@ -216,6 +297,43 @@ Future<LiveDeviceCredentials> registerTemporaryDevice({
   );
 }
 
+Future<LiveDeviceCredentials> provisionTemporaryDevice({
+  required ApiClient apiClient,
+  required LiveServerConfig config,
+  required String deviceRole,
+  String deviceNamePrefix = 'IT fixture device',
+}) async {
+  final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+  final registration = await apiClient.registerFixtureDevice(
+    deviceName: '$deviceNamePrefix $suffix',
+    password: config.registrationPassword,
+    deviceRole: deviceRole,
+    platform: 'ios',
+  );
+
+  return LiveDeviceCredentials(
+    deviceId: pickString(
+      registration,
+      keys: const ['deviceId', 'device_id', 'id'],
+    ),
+    deviceToken: pickString(
+      registration,
+      keys: const ['deviceToken', 'device_token', 'token'],
+    ),
+  );
+}
+
+Future<void> cleanupTemporaryDevice({
+  required ApiClient apiClient,
+  LiveDeviceCredentials? credentials,
+}) async {
+  if (credentials == null) return;
+  await apiClient.deleteDevice(
+    deviceId: credentials.deviceId,
+    deviceToken: credentials.deviceToken,
+  );
+}
+
 String pickString(Map<String, dynamic> source, {required List<String> keys}) {
   for (final key in keys) {
     final value = source[key];
@@ -242,6 +360,8 @@ bool pickBool(Map<String, dynamic> source, {required List<String> keys}) {
 Future<ResolvedFixture> resolveFixture({
   required ApiClient apiClient,
   required LiveServerConfig config,
+  String? deviceRole,
+  bool requireWrite = true,
 }) async {
   if (config.bookUuid != null &&
       config.eventId != null &&
@@ -250,8 +370,8 @@ Future<ResolvedFixture> resolveFixture({
       final existing = await apiClient.fetchEvent(
         bookUuid: config.bookUuid!,
         eventId: config.eventId!,
-        deviceId: config.deviceId,
-        deviceToken: config.deviceToken,
+        deviceId: requireWrite ? config.deviceId : config.readDeviceId,
+        deviceToken: requireWrite ? config.deviceToken : config.readDeviceToken,
       );
       if (existing != null) {
         return ResolvedFixture(
@@ -262,8 +382,7 @@ Future<ResolvedFixture> resolveFixture({
         );
       }
     } catch (_) {
-      // If shared fixture is inaccessible in this environment, fallback to
-      // temporary fixture so integration contracts remain executable.
+      // Allow fallback to a temporary book for direct local runs.
     }
   }
 
@@ -333,13 +452,12 @@ Future<Map<String, dynamic>> createTemporaryBook({
   required LiveServerConfig config,
   required String name,
 }) async {
-  final createdBook = await apiClient.createBook(
+  return apiClient.createBook(
     name: name,
     bookPassword: config.bookPassword,
     deviceId: config.deviceId,
     deviceToken: config.deviceToken,
   );
-  return createdBook;
 }
 
 Map<String, dynamic> buildSingleStrokeNotePayload({

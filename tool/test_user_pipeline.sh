@@ -7,6 +7,7 @@ REPORT_DIR="docs/testing/reports"
 TIMESTAMP="$(date '+%Y%m%d_%H%M%S')"
 REPORT_FILE="${REPORT_DIR}/user_pipeline_report_${TIMESTAMP}.md"
 ENV_FILE="${SN_TEST_ENV_FILE:-.env.integration}"
+PIPELINE_ENV_FILE=""
 
 TOTAL_STEPS=0
 PASSED_STEPS=0
@@ -27,7 +28,8 @@ Modes:
   --full    Run both local and live-server pipelines (default).
 
 Notes:
-  - Server mode requires SN_TEST_BASE_URL, SN_TEST_DEVICE_ID, SN_TEST_DEVICE_TOKEN.
+  - Server mode requires SN_TEST_BASE_URL.
+  - Optional: SN_TEST_REGISTRATION_PASSWORD (defaults to "password").
   - Values are resolved from process env first, then SN_TEST_ENV_FILE/.env.integration.
 EOF
 }
@@ -160,15 +162,19 @@ fi
 
 SERVER_READY=1
 SERVER_BASE_URL=""
-SERVER_DEVICE_ID=""
-SERVER_DEVICE_TOKEN=""
+SERVER_REGISTRATION_PASSWORD=""
+SERVER_BOOK_PASSWORD=""
+SERVER_ALLOW_BAD_CERT=""
 if [[ "$RUN_SERVER" == "1" ]]; then
   SERVER_BASE_URL="$(resolve_env SN_TEST_BASE_URL)"
-  SERVER_DEVICE_ID="$(resolve_env SN_TEST_DEVICE_ID)"
-  SERVER_DEVICE_TOKEN="$(resolve_env SN_TEST_DEVICE_TOKEN)"
-  if [[ -z "$SERVER_BASE_URL" || -z "$SERVER_DEVICE_ID" || -z "$SERVER_DEVICE_TOKEN" ]]; then
+  SERVER_REGISTRATION_PASSWORD="$(resolve_env SN_TEST_REGISTRATION_PASSWORD)"
+  SERVER_BOOK_PASSWORD="$(resolve_env SN_TEST_BOOK_PASSWORD)"
+  SERVER_ALLOW_BAD_CERT="$(resolve_env SN_TEST_ALLOW_BAD_CERT)"
+  if [[ -z "$SERVER_BASE_URL" ]]; then
     SERVER_READY=0
     OVERALL_STATUS="FAIL"
+  else
+    PIPELINE_ENV_FILE="/tmp/sn_test_pipeline_${TIMESTAMP}.env"
   fi
 fi
 
@@ -187,19 +193,24 @@ fi
 
 if [[ "$RUN_SERVER" == "1" ]]; then
   if [[ "$SERVER_READY" == "1" ]]; then
-    run_step "Pipeline 11 - Live Fixture Provision (create book -> create event)" "dart run tool/create_event_metadata_fixture.dart"
+    run_step "Pipeline 11 - Live Device Registration & Fixture Provision" "SN_TEST_ENV_FILE=\"$PIPELINE_ENV_FILE\" SN_TEST_BASE_URL=\"$SERVER_BASE_URL\" SN_TEST_REGISTRATION_PASSWORD=\"$SERVER_REGISTRATION_PASSWORD\" SN_TEST_BOOK_PASSWORD=\"$SERVER_BOOK_PASSWORD\" SN_TEST_ALLOW_BAD_CERT=\"$SERVER_ALLOW_BAD_CERT\" dart run tool/create_event_metadata_fixture.dart"
     if [[ "$LAST_STEP_STATUS" == "PASS" ]]; then
-      run_step "Pipeline 12 - Live Event Metadata Roundtrip" "flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact"
+      run_step "Pipeline 12 - Live Event Metadata Roundtrip" "SN_TEST_ENV_FILE=\"$PIPELINE_ENV_FILE\" SN_TEST_ALLOW_BAD_CERT=\"$SERVER_ALLOW_BAD_CERT\" flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact"
+      run_step "Pipeline 13 - Live Fixture and Device Cleanup" "SN_TEST_ENV_FILE=\"$PIPELINE_ENV_FILE\" SN_TEST_ALLOW_BAD_CERT=\"$SERVER_ALLOW_BAD_CERT\" dart run tool/clean_event_metadata_fixture.dart"
     else
-      run_step_if "0" "Pipeline 12 - Live Event Metadata Roundtrip" "flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact"
+      run_step_if "0" "Pipeline 12 - Live Event Metadata Roundtrip" "SN_TEST_ENV_FILE=\"$PIPELINE_ENV_FILE\" SN_TEST_ALLOW_BAD_CERT=\"$SERVER_ALLOW_BAD_CERT\" flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact"
+      run_step_if "0" "Pipeline 13 - Live Fixture and Device Cleanup" "SN_TEST_ENV_FILE=\"$PIPELINE_ENV_FILE\" SN_TEST_ALLOW_BAD_CERT=\"$SERVER_ALLOW_BAD_CERT\" dart run tool/clean_event_metadata_fixture.dart"
     fi
   else
     TOTAL_STEPS=$((TOTAL_STEPS + 1))
     FAILED_STEPS=$((FAILED_STEPS + 1))
-    add_row "Pipeline 11 - Live Fixture Provision (create book -> create event)" "FAIL" "0" "Missing SN_TEST_BASE_URL/SN_TEST_DEVICE_ID/SN_TEST_DEVICE_TOKEN in env or ${ENV_FILE}"
+    add_row "Pipeline 11 - Live Device Registration & Fixture Provision" "FAIL" "0" "Missing SN_TEST_BASE_URL in env or ${ENV_FILE}"
     TOTAL_STEPS=$((TOTAL_STEPS + 1))
     SKIPPED_STEPS=$((SKIPPED_STEPS + 1))
-    add_row "Pipeline 12 - Live Event Metadata Roundtrip" "SKIP" "0" "flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact"
+    add_row "Pipeline 12 - Live Event Metadata Roundtrip" "SKIP" "0" "SN_TEST_ENV_FILE=\"${PIPELINE_ENV_FILE}\" flutter test test/app/integration/event_metadata_server_smoke_test.dart --reporter compact"
+    TOTAL_STEPS=$((TOTAL_STEPS + 1))
+    SKIPPED_STEPS=$((SKIPPED_STEPS + 1))
+    add_row "Pipeline 13 - Live Fixture and Device Cleanup" "SKIP" "0" "SN_TEST_ENV_FILE=\"${PIPELINE_ENV_FILE}\" dart run tool/clean_event_metadata_fixture.dart"
   fi
 fi
 
@@ -253,6 +264,10 @@ EOF
 echo ""
 echo "Pipeline finished with status: ${OVERALL_STATUS}"
 echo "Markdown report: ${REPORT_FILE}"
+
+if [[ -n "$PIPELINE_ENV_FILE" && -f "$PIPELINE_ENV_FILE" ]]; then
+  rm -f "$PIPELINE_ENV_FILE"
+fi
 
 # Keep checklist auto-test column in sync with the latest pipeline result.
 dart run tool/update_checklist_auto_status.dart --report "${REPORT_FILE}" >/dev/null 2>&1 || true

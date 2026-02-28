@@ -11,11 +11,38 @@ void registerEventInteg008({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final uuid = const Uuid();
+      final readDevice = live.readCredentials;
       String? bookUuid;
       String? eventId;
       String? recordUuid;
 
       try {
+        final fixture = await resolveFixture(
+          apiClient: apiClient,
+          config: live,
+          requireWrite: false,
+        );
+        await expectReadOnlyDeviceFailure(
+          () => apiClient.saveNote(
+            bookUuid: fixture.bookUuid,
+            eventId: fixture.eventId,
+            noteData: buildSingleStrokeNotePayload(
+              eventId: fixture.eventId,
+              version: 1,
+            ),
+            deviceId: readDevice.deviceId,
+            deviceToken: readDevice.deviceToken,
+          ),
+        );
+        await expectReadOnlyDeviceFailure(
+          () => apiClient.deleteNote(
+            bookUuid: fixture.bookUuid,
+            eventId: fixture.eventId,
+            deviceId: readDevice.deviceId,
+            deviceToken: readDevice.deviceToken,
+          ),
+        );
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,

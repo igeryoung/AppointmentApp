@@ -27,7 +27,7 @@ Use this checklist for real-device verification after unit tests pass.
 |---|---|---|---|
 | [V] | [ ] | Install app fresh (clear old app data), then open app | App starts without crash and enters setup flow when no device credentials exist |
 | [V] | [ ] | Enter invalid server URL / unreachable server and continue | App shows setup failure and does not proceed to book list |
-| [V] | [V] | Register device with valid server config | Setup succeeds and app navigates to Book List |
+| [V] | [ ] | Register device with valid server config | Setup succeeds and app navigates to Book List |
 | [V] | [ ] | Force close app and reopen | App keeps registered state and opens Book List directly |
 
 ## 2. Book Behavior
@@ -61,8 +61,8 @@ Use this checklist for real-device verification after unit tests pass.
 | [ ] | [ ] | Open Event Detail note and write strokes, then save | Note content persists when reopening same event |
 | [ ] | [ ] | Open another event with same record/person | Same shared note content is shown (record-based note) |
 | [ ] | [ ] | Create event for record that already has note, but do not write/update note and save | Event does not show note tag; note tag appears only on events that actually create/update note |
-| [ ] | [V] | Create no-record-number event with handwriting note, then reschedule time and open old/new events | Both old (cancelled) and new event show the same shared handwriting note |
-| [ ] | [V] | Create no-record-number event, draw note and auto-save, then reenter and fill record number | Event is updated with the filled record number and handwriting note remains readable |
+| [ ] | [ ] | Create no-record-number event with handwriting note, then reschedule time and open old/new events | Both old (cancelled) and new event show the same shared handwriting note |
+| [ ] | [ ] | Create no-record-number event, draw note and auto-save, then reenter and fill record number | Event is updated with the filled record number and handwriting note remains readable |
 | [ ] | [ ] | Edit note again and save | New strokes persist and previous content remains valid |
 | [ ] | [ ] | (If note clear/delete action exists) clear note cache/content | Note is removed/cleared and not shown on reopen |
 
@@ -89,7 +89,7 @@ Use this checklist for real-device verification after unit tests pass.
 |---|---|---|---|
 | [ ] | [ ] | Turn on airplane mode, try create/edit book/event/note | Write is blocked with clear online-required message |
 | [ ] | [ ] | Re-enable network and retry same operation | Operation succeeds without duplicate objects |
-| [ ] | [V] | Pull server data after reconnect | Pulled data merges cleanly with local state |
+| [ ] | [ ] | Pull server data after reconnect | Pulled data merges cleanly with local state |
 
 ## 8. Performance Sanity (Manual)
 

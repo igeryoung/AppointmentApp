@@ -11,12 +11,37 @@ void registerEventInteg010({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final randomDeviceId = const Uuid().v4();
+      LiveDeviceCredentials? testDevice;
+      String? deletedDeviceId;
 
       try {
-        final registered = await apiClient.checkDeviceRegistration(
+        final writeRole = await apiClient.fetchDeviceRole(
           deviceId: live.deviceId,
         );
+        final readRole = await apiClient.fetchDeviceRole(
+          deviceId: live.readDeviceId,
+        );
+        expect(writeRole, liveDeviceRoleWrite);
+        expect(readRole, liveDeviceRoleRead);
+
+        testDevice = await registerTemporaryDevice(
+          apiClient: apiClient,
+          config: live,
+          deviceNamePrefix: 'IT session contract',
+        );
+        final registeredDevice = testDevice;
+
+        final registered = await apiClient.checkDeviceRegistration(
+          deviceId: registeredDevice.deviceId,
+        );
         expect(registered, isTrue);
+
+        final role =
+            await apiClient.fetchDeviceRole(
+              deviceId: registeredDevice.deviceId,
+            ) ??
+            liveDeviceRoleRead;
+        expect(role, liveDeviceRoleRead);
 
         final missing = await apiClient.checkDeviceRegistration(
           deviceId: randomDeviceId,
@@ -25,7 +50,7 @@ void registerEventInteg010({required LiveServerConfig? config}) {
 
         await expectLater(
           () => apiClient.listServerBooks(
-            deviceId: live.deviceId,
+            deviceId: registeredDevice.deviceId,
             deviceToken: 'invalid-token',
           ),
           throwsA(
@@ -34,11 +59,31 @@ void registerEventInteg010({required LiveServerConfig? config}) {
         );
 
         final books = await apiClient.listServerBooks(
-          deviceId: live.deviceId,
-          deviceToken: live.deviceToken,
+          deviceId: registeredDevice.deviceId,
+          deviceToken: registeredDevice.deviceToken,
         );
         expect(books, isA<List<Map<String, dynamic>>>());
+
+        deletedDeviceId = registeredDevice.deviceId;
+        await cleanupTemporaryDevice(
+          apiClient: apiClient,
+          credentials: registeredDevice,
+        );
+        testDevice = null;
+
+        final deleted = await apiClient.checkDeviceRegistration(
+          deviceId: deletedDeviceId,
+        );
+        expect(deleted, isFalse);
       } finally {
+        try {
+          await cleanupTemporaryDevice(
+            apiClient: apiClient,
+            credentials: testDevice,
+          );
+        } catch (_) {
+          // Best-effort cleanup.
+        }
         apiClient.dispose();
       }
     },

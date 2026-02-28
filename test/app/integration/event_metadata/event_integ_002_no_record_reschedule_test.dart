@@ -11,9 +11,35 @@ void registerEventInteg002({required LiveServerConfig? config}) {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
       final uuid = const Uuid();
+      final deviceRole = await resolveLiveDeviceRole(
+        apiClient: apiClient,
+        config: live,
+      );
       String? bookUuid;
 
       try {
+        if (isReadOnlyDeviceRole(deviceRole)) {
+          final fixture = await resolveFixture(
+            apiClient: apiClient,
+            config: live,
+            deviceRole: deviceRole,
+          );
+          await expectReadOnlyDeviceFailure(
+            () => apiClient.rescheduleEvent(
+              bookUuid: fixture.bookUuid,
+              eventId: fixture.eventId,
+              newStartTime: DateTime.now().toUtc().add(
+                const Duration(hours: 2),
+              ),
+              newEndTime: DateTime.now().toUtc().add(const Duration(hours: 3)),
+              reason: 'integration reschedule',
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            ),
+          );
+          return;
+        }
+
         final suffix = DateTime.now().millisecondsSinceEpoch.toString();
         final createdBook = await createTemporaryBook(
           apiClient: apiClient,
