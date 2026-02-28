@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:http/io_client.dart';
 
+const String _defaultBookPassword = 'book-password';
+
 Map<String, String> _loadEnvFile(String path) {
   final file = File(path);
   if (!file.existsSync()) return const {};
@@ -62,17 +64,24 @@ void _printUsage() {
   stdout.writeln('  SN_TEST_BASE_URL');
   stdout.writeln('  SN_TEST_DEVICE_ID');
   stdout.writeln('  SN_TEST_DEVICE_TOKEN');
+  stdout.writeln('Optional:');
+  stdout.writeln('  SN_TEST_BOOK_PASSWORD (defaults to book-password)');
 }
 
 Map<String, String> _headers({
   required String deviceId,
   required String deviceToken,
+  required String bookPassword,
 }) {
-  return <String, String>{
+  final headers = <String, String>{
     'Content-Type': 'application/json',
     'X-Device-ID': deviceId,
     'X-Device-Token': deviceToken,
   };
+  if (bookPassword.isNotEmpty) {
+    headers['X-Book-Password'] = bookPassword;
+  }
+  return headers;
 }
 
 Future<void> main(List<String> args) async {
@@ -88,6 +97,10 @@ Future<void> main(List<String> args) async {
     key: 'SN_TEST_DEVICE_TOKEN',
     fileEnv: fileEnv,
   );
+  final bookPassword =
+      _resolveValue(key: 'SN_TEST_BOOK_PASSWORD', fileEnv: fileEnv).isEmpty
+      ? _defaultBookPassword
+      : _resolveValue(key: 'SN_TEST_BOOK_PASSWORD', fileEnv: fileEnv);
 
   final dryRun = args.contains('--dry-run');
   final wantsHelp = args.contains('--help') || args.contains('-h');
@@ -139,7 +152,11 @@ Future<void> main(List<String> args) async {
     final preflight = await client
         .get(
           getUri,
-          headers: _headers(deviceId: deviceId, deviceToken: deviceToken),
+          headers: _headers(
+            deviceId: deviceId,
+            deviceToken: deviceToken,
+            bookPassword: bookPassword,
+          ),
         )
         .timeout(const Duration(seconds: 20));
 
@@ -169,7 +186,11 @@ Future<void> main(List<String> args) async {
     final deleted = await client
         .delete(
           deleteUri,
-          headers: _headers(deviceId: deviceId, deviceToken: deviceToken),
+          headers: _headers(
+            deviceId: deviceId,
+            deviceToken: deviceToken,
+            bookPassword: bookPassword,
+          ),
         )
         .timeout(const Duration(seconds: 20));
 

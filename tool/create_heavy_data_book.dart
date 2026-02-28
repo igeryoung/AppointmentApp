@@ -15,6 +15,7 @@ const double _defaultRecordRatio = 0.5;
 const int _defaultTimezoneOffsetHours = 8;
 const double _defaultOpenEndRate = 0.35;
 const int _defaultHeavyBulkChunkSize = 200;
+const String _defaultBookPassword = 'book-password';
 
 // Requirement: 80% notes are heavy (300~500 strokes per page), 20% empty.
 const double _defaultRichNoteRatio = 0.8;
@@ -590,6 +591,10 @@ Future<void> main() async {
     key: 'SN_TEST_DEVICE_TOKEN',
     fileEnv: fileEnv,
   );
+  final bookPassword =
+      _resolveValue(key: 'SN_TEST_BOOK_PASSWORD', fileEnv: fileEnv).isEmpty
+      ? _defaultBookPassword
+      : _resolveValue(key: 'SN_TEST_BOOK_PASSWORD', fileEnv: fileEnv);
   final daysBefore = _resolveInt(
     key: 'SN_HEAVY_DAYS_BEFORE',
     fileEnv: fileEnv,
@@ -779,7 +784,10 @@ Future<void> main() async {
     final createdBook = await _postJson200(
       client: client,
       uri: Uri.parse('$baseUrl/api/books'),
-      body: <String, dynamic>{'name': bookName},
+      body: <String, dynamic>{
+        'name': bookName,
+        'bookPassword': bookPassword,
+      },
       deviceId: deviceId,
       deviceToken: deviceToken,
     );
@@ -1004,6 +1012,7 @@ Future<void> main() async {
     stdout.writeln('Optional export for reuse:');
     stdout.writeln('SN_HEAVY_BOOK_UUID=$bookUuid');
     stdout.writeln('SN_HEAVY_RANDOM_SEED=$randomSeed');
+    stdout.writeln('SN_TEST_BOOK_PASSWORD=$bookPassword');
   } catch (e) {
     stderr.writeln('Failed to create heavy fixture: $e');
     exitCode = 1;
