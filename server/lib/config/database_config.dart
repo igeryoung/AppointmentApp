@@ -25,8 +25,16 @@ bool _isTruthy(String? value) {
 }
 
 bool _isRunningBehindManagedTlsProxy() {
-  return (_getEnvValue('RAILWAY_ENVIRONMENT') ?? '').trim().isNotEmpty ||
+  final hasRailwayMarkers =
+      (_getEnvValue('RAILWAY_ENVIRONMENT') ?? '').trim().isNotEmpty ||
       (_getEnvValue('RAILWAY_PROJECT_ID') ?? '').trim().isNotEmpty;
+  if (hasRailwayMarkers) return true;
+
+  final hasPlatformPort = (_getEnvValue('PORT') ?? '').trim().isNotEmpty;
+  final hasCertPath = (_getEnvValue('SSL_CERT_PATH') ?? '').trim().isNotEmpty;
+  final hasKeyPath = (_getEnvValue('SSL_KEY_PATH') ?? '').trim().isNotEmpty;
+
+  return hasPlatformPort && (!hasCertPath || !hasKeyPath);
 }
 
 /// Supabase-only database configuration.

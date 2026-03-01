@@ -55,7 +55,7 @@ Optional Railway variables:
 
 - `ENABLE_SSL=false` if you want to force plain HTTP inside the container
   behind Railway's HTTPS proxy. This is already the default when Railway
-  environment variables are detected.
+  provides `PORT` and no certificate paths are configured.
 - `SERVER_HOST=0.0.0.0`
 
 Railway provides `PORT` automatically. The production server now honors that
