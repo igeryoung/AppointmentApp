@@ -118,12 +118,10 @@ class TestFixtureRoutes {
     await _bookAccessService.grantBookAccess(
       bookUuid: bookUuid,
       deviceId: writeDeviceId,
-      accessType: BookAccessService.accessOwner,
     );
     await _bookAccessService.grantBookAccess(
       bookUuid: bookUuid,
       deviceId: readDeviceId,
-      accessType: BookAccessService.accessRead,
     );
 
     await db.client.from('records').insert({

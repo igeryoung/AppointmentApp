@@ -1,10 +1,7 @@
 import '../database/connection.dart';
 
 class BookAccessService {
-  static const String accessRead = 'read';
-  static const String accessWrite = 'write';
-  static const String accessOwner = 'owner';
-  static const String accessPulled = 'pulled';
+  static const String membershipAccessType = 'member';
 
   final DatabaseConnection db;
 
@@ -17,21 +14,6 @@ class BookAccessService {
       if (row is Map) return Map<String, dynamic>.from(row);
     }
     return null;
-  }
-
-  String normalizeAccessType(dynamic value, {String fallback = accessRead}) {
-    final normalized = value?.toString().trim().toLowerCase() ?? '';
-    if (normalized == accessOwner) return accessOwner;
-    if (normalized == accessWrite) return accessWrite;
-    if (normalized == accessRead || normalized == accessPulled) {
-      return accessRead;
-    }
-    return fallback;
-  }
-
-  bool isWriteAccessType(String accessType) {
-    final normalized = normalizeAccessType(accessType);
-    return normalized == accessOwner || normalized == accessWrite;
   }
 
   Future<bool> _deviceHasWriteRole(String deviceId) async {
@@ -64,43 +46,30 @@ class BookAccessService {
     if (bookRow == null) return false;
 
     if (bookRow['device_id']?.toString() == deviceId) {
-      return true;
+      return requireWrite ? _deviceHasWriteRole(deviceId) : true;
     }
 
     final accessRows = await db.client
         .from('book_device_access')
-        .select('access_type')
+        .select('book_uuid')
         .eq('book_uuid', bookUuid)
         .eq('device_id', deviceId)
         .limit(1);
     final accessRow = _first(accessRows);
     if (accessRow == null) return false;
 
-    if (!requireWrite) return true;
-    final rawAccessType = accessRow['access_type']?.toString() ?? accessRead;
-    if (isWriteAccessType(rawAccessType)) {
-      return true;
-    }
-
-    // Pulled access is implicit and should follow the device role.
-    // Explicit read access remains read-only until the owner upgrades it.
-    if (rawAccessType.trim().toLowerCase() == accessPulled) {
-      return _deviceHasWriteRole(deviceId);
-    }
-
-    return false;
+    return requireWrite ? _deviceHasWriteRole(deviceId) : true;
   }
 
   Future<void> grantBookAccess({
     required String bookUuid,
     required String deviceId,
-    required String accessType,
   }) async {
-    final normalized = normalizeAccessType(accessType, fallback: accessRead);
     await db.client.from('book_device_access').upsert({
       'book_uuid': bookUuid,
       'device_id': deviceId,
-      'access_type': normalized,
+      // Kept populated for schema compatibility; runtime authorization ignores it.
+      'access_type': membershipAccessType,
       'created_at': DateTime.now().toUtc().toIso8601String(),
     }, onConflict: 'book_uuid,device_id');
   }

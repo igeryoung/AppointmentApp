@@ -67,19 +67,6 @@ class BookPullService {
     return 'other';
   }
 
-  Future<String> _resolvePullAccessType(String deviceId) async {
-    final rows = await db.client
-        .from('devices')
-        .select('device_role')
-        .eq('id', deviceId)
-        .limit(1);
-    final device = _first(rows);
-    final role = (device?['device_role'] ?? '').toString().trim().toLowerCase();
-    return role == 'read'
-        ? BookAccessService.accessPulled
-        : BookAccessService.accessWrite;
-  }
-
   Future<List<Map<String, dynamic>>> listBooksForDevice(
     String deviceId, {
     String? searchQuery,
@@ -259,8 +246,7 @@ class BookPullService {
       }
     }
 
-    final accessType = await _resolvePullAccessType(deviceId);
-    await addDeviceAccess(bookUuid, deviceId, accessType);
+    await addDeviceAccess(bookUuid, deviceId);
 
     return {
       'book': {
@@ -313,37 +299,12 @@ class BookPullService {
     };
   }
 
-  Future<void> addDeviceAccess(
-    String bookUuid,
-    String deviceId,
-    String accessType,
-  ) async {
+  Future<void> addDeviceAccess(String bookUuid, String deviceId) async {
     try {
-      final existingRows = await db.client
-          .from('book_device_access')
-          .select('access_type')
-          .eq('book_uuid', bookUuid)
-          .eq('device_id', deviceId)
-          .limit(1);
-      final existing = _first(existingRows);
-      final existingAccess = _bookAccessService.normalizeAccessType(
-        existing?['access_type'],
+      await _bookAccessService.grantBookAccess(
+        bookUuid: bookUuid,
+        deviceId: deviceId,
       );
-      final requestedAccess = _bookAccessService.normalizeAccessType(
-        accessType,
-        fallback: BookAccessService.accessRead,
-      );
-      final effectiveAccess =
-          _bookAccessService.isWriteAccessType(existingAccess)
-          ? existingAccess
-          : requestedAccess;
-
-      await db.client.from('book_device_access').upsert({
-        'book_uuid': bookUuid,
-        'device_id': deviceId,
-        'access_type': effectiveAccess,
-        'created_at': DateTime.now().toUtc().toIso8601String(),
-      }, onConflict: 'book_uuid,device_id');
     } catch (e) {
       print('⚠️ Failed to add device access: $e');
     }

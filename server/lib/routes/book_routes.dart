@@ -81,13 +81,13 @@ class BookRoutes {
     );
   }
 
-  Future<void> _ensureReadAccess({
+  Future<void> _ensureMembership({
     required String deviceId,
     required String bookUuid,
   }) async {
     final existing = await db.client
         .from('book_device_access')
-        .select('access_type')
+        .select('book_uuid')
         .eq('book_uuid', bookUuid)
         .eq('device_id', deviceId)
         .limit(1);
@@ -95,7 +95,6 @@ class BookRoutes {
     await _bookAccessService.grantBookAccess(
       bookUuid: bookUuid,
       deviceId: deviceId,
-      accessType: BookAccessService.accessRead,
     );
   }
 
@@ -318,12 +317,10 @@ class BookRoutes {
         });
       }
 
-      await db.client.from('book_device_access').upsert({
-        'book_uuid': row['book_uuid'],
-        'device_id': auth['deviceId'],
-        'access_type': 'owner',
-        'created_at': now,
-      }, onConflict: 'book_uuid,device_id');
+      await _bookAccessService.grantBookAccess(
+        bookUuid: row['book_uuid'].toString(),
+        deviceId: auth['deviceId']!,
+      );
 
       return _json(200, {'success': true, 'book': _bookResponse(row)});
     } catch (e) {
@@ -419,7 +416,7 @@ class BookRoutes {
         bookUuid,
       );
       if (!canAccess) {
-        await _ensureReadAccess(
+        await _ensureMembership(
           deviceId: auth['deviceId']!,
           bookUuid: bookUuid,
         );
@@ -669,7 +666,7 @@ class BookRoutes {
         bookUuid,
       );
       if (!canAccess) {
-        await _ensureReadAccess(
+        await _ensureMembership(
           deviceId: auth['deviceId']!,
           bookUuid: bookUuid,
         );
@@ -809,14 +806,10 @@ class BookRoutes {
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
       final targetDeviceId = (json['targetDeviceId'] as String?)?.trim() ?? '';
-      final accessType =
-          (json['accessType'] as String?)?.trim().toLowerCase() ?? '';
-      if (targetDeviceId.isEmpty ||
-          (accessType != BookAccessService.accessRead &&
-              accessType != BookAccessService.accessWrite)) {
+      if (targetDeviceId.isEmpty) {
         return _json(400, {
           'success': false,
-          'message': 'targetDeviceId and accessType(read|write) are required',
+          'message': 'targetDeviceId is required',
         });
       }
 
@@ -836,14 +829,13 @@ class BookRoutes {
       await _bookAccessService.grantBookAccess(
         bookUuid: bookUuid,
         deviceId: targetDeviceId,
-        accessType: accessType,
       );
 
       return _json(200, {
         'success': true,
         'bookUuid': bookUuid,
         'targetDeviceId': targetDeviceId,
-        'accessType': accessType,
+        'membershipGranted': true,
       });
     } catch (e) {
       return _json(500, {

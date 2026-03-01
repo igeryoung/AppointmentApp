@@ -142,6 +142,8 @@ Client architecture note:
 - `synced_at` - Last sync timestamp
 - `is_deleted` - Soft delete flag (never hard delete)
 - `device_id` - Device that created/last modified record
+- `device_role` controls whether a device can perform writes globally
+- `book_device_access` tracks book membership; write permission is derived from `device_role`
 
 Schema source: `server/schema.sql`.
 

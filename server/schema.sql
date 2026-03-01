@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS public.book_device_access
 );
 
 COMMENT ON TABLE public.book_device_access
-    IS 'Controls which devices can access which books and their permission level.';
+    IS 'Tracks which devices have membership on which books.';
 
 CREATE TABLE IF NOT EXISTS public.books
 (
