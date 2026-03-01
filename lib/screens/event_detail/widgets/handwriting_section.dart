@@ -44,10 +44,6 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   /// This should be called before saveEvent() to ensure current canvas state is captured
   void saveCurrentPage() {
     _saveCurrentPageStrokes();
-    final totalStrokes = _allPages.fold<int>(
-      0,
-      (sum, page) => sum + page.length,
-    );
     widget.onPagesChanged(_deepCopyPages(_allPages));
   }
 
@@ -60,21 +56,11 @@ class _HandwritingSectionState extends State<HandwritingSection> {
   void initState() {
     super.initState();
     // Initialize pages with deep copy, ensure at least one empty page
-    final initialTotalStrokes = widget.initialPages.fold<int>(
-      0,
-      (sum, page) => sum + page.length,
-    );
-
     _allPages = widget.initialPages.isEmpty
         ? [[]]
         : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
     // Start at the last page (newest, displayed as "page 1")
     _currentPageIndex = _allPages.length - 1;
-
-    final finalTotalStrokes = _allPages.fold<int>(
-      0,
-      (sum, page) => sum + page.length,
-    );
 
     // Register the save callback with parent
     widget.onSaveCurrentPageCallbackSet?.call(saveCurrentPage);
@@ -103,11 +89,6 @@ class _HandwritingSectionState extends State<HandwritingSection> {
           : widget.initialPages.map((page) => List<Stroke>.from(page)).toList();
       _currentPageIndex = _allPages.length - 1;
 
-      final finalTotalStrokes = _allPages.fold<int>(
-        0,
-        (sum, page) => sum + page.length,
-      );
-
       // Load the new page into canvas
       if (_currentPageIndex >= 0 && _currentPageIndex < _allPages.length) {
         widget.canvasKey.currentState?.loadStrokes(
@@ -119,10 +100,6 @@ class _HandwritingSectionState extends State<HandwritingSection> {
 
   // Convert array index to display page number (reverse order)
   int get _displayPageNumber => _allPages.length - _currentPageIndex;
-
-  // Convert display page number to array index
-  int _displayToArrayIndex(int displayNumber) =>
-      _allPages.length - displayNumber;
 
   // Save current canvas strokes to current page
   void _saveCurrentPageStrokes() {
@@ -222,71 +199,51 @@ class _HandwritingSectionState extends State<HandwritingSection> {
               Column(
                 children: [
                   // Toolbar with page navigation
-                  if (widget.isReadOnlyMode)
-                    Container(
-                      height: 40,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      alignment: Alignment.centerLeft,
-                      color: Colors.grey.shade100,
-                      child: const Row(
-                        children: [
-                          Icon(Icons.visibility_outlined, size: 16),
-                          SizedBox(width: 8),
-                          Text(
-                            'Read-only note view',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ],
-                      ),
-                    )
-                  else
-                    HandwritingToolbar(
-                      currentTool: currentTool,
-                      isControlPanelExpanded: _isControlPanelExpanded,
-                      // Page navigation
-                      currentPageNumber: _displayPageNumber,
-                      totalPages: _allPages.length,
-                      onAddPrependPage: _addPrependPage,
-                      onPreviousPage: _navigatePrevious,
-                      onNextPage: _navigateNext,
-                      // Tool selection
-                      onPenTap: () {
-                        widget.canvasKey.currentState?.setTool(DrawingTool.pen);
-                        setToolbarState(() {});
-                      },
-                      onHighlighterTap: () {
-                        widget.canvasKey.currentState?.setTool(
-                          DrawingTool.highlighter,
-                        );
-                        setToolbarState(() {});
-                      },
-                      onEraserTap: () {
-                        widget.canvasKey.currentState?.setTool(
-                          DrawingTool.eraser,
-                        );
-                        setToolbarState(() {});
-                      },
-                      onExpandCollapseTap: () {
-                        setState(() {
-                          _isControlPanelExpanded = !_isControlPanelExpanded;
-                        });
-                      },
-                      onUndo: () => widget.canvasKey.currentState?.undo(),
-                      onRedo: () => widget.canvasKey.currentState?.redo(),
-                      onClear: () => widget.canvasKey.currentState?.clear(),
-                      // View mode toggle
-                      showOnlyCurrentEvent: _showOnlyCurrentEvent,
-                      onToggleViewMode: widget.currentEventUuid != null
-                          ? () {
-                              setState(() {
-                                _showOnlyCurrentEvent = !_showOnlyCurrentEvent;
-                              });
-                            }
-                          : null,
-                    ),
+                  HandwritingToolbar(
+                    isReadOnlyMode: widget.isReadOnlyMode,
+                    currentTool: currentTool,
+                    isControlPanelExpanded: _isControlPanelExpanded,
+                    // Page navigation
+                    currentPageNumber: _displayPageNumber,
+                    totalPages: _allPages.length,
+                    onAddPrependPage: _addPrependPage,
+                    onPreviousPage: _navigatePrevious,
+                    onNextPage: _navigateNext,
+                    // Tool selection
+                    onPenTap: () {
+                      widget.canvasKey.currentState?.setTool(DrawingTool.pen);
+                      setToolbarState(() {});
+                    },
+                    onHighlighterTap: () {
+                      widget.canvasKey.currentState?.setTool(
+                        DrawingTool.highlighter,
+                      );
+                      setToolbarState(() {});
+                    },
+                    onEraserTap: () {
+                      widget.canvasKey.currentState?.setTool(
+                        DrawingTool.eraser,
+                      );
+                      setToolbarState(() {});
+                    },
+                    onExpandCollapseTap: () {
+                      setState(() {
+                        _isControlPanelExpanded = !_isControlPanelExpanded;
+                      });
+                    },
+                    onUndo: () => widget.canvasKey.currentState?.undo(),
+                    onRedo: () => widget.canvasKey.currentState?.redo(),
+                    onClear: () => widget.canvasKey.currentState?.clear(),
+                    // View mode toggle
+                    showOnlyCurrentEvent: _showOnlyCurrentEvent,
+                    onToggleViewMode: widget.currentEventUuid != null
+                        ? () {
+                            setState(() {
+                              _showOnlyCurrentEvent = !_showOnlyCurrentEvent;
+                            });
+                          }
+                        : null,
+                  ),
                   // Canvas takes remaining space
                   Expanded(
                     child: IgnorePointer(

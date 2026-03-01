@@ -679,6 +679,19 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   size: 24,
                 ),
               ),
+            if (widget.isReadOnlyMode)
+              const Padding(
+                padding: EdgeInsets.only(right: 8),
+                child: Tooltip(
+                  message:
+                      'Read-only mode: data editing and handwriting are disabled.',
+                  child: Icon(
+                    Icons.lock_outline,
+                    semanticLabel: 'Read-only mode',
+                    size: 20,
+                  ),
+                ),
+              ),
             if (!widget.isReadOnlyMode &&
                 !widget.isNew &&
                 !widget.event.isRemoved) ...[
@@ -778,35 +791,6 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
                   return Column(
                     children: [
-                      if (widget.isReadOnlyMode)
-                        Container(
-                          width: double.infinity,
-                          margin: const EdgeInsets.fromLTRB(12, 10, 12, 0),
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(10),
-                            border: Border.all(color: Colors.blue.shade200),
-                          ),
-                          child: const Row(
-                            children: [
-                              Icon(Icons.visibility_outlined, size: 16),
-                              SizedBox(width: 8),
-                              Expanded(
-                                child: Text(
-                                  'Read-only mode: data editing and handwriting are disabled.',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
                       // Status bar
                       EventDetailStatusBar(
                         hasUnsyncedChanges: state.hasUnsyncedChanges,

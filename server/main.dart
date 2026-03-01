@@ -171,8 +171,7 @@ void main(List<String> args) async {
       '✅ HTTPS enabled (${serverConfig.isDevelopment ? 'self-signed cert' : 'production cert'})',
     );
   } else {
-    // HTTP mode - only allowed in development
-    if (!serverConfig.isDevelopment) {
+    if (!serverConfig.isDevelopment && !serverConfig.managedTlsTerminated) {
       print('');
       print('❌ FATAL ERROR: Production server cannot start without HTTPS!');
       print('');
@@ -192,7 +191,11 @@ void main(List<String> args) async {
     }
 
     server = await HttpServer.bind(serverConfig.host, serverConfig.port);
-    print('⚠️  HTTP mode (DEVELOPMENT ONLY - insecure)');
+    if (serverConfig.managedTlsTerminated) {
+      print('✅ HTTP mode behind managed TLS proxy');
+    } else {
+      print('⚠️  HTTP mode (DEVELOPMENT ONLY - insecure)');
+    }
   }
 
   shelf_io.serveRequests(server, handler);

@@ -37,6 +37,38 @@ dart run main.dart
 ./test_notes_api.sh
 ```
 
+## Deploy To Railway
+
+This server can be deployed to Railway as a backend-only service.
+
+Use the `server/` directory as the Railway service root and deploy with the
+included [`Dockerfile`](/Users/yangping/Studio/side-project/scheduleNote/server/Dockerfile).
+
+Required Railway variables:
+
+- `SUPABASE_URL`
+- `SUPABASE_KEY`
+- `DASHBOARD_USERNAME`
+- `DASHBOARD_PASSWORD`
+
+Optional Railway variables:
+
+- `ENABLE_SSL=false` if you want to force plain HTTP inside the container
+  behind Railway's HTTPS proxy. This is already the default when Railway
+  environment variables are detected.
+- `SERVER_HOST=0.0.0.0`
+
+Railway provides `PORT` automatically. The production server now honors that
+value and binds plain HTTP inside the container while Railway terminates TLS at
+the edge.
+
+Recommended Railway settings:
+
+- Health check path: `/health`
+- Root directory: `server`
+- Start command: leave empty when using Dockerfile deploy
+- Public domain/custom domain: enable in Railway networking settings
+
 ## API Documentation
 
 **Interactive docs:** `http://localhost:8080/docs` (Swagger UI)
@@ -77,8 +109,8 @@ See `doc/Server-Store/` for Server-Store API implementation details.
 **Environment variables** (see `../.env.example`):
 - `SUPABASE_URL` - Project URL, e.g. `https://<project-ref>.supabase.co`
 - `SUPABASE_KEY` - **Backend key (service_role / secret key)**. Never expose to frontend.
-- `SERVER_PORT` - Server port (default: 8080)
-- `ENABLE_SSL` - Enable HTTPS (default: true)
+- `SERVER_PORT` - Local fallback server port when `PORT` is not provided
+- `ENABLE_SSL` - Enable in-app HTTPS. Defaults to enabled off Railway and disabled on Railway-managed TLS.
 
 **Supabase SDK example**:
 ```bash

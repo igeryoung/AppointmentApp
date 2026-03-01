@@ -11,6 +11,24 @@ String? _getEnvValue(String key) {
   return _envOverride?[key] ?? Platform.environment[key];
 }
 
+bool _isTruthy(String? value) {
+  if (value == null) return false;
+  switch (value.trim().toLowerCase()) {
+    case '1':
+    case 'true':
+    case 'yes':
+    case 'on':
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool _isRunningBehindManagedTlsProxy() {
+  return (_getEnvValue('RAILWAY_ENVIRONMENT') ?? '').trim().isNotEmpty ||
+      (_getEnvValue('RAILWAY_PROJECT_ID') ?? '').trim().isNotEmpty;
+}
+
 /// Supabase-only database configuration.
 class DatabaseConfig {
   final String? supabaseUrl;
@@ -90,6 +108,7 @@ class ServerConfig {
   final int port;
   final bool isDevelopment;
   final bool enableSSL;
+  final bool managedTlsTerminated;
   final String? certPath;
   final String? keyPath;
 
@@ -98,6 +117,7 @@ class ServerConfig {
     required this.port,
     this.isDevelopment = true,
     this.enableSSL = false,
+    this.managedTlsTerminated = false,
     this.certPath,
     this.keyPath,
   });
@@ -106,26 +126,35 @@ class ServerConfig {
     // Development: SSL is optional, defaults to enabled with self-signed certs
     final enableSSL = _getEnvValue('ENABLE_SSL') != 'false'; // Default: true
     return ServerConfig(
-      host: _getEnvValue('SERVER_HOST') ??
+      host:
+          _getEnvValue('SERVER_HOST') ??
           '0.0.0.0', // Bind to all interfaces for physical device access
       port: int.parse(
         _getEnvValue('SERVER_PORT') ?? (enableSSL ? '8443' : '8080'),
       ),
       isDevelopment: true,
       enableSSL: enableSSL,
+      managedTlsTerminated: false,
       certPath: _getEnvValue('SSL_CERT_PATH') ?? 'certs/cert.pem',
       keyPath: _getEnvValue('SSL_KEY_PATH') ?? 'certs/key.pem',
     );
   }
 
   factory ServerConfig.production() {
-    // Production: SSL is REQUIRED
-    final enableSSL = _getEnvValue('ENABLE_SSL') != 'false'; // Default: true
+    final runningBehindManagedTlsProxy = _isRunningBehindManagedTlsProxy();
+    final enableSSL = _getEnvValue('ENABLE_SSL') == null
+        ? !runningBehindManagedTlsProxy
+        : _isTruthy(_getEnvValue('ENABLE_SSL'));
+    final port = int.tryParse(
+      _getEnvValue('PORT') ?? _getEnvValue('SERVER_PORT') ?? '',
+    );
+
     return ServerConfig(
       host: _getEnvValue('SERVER_HOST') ?? '0.0.0.0',
-      port: int.parse(_getEnvValue('SERVER_PORT') ?? '443'),
+      port: port ?? (enableSSL ? 443 : 8080),
       isDevelopment: false,
       enableSSL: enableSSL,
+      managedTlsTerminated: runningBehindManagedTlsProxy && !enableSSL,
       certPath: _getEnvValue('SSL_CERT_PATH'),
       keyPath: _getEnvValue('SSL_KEY_PATH'),
     );

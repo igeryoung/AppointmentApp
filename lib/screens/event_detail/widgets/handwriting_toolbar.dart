@@ -4,6 +4,7 @@ import '../../../widgets/handwriting_canvas.dart';
 
 /// Toolbar for handwriting canvas with page navigation, tool selection, and action buttons
 class HandwritingToolbar extends StatelessWidget {
+  final bool isReadOnlyMode;
   final DrawingTool currentTool;
   final bool isControlPanelExpanded;
   // Page navigation
@@ -26,6 +27,7 @@ class HandwritingToolbar extends StatelessWidget {
 
   const HandwritingToolbar({
     super.key,
+    this.isReadOnlyMode = false,
     required this.currentTool,
     required this.isControlPanelExpanded,
     required this.currentPageNumber,
@@ -60,34 +62,36 @@ class HandwritingToolbar extends StatelessWidget {
       child: Row(
         children: [
           // Page navigation section
-          InkWell(
-            onTap: onAddPrependPage,
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-              decoration: BoxDecoration(
-                color: Colors.green.shade50,
-                borderRadius: BorderRadius.circular(6),
-                border: Border.all(color: Colors.green.shade300),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.add, size: 16, color: Colors.green.shade700),
-                  const SizedBox(width: 4),
-                  Text(
-                    '頁',
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.green.shade700,
-                      fontWeight: FontWeight.w600,
+          if (!isReadOnlyMode) ...[
+            InkWell(
+              onTap: onAddPrependPage,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.green.shade300),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.add, size: 16, color: Colors.green.shade700),
+                    const SizedBox(width: 4),
+                    Text(
+                      '頁',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 8),
+            const SizedBox(width: 8),
+          ],
           // Previous page button
           IconButton(
             icon: const Icon(Icons.chevron_left, size: 20),
@@ -130,197 +134,254 @@ class HandwritingToolbar extends StatelessWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
-                  color: showOnlyCurrentEvent ? Colors.purple.shade100 : Colors.grey.shade100,
+                  color: showOnlyCurrentEvent
+                      ? Colors.purple.shade100
+                      : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
-                    color: showOnlyCurrentEvent ? Colors.purple.shade300 : Colors.grey.shade300,
+                    color: showOnlyCurrentEvent
+                        ? Colors.purple.shade300
+                        : Colors.grey.shade300,
                   ),
                 ),
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Icon(
-                      showOnlyCurrentEvent ? Icons.visibility : Icons.visibility_off,
+                      showOnlyCurrentEvent
+                          ? Icons.visibility
+                          : Icons.visibility_off,
                       size: 16,
-                      color: showOnlyCurrentEvent ? Colors.purple.shade700 : Colors.grey.shade600,
+                      color: showOnlyCurrentEvent
+                          ? Colors.purple.shade700
+                          : Colors.grey.shade600,
                     ),
                     const SizedBox(width: 4),
                     Text(
                       showOnlyCurrentEvent ? '本次' : '全部',
                       style: TextStyle(
                         fontSize: 12,
-                        fontWeight: showOnlyCurrentEvent ? FontWeight.bold : FontWeight.normal,
-                        color: showOnlyCurrentEvent ? Colors.purple.shade700 : Colors.grey.shade600,
+                        fontWeight: showOnlyCurrentEvent
+                            ? FontWeight.bold
+                            : FontWeight.normal,
+                        color: showOnlyCurrentEvent
+                            ? Colors.purple.shade700
+                            : Colors.grey.shade600,
                       ),
                     ),
                   ],
                 ),
               ),
             ),
-          const SizedBox(width: 12),
-          Container(width: 1, height: 32, color: Colors.grey.shade300),
-          const SizedBox(width: 12),
-          // Pen/Highlighter/Eraser toggle
-          Container(
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                // Pen button
-                InkWell(
-                  onTap: onPenTap,
-                  borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: currentTool == DrawingTool.pen ? Colors.blue.shade100 : Colors.transparent,
-                      borderRadius: const BorderRadius.horizontal(left: Radius.circular(8)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.edit,
-                          size: 16,
-                          color: currentTool == DrawingTool.pen ? Colors.blue.shade700 : Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          l10n.pen,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: currentTool == DrawingTool.pen ? Colors.blue.shade700 : Colors.grey.shade600,
-                            fontWeight: currentTool == DrawingTool.pen ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(width: 1, height: 24, color: Colors.grey.shade300),
-                // Highlighter button
-                InkWell(
-                  onTap: onHighlighterTap,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: currentTool == DrawingTool.highlighter ? Colors.yellow.shade100 : Colors.transparent,
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.highlight,
-                          size: 16,
-                          color: currentTool == DrawingTool.highlighter ? Colors.amber.shade700 : Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          'Highlighter',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: currentTool == DrawingTool.highlighter ? Colors.amber.shade700 : Colors.grey.shade600,
-                            fontWeight: currentTool == DrawingTool.highlighter ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-                Container(width: 1, height: 24, color: Colors.grey.shade300),
-                // Eraser button
-                InkWell(
-                  onTap: onEraserTap,
-                  borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                    decoration: BoxDecoration(
-                      color: currentTool == DrawingTool.eraser ? Colors.orange.shade100 : Colors.transparent,
-                      borderRadius: const BorderRadius.horizontal(right: Radius.circular(8)),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(
-                          Icons.auto_fix_high,
-                          size: 16,
-                          color: currentTool == DrawingTool.eraser ? Colors.orange.shade700 : Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 4),
-                        Text(
-                          l10n.eraser,
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: currentTool == DrawingTool.eraser ? Colors.orange.shade700 : Colors.grey.shade600,
-                            fontWeight: currentTool == DrawingTool.eraser ? FontWeight.bold : FontWeight.normal,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          // Expand/Collapse button with label
-          InkWell(
-            onTap: onExpandCollapseTap,
-            borderRadius: BorderRadius.circular(6),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          if (!isReadOnlyMode) ...[
+            const SizedBox(width: 12),
+            Container(width: 1, height: 32, color: Colors.grey.shade300),
+            const SizedBox(width: 12),
+            // Pen/Highlighter/Eraser toggle
+            Container(
               decoration: BoxDecoration(
                 color: Colors.white,
-                borderRadius: BorderRadius.circular(6),
+                borderRadius: BorderRadius.circular(8),
                 border: Border.all(color: Colors.grey.shade300),
               ),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(
-                    l10n.controls,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade700,
-                      fontWeight: FontWeight.w500,
+                  // Pen button
+                  InkWell(
+                    onTap: onPenTap,
+                    borderRadius: const BorderRadius.horizontal(
+                      left: Radius.circular(8),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: currentTool == DrawingTool.pen
+                            ? Colors.blue.shade100
+                            : Colors.transparent,
+                        borderRadius: const BorderRadius.horizontal(
+                          left: Radius.circular(8),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.edit,
+                            size: 16,
+                            color: currentTool == DrawingTool.pen
+                                ? Colors.blue.shade700
+                                : Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            l10n.pen,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: currentTool == DrawingTool.pen
+                                  ? Colors.blue.shade700
+                                  : Colors.grey.shade600,
+                              fontWeight: currentTool == DrawingTool.pen
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  Icon(
-                    isControlPanelExpanded ? Icons.expand_less : Icons.expand_more,
-                    size: 18,
-                    color: Colors.grey.shade600,
+                  Container(width: 1, height: 24, color: Colors.grey.shade300),
+                  // Highlighter button
+                  InkWell(
+                    onTap: onHighlighterTap,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: currentTool == DrawingTool.highlighter
+                            ? Colors.yellow.shade100
+                            : Colors.transparent,
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.highlight,
+                            size: 16,
+                            color: currentTool == DrawingTool.highlighter
+                                ? Colors.amber.shade700
+                                : Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            'Highlighter',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: currentTool == DrawingTool.highlighter
+                                  ? Colors.amber.shade700
+                                  : Colors.grey.shade600,
+                              fontWeight: currentTool == DrawingTool.highlighter
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  Container(width: 1, height: 24, color: Colors.grey.shade300),
+                  // Eraser button
+                  InkWell(
+                    onTap: onEraserTap,
+                    borderRadius: const BorderRadius.horizontal(
+                      right: Radius.circular(8),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 6,
+                      ),
+                      decoration: BoxDecoration(
+                        color: currentTool == DrawingTool.eraser
+                            ? Colors.orange.shade100
+                            : Colors.transparent,
+                        borderRadius: const BorderRadius.horizontal(
+                          right: Radius.circular(8),
+                        ),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.auto_fix_high,
+                            size: 16,
+                            color: currentTool == DrawingTool.eraser
+                                ? Colors.orange.shade700
+                                : Colors.grey.shade600,
+                          ),
+                          const SizedBox(width: 4),
+                          Text(
+                            l10n.eraser,
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: currentTool == DrawingTool.eraser
+                                  ? Colors.orange.shade700
+                                  : Colors.grey.shade600,
+                              fontWeight: currentTool == DrawingTool.eraser
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
-          ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.undo, size: 20),
-            onPressed: onUndo,
-            tooltip: l10n.undo,
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
-          IconButton(
-            icon: const Icon(Icons.redo, size: 20),
-            onPressed: onRedo,
-            tooltip: l10n.redo,
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
-          IconButton(
-            icon: const Icon(Icons.clear, size: 20),
-            onPressed: onClear,
-            tooltip: l10n.clearAll,
-            padding: const EdgeInsets.all(4),
-            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
-          ),
+            const SizedBox(width: 8),
+            // Expand/Collapse button with label
+            InkWell(
+              onTap: onExpandCollapseTap,
+              borderRadius: BorderRadius.circular(6),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: Colors.grey.shade300),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      l10n.controls,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey.shade700,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+                    Icon(
+                      isControlPanelExpanded
+                          ? Icons.expand_less
+                          : Icons.expand_more,
+                      size: 18,
+                      color: Colors.grey.shade600,
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            IconButton(
+              icon: const Icon(Icons.undo, size: 20),
+              onPressed: onUndo,
+              tooltip: l10n.undo,
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+            IconButton(
+              icon: const Icon(Icons.redo, size: 20),
+              onPressed: onRedo,
+              tooltip: l10n.redo,
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+            IconButton(
+              icon: const Icon(Icons.clear, size: 20),
+              onPressed: onClear,
+              tooltip: l10n.clearAll,
+              padding: const EdgeInsets.all(4),
+              constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+            ),
+          ],
         ],
       ),
     );

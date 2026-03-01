@@ -591,7 +591,11 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                           if (widget.isReadOnlyMode) {
                             return const Padding(
                               padding: EdgeInsets.symmetric(horizontal: 6),
-                              child: Icon(Icons.lock_outline, size: 20),
+                              child: Tooltip(
+                                message:
+                                    'Read-only mode: editing, drag, and handwriting are disabled.',
+                                child: Icon(Icons.lock_outline, size: 20),
+                              ),
                             );
                           }
                           return IconButton(
@@ -665,42 +669,6 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                             children: [
                               Column(
                                 children: [
-                                  if (widget.isReadOnlyMode)
-                                    Container(
-                                      width: double.infinity,
-                                      margin: const EdgeInsets.fromLTRB(
-                                        12,
-                                        8,
-                                        12,
-                                        0,
-                                      ),
-                                      padding: const EdgeInsets.symmetric(
-                                        horizontal: 12,
-                                        vertical: 8,
-                                      ),
-                                      decoration: BoxDecoration(
-                                        color: Colors.blue.shade50,
-                                        borderRadius: BorderRadius.circular(10),
-                                        border: Border.all(
-                                          color: Colors.blue.shade200,
-                                        ),
-                                      ),
-                                      child: const Row(
-                                        children: [
-                                          Icon(Icons.lock_outline, size: 16),
-                                          SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              'Read-only mode: editing, drag, and handwriting are disabled.',
-                                              style: TextStyle(
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
                                   Expanded(
                                     child: isLoading
                                         ? const Center(
