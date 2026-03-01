@@ -9,15 +9,10 @@ COPY . .
 RUN dart pub get --offline
 RUN mkdir -p build && dart compile exe main.dart -o build/server
 
-FROM debian:bookworm-slim
-
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends ca-certificates && \
-    rm -rf /var/lib/apt/lists/*
+FROM dart:stable AS runtime
 
 WORKDIR /app
 
-COPY --from=build /runtime/ /
 COPY --from=build /app/build/server /app/server
 COPY --from=build /app/openapi.yaml /app/openapi.yaml
 COPY --from=build /app/public /app/public
