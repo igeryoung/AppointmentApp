@@ -62,7 +62,6 @@ void registerEventInteg011({required LiveServerConfig? config}) {
         await apiClient.grantBookAccess(
           bookUuid: bookUuid,
           targetDeviceId: deviceB.deviceId,
-          accessType: liveDeviceRoleWrite,
           deviceId: live.deviceId,
           deviceToken: live.deviceToken,
         );

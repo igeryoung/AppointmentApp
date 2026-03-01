@@ -171,4 +171,132 @@ void registerEventInteg008({required LiveServerConfig? config}) {
     },
     skip: skipForMissingConfig(config),
   );
+
+  test(
+    'EVENT-INTEG-008B: write-role device can update notes after pulling a shared book',
+    () async {
+      final live = config!;
+      final apiClient = ApiClient(baseUrl: live.baseUrl);
+      final uuid = const Uuid();
+      LiveDeviceCredentials? pulledWriteDevice;
+      String? bookUuid;
+      String? eventId;
+      String? recordUuid;
+
+      try {
+        pulledWriteDevice = await provisionTemporaryDevice(
+          apiClient: apiClient,
+          config: live,
+          deviceRole: liveDeviceRoleWrite,
+          deviceNamePrefix: 'IT pulled write note device',
+        );
+
+        final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+        final createdBook = await createTemporaryBook(
+          apiClient: apiClient,
+          config: live,
+          name: 'IT note write pull $suffix',
+        );
+        bookUuid = pickString(
+          createdBook,
+          keys: const ['bookUuid', 'book_uuid', 'uuid'],
+        );
+
+        eventId = uuid.v4();
+        recordUuid = uuid.v4();
+        final startTime = DateTime.now().toUtc().add(
+          const Duration(minutes: 30),
+        );
+        final endTime = startTime.add(const Duration(minutes: 30));
+        await apiClient.createEvent(
+          bookUuid: bookUuid,
+          eventData: {
+            'id': eventId,
+            'record_uuid': recordUuid,
+            'title': 'IT pulled note event $suffix',
+            'record_number': 'NOTE-PULL-$suffix',
+            'record_name': 'IT Pulled Note $suffix',
+            'record_phone': null,
+            'event_types': const ['consultation'],
+            'start_time': startTime.millisecondsSinceEpoch ~/ 1000,
+            'end_time': endTime.millisecondsSinceEpoch ~/ 1000,
+          },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        await apiClient.saveNote(
+          bookUuid: bookUuid,
+          eventId: eventId,
+          noteData: buildSingleStrokeNotePayload(eventId: eventId, version: 1),
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        await apiClient.pullBook(
+          bookUuid: bookUuid,
+          bookPassword: live.bookPassword,
+          deviceId: pulledWriteDevice.deviceId,
+          deviceToken: pulledWriteDevice.deviceToken,
+        );
+
+        final fetchedByPulledDevice = await apiClient.fetchNote(
+          bookUuid: bookUuid,
+          eventId: eventId,
+          deviceId: pulledWriteDevice.deviceId,
+          deviceToken: pulledWriteDevice.deviceToken,
+        );
+        expect(fetchedByPulledDevice, isNotNull);
+
+        final updatedPayload = buildSingleStrokeNotePayload(
+          eventId: '${eventId}_pulled',
+          version: (fetchedByPulledDevice!.version) + 1,
+        );
+        await apiClient.saveNote(
+          bookUuid: bookUuid,
+          eventId: eventId,
+          noteData: updatedPayload,
+          deviceId: pulledWriteDevice.deviceId,
+          deviceToken: pulledWriteDevice.deviceToken,
+        );
+
+        final fetchedAfterUpdate = await apiClient.fetchNote(
+          bookUuid: bookUuid,
+          eventId: eventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        expect(fetchedAfterUpdate, isNotNull);
+        expect(fetchedAfterUpdate!.version, greaterThanOrEqualTo(2));
+        expect(fetchedAfterUpdate.pages, isNotEmpty);
+        expect(fetchedAfterUpdate.pages.first, isNotEmpty);
+        expect(
+          fetchedAfterUpdate.pages.first.first.id,
+          contains('${eventId}_pulled'),
+        );
+      } finally {
+        if (bookUuid != null) {
+          try {
+            await apiClient.deleteBook(
+              bookUuid: bookUuid,
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            );
+          } catch (_) {
+            // Best-effort cleanup.
+          }
+        }
+        try {
+          await cleanupTemporaryDevice(
+            apiClient: apiClient,
+            credentials: pulledWriteDevice,
+          );
+        } catch (_) {
+          // Best-effort cleanup.
+        }
+        apiClient.dispose();
+      }
+    },
+    skip: skipForMissingConfig(config),
+  );
 }

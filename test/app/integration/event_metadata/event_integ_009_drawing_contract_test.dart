@@ -341,4 +341,140 @@ void registerEventInteg009({required LiveServerConfig? config}) {
     },
     skip: skipForMissingConfig(config),
   );
+
+  test(
+    'EVENT-INTEG-009C: write-role device can update drawings after pulling a shared book',
+    () async {
+      final live = config!;
+      final apiClient = ApiClient(baseUrl: live.baseUrl);
+      LiveDeviceCredentials? pulledWriteDevice;
+      String? bookUuid;
+
+      try {
+        pulledWriteDevice = await provisionTemporaryDevice(
+          apiClient: apiClient,
+          config: live,
+          deviceRole: liveDeviceRoleWrite,
+          deviceNamePrefix: 'IT pulled write drawing device',
+        );
+
+        final suffix = DateTime.now().millisecondsSinceEpoch.toString();
+        final createdBook = await createTemporaryBook(
+          apiClient: apiClient,
+          config: live,
+          name: 'IT drawing write pull $suffix',
+        );
+        bookUuid = pickString(
+          createdBook,
+          keys: const ['bookUuid', 'book_uuid', 'uuid'],
+        );
+
+        final date = DateTime.now().toUtc();
+        const viewMode = ScheduleDrawing.VIEW_MODE_2DAY;
+        final ownerStrokes = jsonEncode([
+          {
+            'id': 'owner-stroke',
+            'points': [
+              {'x': 10.0, 'y': 10.0},
+              {'x': 20.0, 'y': 20.0},
+            ],
+            'strokeType': 'pen',
+            'strokeWidth': 2.0,
+            'color': 4278190080,
+          },
+        ]);
+
+        await apiClient.saveDrawing(
+          bookUuid: bookUuid,
+          drawingData: {
+            'date': date.toIso8601String().split('T')[0],
+            'viewMode': viewMode,
+            'strokesData': ownerStrokes,
+            'version': 1,
+          },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+
+        await apiClient.pullBook(
+          bookUuid: bookUuid,
+          bookPassword: live.bookPassword,
+          deviceId: pulledWriteDevice.deviceId,
+          deviceToken: pulledWriteDevice.deviceToken,
+        );
+
+        final fetchedByPulledDevice = await apiClient.fetchDrawing(
+          bookUuid: bookUuid,
+          date: date,
+          viewMode: viewMode,
+          deviceId: pulledWriteDevice.deviceId,
+          deviceToken: pulledWriteDevice.deviceToken,
+        );
+        expect(fetchedByPulledDevice, isNotNull);
+
+        final pulledVersion = fetchedByPulledDevice!['version'] as int? ?? 1;
+        final updatedStrokes = jsonEncode([
+          {
+            'id': 'pulled-write-stroke',
+            'points': [
+              {'x': 30.0, 'y': 30.0},
+              {'x': 40.0, 'y': 40.0},
+            ],
+            'strokeType': 'pen',
+            'strokeWidth': 2.0,
+            'color': 4278190080,
+          },
+        ]);
+
+        await apiClient.saveDrawing(
+          bookUuid: bookUuid,
+          drawingData: {
+            'date': date.toIso8601String().split('T')[0],
+            'viewMode': viewMode,
+            'strokesData': updatedStrokes,
+            'version': pulledVersion + 1,
+          },
+          deviceId: pulledWriteDevice.deviceId,
+          deviceToken: pulledWriteDevice.deviceToken,
+        );
+
+        final fetchedAfterUpdate = await apiClient.fetchDrawing(
+          bookUuid: bookUuid,
+          date: date,
+          viewMode: viewMode,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        expect(fetchedAfterUpdate, isNotNull);
+        final updatedStrokesData =
+            (fetchedAfterUpdate!['strokesData'] ??
+                    fetchedAfterUpdate['strokes_data'])
+                ?.toString() ??
+            '';
+        expect(updatedStrokesData, contains('pulled-write-stroke'));
+      } finally {
+        if (bookUuid != null) {
+          try {
+            await apiClient.deleteBook(
+              bookUuid: bookUuid,
+              deviceId: live.deviceId,
+              deviceToken: live.deviceToken,
+            );
+          } catch (_) {
+            // Best-effort cleanup.
+          }
+        }
+        try {
+          await cleanupTemporaryDevice(
+            apiClient: apiClient,
+            credentials: pulledWriteDevice,
+          );
+        } catch (_) {
+          // Best-effort cleanup.
+        }
+        apiClient.dispose();
+      }
+    },
+    skip: skipForMissingConfig(config),
+  );
 }

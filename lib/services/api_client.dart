@@ -1152,7 +1152,6 @@ class ApiClient {
   Future<Map<String, dynamic>> grantBookAccess({
     required String bookUuid,
     required String targetDeviceId,
-    required String accessType,
     required String deviceId,
     required String deviceToken,
   }) async {
@@ -1164,10 +1163,7 @@ class ApiClient {
             'X-Device-ID': deviceId,
             'X-Device-Token': deviceToken,
           },
-          body: jsonEncode({
-            'targetDeviceId': targetDeviceId,
-            'accessType': accessType,
-          }),
+          body: jsonEncode({'targetDeviceId': targetDeviceId}),
         )
         .timeout(timeout);
 

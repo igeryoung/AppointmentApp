@@ -7,7 +7,6 @@ CREATE TABLE IF NOT EXISTS public.book_device_access
 (
     book_uuid uuid NOT NULL,
     device_id uuid NOT NULL,
-    access_type text COLLATE pg_catalog."default" NOT NULL DEFAULT 'owner'::text,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     CONSTRAINT book_device_access_pkey PRIMARY KEY (book_uuid, device_id)
 );

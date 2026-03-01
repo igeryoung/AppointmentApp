@@ -1,8 +1,6 @@
 import '../database/connection.dart';
 
 class BookAccessService {
-  static const String membershipAccessType = 'member';
-
   final DatabaseConnection db;
 
   BookAccessService(this.db);
@@ -68,8 +66,6 @@ class BookAccessService {
     await db.client.from('book_device_access').upsert({
       'book_uuid': bookUuid,
       'device_id': deviceId,
-      // Kept populated for schema compatibility; runtime authorization ignores it.
-      'access_type': membershipAccessType,
       'created_at': DateTime.now().toUtc().toIso8601String(),
     }, onConflict: 'book_uuid,device_id');
   }

@@ -69,7 +69,6 @@ AS $$
     JOIN public.books b ON b.book_uuid = a.book_uuid
     WHERE a.book_uuid = p_book_uuid
       AND a.device_id = auth.uid()
-      AND a.access_type IN ('owner', 'editor')
       AND b.is_deleted = false
     )
   );
