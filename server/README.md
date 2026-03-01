@@ -57,6 +57,8 @@ Optional Railway variables:
   behind Railway's HTTPS proxy. This is already the default when Railway
   provides `PORT` and no certificate paths are configured.
 - `SERVER_HOST=0.0.0.0`
+- `DEFAULT_DEVICE_ROLE=write` to control whether newly registered devices can
+  write immediately. The default is `write`.
 
 Railway provides `PORT` automatically. The production server now honors that
 value and binds plain HTTP inside the container while Railway terminates TLS at

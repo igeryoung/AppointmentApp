@@ -34,6 +34,21 @@ class BookAccessService {
     return normalized == accessOwner || normalized == accessWrite;
   }
 
+  Future<bool> _deviceHasWriteRole(String deviceId) async {
+    final deviceRows = await db.client
+        .from('devices')
+        .select('device_role')
+        .eq('id', deviceId)
+        .limit(1);
+    final deviceRow = _first(deviceRows);
+    if (deviceRow == null) return false;
+    final role = (deviceRow['device_role'] ?? '')
+        .toString()
+        .trim()
+        .toLowerCase();
+    return role == 'write';
+  }
+
   Future<bool> verifyBookAccess(
     String deviceId,
     String bookUuid, {
@@ -62,9 +77,18 @@ class BookAccessService {
     if (accessRow == null) return false;
 
     if (!requireWrite) return true;
-    return isWriteAccessType(
-      accessRow['access_type']?.toString() ?? accessRead,
-    );
+    final rawAccessType = accessRow['access_type']?.toString() ?? accessRead;
+    if (isWriteAccessType(rawAccessType)) {
+      return true;
+    }
+
+    // Pulled access is implicit and should follow the device role.
+    // Explicit read access remains read-only until the owner upgrades it.
+    if (rawAccessType.trim().toLowerCase() == accessPulled) {
+      return _deviceHasWriteRole(deviceId);
+    }
+
+    return false;
   }
 
   Future<void> grantBookAccess({

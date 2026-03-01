@@ -11,12 +11,18 @@ import '../models/device.dart';
 
 /// Router for device management endpoints.
 class DeviceRoutes {
-  static const String _defaultDeviceRole = 'read';
-
   final DatabaseConnection db;
   final _uuid = const Uuid();
 
   DeviceRoutes(this.db);
+
+  String get _defaultDeviceRole {
+    final configuredRole = (Platform.environment['DEFAULT_DEVICE_ROLE'] ?? '')
+        .trim()
+        .toLowerCase();
+    if (configuredRole == 'read') return 'read';
+    return 'write';
+  }
 
   Router get router {
     final router = Router();

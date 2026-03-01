@@ -1,17 +1,22 @@
 import 'dart:convert';
 
 import '../database/connection.dart';
+import 'book_access_service.dart';
 
 /// Service for pulling books from server to local device.
 class BookPullService {
   final DatabaseConnection db;
+  late final BookAccessService _bookAccessService;
 
-  BookPullService(this.db);
+  BookPullService(this.db) {
+    _bookAccessService = BookAccessService(db);
+  }
 
   DateTime _asUtc(dynamic value) {
     if (value is DateTime) return value.isUtc ? value : value.toUtc();
     final parsed = DateTime.tryParse(value?.toString() ?? '');
-    if (parsed == null) return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
+    if (parsed == null)
+      return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true);
     return parsed.isUtc ? parsed : parsed.toUtc();
   }
 
@@ -60,6 +65,19 @@ class BookPullService {
       }
     } catch (_) {}
     return 'other';
+  }
+
+  Future<String> _resolvePullAccessType(String deviceId) async {
+    final rows = await db.client
+        .from('devices')
+        .select('device_role')
+        .eq('id', deviceId)
+        .limit(1);
+    final device = _first(rows);
+    final role = (device?['device_role'] ?? '').toString().trim().toLowerCase();
+    return role == 'read'
+        ? BookAccessService.accessPulled
+        : BookAccessService.accessWrite;
   }
 
   Future<List<Map<String, dynamic>>> listBooksForDevice(
@@ -241,7 +259,8 @@ class BookPullService {
       }
     }
 
-    await addDeviceAccess(bookUuid, deviceId, 'pulled');
+    final accessType = await _resolvePullAccessType(deviceId);
+    await addDeviceAccess(bookUuid, deviceId, accessType);
 
     return {
       'book': {
@@ -300,10 +319,29 @@ class BookPullService {
     String accessType,
   ) async {
     try {
+      final existingRows = await db.client
+          .from('book_device_access')
+          .select('access_type')
+          .eq('book_uuid', bookUuid)
+          .eq('device_id', deviceId)
+          .limit(1);
+      final existing = _first(existingRows);
+      final existingAccess = _bookAccessService.normalizeAccessType(
+        existing?['access_type'],
+      );
+      final requestedAccess = _bookAccessService.normalizeAccessType(
+        accessType,
+        fallback: BookAccessService.accessRead,
+      );
+      final effectiveAccess =
+          _bookAccessService.isWriteAccessType(existingAccess)
+          ? existingAccess
+          : requestedAccess;
+
       await db.client.from('book_device_access').upsert({
         'book_uuid': bookUuid,
         'device_id': deviceId,
-        'access_type': accessType,
+        'access_type': effectiveAccess,
         'created_at': DateTime.now().toUtc().toIso8601String(),
       }, onConflict: 'book_uuid,device_id');
     } catch (e) {
