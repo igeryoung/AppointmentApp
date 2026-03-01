@@ -20,8 +20,8 @@ class DeviceRoutes {
     final configuredRole = (Platform.environment['DEFAULT_DEVICE_ROLE'] ?? '')
         .trim()
         .toLowerCase();
-    if (configuredRole == 'read') return 'read';
-    return 'write';
+    if (configuredRole == 'write') return 'write';
+    return 'read';
   }
 
   Router get router {
