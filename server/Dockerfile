@@ -7,7 +7,7 @@ RUN dart pub get
 
 COPY . .
 RUN dart pub get --offline
-RUN dart compile exe main.dart -o build/server
+RUN mkdir -p build && dart compile exe main.dart -o build/server
 
 FROM debian:bookworm-slim
 
