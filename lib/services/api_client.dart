@@ -271,6 +271,85 @@ class ApiClient {
     }
   }
 
+  /// Fetch prefix-matched name suggestions for query dialog.
+  Future<List<String>> fetchNameSuggestions({
+    required String bookUuid,
+    required String prefix,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final uri = Uri.parse(
+      '$baseUrl/api/books/$bookUuid/query-options/names',
+    ).replace(queryParameters: {'prefix': prefix});
+
+    final response = await _client
+        .get(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return (json['names'] as List<dynamic>? ?? const [])
+          .map((value) => value.toString())
+          .toList();
+    }
+
+    throw ApiException(
+      'Fetch name suggestions failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  /// Fetch prefix-matched record-number suggestions for query dialog.
+  Future<List<Map<String, dynamic>>> fetchRecordNumberSuggestions({
+    required String bookUuid,
+    required String prefix,
+    String? namePrefix,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final queryParameters = <String, String>{'prefix': prefix};
+    if (namePrefix != null && namePrefix.trim().isNotEmpty) {
+      queryParameters['namePrefix'] = namePrefix.trim();
+    }
+
+    final uri = Uri.parse(
+      '$baseUrl/api/books/$bookUuid/query-options/record-numbers',
+    ).replace(queryParameters: queryParameters);
+
+    final response = await _client
+        .get(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return (json['pairs'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
+    throw ApiException(
+      'Fetch record number suggestions failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
   /// Fetch event, record, and note in one request.
   Future<Map<String, dynamic>?> fetchEventDetailBundle({
     required String bookUuid,

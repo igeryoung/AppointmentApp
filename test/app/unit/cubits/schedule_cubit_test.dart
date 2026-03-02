@@ -68,6 +68,20 @@ class _FakeEventRepository implements IEventRepository {
   }
 
   @override
+  Future<List<String>> fetchNameSuggestions(String bookUuid, String prefix) {
+    throw UnimplementedError();
+  }
+
+  @override
+  Future<List<NameRecordPair>> fetchRecordNumberSuggestions(
+    String bookUuid,
+    String prefix, {
+    String? namePrefix,
+  }) {
+    throw UnimplementedError();
+  }
+
+  @override
   Future<List<String>> getAllRecordNumbers(String bookUuid) {
     throw UnimplementedError();
   }

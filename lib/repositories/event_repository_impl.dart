@@ -1,4 +1,3 @@
-import 'package:sqflite/sqflite.dart';
 import 'package:uuid/uuid.dart';
 import '../models/event.dart';
 import '../repositories/device_repository.dart';
@@ -15,12 +14,11 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
   final IDeviceRepository? _deviceRepository;
 
   EventRepositoryImpl(
-    Future<Database> Function() getDatabaseFn, {
+    super.getDatabaseFn, {
     ApiClient? apiClient,
     IDeviceRepository? deviceRepository,
   }) : _apiClient = apiClient,
-       _deviceRepository = deviceRepository,
-       super(getDatabaseFn);
+       _deviceRepository = deviceRepository;
 
   @override
   String get tableName => 'events';
@@ -33,9 +31,6 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
 
   @override
   Future<List<Event>> getAll() => queryAll(orderBy: 'start_time ASC');
-
-  @override
-  Future<Event?> getById(String id) => super.getById(id);
 
   @override
   Future<List<Event>> getByBookId(String bookUuid) {
@@ -266,13 +261,92 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
       '''
-      SELECT DISTINCT r.name
+      SELECT DISTINCT
+        TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) AS name
       FROM events e
-      INNER JOIN records r ON e.record_uuid = r.record_uuid
-      WHERE e.book_uuid = ? AND r.name IS NOT NULL AND r.name != ''
-      ORDER BY r.name ASC
+      LEFT JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ?
+        AND TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) != ''
+      ORDER BY name ASC
     ''',
       [bookUuid],
+    );
+    return result.map((row) => row['name'] as String).toList();
+  }
+
+  @override
+  Future<List<String>> fetchNameSuggestions(
+    String bookUuid,
+    String prefix,
+  ) async {
+    final normalizedPrefix = prefix.trim().toLowerCase();
+    if (normalizedPrefix.isEmpty) {
+      return const [];
+    }
+
+    final serverNames = await _fetchNameSuggestionsFromServer(
+      bookUuid,
+      normalizedPrefix,
+    );
+    if (serverNames != null) {
+      return serverNames;
+    }
+
+    final db = await getDatabaseFn();
+    final result = await db.rawQuery(
+      '''
+      SELECT DISTINCT
+        TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) AS name
+      FROM events e
+      LEFT JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ?
+        AND TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) != ''
+        AND LOWER(
+          TRIM(
+            COALESCE(
+              NULLIF(r.name, ''),
+              CASE
+                WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+                ELSE e.title
+              END
+            )
+          )
+        ) LIKE ?
+      ORDER BY name ASC
+    ''',
+      [bookUuid, '$normalizedPrefix%'],
     );
     return result.map((row) => row['name'] as String).toList();
   }
@@ -318,16 +392,108 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     final db = await getDatabaseFn();
     final result = await db.rawQuery(
       '''
-      SELECT DISTINCT r.name AS name, e.record_number AS record_number
+      SELECT DISTINCT
+        TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) AS name,
+        e.record_number AS record_number
       FROM events e
-      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      LEFT JOIN records r ON e.record_uuid = r.record_uuid
       WHERE e.book_uuid = ?
-        AND r.name IS NOT NULL AND r.name != ''
+        AND TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) != ''
         AND e.record_number IS NOT NULL AND e.record_number != ''
-      ORDER BY r.name ASC, e.record_number ASC
+      ORDER BY name ASC, e.record_number ASC
     ''',
       [bookUuid],
     );
+    return result
+        .map(
+          (row) => NameRecordPair(
+            name: row['name'] as String,
+            recordNumber: row['record_number'] as String,
+          ),
+        )
+        .toList();
+  }
+
+  @override
+  Future<List<NameRecordPair>> fetchRecordNumberSuggestions(
+    String bookUuid,
+    String prefix, {
+    String? namePrefix,
+  }) async {
+    final normalizedPrefix = prefix.trim().toLowerCase();
+    if (normalizedPrefix.isEmpty) {
+      return const [];
+    }
+
+    final normalizedNamePrefix = namePrefix?.trim().toLowerCase();
+    final serverPairs = await _fetchRecordNumberSuggestionsFromServer(
+      bookUuid,
+      normalizedPrefix,
+      namePrefix: normalizedNamePrefix,
+    );
+    if (serverPairs != null) {
+      return serverPairs;
+    }
+
+    final db = await getDatabaseFn();
+    final queryArgs = <Object?>[bookUuid, '$normalizedPrefix%'];
+    final nameClause =
+        normalizedNamePrefix == null || normalizedNamePrefix.isEmpty
+        ? ''
+        : '''
+        AND LOWER(
+          TRIM(
+            COALESCE(
+              NULLIF(r.name, ''),
+              CASE
+                WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+                ELSE e.title
+              END
+            )
+          )
+        ) LIKE ?
+      ''';
+    if (nameClause.isNotEmpty) {
+      queryArgs.add('$normalizedNamePrefix%');
+    }
+
+    final result = await db.rawQuery('''
+      SELECT DISTINCT
+        TRIM(
+          COALESCE(
+            NULLIF(r.name, ''),
+            CASE
+              WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+              ELSE e.title
+            END
+          )
+        ) AS name,
+        e.record_number AS record_number
+      FROM events e
+      LEFT JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ?
+        AND e.record_number IS NOT NULL
+        AND e.record_number != ''
+        AND LOWER(e.record_number) LIKE ?
+        $nameClause
+      ORDER BY e.record_number ASC, name ASC
+    ''', queryArgs);
     return result
         .map(
           (row) => NameRecordPair(
@@ -364,13 +530,23 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
       '''
       SELECT DISTINCT e.record_number
       FROM events e
-      INNER JOIN records r ON e.record_uuid = r.record_uuid
+      LEFT JOIN records r ON e.record_uuid = r.record_uuid
       WHERE e.book_uuid = ?
-        AND LOWER(r.name) = LOWER(?)
+        AND LOWER(
+          TRIM(
+            COALESCE(
+              NULLIF(r.name, ''),
+              CASE
+                WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+                ELSE e.title
+              END
+            )
+          )
+        ) LIKE ?
         AND e.record_number IS NOT NULL AND e.record_number != ''
       ORDER BY e.record_number ASC
     ''',
-      [bookUuid, name],
+      [bookUuid, '%${name.trim().toLowerCase()}%'],
     );
     return result.map((row) => row['record_number'] as String).toList();
   }
@@ -402,11 +578,23 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
       '''
       SELECT e.*
       FROM events e
-      INNER JOIN records r ON e.record_uuid = r.record_uuid
-      WHERE e.book_uuid = ? AND LOWER(r.name) = LOWER(?) AND e.record_number = ?
+      LEFT JOIN records r ON e.record_uuid = r.record_uuid
+      WHERE e.book_uuid = ?
+        AND LOWER(
+          TRIM(
+            COALESCE(
+              NULLIF(r.name, ''),
+              CASE
+                WHEN INSTR(e.title, '(') > 1 THEN SUBSTR(e.title, 1, INSTR(e.title, '(') - 1)
+                ELSE e.title
+              END
+            )
+          )
+        ) LIKE ?
+        AND e.record_number = ?
       ORDER BY e.start_time DESC
     ''',
-      [bookUuid, name, recordNumber],
+      [bookUuid, '%${name.trim().toLowerCase()}%', recordNumber],
     );
     return result.map((row) => Event.fromMap(row)).toList();
   }
@@ -438,28 +626,101 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
   }
 
   Future<List<Event>?> _fetchAllEventsFromServer(String bookUuid) async {
-    final apiClient = _apiClient;
-    final deviceRepository = _deviceRepository;
-    if (apiClient == null || deviceRepository == null) {
+    try {
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        return null;
+      }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        return null;
+      }
+
+      final nowUtc = DateTime.now().toUtc();
+      final serverEvents = await apiClient.fetchEventsByDateRange(
+        bookUuid: bookUuid,
+        startDate: nowUtc.subtract(const Duration(days: 365 * 50)),
+        endDate: nowUtc.add(const Duration(days: 365 * 50)),
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+
+      return serverEvents
+          .map((event) => Event.fromServerResponse(event))
+          .toList();
+    } catch (_) {
       return null;
     }
+  }
 
-    final credentials = await deviceRepository.getCredentials();
-    if (credentials == null) {
+  Future<List<String>?> _fetchNameSuggestionsFromServer(
+    String bookUuid,
+    String prefix,
+  ) async {
+    try {
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        return null;
+      }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        return null;
+      }
+
+      return await apiClient.fetchNameSuggestions(
+        bookUuid: bookUuid,
+        prefix: prefix,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+    } catch (_) {
       return null;
     }
+  }
 
-    final nowUtc = DateTime.now().toUtc();
-    final serverEvents = await apiClient.fetchEventsByDateRange(
-      bookUuid: bookUuid,
-      startDate: nowUtc.subtract(const Duration(days: 365 * 50)),
-      endDate: nowUtc.add(const Duration(days: 365 * 50)),
-      deviceId: credentials.deviceId,
-      deviceToken: credentials.deviceToken,
-    );
+  Future<List<NameRecordPair>?> _fetchRecordNumberSuggestionsFromServer(
+    String bookUuid,
+    String prefix, {
+    String? namePrefix,
+  }) async {
+    try {
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        return null;
+      }
 
-    return serverEvents
-        .map((event) => Event.fromServerResponse(event))
-        .toList();
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        return null;
+      }
+
+      final pairs = await apiClient.fetchRecordNumberSuggestions(
+        bookUuid: bookUuid,
+        prefix: prefix,
+        namePrefix: namePrefix,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      return pairs
+          .map(
+            (row) => NameRecordPair(
+              name: row['name']?.toString() ?? '',
+              recordNumber: row['record_number']?.toString() ?? '',
+            ),
+          )
+          .where(
+            (pair) =>
+                pair.name.trim().isNotEmpty &&
+                pair.recordNumber.trim().isNotEmpty,
+          )
+          .toList();
+    } catch (_) {
+      return null;
+    }
   }
 }

@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
@@ -40,11 +41,16 @@ class _QueryAppointmentsDialog extends StatefulWidget {
 class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController nameController;
   late TextEditingController recordNumberController;
-  Timer? _debounceTimer;
   String? selectedRecordNumber;
-  List<String> allNames = [];
-  List<NameRecordPair> allNameRecordPairs = [];
-  List<NameRecordPair> filteredNameRecordPairs = [];
+  List<String> nameSuggestions = [];
+  List<String> _cachedNameSuggestions = [];
+  String? _nameFetchPrefix;
+  bool isNameSuggestionsLoading = false;
+  List<NameRecordPair> recordSuggestions = [];
+  List<NameRecordPair> _cachedRecordSuggestions = [];
+  String? _recordFetchPrefix;
+  String? _recordNameConstraint;
+  bool isRecordSuggestionsLoading = false;
   List<Event> searchResults = [];
   bool isLoading = false;
   bool hasSearched = false;
@@ -57,63 +63,249 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     super.initState();
     nameController = TextEditingController();
     recordNumberController = TextEditingController();
-    _loadAllNameRecordPairs();
   }
 
   @override
   void dispose() {
-    _debounceTimer?.cancel();
     nameController.dispose();
     recordNumberController.dispose();
     super.dispose();
   }
 
-  /// Load all available name-record pairs for dropdown
-  Future<void> _loadAllNameRecordPairs() async {
+  String _normalize(String value) => value.trim().toLowerCase();
+
+  void _clearNameSuggestionState() {
+    setState(() {
+      nameSuggestions = [];
+      _cachedNameSuggestions = [];
+      _nameFetchPrefix = null;
+      isNameSuggestionsLoading = false;
+    });
+  }
+
+  void _clearRecordSuggestionState({bool clearInput = false}) {
+    setState(() {
+      selectedRecordNumber = null;
+      recordSuggestions = [];
+      _cachedRecordSuggestions = [];
+      _recordFetchPrefix = null;
+      _recordNameConstraint = null;
+      isRecordSuggestionsLoading = false;
+      if (clearInput) {
+        recordNumberController.clear();
+      }
+    });
+  }
+
+  List<String> _filterNameSuggestions(List<String> suggestions, String query) {
+    final normalizedQuery = _normalize(query);
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+
+    return suggestions
+        .where((name) => _normalize(name).startsWith(normalizedQuery))
+        .toList();
+  }
+
+  List<NameRecordPair> _filterRecordSuggestions(
+    List<NameRecordPair> suggestions,
+    String query, {
+    String? nameConstraint,
+  }) {
+    final normalizedQuery = _normalize(query);
+    final normalizedNameConstraint = nameConstraint == null
+        ? null
+        : _normalize(nameConstraint);
+    if (normalizedQuery.isEmpty) {
+      return const [];
+    }
+
+    return suggestions.where((pair) {
+      if (!_normalize(pair.recordNumber).startsWith(normalizedQuery)) {
+        return false;
+      }
+      if (normalizedNameConstraint != null &&
+          normalizedNameConstraint.isNotEmpty) {
+        return _normalize(pair.name).startsWith(normalizedNameConstraint);
+      }
+      return true;
+    }).toList();
+  }
+
+  Future<void> _fetchNameSuggestions({
+    required String fetchPrefix,
+    required String activeQuery,
+  }) async {
+    setState(() {
+      isNameSuggestionsLoading = true;
+      nameSuggestions = [];
+    });
+
     try {
-      final pairs = await widget.eventRepository.getAllNameRecordPairs(
+      final suggestions = await widget.eventRepository.fetchNameSuggestions(
         widget.bookUuid,
+        fetchPrefix,
       );
-      final names = pairs.map((pair) => pair.name).toSet().toList()..sort();
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        allNames = names;
-        allNameRecordPairs = pairs;
-        filteredNameRecordPairs = pairs; // Initially show all pairs
+        _nameFetchPrefix = fetchPrefix;
+        _cachedNameSuggestions = suggestions;
+        nameSuggestions = _filterNameSuggestions(suggestions, activeQuery);
+        isNameSuggestionsLoading = false;
       });
     } catch (e) {
-      // Silently fail - allNameRecordPairs will remain empty
-      if (mounted) {
-        final l10n = AppLocalizations.of(context)!;
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      if (!mounted) {
+        return;
       }
+
+      setState(() {
+        _nameFetchPrefix = null;
+        _cachedNameSuggestions = [];
+        nameSuggestions = [];
+        isNameSuggestionsLoading = false;
+      });
+
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
     }
   }
 
-  /// Filter name-record pairs based on entered name (case-insensitive partial match)
-  void _filterNameRecordPairsByName() {
-    final name = nameController.text.trim();
+  Future<void> _fetchRecordSuggestions({
+    required String fetchPrefix,
+    required String activeQuery,
+    String? nameConstraint,
+  }) async {
+    setState(() {
+      isRecordSuggestionsLoading = true;
+      recordSuggestions = [];
+    });
 
-    if (name.isEmpty) {
-      // Empty name - show all pairs
+    try {
+      final suggestions = await widget.eventRepository
+          .fetchRecordNumberSuggestions(
+            widget.bookUuid,
+            fetchPrefix,
+            namePrefix: nameConstraint,
+          );
+      if (!mounted) {
+        return;
+      }
+
       setState(() {
-        filteredNameRecordPairs = allNameRecordPairs;
-        selectedRecordNumber = null;
-        recordNumberController.clear(); // Clear the field
+        _recordFetchPrefix = fetchPrefix;
+        _recordNameConstraint = nameConstraint == null
+            ? null
+            : _normalize(nameConstraint);
+        _cachedRecordSuggestions = suggestions;
+        recordSuggestions = _filterRecordSuggestions(
+          suggestions,
+          activeQuery,
+          nameConstraint: nameConstraint,
+        );
+        isRecordSuggestionsLoading = false;
       });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+
+      setState(() {
+        _recordFetchPrefix = null;
+        _recordNameConstraint = null;
+        _cachedRecordSuggestions = [];
+        recordSuggestions = [];
+        isRecordSuggestionsLoading = false;
+      });
+
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+    }
+  }
+
+  Future<void> _handleNameChanged(String value) async {
+    if (_isProgrammaticNameChange) {
       return;
     }
 
-    // Filter pairs where name matches (case-insensitive, partial match)
-    final filtered = allNameRecordPairs
-        .where((pair) => pair.name.toLowerCase().contains(name.toLowerCase()))
-        .toList();
+    final normalized = _normalize(value);
+    final previousRecordText = recordNumberController.text;
 
     setState(() {
-      filteredNameRecordPairs = filtered;
-      selectedRecordNumber = null; // Clear selection when name changes
-      recordNumberController.clear(); // Clear the field
+      nameError = null;
+    });
+
+    if (previousRecordText.isNotEmpty || selectedRecordNumber != null) {
+      _clearRecordSuggestionState(clearInput: previousRecordText.isNotEmpty);
+    } else {
+      _clearRecordSuggestionState();
+    }
+
+    if (normalized.isEmpty) {
+      _clearNameSuggestionState();
+      return;
+    }
+
+    final fetchPrefix = normalized[0];
+    final shouldFetch =
+        _nameFetchPrefix != fetchPrefix || _cachedNameSuggestions.isEmpty;
+    if (shouldFetch) {
+      await _fetchNameSuggestions(
+        fetchPrefix: fetchPrefix,
+        activeQuery: normalized,
+      );
+      return;
+    }
+
+    setState(() {
+      nameSuggestions = _filterNameSuggestions(
+        _cachedNameSuggestions,
+        normalized,
+      );
+    });
+  }
+
+  Future<void> _handleRecordNumberChanged(String value) async {
+    final normalized = _normalize(value);
+    final nameConstraint = _normalize(nameController.text);
+
+    setState(() {
+      recordNumberError = null;
+      selectedRecordNumber = null;
+    });
+
+    if (normalized.isEmpty) {
+      _clearRecordSuggestionState();
+      return;
+    }
+
+    final fetchPrefix = normalized[0];
+    final shouldFetch =
+        _recordFetchPrefix != fetchPrefix ||
+        _cachedRecordSuggestions.isEmpty ||
+        (_recordNameConstraint ?? '') != nameConstraint;
+    if (shouldFetch) {
+      await _fetchRecordSuggestions(
+        fetchPrefix: fetchPrefix,
+        activeQuery: normalized,
+        nameConstraint: nameConstraint.isEmpty ? null : nameConstraint,
+      );
+      return;
+    }
+
+    setState(() {
+      recordSuggestions = _filterRecordSuggestions(
+        _cachedRecordSuggestions,
+        normalized,
+        nameConstraint: nameConstraint,
+      );
     });
   }
 
@@ -232,37 +424,18 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                   _NameAutocompleteField(
                     controller: nameController,
                     labelText: l10n.eventName,
-                    allNames: allNames,
+                    allNames: nameSuggestions,
                     errorText: nameError,
+                    isLoading: isNameSuggestionsLoading,
                     onNameSelected: (name) {
                       setState(() {
                         nameError = null;
-                        selectedRecordNumber = null;
-                        recordNumberController
-                            .clear(); // Clear record number field
+                        nameSuggestions = _filterNameSuggestions([name], name);
                       });
-                      _filterNameRecordPairsByName();
+                      _clearRecordSuggestionState(clearInput: true);
                     },
                     onChanged: (value) {
-                      // Skip if this is a programmatic change from record selection
-                      if (_isProgrammaticNameChange) {
-                        return;
-                      }
-
-                      setState(() {
-                        nameError = null;
-                        selectedRecordNumber = null;
-                        recordNumberController
-                            .clear(); // Clear record number field
-                      });
-
-                      _debounceTimer?.cancel();
-                      _debounceTimer = Timer(
-                        const Duration(milliseconds: 500),
-                        () {
-                          _filterNameRecordPairsByName();
-                        },
-                      );
+                      _handleNameChanged(value);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -271,8 +444,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                   _RecordNumberAutocompleteField(
                     controller: recordNumberController,
                     labelText: l10n.recordNumber,
-                    allNameRecordPairs: filteredNameRecordPairs,
+                    allNameRecordPairs: recordSuggestions,
                     errorText: recordNumberError,
+                    isLoading: isRecordSuggestionsLoading,
                     onRecordSelected: (pair) {
                       // Set flag to prevent onChanged from clearing selection
                       _isProgrammaticNameChange = true;
@@ -290,10 +464,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                       _isProgrammaticNameChange = false;
                     },
                     onChanged: (value) {
-                      setState(() {
-                        recordNumberError = null;
-                        selectedRecordNumber = null;
-                      });
+                      _handleRecordNumberChanged(value);
                     },
                   ),
                   const SizedBox(height: 16),
@@ -464,6 +635,7 @@ class _NameAutocompleteField extends StatefulWidget {
   final String labelText;
   final List<String> allNames;
   final String? errorText;
+  final bool isLoading;
   final ValueChanged<String>? onNameSelected;
   final ValueChanged<String>? onChanged;
 
@@ -472,6 +644,7 @@ class _NameAutocompleteField extends StatefulWidget {
     required this.labelText,
     required this.allNames,
     this.errorText,
+    this.isLoading = false,
     this.onNameSelected,
     this.onChanged,
   });
@@ -490,6 +663,20 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
     super.initState();
     _focusNode.addListener(_onFocusChanged);
     widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NameAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_focusNode.hasFocus &&
+        !listEquals(oldWidget.allNames, widget.allNames)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_focusNode.hasFocus) {
+          return;
+        }
+        _updateOverlay();
+      });
+    }
   }
 
   @override
@@ -519,20 +706,35 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
   List<String> _getFilteredOptions() {
     final text = widget.controller.text.toLowerCase();
     if (text.isEmpty) {
-      return widget.allNames;
+      return const [];
     }
     return widget.allNames
-        .where((name) => name.toLowerCase().contains(text))
+        .where((name) => name.toLowerCase().startsWith(text))
         .toList();
   }
 
   void _showOverlay() {
+    if (_getFilteredOptions().isEmpty) {
+      _removeOverlay();
+      return;
+    }
     _removeOverlay();
     _overlayEntry = _createOverlayEntry();
     Overlay.of(context).insert(_overlayEntry!);
   }
 
   void _updateOverlay() {
+    final hasOptions = _getFilteredOptions().isNotEmpty;
+    if (!hasOptions) {
+      _removeOverlay();
+      return;
+    }
+
+    if (_overlayEntry == null) {
+      _showOverlay();
+      return;
+    }
+
     _overlayEntry?.markNeedsBuild();
   }
 
@@ -617,6 +819,16 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
             horizontal: 12,
             vertical: 8,
           ),
+          suffixIcon: widget.isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : null,
         ),
       ),
     );
@@ -629,6 +841,7 @@ class _RecordNumberAutocompleteField extends StatefulWidget {
   final String labelText;
   final List<NameRecordPair> allNameRecordPairs;
   final String? errorText;
+  final bool isLoading;
   final ValueChanged<NameRecordPair>? onRecordSelected;
   final ValueChanged<String>? onChanged;
 
@@ -637,6 +850,7 @@ class _RecordNumberAutocompleteField extends StatefulWidget {
     required this.labelText,
     required this.allNameRecordPairs,
     this.errorText,
+    this.isLoading = false,
     this.onRecordSelected,
     this.onChanged,
   });
@@ -657,6 +871,20 @@ class _RecordNumberAutocompleteFieldState
     super.initState();
     _focusNode.addListener(_onFocusChanged);
     widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(covariant _RecordNumberAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (_focusNode.hasFocus &&
+        !listEquals(oldWidget.allNameRecordPairs, widget.allNameRecordPairs)) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_focusNode.hasFocus) {
+          return;
+        }
+        _updateOverlay();
+      });
+    }
   }
 
   @override
@@ -686,21 +914,36 @@ class _RecordNumberAutocompleteFieldState
   List<NameRecordPair> _getFilteredOptions() {
     final text = widget.controller.text.toLowerCase();
     if (text.isEmpty) {
-      return widget.allNameRecordPairs;
+      return const [];
     }
     // Filter by record number
     return widget.allNameRecordPairs
-        .where((pair) => pair.recordNumber.toLowerCase().contains(text))
+        .where((pair) => pair.recordNumber.toLowerCase().startsWith(text))
         .toList();
   }
 
   void _showOverlay() {
+    if (_getFilteredOptions().isEmpty) {
+      _removeOverlay();
+      return;
+    }
     _removeOverlay();
     _overlayEntry = _createOverlayEntry();
     Overlay.of(context).insert(_overlayEntry!);
   }
 
   void _updateOverlay() {
+    final hasOptions = _getFilteredOptions().isNotEmpty;
+    if (!hasOptions) {
+      _removeOverlay();
+      return;
+    }
+
+    if (_overlayEntry == null) {
+      _showOverlay();
+      return;
+    }
+
     _overlayEntry?.markNeedsBuild();
   }
 
@@ -787,6 +1030,16 @@ class _RecordNumberAutocompleteFieldState
             horizontal: 12,
             vertical: 8,
           ),
+          suffixIcon: widget.isLoading
+              ? const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: Padding(
+                    padding: EdgeInsets.all(12.0),
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  ),
+                )
+              : null,
         ),
       ),
     );

@@ -1,11 +1,12 @@
 @Tags(['event', 'unit'])
+library;
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/repositories/device_repository.dart';
 import 'package:schedule_note_app/repositories/event_repository_impl.dart';
 import 'package:schedule_note_app/repositories/event_repository.dart';
 import 'package:schedule_note_app/services/api_client.dart';
 import 'package:schedule_note_app/services/database/prd_database_service.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../support/db_seed.dart';
@@ -35,6 +36,13 @@ class _FakeApiClient extends ApiClient {
 
   final List<Map<String, dynamic>> responseEvents;
   int fetchCalls = 0;
+  Object? fetchError;
+  List<String> nameSuggestionsResponse = const [];
+  Object? nameSuggestionsError;
+  int nameSuggestionsCalls = 0;
+  List<Map<String, dynamic>> recordSuggestionsResponse = const [];
+  Object? recordSuggestionsError;
+  int recordSuggestionsCalls = 0;
 
   @override
   Future<List<Map<String, dynamic>>> fetchEventsByDateRange({
@@ -45,7 +53,39 @@ class _FakeApiClient extends ApiClient {
     required String deviceToken,
   }) async {
     fetchCalls += 1;
+    if (fetchError != null) {
+      throw fetchError!;
+    }
     return responseEvents;
+  }
+
+  @override
+  Future<List<String>> fetchNameSuggestions({
+    required String bookUuid,
+    required String prefix,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    nameSuggestionsCalls += 1;
+    if (nameSuggestionsError != null) {
+      throw nameSuggestionsError!;
+    }
+    return nameSuggestionsResponse;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchRecordNumberSuggestions({
+    required String bookUuid,
+    required String prefix,
+    String? namePrefix,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    recordSuggestionsCalls += 1;
+    if (recordSuggestionsError != null) {
+      throw recordSuggestionsError!;
+    }
+    return recordSuggestionsResponse;
   }
 }
 
@@ -377,6 +417,274 @@ void main() {
       ]);
       expect(numbers, ['SRV-001']);
       expect(search.map((e) => e.id).toList(), ['event-server-1']);
+    },
+  );
+
+  test(
+    'EVENT-UNIT-005: name/record lookup APIs fall back to local data when server fetch fails',
+    () async {
+      // Arrange
+      await seedBook(db, bookUuid: 'book-a');
+      await seedRecord(
+        db,
+        recordUuid: 'record-1',
+        name: 'Alice',
+        recordNumber: 'A-001',
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-1',
+          bookUuid: 'book-a',
+          recordUuid: 'record-1',
+          title: 'Alice(01)',
+          recordNumber: 'A-001',
+        ),
+      );
+
+      final fakeApi = _FakeApiClient(const []);
+      fakeApi.fetchError = Exception('network down');
+      final serverRepository = EventRepositoryImpl(
+        () => dbService.database,
+        apiClient: fakeApi,
+        deviceRepository: _FakeDeviceRepository(
+          const DeviceCredentials(deviceId: 'd1', deviceToken: 't1'),
+        ),
+      );
+
+      // Act
+      final names = await serverRepository.getAllNames('book-a');
+      final pairs = await serverRepository.getAllNameRecordPairs('book-a');
+      final numbers = await serverRepository.getRecordNumbersByName(
+        'book-a',
+        'ali',
+      );
+      final search = await serverRepository.searchByNameAndRecordNumber(
+        'book-a',
+        'alice',
+        'A-001',
+      );
+
+      // Assert
+      expect(fakeApi.fetchCalls, 4);
+      expect(names, ['Alice']);
+      expect(pairs, const [
+        NameRecordPair(name: 'Alice', recordNumber: 'A-001'),
+      ]);
+      expect(numbers, ['A-001']);
+      expect(search.map((e) => e.id).toList(), ['event-1']);
+    },
+  );
+
+  test(
+    'EVENT-UNIT-006: name/record lookup APIs use event title when record names are blank',
+    () async {
+      // Arrange
+      await seedBook(db, bookUuid: 'book-a');
+      await seedRecord(
+        db,
+        recordUuid: 'record-1',
+        name: '',
+        recordNumber: 'A-001',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-2',
+        name: '',
+        recordNumber: 'B-001',
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-1',
+          bookUuid: 'book-a',
+          recordUuid: 'record-1',
+          title: 'Alice(01)',
+          recordNumber: 'A-001',
+        ),
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-2',
+          bookUuid: 'book-a',
+          recordUuid: 'record-2',
+          title: 'Bob',
+          recordNumber: 'B-001',
+        ),
+      );
+
+      // Act
+      final names = await repository.getAllNames('book-a');
+      final pairs = await repository.getAllNameRecordPairs('book-a');
+      final numbers = await repository.getRecordNumbersByName('book-a', 'ali');
+      final search = await repository.searchByNameAndRecordNumber(
+        'book-a',
+        'alice',
+        'A-001',
+      );
+
+      // Assert
+      expect(names, ['Alice', 'Bob']);
+      expect(pairs, const [
+        NameRecordPair(name: 'Alice', recordNumber: 'A-001'),
+        NameRecordPair(name: 'Bob', recordNumber: 'B-001'),
+      ]);
+      expect(numbers, ['A-001']);
+      expect(search.map((e) => e.id).toList(), ['event-1']);
+    },
+  );
+
+  test(
+    'EVENT-UNIT-007: fetchNameSuggestions prefers server prefix results and falls back locally on failure',
+    () async {
+      await seedBook(db, bookUuid: 'book-a');
+      await seedRecord(
+        db,
+        recordUuid: 'record-1',
+        name: 'Alice',
+        recordNumber: 'A-001',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-2',
+        name: 'Amy',
+        recordNumber: 'A-002',
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-1',
+          bookUuid: 'book-a',
+          recordUuid: 'record-1',
+          title: 'Alice(01)',
+          recordNumber: 'A-001',
+        ),
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-2',
+          bookUuid: 'book-a',
+          recordUuid: 'record-2',
+          title: 'Amy(02)',
+          recordNumber: 'A-002',
+        ),
+      );
+
+      final fakeApi = _FakeApiClient(const []);
+      fakeApi.nameSuggestionsResponse = ['Aaron', 'Abel'];
+      final serverRepository = EventRepositoryImpl(
+        () => dbService.database,
+        apiClient: fakeApi,
+        deviceRepository: _FakeDeviceRepository(
+          const DeviceCredentials(deviceId: 'd1', deviceToken: 't1'),
+        ),
+      );
+
+      expect(await serverRepository.fetchNameSuggestions('book-a', 'a'), [
+        'Aaron',
+        'Abel',
+      ]);
+      expect(fakeApi.nameSuggestionsCalls, 1);
+
+      fakeApi.nameSuggestionsError = Exception('offline');
+      expect(await serverRepository.fetchNameSuggestions('book-a', 'a'), [
+        'Alice',
+        'Amy',
+      ]);
+      expect(fakeApi.nameSuggestionsCalls, 2);
+    },
+  );
+
+  test(
+    'EVENT-UNIT-008: fetchRecordNumberSuggestions constrains by name prefix and falls back locally on failure',
+    () async {
+      await seedBook(db, bookUuid: 'book-a');
+      await seedRecord(
+        db,
+        recordUuid: 'record-1',
+        name: 'Alice',
+        recordNumber: '100',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-2',
+        name: 'Alfred',
+        recordNumber: '145',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-3',
+        name: 'Bob',
+        recordNumber: '199',
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-1',
+          bookUuid: 'book-a',
+          recordUuid: 'record-1',
+          title: 'Alice',
+          recordNumber: '100',
+        ),
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-2',
+          bookUuid: 'book-a',
+          recordUuid: 'record-2',
+          title: 'Alfred',
+          recordNumber: '145',
+        ),
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-3',
+          bookUuid: 'book-a',
+          recordUuid: 'record-3',
+          title: 'Bob',
+          recordNumber: '199',
+        ),
+      );
+
+      final fakeApi = _FakeApiClient(const []);
+      fakeApi.recordSuggestionsResponse = const [
+        {'name': 'Alice', 'record_number': '100'},
+      ];
+      final serverRepository = EventRepositoryImpl(
+        () => dbService.database,
+        apiClient: fakeApi,
+        deviceRepository: _FakeDeviceRepository(
+          const DeviceCredentials(deviceId: 'd1', deviceToken: 't1'),
+        ),
+      );
+
+      expect(
+        await serverRepository.fetchRecordNumberSuggestions(
+          'book-a',
+          '1',
+          namePrefix: 'al',
+        ),
+        const [NameRecordPair(name: 'Alice', recordNumber: '100')],
+      );
+      expect(fakeApi.recordSuggestionsCalls, 1);
+
+      fakeApi.recordSuggestionsError = Exception('offline');
+      expect(
+        await serverRepository.fetchRecordNumberSuggestions(
+          'book-a',
+          '1',
+          namePrefix: 'al',
+        ),
+        const [
+          NameRecordPair(name: 'Alice', recordNumber: '100'),
+          NameRecordPair(name: 'Alfred', recordNumber: '145'),
+        ],
+      );
+      expect(fakeApi.recordSuggestionsCalls, 2);
     },
   );
 }

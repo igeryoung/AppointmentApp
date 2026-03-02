@@ -6,10 +6,7 @@ class NameRecordPair {
   final String name;
   final String recordNumber;
 
-  const NameRecordPair({
-    required this.name,
-    required this.recordNumber,
-  });
+  const NameRecordPair({required this.name, required this.recordNumber});
 
   /// Display format: [name] - [record number]
   String get displayText => '$name - $recordNumber';
@@ -80,6 +77,17 @@ abstract class IEventRepository {
 
   /// Get all unique name-record number pairs for a specific book
   Future<List<NameRecordPair>> getAllNameRecordPairs(String bookUuid);
+
+  /// Fetch name suggestions for a specific book using server-first prefix search.
+  Future<List<String>> fetchNameSuggestions(String bookUuid, String prefix);
+
+  /// Fetch record-number suggestions using server-first prefix search.
+  /// When [namePrefix] is provided, suggestions are constrained by that name.
+  Future<List<NameRecordPair>> fetchRecordNumberSuggestions(
+    String bookUuid,
+    String prefix, {
+    String? namePrefix,
+  });
 
   /// Get unique record numbers filtered by exact name match (case-insensitive)
   Future<List<String>> getRecordNumbersByName(String bookUuid, String name);

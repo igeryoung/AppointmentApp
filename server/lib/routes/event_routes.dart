@@ -34,6 +34,11 @@ class EventRoutes {
 
   EventRoutes(this.db) : _noteService = NoteService(db) {
     bookScopedRouter = Router()
+      ..get('/<bookUuid>/query-options/names', _getNameSuggestions)
+      ..get(
+        '/<bookUuid>/query-options/record-numbers',
+        _getRecordNumberSuggestions,
+      )
       ..get('/<bookUuid>/events', _getEventsByDateRange)
       ..post('/<bookUuid>/events', _createEvent)
       ..post('/<bookUuid>/heavy-test/events/bulk', _createEventsBulkHeavyTest)
@@ -257,6 +262,177 @@ class EventRoutes {
         'record_number': record?['record_number'],
       };
     }).toList();
+  }
+
+  String _normalizedEventName(
+    Map<String, dynamic> event,
+    Map<String, dynamic>? record,
+  ) {
+    final recordName = (record?['name'] ?? '').toString().trim();
+    if (recordName.isNotEmpty) {
+      return recordName;
+    }
+
+    final title = (event['title'] ?? '').toString().trim();
+    final suffixIndex = title.indexOf('(');
+    if (suffixIndex > 0) {
+      return title.substring(0, suffixIndex).trim();
+    }
+    return title;
+  }
+
+  Future<List<Map<String, dynamic>>> _bookEventRecordRows(
+    String bookUuid,
+  ) async {
+    final eventRows = _rows(
+      await db.client
+          .from('events')
+          .select('record_uuid, title')
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false),
+    );
+
+    final recordUuids = eventRows
+        .map((row) => row['record_uuid']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final recordsById = <String, Map<String, dynamic>>{};
+    if (recordUuids.isNotEmpty) {
+      final recordRows = _rows(
+        await db.client
+            .from('records')
+            .select('record_uuid, record_number, name')
+            .inFilter('record_uuid', recordUuids)
+            .eq('is_deleted', false),
+      );
+      for (final row in recordRows) {
+        recordsById[row['record_uuid']?.toString() ?? ''] = row;
+      }
+    }
+
+    return eventRows.map((event) {
+      final recordUuid = event['record_uuid']?.toString() ?? '';
+      final record = recordsById[recordUuid];
+      return {
+        'name': _normalizedEventName(event, record),
+        'record_number': (record?['record_number'] ?? '').toString().trim(),
+      };
+    }).toList();
+  }
+
+  Future<Response> _getNameSuggestions(Request request, String bookUuid) async {
+    try {
+      final authError = await _authorizeBookAccess(request, bookUuid);
+      if (authError != null) {
+        return authError;
+      }
+
+      final prefix =
+          request.url.queryParameters['prefix']?.trim().toLowerCase() ?? '';
+      if (prefix.isEmpty) {
+        return Response.ok(
+          jsonEncode({'success': true, 'names': const <String>[]}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final rows = await _bookEventRecordRows(bookUuid);
+      final names =
+          rows
+              .map((row) => row['name']?.toString().trim() ?? '')
+              .where(
+                (name) =>
+                    name.isNotEmpty && name.toLowerCase().startsWith(prefix),
+              )
+              .toSet()
+              .toList()
+            ..sort();
+
+      return Response.ok(
+        jsonEncode({'success': true, 'names': names}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to load name suggestions: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> _getRecordNumberSuggestions(
+    Request request,
+    String bookUuid,
+  ) async {
+    try {
+      final authError = await _authorizeBookAccess(request, bookUuid);
+      if (authError != null) {
+        return authError;
+      }
+
+      final prefix =
+          request.url.queryParameters['prefix']?.trim().toLowerCase() ?? '';
+      final namePrefix =
+          request.url.queryParameters['namePrefix']?.trim().toLowerCase() ?? '';
+      if (prefix.isEmpty) {
+        return Response.ok(
+          jsonEncode({'success': true, 'pairs': const <Map<String, String>>[]}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final rows = await _bookEventRecordRows(bookUuid);
+      final pairs = <Map<String, String>>[];
+      final seen = <String>{};
+      for (final row in rows) {
+        final name = row['name']?.toString().trim() ?? '';
+        final recordNumber = row['record_number']?.toString().trim() ?? '';
+        if (name.isEmpty || recordNumber.isEmpty) {
+          continue;
+        }
+        if (!recordNumber.toLowerCase().startsWith(prefix)) {
+          continue;
+        }
+        if (namePrefix.isNotEmpty &&
+            !name.toLowerCase().startsWith(namePrefix)) {
+          continue;
+        }
+
+        final key = '$name::$recordNumber';
+        if (!seen.add(key)) {
+          continue;
+        }
+        pairs.add({'name': name, 'record_number': recordNumber});
+      }
+
+      pairs.sort((a, b) {
+        final numberCompare = a['record_number']!.compareTo(
+          b['record_number']!,
+        );
+        if (numberCompare != 0) {
+          return numberCompare;
+        }
+        return a['name']!.compareTo(b['name']!);
+      });
+
+      return Response.ok(
+        jsonEncode({'success': true, 'pairs': pairs}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to load record number suggestions: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
   }
 
   Map<String, dynamic> _serializeEvent(Map<String, dynamic> row) {

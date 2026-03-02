@@ -281,4 +281,103 @@ void main() {
       }
     },
   );
+
+  test(
+    'API-CLIENT-EVENT-005: fetchNameSuggestions sends prefix query and device headers',
+    () async {
+      final requests = <HttpRequest>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requests.add(request);
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'success': true,
+            'names': ['Alice', 'Amy'],
+          }),
+        );
+        await request.response.close();
+      });
+
+      final apiClient = ApiClient(
+        baseUrl: 'http://${server.address.address}:${server.port}',
+      );
+
+      try {
+        final names = await apiClient.fetchNameSuggestions(
+          bookUuid: 'book-1',
+          prefix: 'a',
+          deviceId: 'device-1',
+          deviceToken: 'token-1',
+        );
+
+        expect(names, ['Alice', 'Amy']);
+        expect(requests.length, 1);
+        final request = requests.single;
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/books/book-1/query-options/names');
+        expect(request.uri.queryParameters['prefix'], 'a');
+        expect(request.headers.value('x-device-id'), 'device-1');
+        expect(request.headers.value('x-device-token'), 'token-1');
+      } finally {
+        apiClient.dispose();
+        await server.close(force: true);
+      }
+    },
+  );
+
+  test(
+    'API-CLIENT-EVENT-006: fetchRecordNumberSuggestions sends prefix and namePrefix query params',
+    () async {
+      final requests = <HttpRequest>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requests.add(request);
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'success': true,
+            'pairs': [
+              {'name': 'Alice', 'record_number': '100'},
+            ],
+          }),
+        );
+        await request.response.close();
+      });
+
+      final apiClient = ApiClient(
+        baseUrl: 'http://${server.address.address}:${server.port}',
+      );
+
+      try {
+        final pairs = await apiClient.fetchRecordNumberSuggestions(
+          bookUuid: 'book-1',
+          prefix: '1',
+          namePrefix: 'al',
+          deviceId: 'device-1',
+          deviceToken: 'token-1',
+        );
+
+        expect(pairs, [
+          {'name': 'Alice', 'record_number': '100'},
+        ]);
+        expect(requests.length, 1);
+        final request = requests.single;
+        expect(request.method, 'GET');
+        expect(
+          request.uri.path,
+          '/api/books/book-1/query-options/record-numbers',
+        );
+        expect(request.uri.queryParameters['prefix'], '1');
+        expect(request.uri.queryParameters['namePrefix'], 'al');
+        expect(request.headers.value('x-device-id'), 'device-1');
+        expect(request.headers.value('x-device-token'), 'token-1');
+      } finally {
+        apiClient.dispose();
+        await server.close(force: true);
+      }
+    },
+  );
 }
