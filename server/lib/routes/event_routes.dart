@@ -27,6 +27,8 @@ class _PreparedEventCreate {
 
 /// Event routes (record-based architecture)
 class EventRoutes {
+  static const int _queryPageSize = 500;
+
   final DatabaseConnection db;
   late final Router bookScopedRouter;
   final NoteService _noteService;
@@ -284,13 +286,25 @@ class EventRoutes {
   Future<List<Map<String, dynamic>>> _bookEventRecordRows(
     String bookUuid,
   ) async {
-    final eventRows = _rows(
-      await db.client
-          .from('events')
-          .select('record_uuid, title')
-          .eq('book_uuid', bookUuid)
-          .eq('is_deleted', false),
-    );
+    final eventRows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += _queryPageSize) {
+      final batch = _rows(
+        await db.client
+            .from('events')
+            .select('record_uuid, title')
+            .eq('book_uuid', bookUuid)
+            .eq('is_deleted', false)
+            .order('id', ascending: true)
+            .range(offset, offset + _queryPageSize - 1),
+      );
+      if (batch.isEmpty) {
+        break;
+      }
+      eventRows.addAll(batch);
+      if (batch.length < _queryPageSize) {
+        break;
+      }
+    }
 
     final recordUuids = eventRows
         .map((row) => row['record_uuid']?.toString() ?? '')
@@ -300,15 +314,21 @@ class EventRoutes {
 
     final recordsById = <String, Map<String, dynamic>>{};
     if (recordUuids.isNotEmpty) {
-      final recordRows = _rows(
-        await db.client
-            .from('records')
-            .select('record_uuid, record_number, name')
-            .inFilter('record_uuid', recordUuids)
-            .eq('is_deleted', false),
-      );
-      for (final row in recordRows) {
-        recordsById[row['record_uuid']?.toString() ?? ''] = row;
+      for (var i = 0; i < recordUuids.length; i += _queryPageSize) {
+        final chunk = recordUuids.sublist(
+          i,
+          (i + _queryPageSize).clamp(0, recordUuids.length),
+        );
+        final recordRows = _rows(
+          await db.client
+              .from('records')
+              .select('record_uuid, record_number, name')
+              .inFilter('record_uuid', chunk)
+              .eq('is_deleted', false),
+        );
+        for (final row in recordRows) {
+          recordsById[row['record_uuid']?.toString() ?? ''] = row;
+        }
       }
     }
 
