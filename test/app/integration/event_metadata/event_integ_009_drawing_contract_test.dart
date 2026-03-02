@@ -6,6 +6,8 @@ import 'package:schedule_note_app/services/api_client.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg009({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-009: drawing server contract covers fetch/save/update/delete',
@@ -176,6 +178,7 @@ void registerEventInteg009({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 
@@ -339,6 +342,7 @@ void registerEventInteg009({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 
@@ -475,6 +479,7 @@ void registerEventInteg009({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

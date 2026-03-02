@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg004({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-004: no-record event note persists after reenter fill record number update',
@@ -171,6 +173,7 @@ void registerEventInteg004({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

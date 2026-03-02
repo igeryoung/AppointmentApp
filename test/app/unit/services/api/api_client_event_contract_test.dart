@@ -146,4 +146,139 @@ void main() {
       }
     },
   );
+
+  test(
+    'API-CLIENT-EVENT-003: fetchEventDetailBundle returns event, record, and note with device headers',
+    () async {
+      final requests = <HttpRequest>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requests.add(request);
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'success': true,
+            'event': {
+              'id': 'event-1',
+              'book_uuid': 'book-1',
+              'record_uuid': 'record-1',
+              'record_name': 'Alice',
+              'record_number': '001',
+              'event_types': '["consultation"]',
+              'has_charge_items': false,
+              'start_time': 1760058000,
+              'end_time': 1760059800,
+              'created_at': 1760057000,
+              'updated_at': 1760057100,
+              'is_removed': false,
+              'is_checked': false,
+              'has_note': true,
+              'version': 2,
+            },
+            'record': {
+              'record_uuid': 'record-1',
+              'record_number': '001',
+              'name': 'Alice',
+              'phone': '0900000000',
+              'version': 4,
+            },
+            'note': {
+              'id': 'note-1',
+              'record_uuid': 'record-1',
+              'pages_data': '{"pages":[]}',
+              'created_at': '2026-03-02T00:00:00Z',
+              'updated_at': '2026-03-02T00:00:01Z',
+              'version': 5,
+            },
+          }),
+        );
+        await request.response.close();
+      });
+
+      final apiClient = ApiClient(
+        baseUrl: 'http://${server.address.address}:${server.port}',
+      );
+
+      try {
+        final bundle = await apiClient.fetchEventDetailBundle(
+          bookUuid: 'book-1',
+          eventId: 'event-1',
+          deviceId: 'device-1',
+          deviceToken: 'token-1',
+        );
+
+        expect(bundle, isNotNull);
+        expect(requests.length, 1);
+        final request = requests.single;
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/books/book-1/event-details/event-1');
+        expect(request.headers.value('x-device-id'), 'device-1');
+        expect(request.headers.value('x-device-token'), 'token-1');
+        expect((bundle!['record'] as Map<String, dynamic>)['name'], 'Alice');
+        expect((bundle['note'] as Map<String, dynamic>)['version'], 5);
+      } finally {
+        apiClient.dispose();
+        await server.close(force: true);
+      }
+    },
+  );
+
+  test(
+    'API-CLIENT-EVENT-004: updateEventDetailBundle sends event and record payloads together',
+    () async {
+      final requests = <HttpRequest>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requests.add(request);
+        final body = await utf8.decoder.bind(request).join();
+        final payload = jsonDecode(body) as Map<String, dynamic>;
+        expect(payload['event']['title'], 'Edited');
+        expect(payload['record']['phone'], '0900000000');
+
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'success': true,
+            'event': {
+              'id': 'event-1',
+              'book_uuid': 'book-1',
+              'record_uuid': 'record-1',
+              'title': 'Edited',
+            },
+            'record': {'record_uuid': 'record-1', 'phone': '0900000000'},
+            'note': null,
+          }),
+        );
+        await request.response.close();
+      });
+
+      final apiClient = ApiClient(
+        baseUrl: 'http://${server.address.address}:${server.port}',
+      );
+
+      try {
+        final response = await apiClient.updateEventDetailBundle(
+          bookUuid: 'book-1',
+          eventId: 'event-1',
+          eventData: {'title': 'Edited'},
+          recordData: {'phone': '0900000000'},
+          deviceId: 'device-1',
+          deviceToken: 'token-1',
+        );
+
+        expect(requests.length, 1);
+        final request = requests.single;
+        expect(request.method, 'PATCH');
+        expect(request.uri.path, '/api/books/book-1/event-details/event-1');
+        expect(request.headers.value('x-device-id'), 'device-1');
+        expect(request.headers.value('x-device-token'), 'token-1');
+        expect((response['event'] as Map<String, dynamic>)['title'], 'Edited');
+      } finally {
+        apiClient.dispose();
+        await server.close(force: true);
+      }
+    },
+  );
 }

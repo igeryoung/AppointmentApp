@@ -7,6 +7,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg005({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-005: events endpoint rejects requests without required device headers',
@@ -33,6 +35,7 @@ void registerEventInteg005({required LiveServerConfig? config}) {
         httpClient.close();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 
@@ -157,6 +160,7 @@ void registerEventInteg005({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

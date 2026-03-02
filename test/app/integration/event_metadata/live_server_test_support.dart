@@ -15,6 +15,7 @@ const String liveServerSkipReason =
     'SN_TEST_RECORD_UUID. Optional: SN_TEST_BOOK_PASSWORD.';
 const String liveDeviceRoleRead = 'read';
 const String liveDeviceRoleWrite = 'write';
+const Timeout liveServerTestTimeout = Timeout(Duration(minutes: 2));
 
 class LiveDeviceCredentials {
   final String deviceId;

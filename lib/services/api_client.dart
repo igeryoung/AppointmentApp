@@ -120,6 +120,45 @@ class ApiClient {
     }
   }
 
+  /// Resolve a canonical record on the server, creating one if needed.
+  Future<Map<String, dynamic>> getOrCreateRecord({
+    required String recordNumber,
+    required String name,
+    String? phone,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client
+          .post(
+            Uri.parse('$baseUrl/api/records/get-or-create'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+            body: jsonEncode({
+              'record_number': recordNumber,
+              'name': name,
+              'phone': phone,
+            }),
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+
+      throw ApiException(
+        'Get or create record failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Update record metadata on server.
   /// Used to sync record-level fields (name/phone/record_number).
   Future<Map<String, dynamic>> updateRecord({
@@ -187,6 +226,77 @@ class ApiClient {
       } else {
         throw ApiException(
           'Fetch event failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Fetch record details from the server.
+  Future<Map<String, dynamic>?> fetchRecordDetails({
+    required String bookUuid,
+    required String recordUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid/records/$recordUuid'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        final json = jsonDecode(response.body) as Map<String, dynamic>;
+        return json['record'] as Map<String, dynamic>?;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw ApiException(
+          'Fetch record details failed: ${response.statusCode}',
+          statusCode: response.statusCode,
+          responseBody: response.body,
+        );
+      }
+    } catch (e) {
+      rethrow;
+    }
+  }
+
+  /// Fetch event, record, and note in one request.
+  Future<Map<String, dynamic>?> fetchEventDetailBundle({
+    required String bookUuid,
+    required String eventId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/books/$bookUuid/event-details/$eventId'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw ApiException(
+          'Fetch event detail bundle failed: ${response.statusCode}',
           statusCode: response.statusCode,
           responseBody: response.body,
         );
@@ -312,6 +422,51 @@ class ApiClient {
 
     throw ApiException(
       'Update event failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  /// Update event and record metadata in one request.
+  Future<Map<String, dynamic>> updateEventDetailBundle({
+    required String bookUuid,
+    required String eventId,
+    required Map<String, dynamic> eventData,
+    required Map<String, dynamic> recordData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .patch(
+          Uri.parse('$baseUrl/api/books/$bookUuid/event-details/$eventId'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+          body: jsonEncode({'event': eventData, 'record': recordData}),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    if (response.statusCode == 409) {
+      String message = 'Event detail version conflict';
+      try {
+        final body = jsonDecode(response.body) as Map<String, dynamic>;
+        message = body['message'] as String? ?? message;
+      } catch (_) {}
+      throw ApiConflictException(
+        message,
+        statusCode: 409,
+        responseBody: response.body,
+      );
+    }
+
+    throw ApiException(
+      'Update event detail bundle failed: ${response.statusCode}',
       statusCode: response.statusCode,
       responseBody: response.body,
     );

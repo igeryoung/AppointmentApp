@@ -12,7 +12,6 @@ import '../../services/database/prd_database_service.dart';
 import '../../services/content_service.dart';
 import '../../services/api_client.dart';
 import '../../services/server_config_service.dart';
-import '../../services/save_sync_notifier.dart';
 import 'event_detail_state.dart';
 import 'adapters/connectivity_watcher.dart';
 import 'adapters/server_health_checker.dart';
@@ -85,18 +84,11 @@ class EventDetailController {
       _serverHealthChecker = ServerHealthChecker(_contentService!);
 
       // Mark services as ready
-      _updateState(_state.copyWith(isServicesReady: true));
-
-      // Step 1.5: Check actual server connectivity on startup
-      final serverReachable = await _checkServerConnectivity();
-      _updateState(_state.copyWith(isOffline: !serverReachable));
+      _updateState(_state.copyWith(isServicesReady: true, isOffline: false));
 
       // Step 2: Load initial data (now that ContentService is ready)
       if (!isNew) {
-        await _ensureLocalEventCache();
-        await _logLocalEventSnapshot();
         await _refreshEventFromServer();
-        await loadNote();
         await loadChargeItems(); // Load charge items from charge_items table
         if (event.hasNewTime) {
           await _loadNewEvent();
@@ -115,51 +107,6 @@ class EventDetailController {
     }
   }
 
-  Future<void> _ensureLocalEventCache() async {
-    if (isNew || event.id == null) {
-      return;
-    }
-
-    if (_dbService is! PRDDatabaseService) {
-      return;
-    }
-
-    final prdDb = _dbService as PRDDatabaseService;
-    final db = await prdDb.database;
-    final createdAtSeconds =
-        event.createdAt.toUtc().millisecondsSinceEpoch ~/ 1000;
-    final updatedAtSeconds =
-        event.updatedAt.toUtc().millisecondsSinceEpoch ~/ 1000;
-
-    if (event.recordUuid.isNotEmpty) {
-      final existingRecord = await prdDb.getRecordByUuid(event.recordUuid);
-      if (existingRecord == null) {
-        await db.insert('records', {
-          'record_uuid': event.recordUuid,
-          'record_number': event.recordNumber,
-          'name': event.title.isEmpty ? null : event.title,
-          'phone': null,
-          'created_at': createdAtSeconds,
-          'updated_at': updatedAtSeconds,
-          'version': 1,
-          'is_dirty': 0,
-          'is_deleted': 0,
-        }, conflictAlgorithm: ConflictAlgorithm.ignore);
-      }
-    }
-
-    final existingEvent = await prdDb.getEventById(event.id!);
-    if (existingEvent == null) {
-      final eventMap = event.toMap();
-      eventMap['is_dirty'] = 0;
-      await db.insert(
-        'events',
-        eventMap,
-        conflictAlgorithm: ConflictAlgorithm.ignore,
-      );
-    }
-  }
-
   /// Load new event for time change display
   Future<void> _loadNewEvent() async {
     if (event.newEventId == null) return;
@@ -174,42 +121,80 @@ class EventDetailController {
       return;
     }
 
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
     try {
+      final prdDb = _dbService as PRDDatabaseService;
+      final credentials = await prdDb.getDeviceCredentials();
+      if (credentials == null) {
+        return;
+      }
+
       await _logEventTime('before_server_fetch', event);
-      final refreshedEvent = await _contentService!.refreshEventFromServer(
-        event.id!,
+      final bundle = await _contentService!.apiClient.fetchEventDetailBundle(
+        bookUuid: event.bookUuid,
+        eventId: event.id!,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
       );
-      if (refreshedEvent != null) {
-        // Persist server-authoritative data locally to prevent stale local values from overriding UI
-        await _dbService.replaceEventWithServerData(refreshedEvent);
+      if (bundle != null) {
+        final eventPayload = bundle['event'] as Map<String, dynamic>?;
+        if (eventPayload == null) {
+          return;
+        }
+        final refreshedEvent = Event.fromServerResponse(eventPayload);
+        final recordDetails = bundle['record'] as Map<String, dynamic>?;
+        final notePayload = bundle['note'] as Map<String, dynamic>?;
+        final serverNote = notePayload == null
+            ? null
+            : Note.fromServer(notePayload);
+
+        await _cacheServerMetadataLocally(
+          prdDb: prdDb,
+          savedEvent: refreshedEvent,
+          name: (recordDetails?['name'] ?? '').toString(),
+          recordNumber:
+              (recordDetails?['record_number'] ?? refreshedEvent.recordNumber)
+                  .toString(),
+          phone: recordDetails?['phone']?.toString(),
+        );
 
         await _logEventTime('after_server_fetch', refreshedEvent);
 
-        // Get record data (name, phone) from record via recordUuid
-        String name = '';
-        String phone = '';
-        if (_dbService is PRDDatabaseService) {
-          final prdDb = _dbService as PRDDatabaseService;
-          final record = await prdDb.getRecordByUuid(refreshedEvent.recordUuid);
-          if (record != null) {
-            name = record.name ?? '';
-            phone = record.phone ?? '';
-          }
-        }
+        final name = (recordDetails?['name'] ?? '').toString();
+        final phone = (recordDetails?['phone'] ?? '').toString();
+        final recordNumber =
+            (recordDetails?['record_number'] ?? refreshedEvent.recordNumber)
+                .toString();
 
         _updateState(
           _state.copyWith(
             name: name,
-            recordNumber: refreshedEvent.recordNumber,
+            recordNumber: recordNumber,
             phone: phone,
             selectedEventTypes: refreshedEvent.eventTypes,
             startTime: refreshedEvent.startTime,
             endTime: refreshedEvent.endTime,
+            note: serverNote,
+            clearNote: serverNote == null,
+            lastKnownPages: serverNote?.pages ?? const [[]],
+            erasedStrokesByEvent: serverNote?.erasedStrokesByEvent ?? const {},
+            isLoadingFromServer: false,
+            hasUnsyncedChanges: false,
+            isOffline: false,
           ),
         );
+        _noteEditedInSession = false;
+        _incrementNoteGeneration();
         await _logStateTime('after_state_update');
       }
-    } catch (e) {}
+    } catch (e) {
+      _updateState(
+        _state.copyWith(isOffline: true, isLoadingFromServer: false),
+      );
+    }
   }
 
   /// Setup network connectivity monitoring for automatic sync retry
@@ -343,6 +328,178 @@ class EventDetailController {
     _incrementNoteGeneration();
   }
 
+  Future<Event> _saveEventMetadataServerFirst({
+    required PRDDatabaseService prdDb,
+    required String name,
+    required String recordNumber,
+    required String? phone,
+    required bool shouldClearEndTime,
+  }) async {
+    if (_contentService == null) {
+      throw Exception('Cannot save event: Services not initialized');
+    }
+
+    final credentials = await prdDb.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception('Device not registered, cannot save to server');
+    }
+
+    final apiClient = _contentService!.apiClient;
+    final resolvedRecordUuid = await _resolveServerRecordUuidForSave(
+      apiClient: apiClient,
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+      name: name,
+      recordNumber: recordNumber,
+      phone: phone,
+    );
+
+    final title = PRDDatabaseService.generateTitle(name, recordNumber);
+    final eventDraft = event.copyWith(
+      recordUuid: resolvedRecordUuid,
+      title: title,
+      recordNumber: recordNumber,
+      eventTypes: _state.selectedEventTypes,
+      startTime: _state.startTime,
+      endTime: _state.endTime,
+      clearEndTime: shouldClearEndTime,
+    );
+    final payload = _buildEventSyncPayload(
+      eventDraft,
+      name: name,
+      phone: phone,
+    );
+    final recordPayload = {
+      'name': name,
+      'phone': phone,
+      'record_number': recordNumber,
+    };
+
+    late final Event savedEvent;
+    if (isNew) {
+      final savedPayload = await apiClient.createEvent(
+        bookUuid: event.bookUuid,
+        eventData: payload,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      savedEvent = Event.fromServerResponse(savedPayload);
+    } else {
+      final savedBundle = await apiClient.updateEventDetailBundle(
+        bookUuid: event.bookUuid,
+        eventId: event.id!,
+        eventData: payload,
+        recordData: recordPayload,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      final savedPayload = savedBundle['event'] as Map<String, dynamic>?;
+      if (savedPayload == null) {
+        throw Exception('Server did not return an event payload');
+      }
+      savedEvent = Event.fromServerResponse(savedPayload);
+    }
+    if (isNew) {
+      await apiClient.updateRecord(
+        recordUuid: savedEvent.recordUuid,
+        recordData: recordPayload,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+    }
+
+    await _cacheServerMetadataLocally(
+      prdDb: prdDb,
+      savedEvent: savedEvent,
+      name: name,
+      recordNumber: recordNumber,
+      phone: phone,
+    );
+
+    return savedEvent;
+  }
+
+  Future<String> _resolveServerRecordUuidForSave({
+    required ApiClient apiClient,
+    required String deviceId,
+    required String deviceToken,
+    required String name,
+    required String recordNumber,
+    required String? phone,
+  }) async {
+    final currentRecordNumber = event.recordNumber.trim();
+    final canReuseCurrentRecord =
+        !isNew &&
+        event.recordUuid.isNotEmpty &&
+        currentRecordNumber == recordNumber;
+    if (canReuseCurrentRecord) {
+      return event.recordUuid;
+    }
+
+    final record = await apiClient.getOrCreateRecord(
+      recordNumber: recordNumber,
+      name: name,
+      phone: phone,
+      deviceId: deviceId,
+      deviceToken: deviceToken,
+    );
+    final recordUuid = (record['record_uuid'] ?? record['recordUuid'])
+        ?.toString()
+        .trim();
+    if (recordUuid == null || recordUuid.isEmpty) {
+      throw Exception('Server did not return a record_uuid');
+    }
+    return recordUuid;
+  }
+
+  Future<void> _cacheServerMetadataLocally({
+    required PRDDatabaseService prdDb,
+    required Event savedEvent,
+    required String name,
+    required String recordNumber,
+    required String? phone,
+  }) async {
+    final db = await prdDb.database;
+    final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+
+    final existingRecord = await prdDb.getRecordByUuid(savedEvent.recordUuid);
+    if (existingRecord == null) {
+      await db.insert('records', {
+        'record_uuid': savedEvent.recordUuid,
+        'record_number': recordNumber,
+        'name': name,
+        'phone': phone,
+        'created_at': nowSeconds,
+        'updated_at': nowSeconds,
+        'version': 1,
+        'is_dirty': 0,
+        'is_deleted': 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+    } else {
+      await db.update(
+        'records',
+        {
+          'record_number': recordNumber,
+          'name': name,
+          'phone': phone,
+          'updated_at': nowSeconds,
+          'is_dirty': 0,
+          'is_deleted': 0,
+        },
+        where: 'record_uuid = ?',
+        whereArgs: [savedEvent.recordUuid],
+      );
+    }
+
+    final eventMap = savedEvent.toMap();
+    eventMap['is_dirty'] = 0;
+    await db.insert(
+      'events',
+      eventMap,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
   /// Save event with handwriting note
   Future<Event> saveEvent({
     Size? canvasSize,
@@ -357,6 +514,7 @@ class EventDetailController {
       final nameText = _state.name.trim();
       final recordNumberText = _state.recordNumber.trim();
       final phoneText = _state.phone.trim();
+      final normalizedPhone = phoneText.isEmpty ? null : phoneText;
 
       // Check if user cleared the end time (converting close-end to open-end event)
       final shouldClearEndTime =
@@ -366,153 +524,79 @@ class EventDetailController {
         throw Exception('PRDDatabaseService required');
       }
       final prdDb = _dbService as PRDDatabaseService;
+      final savedEvent = await _saveEventMetadataServerFirst(
+        prdDb: prdDb,
+        name: nameText,
+        recordNumber: recordNumberText,
+        phone: normalizedPhone,
+        shouldClearEndTime: shouldClearEndTime,
+      );
 
-      Event savedEvent;
-      if (isNew) {
-        // Create new event with record handling
-        savedEvent = await prdDb.createEventWithRecord(
-          bookUuid: event.bookUuid,
-          name: nameText,
-          recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
-          phone: phoneText.isEmpty ? null : phoneText,
-          eventTypes: _state.selectedEventTypes,
-          startTime: _state.startTime,
-          endTime: _state.endTime,
-          eventId: event.id,
+      final oldRecordNumber = event.recordNumber.trim();
+      final recordNumberAdded =
+          oldRecordNumber.isEmpty && recordNumberText.isNotEmpty;
+      final recordRelinked =
+          event.recordUuid.isNotEmpty &&
+          savedEvent.recordUuid != event.recordUuid;
+      final shouldCarryForwardCurrentNote =
+          recordNumberAdded && recordRelinked && _hasCurrentNoteContent(pages);
+
+      if ((isNew && recordNumberText.isNotEmpty) || recordNumberAdded) {
+        final existingNote = await _fetchExistingNoteForRecordUuid(
+          bookUuid: savedEvent.bookUuid,
+          recordUuid: savedEvent.recordUuid,
         );
-
-        // Check for existing note for this record
-        if (recordNumberText.isNotEmpty) {
-          final existingNote = await _fetchExistingNoteForRecordNumber(
-            recordNumber: recordNumberText,
-            name: nameText,
-            allowServerLookup: false,
+        if (existingNote != null &&
+            existingNote.isNotEmpty &&
+            !shouldCarryForwardCurrentNote) {
+          _updateState(
+            _state.copyWith(
+              note: existingNote,
+              lastKnownPages: existingNote.pages,
+              isLoading: false,
+              hasChanges: false,
+              hasUnsyncedChanges: false,
+              isOffline: false,
+            ),
           );
-          if (existingNote != null && existingNote.isNotEmpty) {
-            // Load existing note (safety: never lose existing patient data)
-            _updateState(
-              _state.copyWith(
-                note: existingNote,
-                lastKnownPages: existingNote.pages,
-              ),
-            );
-            // Loaded existing note only; do not save unless user edited note in this session.
-            _noteEditedInSession = false;
-            _startAsyncServerSync(
-              eventData: savedEvent,
-              pages: pages,
-              shouldSaveNote: false,
-              canvasSize: canvasSize,
-              preferIncomingServerNote: isAutoSave,
-              name: nameText,
-              recordNumber: recordNumberText,
-              phone: phoneText.isEmpty ? null : phoneText,
-              allowCreateOnMissingEvent: true,
-            );
-            _updateState(
-              _state.copyWith(
-                isLoading: false,
-                hasChanges: false,
-                hasUnsyncedChanges: true,
-              ),
-            );
-            return savedEvent;
-          }
-        }
-      } else {
-        // Update existing event with record handling
-        savedEvent = await prdDb.updateEventWithRecord(
-          event: event,
-          name: nameText,
-          recordNumber: recordNumberText.isEmpty ? null : recordNumberText,
-          phone: phoneText.isEmpty ? null : phoneText,
-          eventTypes: _state.selectedEventTypes,
-          startTime: _state.startTime,
-          endTime: _state.endTime,
-          clearEndTime: shouldClearEndTime,
-        );
-
-        // Check if record_number was added and there's an existing note
-        final oldRecordNumber = event.recordNumber.trim();
-        final recordNumberAdded =
-            oldRecordNumber.isEmpty && recordNumberText.isNotEmpty;
-        final recordRelinked =
-            event.recordUuid.isNotEmpty &&
-            savedEvent.recordUuid != event.recordUuid;
-        final shouldCarryForwardCurrentNote =
-            recordNumberAdded &&
-            recordRelinked &&
-            _hasCurrentNoteContent(pages);
-
-        if (recordNumberAdded) {
-          final existingNote = await _fetchExistingNoteForRecordNumber(
-            recordNumber: recordNumberText,
-            name: nameText,
-            allowServerLookup: false,
-          );
-          if (existingNote != null &&
-              existingNote.isNotEmpty &&
-              !shouldCarryForwardCurrentNote) {
-            // Load existing note
-            _updateState(
-              _state.copyWith(
-                note: existingNote,
-                lastKnownPages: existingNote.pages,
-              ),
-            );
-            // Loaded existing note only; do not save unless user edited note in this session.
-            _noteEditedInSession = false;
-            _startAsyncServerSync(
-              eventData: savedEvent,
-              pages: pages,
-              shouldSaveNote: false,
-              canvasSize: canvasSize,
-              preferIncomingServerNote: isAutoSave,
-              name: nameText,
-              recordNumber: recordNumberText,
-              phone: phoneText.isEmpty ? null : phoneText,
-              allowCreateOnMissingEvent: false,
-            );
-            _updateState(
-              _state.copyWith(
-                isLoading: false,
-                hasChanges: false,
-                hasUnsyncedChanges: true,
-              ),
-            );
-            return savedEvent;
-          }
-        }
-
-        if (shouldCarryForwardCurrentNote && !_noteEditedInSession) {
-          _noteEditedInSession = true;
+          _noteEditedInSession = false;
+          return savedEvent;
         }
       }
 
-      final shouldSaveNote = _shouldSaveNote(pages);
+      if (shouldCarryForwardCurrentNote && !_noteEditedInSession) {
+        _noteEditedInSession = true;
+      }
 
-      _startAsyncServerSync(
-        eventData: savedEvent,
-        pages: pages,
-        shouldSaveNote: shouldSaveNote,
-        canvasSize: canvasSize,
-        preferIncomingServerNote: isAutoSave,
-        name: nameText,
-        recordNumber: recordNumberText,
-        phone: phoneText.isEmpty ? null : phoneText,
-        allowCreateOnMissingEvent: isNew,
-      );
+      final shouldSaveNote = _shouldSaveNote(pages);
+      if (shouldSaveNote) {
+        await saveNoteToServer(
+          savedEvent.id!,
+          pages,
+          eventDataOverride: savedEvent,
+          canvasSize: canvasSize,
+          preferIncomingServerNote: isAutoSave,
+          updateStateOnSuccess: true,
+        );
+      }
       _updateState(
         _state.copyWith(
           isLoading: false,
           hasChanges: false,
-          hasUnsyncedChanges: true,
+          hasUnsyncedChanges: false,
+          isOffline: false,
         ),
       );
 
       return savedEvent;
     } catch (e) {
-      _updateState(_state.copyWith(isLoading: false));
+      _updateState(
+        _state.copyWith(
+          isLoading: false,
+          hasUnsyncedChanges: true,
+          isOffline: true,
+        ),
+      );
       rethrow;
     }
   }
@@ -521,6 +605,7 @@ class EventDetailController {
   Future<void> saveNoteToServer(
     String eventId,
     List<List<Stroke>> pages, {
+    Event? eventDataOverride,
     Size? canvasSize,
     bool preferIncomingServerNote = false,
     bool updateStateOnSuccess = true,
@@ -534,13 +619,13 @@ class EventDetailController {
       throw Exception('Database service error');
     }
     final prdDb = _dbService as PRDDatabaseService;
-    final eventData = await prdDb.getEventById(eventId);
+    final eventData = eventDataOverride ?? await prdDb.getEventById(eventId);
     if (eventData == null) {
       throw Exception('Event not found');
     }
 
     Note? baseNote;
-    if (eventData.recordUuid.isNotEmpty) {
+    if (preferIncomingServerNote && eventData.recordUuid.isNotEmpty) {
       baseNote = await _noteSyncAdapter!.getNoteByRecordUuid(
         eventData.bookUuid,
         eventData.recordUuid,
@@ -561,13 +646,21 @@ class EventDetailController {
       return;
     }
 
-    final nextVersion = (baseNote?.version ?? 0) + 1;
-    final canvasWidth = canvasSize?.width ?? baseNote?.canvasWidth;
-    final canvasHeight = canvasSize?.height ?? baseNote?.canvasHeight;
+    final localBaseNote = _state.note;
+    final optimisticBaseVersion = localBaseNote?.version ?? 0;
+    final nextVersion = optimisticBaseVersion + 1;
+    final canvasWidth =
+        canvasSize?.width ??
+        localBaseNote?.canvasWidth ??
+        baseNote?.canvasWidth;
+    final canvasHeight =
+        canvasSize?.height ??
+        localBaseNote?.canvasHeight ??
+        baseNote?.canvasHeight;
 
-    // Merge erased strokes from base note and current state
+    // Merge erased strokes from the locally known note and current state.
     final mergedErasedStrokes = Map<String, List<String>>.from(
-      baseNote?.erasedStrokesByEvent ?? {},
+      localBaseNote?.erasedStrokesByEvent ?? const {},
     );
     for (final entry in _state.erasedStrokesByEvent.entries) {
       final existingList = mergedErasedStrokes[entry.key] ?? [];
@@ -586,14 +679,15 @@ class EventDetailController {
       erasedStrokesByEvent: mergedErasedStrokes,
       canvasWidth: canvasWidth,
       canvasHeight: canvasHeight,
-      createdAt: baseNote?.createdAt ?? DateTime.now(),
+      createdAt:
+          localBaseNote?.createdAt ?? baseNote?.createdAt ?? DateTime.now(),
       updatedAt: DateTime.now(),
       version: nextVersion,
     );
     debugPrint(
       '[EventDetail] saveNoteToServer: eventId=$eventId '
       'recordUuid=${eventData.recordUuid} '
-      'baseVersion=${baseNote?.version} nextVersion=$nextVersion',
+      'baseVersion=$optimisticBaseVersion nextVersion=$nextVersion',
     );
 
     // Save directly to server (no local cache)
@@ -616,91 +710,6 @@ class EventDetailController {
         ),
       );
     }
-  }
-
-  void _startAsyncServerSync({
-    required Event eventData,
-    required List<List<Stroke>> pages,
-    required bool shouldSaveNote,
-    required Size? canvasSize,
-    required bool preferIncomingServerNote,
-    required String name,
-    required String recordNumber,
-    required String? phone,
-    required bool allowCreateOnMissingEvent,
-  }) {
-    unawaited(
-      _runAsyncServerSync(
-        eventData: eventData,
-        pages: pages,
-        shouldSaveNote: shouldSaveNote,
-        canvasSize: canvasSize,
-        preferIncomingServerNote: preferIncomingServerNote,
-        name: name,
-        recordNumber: recordNumber,
-        phone: phone,
-        allowCreateOnMissingEvent: allowCreateOnMissingEvent,
-      ),
-    );
-  }
-
-  Future<void> _runAsyncServerSync({
-    required Event eventData,
-    required List<List<Stroke>> pages,
-    required bool shouldSaveNote,
-    required Size? canvasSize,
-    required bool preferIncomingServerNote,
-    required String name,
-    required String recordNumber,
-    required String? phone,
-    required bool allowCreateOnMissingEvent,
-  }) async {
-    try {
-      if (eventData.id == null) {
-        throw Exception('Cannot sync metadata: Event ID is missing');
-      }
-
-      if (shouldSaveNote) {
-        await saveNoteToServer(
-          eventData.id!,
-          pages,
-          canvasSize: canvasSize,
-          preferIncomingServerNote: preferIncomingServerNote,
-          updateStateOnSuccess: true,
-        );
-      }
-
-      // Keep existing sync order: note first, metadata second.
-      await _syncMetadataToServer(
-        eventData: eventData,
-        name: name,
-        recordNumber: recordNumber,
-        phone: phone,
-        allowCreateOnMissingEvent: allowCreateOnMissingEvent,
-      );
-
-      _updateState(
-        _state.copyWith(hasUnsyncedChanges: false, isOffline: false),
-      );
-    } catch (e) {
-      final message = _buildAsyncSyncErrorMessage(e);
-      SaveSyncNotifier.instance.notifyFailure(
-        SaveSyncFailure(
-          bookUuid: eventData.bookUuid,
-          eventId: eventData.id,
-          errorMessage: message,
-          occurredAt: DateTime.now(),
-        ),
-      );
-      _updateState(_state.copyWith(hasUnsyncedChanges: true, isOffline: true));
-    }
-  }
-
-  String _buildAsyncSyncErrorMessage(Object error) {
-    if (error is ApiException) {
-      return '${error.message} (status: ${error.statusCode ?? 'unknown'})';
-    }
-    return error.toString();
   }
 
   Future<Note> _saveNoteWithConflictRetry({
@@ -887,209 +896,6 @@ class EventDetailController {
     payload['phone'] = phone;
     payload['eventTypes'] = eventData.eventTypes.map((t) => t.name).toList();
     return payload;
-  }
-
-  Future<void> _syncMetadataToServer({
-    required Event eventData,
-    required String name,
-    required String recordNumber,
-    required String? phone,
-    bool allowCreateOnMissingEvent = false,
-  }) async {
-    if (_contentService == null) {
-      throw Exception('Cannot sync metadata: Services not initialized');
-    }
-    if (eventData.id == null) {
-      throw Exception('Cannot sync metadata: Event ID is missing');
-    }
-    if (_dbService is! PRDDatabaseService) return;
-
-    final prdDb = _dbService as PRDDatabaseService;
-    final credentials = await prdDb.getDeviceCredentials();
-    if (credentials == null) {
-      throw Exception('Device not registered, cannot sync metadata to server');
-    }
-
-    try {
-      final apiClient = _contentService!.apiClient;
-      final eventPayload = _buildEventSyncPayload(
-        eventData,
-        name: name,
-        phone: phone,
-      );
-      Map<String, dynamic>? syncedEventPayload;
-
-      debugPrint(
-        '[EventDetail] metadata sync start: eventId=${eventData.id} '
-        'bookUuid=${eventData.bookUuid} recordUuid=${eventData.recordUuid} '
-        'recordNumber="$recordNumber" allowCreateOnMissingEvent=$allowCreateOnMissingEvent',
-      );
-
-      try {
-        syncedEventPayload = await apiClient.updateEvent(
-          bookUuid: eventData.bookUuid,
-          eventId: eventData.id!,
-          eventData: eventPayload,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
-      } on ApiException catch (e) {
-        final shouldCreateFallback =
-            allowCreateOnMissingEvent && e.statusCode == 404;
-        if (!shouldCreateFallback) {
-          rethrow;
-        }
-
-        debugPrint(
-          '[EventDetail] metadata sync updateEvent 404 for eventId=${eventData.id}; '
-          'falling back to createEvent',
-        );
-        syncedEventPayload = await apiClient.createEvent(
-          bookUuid: eventData.bookUuid,
-          eventData: eventPayload,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
-      }
-
-      if (eventData.recordUuid.isNotEmpty) {
-        final recordData = {
-          'name': name,
-          'phone': phone,
-          'record_number': recordNumber,
-        };
-        var recordUuidForSync = eventData.recordUuid;
-        final serverRecordUuid = _extractRecordUuidFromEventPayload(
-          syncedEventPayload,
-        );
-        if (serverRecordUuid != null &&
-            serverRecordUuid.isNotEmpty &&
-            serverRecordUuid != recordUuidForSync) {
-          debugPrint(
-            '[EventDetail] metadata sync record_uuid remap from event response: '
-            'local=$recordUuidForSync server=$serverRecordUuid',
-          );
-          recordUuidForSync = serverRecordUuid;
-        }
-
-        debugPrint(
-          '[EventDetail] metadata sync updateRecord start: '
-          'eventId=${eventData.id} recordUuid=$recordUuidForSync',
-        );
-
-        try {
-          await apiClient.updateRecord(
-            recordUuid: recordUuidForSync,
-            recordData: recordData,
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-          );
-        } on ApiException catch (e) {
-          final shouldRetryWithServerRecord =
-              e.statusCode == 404 && recordUuidForSync == eventData.recordUuid;
-          if (!shouldRetryWithServerRecord) {
-            rethrow;
-          }
-
-          debugPrint(
-            '[EventDetail] metadata sync updateRecord 404: '
-            'recordUuid=${eventData.recordUuid}; fetching server event for remap',
-          );
-          final serverEvent = await apiClient.fetchEvent(
-            bookUuid: eventData.bookUuid,
-            eventId: eventData.id!,
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-          );
-          final retryRecordUuid = _extractRecordUuidFromEventPayload(
-            serverEvent,
-          );
-          if (retryRecordUuid == null || retryRecordUuid.isEmpty) {
-            rethrow;
-          }
-
-          debugPrint(
-            '[EventDetail] metadata sync retry updateRecord with server recordUuid=$retryRecordUuid',
-          );
-          await apiClient.updateRecord(
-            recordUuid: retryRecordUuid,
-            recordData: recordData,
-            deviceId: credentials.deviceId,
-            deviceToken: credentials.deviceToken,
-          );
-          recordUuidForSync = retryRecordUuid;
-        }
-
-        if (recordUuidForSync != eventData.recordUuid) {
-          await _updateLocalEventRecordUuid(
-            eventId: eventData.id!,
-            recordUuid: recordUuidForSync,
-          );
-        }
-      }
-
-      debugPrint(
-        '[EventDetail] metadata sync success: eventId=${eventData.id}',
-      );
-      _updateState(_state.copyWith(isOffline: false));
-    } catch (e) {
-      if (e is ApiException) {
-        debugPrint(
-          '[EventDetail] metadata sync failed: eventId=${eventData.id} '
-          'status=${e.statusCode} body=${e.responseBody}',
-        );
-      } else {
-        debugPrint(
-          '[EventDetail] metadata sync failed: eventId=${eventData.id} error=$e',
-        );
-      }
-      _updateState(_state.copyWith(isOffline: true));
-      rethrow;
-    }
-  }
-
-  String? _extractRecordUuidFromEventPayload(Map<String, dynamic>? payload) {
-    if (payload == null) return null;
-    final value = payload['record_uuid'] ?? payload['recordUuid'];
-    final text = value?.toString().trim();
-    if (text == null || text.isEmpty) {
-      return null;
-    }
-    return text;
-  }
-
-  Future<void> _updateLocalEventRecordUuid({
-    required String eventId,
-    required String recordUuid,
-  }) async {
-    if (_dbService is! PRDDatabaseService) {
-      return;
-    }
-    final prdDb = _dbService as PRDDatabaseService;
-    final localEvent = await prdDb.getEventById(eventId);
-    if (localEvent == null) {
-      return;
-    }
-
-    if (localEvent.recordUuid == recordUuid) {
-      return;
-    }
-
-    final localRecord = await prdDb.getRecordByUuid(recordUuid);
-    if (localRecord == null) {
-      debugPrint(
-        '[EventDetail] local event record_uuid update skipped: '
-        'target record not found locally (eventId=$eventId target=$recordUuid)',
-      );
-      return;
-    }
-
-    debugPrint(
-      '[EventDetail] local event record_uuid update: eventId=$eventId '
-      'from=${localEvent.recordUuid} to=$recordUuid',
-    );
-    final updatedEvent = localEvent.copyWith(recordUuid: recordUuid);
-    await prdDb.updateEvent(updatedEvent);
   }
 
   /// Delete event permanently
@@ -1531,38 +1337,74 @@ class EventDetailController {
       return null;
     }
 
-    if (_dbService is! PRDDatabaseService) {
-      return null;
+    final nameText = (name ?? _state.name).trim();
+    String recordUuid = '';
+
+    if (allowServerLookup &&
+        _contentService != null &&
+        _dbService is PRDDatabaseService &&
+        nameText.isNotEmpty) {
+      try {
+        final prdDb = _dbService as PRDDatabaseService;
+        final credentials = await prdDb.getDeviceCredentials();
+        if (credentials != null) {
+          final validation = await _contentService!.apiClient
+              .validateRecordNumber(
+                recordNumber: trimmedRecordNumber,
+                name: nameText,
+                deviceId: credentials.deviceId,
+                deviceToken: credentials.deviceToken,
+              );
+          if (validation.exists && validation.valid) {
+            recordUuid =
+                (validation.record?['record_uuid'] ??
+                        validation.record?['recordUuid'])
+                    ?.toString() ??
+                '';
+          }
+        }
+      } catch (e) {
+        return null;
+      }
     }
 
-    final prdDb = _dbService as PRDDatabaseService;
-    final nameText = (name ?? _state.name).trim();
+    if (recordUuid.isEmpty && _dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      final record = nameText.isNotEmpty
+          ? await prdDb.getRecordByNameAndRecordNumber(
+              nameText,
+              trimmedRecordNumber,
+            )
+          : null;
+      final fallbackRecord =
+          record ?? await prdDb.getRecordByRecordNumber(trimmedRecordNumber);
+      recordUuid = fallbackRecord?.recordUuid ?? '';
+    }
 
-    var record = nameText.isNotEmpty
-        ? await prdDb.getRecordByNameAndRecordNumber(
-            nameText,
-            trimmedRecordNumber,
-          )
-        : null;
-    record ??= await prdDb.getRecordByRecordNumber(trimmedRecordNumber);
-
-    final recordUuid = record?.recordUuid ?? '';
     if (recordUuid.isEmpty) {
       return null;
     }
 
-    if (_dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      final localNote = await prdDb.getNoteByRecordUuid(recordUuid);
-      if (localNote != null && localNote.isNotEmpty) {
-        return localNote;
-      }
+    return _fetchExistingNoteForRecordUuid(
+      bookUuid: event.bookUuid,
+      recordUuid: recordUuid,
+      allowServerLookup: allowServerLookup,
+    );
+  }
+
+  Future<Note?> _fetchExistingNoteForRecordUuid({
+    required String bookUuid,
+    required String recordUuid,
+    bool allowServerLookup = true,
+  }) async {
+    if (recordUuid.isEmpty) {
+      return null;
     }
 
     if (allowServerLookup && _noteSyncAdapter != null) {
       try {
         final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
-          event.bookUuid,
+          bookUuid,
           recordUuid,
         );
         if (serverNote != null) {
@@ -1570,6 +1412,14 @@ class EventDetailController {
         }
       } catch (e) {
         return null;
+      }
+    }
+
+    if (_dbService is PRDDatabaseService) {
+      final prdDb = _dbService as PRDDatabaseService;
+      final localNote = await prdDb.getNoteByRecordUuid(recordUuid);
+      if (localNote != null && localNote.isNotEmpty) {
+        return localNote;
       }
     }
 
@@ -1796,25 +1646,6 @@ class EventDetailController {
       (ids) => ids.isNotEmpty,
     );
     return hasAnyStroke || hasAnyErasedStroke;
-  }
-
-  Future<void> _logLocalEventSnapshot() async {
-    if (!kDebugMode || event.id == null) return;
-
-    try {
-      final local = await _dbService.getEventById(event.id!);
-      if (local == null) {
-        debugPrint('[EventDetail] Local fetch for ${event.id} returned null');
-        return;
-      }
-
-      debugPrint(
-        '[EventDetail] Local event snapshot id=${local.id} start=${local.startTime.toIso8601String()} (isUtc=${local.startTime.isUtc}) '
-        'end=${local.endTime?.toIso8601String()} created=${local.createdAt.toIso8601String()} updated=${local.updatedAt.toIso8601String()}',
-      );
-    } catch (e) {
-      debugPrint('[EventDetail] Failed to log local event snapshot: $e');
-    }
   }
 
   Future<void> _logEventTime(String label, Event e) async {

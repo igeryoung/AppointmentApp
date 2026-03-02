@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg012({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-012: stale writer gets conflict and keeps newer server note',
@@ -187,6 +189,7 @@ void registerEventInteg012({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

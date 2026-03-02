@@ -5,6 +5,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg011({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-011: multi-device metadata updates keep last writer value',
@@ -118,6 +120,7 @@ void registerEventInteg011({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

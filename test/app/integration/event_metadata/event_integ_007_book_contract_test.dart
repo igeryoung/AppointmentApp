@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg007({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-007: book server contract covers create/list/update/archive/delete, bundle pull, and password guard',
@@ -246,6 +248,7 @@ void registerEventInteg007({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg003({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-003: has_note stays false for new event that only shares an existing record note',
@@ -176,6 +178,7 @@ void registerEventInteg003({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

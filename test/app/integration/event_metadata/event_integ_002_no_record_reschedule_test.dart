@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg002({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-002: no-record-number note remains visible for old/new events after reschedule',
@@ -153,6 +155,7 @@ void registerEventInteg002({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

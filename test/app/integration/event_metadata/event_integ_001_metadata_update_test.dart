@@ -4,6 +4,8 @@ import 'package:schedule_note_app/services/http_client_factory.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg001({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-001: event metadata update persists on live server',
@@ -161,6 +163,7 @@ void registerEventInteg001({required LiveServerConfig? config}) {
         httpClient.close();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

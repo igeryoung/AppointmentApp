@@ -37,6 +37,8 @@ class EventRoutes {
       ..get('/<bookUuid>/events', _getEventsByDateRange)
       ..post('/<bookUuid>/events', _createEvent)
       ..post('/<bookUuid>/heavy-test/events/bulk', _createEventsBulkHeavyTest)
+      ..get('/<bookUuid>/event-details/<eventId>', _getEventDetailBundle)
+      ..patch('/<bookUuid>/event-details/<eventId>', _updateEventDetailBundle)
       ..get('/<bookUuid>/events/<eventId>', _getEventDetail)
       ..patch('/<bookUuid>/events/<eventId>', _updateEvent)
       ..post('/<bookUuid>/events/<eventId>/remove', _removeEvent)
@@ -287,6 +289,60 @@ class EventRoutes {
     };
   }
 
+  Map<String, dynamic> _serializeRecord(Map<String, dynamic> row) {
+    int? asSeconds(dynamic v) {
+      if (v == null) return null;
+      return _asUtc(v).millisecondsSinceEpoch ~/ 1000;
+    }
+
+    return {
+      'record_uuid': row['record_uuid'],
+      'record_number': row['record_number'],
+      'name': row['name'],
+      'phone': row['phone'],
+      'created_at': asSeconds(row['created_at']),
+      'updated_at': asSeconds(row['updated_at']),
+      'version': (row['version'] as num?)?.toInt() ?? 1,
+    };
+  }
+
+  Map<String, dynamic> _serializeNote(Map<String, dynamic> row) {
+    return {
+      'id': row['id'],
+      'record_uuid': row['record_uuid'],
+      'pages_data': row['pages_data'],
+      'created_at': row['created_at'],
+      'updated_at': row['updated_at'],
+      'version': (row['version'] as num?)?.toInt() ?? 1,
+      'locked_by_device_id': row['locked_by_device_id'],
+      'locked_at': row['locked_at'],
+    };
+  }
+
+  Future<Map<String, dynamic>?> _recordByUuid(String recordUuid) async {
+    final recordRows = await db.client
+        .from('records')
+        .select(
+          'record_uuid, record_number, name, phone, created_at, updated_at, version',
+        )
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false)
+        .limit(1);
+    return _first(recordRows);
+  }
+
+  Future<Map<String, dynamic>?> _noteByRecordUuid(String recordUuid) async {
+    final noteRows = await db.client
+        .from('notes')
+        .select(
+          'id, record_uuid, pages_data, created_at, updated_at, version, locked_by_device_id, locked_at',
+        )
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false)
+        .limit(1);
+    return _first(noteRows);
+  }
+
   Future<Response> _getEventsByDateRange(
     Request request,
     String bookUuid,
@@ -380,6 +436,53 @@ class EventRoutes {
     }
   }
 
+  Future<Response> _getEventDetailBundle(
+    Request request,
+    String bookUuid,
+    String eventId,
+  ) async {
+    try {
+      final authError = await _authorizeBookAccess(request, bookUuid);
+      if (authError != null) {
+        return authError;
+      }
+
+      final eventRow = await _eventWithRecord(bookUuid, eventId);
+      if (eventRow == null) {
+        return Response.notFound(
+          jsonEncode({'success': false, 'message': 'Event not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final recordUuid = eventRow['record_uuid']?.toString() ?? '';
+      final recordRow = recordUuid.isEmpty
+          ? null
+          : await _recordByUuid(recordUuid);
+      final noteRow = recordUuid.isEmpty
+          ? null
+          : await _noteByRecordUuid(recordUuid);
+
+      return Response.ok(
+        jsonEncode({
+          'success': true,
+          'event': _serializeEvent(eventRow),
+          'record': recordRow == null ? null : _serializeRecord(recordRow),
+          'note': noteRow == null ? null : _serializeNote(noteRow),
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to load event detail bundle: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
   Future<Response> _getRecordDetails(
     Request request,
     String bookUuid,
@@ -391,15 +494,7 @@ class EventRoutes {
         return authError;
       }
 
-      final recordRows = await db.client
-          .from('records')
-          .select(
-            'record_uuid, record_number, name, phone, created_at, updated_at, version',
-          )
-          .eq('record_uuid', recordUuid)
-          .eq('is_deleted', false)
-          .limit(1);
-      final recordRow = _first(recordRows);
+      final recordRow = await _recordByUuid(recordUuid);
 
       if (recordRow == null) {
         return Response.notFound(
@@ -408,34 +503,13 @@ class EventRoutes {
         );
       }
 
-      final noteRows = await db.client
-          .from('notes')
-          .select(
-            'id, record_uuid, pages_data, created_at, updated_at, version',
-          )
-          .eq('record_uuid', recordUuid)
-          .eq('is_deleted', false)
-          .limit(1);
-      final noteRow = _first(noteRows);
+      final noteRow = await _noteByRecordUuid(recordUuid);
 
       return Response.ok(
         jsonEncode({
           'success': true,
-          'record': {
-            'record_uuid': recordRow['record_uuid'],
-            'record_number': recordRow['record_number'],
-            'name': recordRow['name'],
-            'phone': recordRow['phone'],
-            'version': recordRow['version'],
-          },
-          'note': noteRow != null
-              ? {
-                  'id': noteRow['id'],
-                  'record_uuid': noteRow['record_uuid'],
-                  'pages_data': noteRow['pages_data'],
-                  'version': noteRow['version'],
-                }
-              : null,
+          'record': _serializeRecord(recordRow),
+          'note': noteRow != null ? _serializeNote(noteRow) : null,
         }),
         headers: {'Content-Type': 'application/json'},
       );
@@ -791,6 +865,14 @@ class EventRoutes {
       final payload = <String, dynamic>{};
       if (json.containsKey('title'))
         payload['title'] = (json['title'] as String?)?.trim();
+      if (json.containsKey('record_uuid') || json.containsKey('recordUuid')) {
+        final recordUuid = (json['record_uuid'] ?? json['recordUuid'])
+            ?.toString()
+            .trim();
+        if (recordUuid != null && recordUuid.isNotEmpty) {
+          payload['record_uuid'] = recordUuid;
+        }
+      }
       if (json.containsKey('event_types') || json.containsKey('eventTypes')) {
         payload['event_types'] = _eventTypesToJson(
           json['event_types'] ?? json['eventTypes'],
@@ -878,6 +960,196 @@ class EventRoutes {
         body: jsonEncode({
           'success': false,
           'message': 'Failed to update event: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> _updateEventDetailBundle(
+    Request request,
+    String bookUuid,
+    String eventId,
+  ) async {
+    try {
+      final authError = await _authorizeBookAccess(
+        request,
+        bookUuid,
+        requireWrite: true,
+      );
+      if (authError != null) return authError;
+
+      final body = await request.readAsString();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final eventJson = json['event'] is Map<String, dynamic>
+          ? json['event'] as Map<String, dynamic>
+          : json;
+      final recordJson = json['record'] is Map<String, dynamic>
+          ? json['record'] as Map<String, dynamic>
+          : const <String, dynamic>{};
+
+      final existingRows = await db.client
+          .from('events')
+          .select('id, version, record_uuid')
+          .eq('id', eventId)
+          .eq('book_uuid', bookUuid)
+          .eq('is_deleted', false)
+          .limit(1);
+      final existing = _first(existingRows);
+      if (existing == null) {
+        return Response.notFound(
+          jsonEncode({'success': false, 'message': 'Event not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final eventPayload = <String, dynamic>{};
+      if (eventJson.containsKey('title')) {
+        eventPayload['title'] = (eventJson['title'] as String?)?.trim();
+      }
+      if (eventJson.containsKey('record_uuid') ||
+          eventJson.containsKey('recordUuid')) {
+        final nextRecordUuid =
+            (eventJson['record_uuid'] ?? eventJson['recordUuid'])
+                ?.toString()
+                .trim();
+        if (nextRecordUuid != null && nextRecordUuid.isNotEmpty) {
+          eventPayload['record_uuid'] = nextRecordUuid;
+        }
+      }
+      if (eventJson.containsKey('event_types') ||
+          eventJson.containsKey('eventTypes')) {
+        eventPayload['event_types'] = _eventTypesToJson(
+          eventJson['event_types'] ?? eventJson['eventTypes'],
+        );
+      }
+      if (eventJson.containsKey('has_charge_items') ||
+          eventJson.containsKey('hasChargeItems')) {
+        eventPayload['has_charge_items'] = _toBool(
+          eventJson['has_charge_items'] ?? eventJson['hasChargeItems'],
+        );
+      }
+      if (eventJson.containsKey('start_time') ||
+          eventJson.containsKey('startTime')) {
+        eventPayload['start_time'] = _parseTimestamp(
+          eventJson['start_time'] ?? eventJson['startTime'],
+        )?.toIso8601String();
+      }
+      if (eventJson.containsKey('end_time') ||
+          eventJson.containsKey('endTime')) {
+        eventPayload['end_time'] = _parseTimestamp(
+          eventJson['end_time'] ?? eventJson['endTime'],
+        )?.toIso8601String();
+      }
+      if (eventJson.containsKey('is_removed') ||
+          eventJson.containsKey('isRemoved')) {
+        eventPayload['is_removed'] = _toBool(
+          eventJson['is_removed'] ?? eventJson['isRemoved'],
+        );
+      }
+      if (eventJson.containsKey('removal_reason') ||
+          eventJson.containsKey('removalReason')) {
+        eventPayload['removal_reason'] =
+            (eventJson['removal_reason'] ?? eventJson['removalReason'])
+                ?.toString();
+      }
+      if (eventJson.containsKey('original_event_id') ||
+          eventJson.containsKey('originalEventId')) {
+        eventPayload['original_event_id'] =
+            (eventJson['original_event_id'] ?? eventJson['originalEventId'])
+                ?.toString();
+      }
+      if (eventJson.containsKey('new_event_id') ||
+          eventJson.containsKey('newEventId')) {
+        eventPayload['new_event_id'] =
+            (eventJson['new_event_id'] ?? eventJson['newEventId'])?.toString();
+      }
+      if (eventJson.containsKey('is_checked') ||
+          eventJson.containsKey('isChecked')) {
+        eventPayload['is_checked'] = _toBool(
+          eventJson['is_checked'] ?? eventJson['isChecked'],
+        );
+      }
+      if (eventJson.containsKey('has_note') ||
+          eventJson.containsKey('hasNote')) {
+        eventPayload['has_note'] = _toBool(
+          eventJson['has_note'] ?? eventJson['hasNote'],
+        );
+      }
+
+      if (eventPayload.isNotEmpty) {
+        eventPayload['updated_at'] = DateTime.now().toUtc().toIso8601String();
+        eventPayload['synced_at'] = DateTime.now().toUtc().toIso8601String();
+        eventPayload['version'] =
+            ((existing['version'] as num?)?.toInt() ?? 1) + 1;
+
+        await db.client
+            .from('events')
+            .update(eventPayload)
+            .eq('id', eventId)
+            .eq('book_uuid', bookUuid)
+            .eq('is_deleted', false);
+      }
+
+      final targetRecordUuid =
+          (eventPayload['record_uuid'] ?? existing['record_uuid'])
+              ?.toString() ??
+          '';
+      if (targetRecordUuid.isNotEmpty && recordJson.isNotEmpty) {
+        final recordPayload = <String, dynamic>{};
+        if (recordJson.containsKey('record_number') ||
+            recordJson.containsKey('recordNumber')) {
+          recordPayload['record_number'] =
+              (recordJson['record_number'] ?? recordJson['recordNumber'])
+                  ?.toString();
+        }
+        if (recordJson.containsKey('name')) {
+          recordPayload['name'] = recordJson['name']?.toString();
+        }
+        if (recordJson.containsKey('phone')) {
+          recordPayload['phone'] = recordJson['phone']?.toString();
+        }
+
+        if (recordPayload.isNotEmpty) {
+          recordPayload['updated_at'] = DateTime.now()
+              .toUtc()
+              .toIso8601String();
+          recordPayload['synced_at'] = DateTime.now().toUtc().toIso8601String();
+
+          await db.client
+              .from('records')
+              .update(recordPayload)
+              .eq('record_uuid', targetRecordUuid)
+              .eq('is_deleted', false);
+        }
+      }
+
+      final eventRow = await _eventWithRecord(bookUuid, eventId);
+      if (eventRow == null) {
+        return Response.notFound(
+          jsonEncode({'success': false, 'message': 'Event not found'}),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      final recordRow = await _recordByUuid(eventRow['record_uuid'].toString());
+      final noteRow = await _noteByRecordUuid(
+        eventRow['record_uuid'].toString(),
+      );
+
+      return Response.ok(
+        jsonEncode({
+          'success': true,
+          'event': _serializeEvent(eventRow),
+          'record': recordRow == null ? null : _serializeRecord(recordRow),
+          'note': noteRow == null ? null : _serializeNote(noteRow),
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to update event detail bundle: $e',
         }),
         headers: {'Content-Type': 'application/json'},
       );

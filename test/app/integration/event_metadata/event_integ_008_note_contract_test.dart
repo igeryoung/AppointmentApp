@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg008({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-008: note server contract covers fetch/save/update/delete by event and record',
@@ -169,6 +171,7 @@ void registerEventInteg008({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 
@@ -297,6 +300,7 @@ void registerEventInteg008({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }

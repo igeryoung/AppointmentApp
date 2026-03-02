@@ -24,14 +24,17 @@ class _FakeEventMetadataApiClient extends ApiClient {
   _FakeEventMetadataApiClient() : super(baseUrl: 'http://fake.local');
 
   int updateEventCalls = 0;
+  int updateEventDetailBundleCalls = 0;
   int createEventCalls = 0;
   int updateRecordCalls = 0;
+  int getOrCreateRecordCalls = 0;
 
   String? lastUpdateBookUuid;
   String? lastUpdateEventId;
   Map<String, dynamic>? lastEventData;
   String? forcedServerRecordUuid;
   Map<String, dynamic>? fetchEventResponse;
+  Map<String, dynamic>? fetchEventDetailBundleResponse;
   String? lastCreateBookUuid;
   Map<String, dynamic>? lastCreateEventData;
   String? lastEventDeviceId;
@@ -41,10 +44,14 @@ class _FakeEventMetadataApiClient extends ApiClient {
   Map<String, dynamic>? lastRecordData;
   String? lastRecordDeviceId;
   String? lastRecordDeviceToken;
+  Map<String, dynamic>? lastGetOrCreateRecordData;
   Object? updateEventError;
+  Object? updateEventDetailBundleError;
   Object? updateRecordError;
   String? requiredRecordUuidForUpdate;
   bool failUpdateEventWithNotFound = false;
+  final Map<String, String> recordUuidsByRecordNumber = {};
+  int _generatedRecordCounter = 0;
 
   @override
   Future<Map<String, dynamic>> createEvent({
@@ -103,6 +110,37 @@ class _FakeEventMetadataApiClient extends ApiClient {
   }
 
   @override
+  Future<Map<String, dynamic>?> fetchEventDetailBundle({
+    required String bookUuid,
+    required String eventId,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    lastEventDeviceId = deviceId;
+    lastEventDeviceToken = deviceToken;
+    if (fetchEventDetailBundleResponse != null) {
+      return Map<String, dynamic>.from(fetchEventDetailBundleResponse!);
+    }
+    final eventPayload = await fetchEvent(
+      bookUuid: bookUuid,
+      eventId: eventId,
+      deviceId: deviceId,
+      deviceToken: deviceToken,
+    );
+    return {
+      'event': eventPayload,
+      'record': {
+        'record_uuid': forcedServerRecordUuid ?? 'record-a1',
+        'record_number': '001',
+        'name': 'Alice',
+        'phone': null,
+        'version': 1,
+      },
+      'note': null,
+    };
+  }
+
+  @override
   Future<Map<String, dynamic>> updateRecord({
     required String recordUuid,
     required Map<String, dynamic> recordData,
@@ -120,6 +158,81 @@ class _FakeEventMetadataApiClient extends ApiClient {
     lastRecordDeviceId = deviceId;
     lastRecordDeviceToken = deviceToken;
     return {'record_uuid': recordUuid, ...recordData};
+  }
+
+  @override
+  Future<Map<String, dynamic>> updateEventDetailBundle({
+    required String bookUuid,
+    required String eventId,
+    required Map<String, dynamic> eventData,
+    required Map<String, dynamic> recordData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    updateEventDetailBundleCalls += 1;
+    updateEventCalls += 1;
+    if (updateEventDetailBundleError != null) {
+      throw updateEventDetailBundleError!;
+    }
+    if (updateEventError != null) throw updateEventError!;
+    lastUpdateBookUuid = bookUuid;
+    lastUpdateEventId = eventId;
+    lastEventData = Map<String, dynamic>.from(eventData);
+    lastEventDeviceId = deviceId;
+    lastEventDeviceToken = deviceToken;
+
+    final recordUuid =
+        forcedServerRecordUuid ??
+        (eventData['record_uuid'] ?? eventData['recordUuid'])?.toString() ??
+        'record-a1';
+    updateRecordCalls += 1;
+    if (requiredRecordUuidForUpdate != null &&
+        recordUuid != requiredRecordUuidForUpdate) {
+      throw ApiException('Record conflict', statusCode: 409);
+    }
+    if (updateRecordError != null) throw updateRecordError!;
+    lastRecordUuid = recordUuid;
+    lastRecordData = Map<String, dynamic>.from(recordData);
+    lastRecordDeviceId = deviceId;
+    lastRecordDeviceToken = deviceToken;
+
+    return {
+      'event': {'id': eventId, ...eventData, 'record_uuid': recordUuid},
+      'record': {'record_uuid': recordUuid, ...recordData},
+      'note': null,
+    };
+  }
+
+  @override
+  Future<Map<String, dynamic>> getOrCreateRecord({
+    required String recordNumber,
+    required String name,
+    String? phone,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    getOrCreateRecordCalls += 1;
+    lastGetOrCreateRecordData = {
+      'record_number': recordNumber,
+      'name': name,
+      'phone': phone,
+      'device_id': deviceId,
+      'device_token': deviceToken,
+    };
+    final existed = recordUuidsByRecordNumber.containsKey(recordNumber);
+    final recordUuid =
+        recordUuidsByRecordNumber[recordNumber] ??
+        'generated-record-${++_generatedRecordCounter}';
+    if (recordNumber.isNotEmpty) {
+      recordUuidsByRecordNumber[recordNumber] = recordUuid;
+    }
+    return {
+      'record_uuid': recordUuid,
+      'record_number': recordNumber,
+      'name': name,
+      'phone': phone,
+      'created': !existed,
+    };
   }
 }
 
@@ -229,6 +342,7 @@ void main() {
     await seedEvent(db, event: seededEvent);
 
     fakeApiClient = _FakeEventMetadataApiClient();
+    fakeApiClient.recordUuidsByRecordNumber['001'] = 'record-a1';
     fakeContentService = ContentService(fakeApiClient, dbService);
     fakeNoteSyncAdapter = _FakeNoteSyncAdapter(fakeContentService);
   });
@@ -318,16 +432,13 @@ void main() {
   );
 
   test(
-    'EVENT-DETAIL-UNIT-002: saveEvent() returns local success when metadata sync has no device credentials',
+    'EVENT-DETAIL-UNIT-002: saveEvent() fails fast when device credentials are missing',
     () async {
       final controller = buildController();
       controller.updatePhone('0911222333');
       controller.updateEventTypes(const [EventType.emergency]);
 
-      final savedEvent = await controller.saveEvent();
-      await waitForBackgroundSync();
-
-      expect(savedEvent.id, 'event-a1');
+      await expectLater(controller.saveEvent(), throwsException);
       expect(fakeApiClient.updateEventCalls, 0);
       expect(fakeApiClient.updateRecordCalls, 0);
       expect(controller.state.hasUnsyncedChanges, isTrue);
@@ -367,6 +478,7 @@ void main() {
       await waitForBackgroundSync();
 
       expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 0);
       expect(fakeNoteSyncAdapter.lastSaveEventId, 'event-a1');
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
@@ -395,7 +507,7 @@ void main() {
   );
 
   test(
-    'EVENT-FLOW-002: saveEvent() keeps local success and marks state offline when metadata sync fails after trigger',
+    'EVENT-FLOW-002: saveEvent() throws and marks state offline when server metadata save fails',
     () async {
       await dbService.saveDeviceCredentials(
         deviceId: 'device-001',
@@ -413,10 +525,7 @@ void main() {
       controller.updatePhone('0900001234');
       controller.updateEventTypes(const [EventType.emergency]);
 
-      final savedEvent = await controller.saveEvent();
-      await waitForBackgroundSync();
-
-      expect(savedEvent.id, 'event-a1');
+      await expectLater(controller.saveEvent(), throwsA(isA<ApiException>()));
       expect(fakeNoteSyncAdapter.saveCalls, 0);
       expect(fakeApiClient.updateEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 0);
@@ -425,7 +534,7 @@ void main() {
 
       final persistedEvent = await dbService.getEventById('event-a1');
       expect(persistedEvent, isNotNull);
-      expect(persistedEvent!.eventTypes, const [EventType.emergency]);
+      expect(persistedEvent!.eventTypes, const [EventType.consultation]);
     },
   );
 
@@ -456,9 +565,10 @@ void main() {
       await controller.saveEvent();
       await waitForBackgroundSync();
 
-      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 0);
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 1);
       expect(fakeNoteSyncAdapter.saveCalls, 0);
-      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.createEventCalls, 1);
+      expect(fakeApiClient.updateEventCalls, 0);
       expect(fakeApiClient.updateRecordCalls, 1);
     },
   );
@@ -589,7 +699,7 @@ void main() {
       expect(fakeApiClient.lastRecordUuid, 'record-a1');
       expect(fakeNoteSyncAdapter.saveCalls, 2);
       expect(fakeNoteSyncAdapter.lastSaveEventId, 'event-refill-note-1');
-      expect(fakeNoteSyncAdapter.savedNotes.first.version, 2);
+      expect(fakeNoteSyncAdapter.savedNotes.first.version, 4);
       expect(fakeNoteSyncAdapter.savedNotes.last.version, 2);
       expect(controller.state.note, isNotNull);
       expect(controller.state.note!.recordUuid, 'record-a1');
@@ -621,8 +731,6 @@ void main() {
         platform: 'test',
       );
 
-      fakeApiClient.failUpdateEventWithNotFound = true;
-
       final newEvent = makeEvent(
         id: 'event-new-empty-record',
         bookUuid: 'book-a',
@@ -638,7 +746,7 @@ void main() {
       await controller.saveEvent();
       await waitForBackgroundSync();
 
-      expect(fakeApiClient.updateEventCalls, 1);
+      expect(fakeApiClient.updateEventCalls, 0);
       expect(fakeApiClient.createEventCalls, 1);
       expect(fakeApiClient.updateRecordCalls, 1);
       expect(fakeApiClient.lastCreateBookUuid, 'book-a');
@@ -993,6 +1101,31 @@ void main() {
           .toSet();
       expect(finalStrokeIds, contains('server-v3-stroke'));
       expect(finalStrokeIds, isNot(contains('local-conflict-stroke')));
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-016: manual saveNoteToServer() does not prefetch server note before write',
+    () async {
+      final controller = buildController();
+      await controller.loadExistingPersonNote(
+        makeNote(recordUuid: 'record-a1', version: 4),
+      );
+
+      await controller.saveNoteToServer('event-a1', [
+        const [
+          Stroke(
+            id: 'manual-save-stroke',
+            eventUuid: 'event-a1',
+            points: [StrokePoint(3, 3), StrokePoint(9, 9)],
+          ),
+        ],
+      ]);
+
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 0);
+      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.lastSavedNote, isNotNull);
+      expect(fakeNoteSyncAdapter.lastSavedNote!.version, 5);
     },
   );
 

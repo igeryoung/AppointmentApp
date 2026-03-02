@@ -4,6 +4,8 @@ import 'package:uuid/uuid.dart';
 
 import 'live_server_test_support.dart';
 
+void main() {}
+
 void registerEventInteg010({required LiveServerConfig? config}) {
   test(
     'EVENT-INTEG-010: device session contract validates registration check and credential gating',
@@ -87,6 +89,7 @@ void registerEventInteg010({required LiveServerConfig? config}) {
         apiClient.dispose();
       }
     },
+    timeout: liveServerTestTimeout,
     skip: skipForMissingConfig(config),
   );
 }
