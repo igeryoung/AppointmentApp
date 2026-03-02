@@ -437,11 +437,12 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     String? namePrefix,
   }) async {
     final normalizedPrefix = prefix.trim().toLowerCase();
-    if (normalizedPrefix.isEmpty) {
+    final normalizedNamePrefix = namePrefix?.trim().toLowerCase();
+    if (normalizedPrefix.isEmpty &&
+        (normalizedNamePrefix == null || normalizedNamePrefix.isEmpty)) {
       return const [];
     }
 
-    final normalizedNamePrefix = namePrefix?.trim().toLowerCase();
     final serverPairs = await _fetchRecordNumberSuggestionsFromServer(
       bookUuid,
       normalizedPrefix,
@@ -452,7 +453,13 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     }
 
     final db = await getDatabaseFn();
-    final queryArgs = <Object?>[bookUuid, '$normalizedPrefix%'];
+    final queryArgs = <Object?>[bookUuid];
+    final recordNumberClause = normalizedPrefix.isEmpty
+        ? ''
+        : 'AND LOWER(e.record_number) LIKE ?';
+    if (recordNumberClause.isNotEmpty) {
+      queryArgs.add('$normalizedPrefix%');
+    }
     final nameClause =
         normalizedNamePrefix == null || normalizedNamePrefix.isEmpty
         ? ''
@@ -490,7 +497,7 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
       WHERE e.book_uuid = ?
         AND e.record_number IS NOT NULL
         AND e.record_number != ''
-        AND LOWER(e.record_number) LIKE ?
+        $recordNumberClause
         $nameClause
       ORDER BY e.record_number ASC, name ASC
     ''', queryArgs);

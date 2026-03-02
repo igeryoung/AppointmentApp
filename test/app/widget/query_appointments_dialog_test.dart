@@ -258,6 +258,10 @@ void main() {
             'a': ['Alice', 'Alfred'],
           },
           recordSuggestionsByQuery: {
+            '|al': const [
+              NameRecordPair(name: 'Alice', recordNumber: '100'),
+              NameRecordPair(name: 'Alfred', recordNumber: '145'),
+            ],
             '1|al': const [
               NameRecordPair(name: 'Alice', recordNumber: '100'),
               NameRecordPair(name: 'Alfred', recordNumber: '145'),
@@ -278,21 +282,60 @@ void main() {
         expect(repository.nameSuggestionRequests, ['a']);
 
         tester.binding.focusManager.primaryFocus?.unfocus();
-        await tester.pump();
+        await tester.pumpAndSettle();
+
+        await tester.showKeyboard(find.byType(TextField).at(1));
+        await tester.pumpAndSettle();
+
+        expect(repository.recordSuggestionRequests, ['|al']);
+        expect(find.text('Alice - 100'), findsOneWidget);
+        expect(find.text('Alfred - 145'), findsOneWidget);
 
         await tester.enterText(find.byType(TextField).at(1), '1');
         await tester.pumpAndSettle();
 
-        expect(repository.recordSuggestionRequests, ['1|al']);
-        expect(find.text('Alice - 100'), findsOneWidget);
-        expect(find.text('Alfred - 145'), findsOneWidget);
-
+        expect(repository.recordSuggestionRequests, ['|al']);
         await tester.enterText(find.byType(TextField).at(1), '10');
         await tester.pumpAndSettle();
 
-        expect(repository.recordSuggestionRequests, ['1|al']);
+        expect(repository.recordSuggestionRequests, ['|al']);
         expect(find.text('Alice - 100'), findsOneWidget);
         expect(find.text('Alfred - 145'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'QUERY-APPOINTMENTS-WIDGET-004: focusing empty record number fetches options when name already exists',
+      (tester) async {
+        final repository = _FakeEventRepository(
+          nameSuggestionsByPrefix: const {},
+          recordSuggestionsByQuery: {
+            '|kai': const [
+              NameRecordPair(name: 'Kai', recordNumber: '100'),
+              NameRecordPair(name: 'Kai', recordNumber: '145'),
+            ],
+          },
+        );
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _QueryAppointmentsDialogHost(repository: repository),
+          ),
+        );
+
+        await openDialog(tester);
+        await tester.enterText(find.byType(TextField).first, 'Kai');
+        await tester.pumpAndSettle();
+
+        tester.binding.focusManager.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+
+        await tester.showKeyboard(find.byType(TextField).at(1));
+        await tester.pumpAndSettle();
+
+        expect(repository.recordSuggestionRequests, ['|kai']);
+        expect(find.text('Kai - 100'), findsOneWidget);
+        expect(find.text('Kai - 145'), findsOneWidget);
       },
     );
   });

@@ -117,12 +117,9 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     final normalizedNameConstraint = nameConstraint == null
         ? null
         : _normalize(nameConstraint);
-    if (normalizedQuery.isEmpty) {
-      return const [];
-    }
-
     return suggestions.where((pair) {
-      if (!_normalize(pair.recordNumber).startsWith(normalizedQuery)) {
+      if (normalizedQuery.isNotEmpty &&
+          !_normalize(pair.recordNumber).startsWith(normalizedQuery)) {
         return false;
       }
       if (normalizedNameConstraint != null &&
@@ -288,9 +285,11 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
 
     final fetchPrefix = normalized[0];
     final shouldFetch =
-        _recordFetchPrefix != fetchPrefix ||
         _cachedRecordSuggestions.isEmpty ||
-        (_recordNameConstraint ?? '') != nameConstraint;
+        (_recordNameConstraint ?? '') != nameConstraint ||
+        (_recordFetchPrefix != null &&
+            _recordFetchPrefix!.isNotEmpty &&
+            _recordFetchPrefix != fetchPrefix);
     if (shouldFetch) {
       await _fetchRecordSuggestions(
         fetchPrefix: fetchPrefix,
@@ -304,6 +303,34 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       recordSuggestions = _filterRecordSuggestions(
         _cachedRecordSuggestions,
         normalized,
+        nameConstraint: nameConstraint,
+      );
+    });
+  }
+
+  Future<void> _handleRecordNumberFocused() async {
+    final normalizedRecord = _normalize(recordNumberController.text);
+    final nameConstraint = _normalize(nameController.text);
+    if (normalizedRecord.isNotEmpty || nameConstraint.isEmpty) {
+      return;
+    }
+
+    final shouldFetch =
+        _cachedRecordSuggestions.isEmpty ||
+        (_recordNameConstraint ?? '') != nameConstraint;
+    if (shouldFetch) {
+      await _fetchRecordSuggestions(
+        fetchPrefix: '',
+        activeQuery: '',
+        nameConstraint: nameConstraint,
+      );
+      return;
+    }
+
+    setState(() {
+      recordSuggestions = _filterRecordSuggestions(
+        _cachedRecordSuggestions,
+        '',
         nameConstraint: nameConstraint,
       );
     });
@@ -447,6 +474,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
                     allNameRecordPairs: recordSuggestions,
                     errorText: recordNumberError,
                     isLoading: isRecordSuggestionsLoading,
+                    onFocused: _handleRecordNumberFocused,
                     onRecordSelected: (pair) {
                       // Set flag to prevent onChanged from clearing selection
                       _isProgrammaticNameChange = true;
@@ -842,6 +870,7 @@ class _RecordNumberAutocompleteField extends StatefulWidget {
   final List<NameRecordPair> allNameRecordPairs;
   final String? errorText;
   final bool isLoading;
+  final VoidCallback? onFocused;
   final ValueChanged<NameRecordPair>? onRecordSelected;
   final ValueChanged<String>? onChanged;
 
@@ -851,6 +880,7 @@ class _RecordNumberAutocompleteField extends StatefulWidget {
     required this.allNameRecordPairs,
     this.errorText,
     this.isLoading = false,
+    this.onFocused,
     this.onRecordSelected,
     this.onChanged,
   });
@@ -898,6 +928,7 @@ class _RecordNumberAutocompleteFieldState
 
   void _onFocusChanged() {
     if (_focusNode.hasFocus) {
+      widget.onFocused?.call();
       _showOverlay();
     } else {
       _removeOverlay();
@@ -914,7 +945,7 @@ class _RecordNumberAutocompleteFieldState
   List<NameRecordPair> _getFilteredOptions() {
     final text = widget.controller.text.toLowerCase();
     if (text.isEmpty) {
-      return const [];
+      return widget.allNameRecordPairs;
     }
     // Filter by record number
     return widget.allNameRecordPairs

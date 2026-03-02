@@ -687,4 +687,55 @@ void main() {
       expect(fakeApi.recordSuggestionsCalls, 2);
     },
   );
+
+  test(
+    'EVENT-UNIT-009: fetchRecordNumberSuggestions allows empty record prefix when name is already known',
+    () async {
+      await seedBook(db, bookUuid: 'book-a');
+      await seedRecord(
+        db,
+        recordUuid: 'record-1',
+        name: 'Kai',
+        recordNumber: '100',
+      );
+      await seedRecord(
+        db,
+        recordUuid: 'record-2',
+        name: 'Kai',
+        recordNumber: '145',
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-1',
+          bookUuid: 'book-a',
+          recordUuid: 'record-1',
+          title: 'Kai',
+          recordNumber: '100',
+        ),
+      );
+      await seedEvent(
+        db,
+        event: makeEvent(
+          id: 'event-2',
+          bookUuid: 'book-a',
+          recordUuid: 'record-2',
+          title: 'Kai',
+          recordNumber: '145',
+        ),
+      );
+
+      expect(
+        await repository.fetchRecordNumberSuggestions(
+          'book-a',
+          '',
+          namePrefix: 'kai',
+        ),
+        const [
+          NameRecordPair(name: 'Kai', recordNumber: '100'),
+          NameRecordPair(name: 'Kai', recordNumber: '145'),
+        ],
+      );
+    },
+  );
 }

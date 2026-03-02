@@ -399,7 +399,7 @@ class EventRoutes {
           request.url.queryParameters['prefix']?.trim().toLowerCase() ?? '';
       final namePrefix =
           request.url.queryParameters['namePrefix']?.trim().toLowerCase() ?? '';
-      if (prefix.isEmpty) {
+      if (prefix.isEmpty && namePrefix.isEmpty) {
         return Response.ok(
           jsonEncode({'success': true, 'pairs': const <Map<String, String>>[]}),
           headers: {'Content-Type': 'application/json'},
@@ -415,7 +415,8 @@ class EventRoutes {
         if (name.isEmpty || recordNumber.isEmpty) {
           continue;
         }
-        if (!recordNumber.toLowerCase().startsWith(prefix)) {
+        if (prefix.isNotEmpty &&
+            !recordNumber.toLowerCase().startsWith(prefix)) {
           continue;
         }
         if (namePrefix.isNotEmpty &&
