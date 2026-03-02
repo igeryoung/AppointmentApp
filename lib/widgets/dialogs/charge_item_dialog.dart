@@ -17,6 +17,7 @@ class ChargeItemDialog extends StatefulWidget {
 class _ChargeItemDialogState extends State<ChargeItemDialog> {
   late TextEditingController _nameController;
   late TextEditingController _costController;
+  late TextEditingController _paidAmountController;
   final _formKey = GlobalKey<FormState>();
 
   @override
@@ -30,13 +31,25 @@ class _ChargeItemDialogState extends State<ChargeItemDialog> {
           ? widget.existingItem!.itemPrice.toString()
           : '',
     );
+    _paidAmountController = TextEditingController(
+      text: widget.existingItem?.receivedAmount.toString() ?? '0',
+    );
   }
 
   @override
   void dispose() {
     _nameController.dispose();
     _costController.dispose();
+    _paidAmountController.dispose();
     super.dispose();
+  }
+
+  int _parsePaidAmount() {
+    final rawValue = _paidAmountController.text.trim();
+    if (rawValue.isEmpty) {
+      return 0;
+    }
+    return int.tryParse(rawValue) ?? 0;
   }
 
   void _handleSave() {
@@ -44,13 +57,14 @@ class _ChargeItemDialogState extends State<ChargeItemDialog> {
       return;
     }
 
+    final paidAmount = _parsePaidAmount();
     final chargeItem = ChargeItem(
       id: widget.existingItem?.id,
       recordUuid: widget.existingItem?.recordUuid ?? '',
       eventId: widget.existingItem?.eventId,
       itemName: _nameController.text.trim(),
       itemPrice: int.parse(_costController.text.trim()),
-      receivedAmount: widget.existingItem?.receivedAmount ?? 0,
+      receivedAmount: paidAmount,
     );
     Navigator.of(context).pop(chargeItem);
   }
@@ -151,6 +165,42 @@ class _ChargeItemDialogState extends State<ChargeItemDialog> {
                     final cost = int.tryParse(value.trim());
                     if (cost == null || cost <= 0) {
                       return l10n.chargeItemCostInvalid;
+                    }
+                    return null;
+                  },
+                ),
+                const SizedBox(height: 14),
+                TextFormField(
+                  controller: _paidAmountController,
+                  decoration: InputDecoration(
+                    labelText: l10n.chargeItemPaidAmount,
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    prefixIcon: const Icon(Icons.payments_outlined),
+                    prefixText: 'NT\$ ',
+                  ),
+                  keyboardType: TextInputType.number,
+                  textInputAction: TextInputAction.done,
+                  onFieldSubmitted: (_) => _handleSave(),
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  validator: (value) {
+                    final paidAmountText = value?.trim() ?? '';
+                    if (paidAmountText.isNotEmpty &&
+                        int.tryParse(paidAmountText) == null) {
+                      return l10n.chargeItemPaidAmountInvalid;
+                    }
+
+                    final cost = int.tryParse(_costController.text.trim());
+                    final paidAmount = paidAmountText.isEmpty
+                        ? 0
+                        : int.parse(paidAmountText);
+
+                    if (paidAmount < 0) {
+                      return l10n.chargeItemPaidAmountInvalid;
+                    }
+                    if (cost != null && paidAmount > cost) {
+                      return l10n.chargeItemPaidAmountExceedsCost;
                     }
                     return null;
                   },

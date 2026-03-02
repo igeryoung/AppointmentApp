@@ -1072,4 +1072,45 @@ void main() {
       );
     },
   );
+
+  test(
+    'EVENT-DETAIL-UNIT-013: editChargeItem() persists partial paid amount and marks full payment when received amount matches price',
+    () async {
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-edit-paid',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 0,
+        ),
+      );
+
+      final controller = buildController();
+
+      await controller.editChargeItem(
+        ChargeItem(
+          id: 'charge-edit-paid',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 300,
+        ),
+      );
+
+      var savedItem = await dbService.getChargeItemById('charge-edit-paid');
+      expect(savedItem, isNotNull);
+      expect(savedItem!.receivedAmount, 300);
+      expect(savedItem.isPaid, isFalse);
+
+      await controller.editChargeItem(savedItem.copyWith(receivedAmount: 800));
+
+      savedItem = await dbService.getChargeItemById('charge-edit-paid');
+      expect(savedItem, isNotNull);
+      expect(savedItem!.receivedAmount, 800);
+      expect(savedItem.isPaid, isTrue);
+    },
+  );
 }

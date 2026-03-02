@@ -208,6 +208,9 @@ class AppLocalizationsEn extends AppLocalizations {
   String get paid => 'Paid';
 
   @override
+  String get chargeItemPaidAmount => 'Paid Amount';
+
+  @override
   String get total => 'Total';
 
   @override
@@ -215,6 +218,14 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get chargeItemCostInvalid => 'Cost must be a positive integer';
+
+  @override
+  String get chargeItemPaidAmountInvalid =>
+      'Paid amount must be 0 or a positive integer';
+
+  @override
+  String get chargeItemPaidAmountExceedsCost =>
+      'Paid amount cannot exceed cost';
 
   @override
   String get eventType => '約診類型 *';

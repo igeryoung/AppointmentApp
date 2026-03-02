@@ -146,6 +146,11 @@
     "description": "Label showing paid amount"
   },
 
+  "chargeItemPaidAmount": "Paid Amount",
+  "@chargeItemPaidAmount": {
+    "description": "Label for charge item paid amount field"
+  },
+
   "total": "Total",
   "@total": {
     "description": "Label for total amount"
@@ -159,6 +164,16 @@
   "chargeItemCostInvalid": "Cost must be a positive integer",
   "@chargeItemCostInvalid": {
     "description": "Validation error for invalid cost"
+  },
+
+  "chargeItemPaidAmountInvalid": "Paid amount must be 0 or a positive integer",
+  "@chargeItemPaidAmountInvalid": {
+    "description": "Validation error for invalid paid amount"
+  },
+
+  "chargeItemPaidAmountExceedsCost": "Paid amount cannot exceed cost",
+  "@chargeItemPaidAmountExceedsCost": {
+    "description": "Validation error when paid amount exceeds cost"
   },
 
   "chargeItemsRequireRecordNumber": "Please add a record number to track charge items",

@@ -453,6 +453,12 @@ abstract class AppLocalizations {
   /// **'已付'**
   String get paid;
 
+  /// Label for charge item paid amount field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已付金額'**
+  String get chargeItemPaidAmount;
+
   /// Label for total amount
   ///
   /// In zh_TW, this message translates to:
@@ -470,6 +476,18 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'費用必須為正整數'**
   String get chargeItemCostInvalid;
+
+  /// Validation error for invalid paid amount
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已付金額必須為 0 或正整數'**
+  String get chargeItemPaidAmountInvalid;
+
+  /// Validation error when paid amount exceeds cost
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已付金額不可超過費用'**
+  String get chargeItemPaidAmountExceedsCost;
 
   /// Label for event type field
   ///

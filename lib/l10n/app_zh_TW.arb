@@ -351,6 +351,11 @@
     "description": "Label showing paid amount"
   },
 
+  "chargeItemPaidAmount": "已付金額",
+  "@chargeItemPaidAmount": {
+    "description": "Label for charge item paid amount field"
+  },
+
   "total": "總額",
   "@total": {
     "description": "Label for total amount"
@@ -364,6 +369,16 @@
   "chargeItemCostInvalid": "費用必須為正整數",
   "@chargeItemCostInvalid": {
     "description": "Validation error for invalid cost"
+  },
+
+  "chargeItemPaidAmountInvalid": "已付金額必須為 0 或正整數",
+  "@chargeItemPaidAmountInvalid": {
+    "description": "Validation error for invalid paid amount"
+  },
+
+  "chargeItemPaidAmountExceedsCost": "已付金額不可超過費用",
+  "@chargeItemPaidAmountExceedsCost": {
+    "description": "Validation error when paid amount exceeds cost"
   },
 
   "eventType": "約診類型 *",

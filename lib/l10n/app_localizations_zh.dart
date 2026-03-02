@@ -208,6 +208,9 @@ class AppLocalizationsZh extends AppLocalizations {
   String get paid => '已付';
 
   @override
+  String get chargeItemPaidAmount => '已付金額';
+
+  @override
   String get total => '總額';
 
   @override
@@ -215,6 +218,12 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get chargeItemCostInvalid => '費用必須為正整數';
+
+  @override
+  String get chargeItemPaidAmountInvalid => '已付金額必須為 0 或正整數';
+
+  @override
+  String get chargeItemPaidAmountExceedsCost => '已付金額不可超過費用';
 
   @override
   String get eventType => '活動類型 *';
@@ -979,6 +988,9 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get paid => '已付';
 
   @override
+  String get chargeItemPaidAmount => '已付金額';
+
+  @override
   String get total => '總額';
 
   @override
@@ -986,6 +998,12 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get chargeItemCostInvalid => '費用必須為正整數';
+
+  @override
+  String get chargeItemPaidAmountInvalid => '已付金額必須為 0 或正整數';
+
+  @override
+  String get chargeItemPaidAmountExceedsCost => '已付金額不可超過費用';
 
   @override
   String get eventType => '約診類型 *';
