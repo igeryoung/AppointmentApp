@@ -380,4 +380,68 @@ void main() {
       }
     },
   );
+
+  test(
+    'API-CLIENT-EVENT-005: fetchQueryAppointments sends query params and device headers',
+    () async {
+      final requests = <HttpRequest>[];
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        requests.add(request);
+        request.response.statusCode = 200;
+        request.response.headers.contentType = ContentType.json;
+        request.response.write(
+          jsonEncode({
+            'success': true,
+            'events': [
+              {
+                'id': 'event-1',
+                'book_uuid': 'book-1',
+                'record_uuid': 'record-1',
+                'record_name': 'Kai',
+                'record_number': 'K-001',
+                'event_types': '["consultation"]',
+                'start_time': 1760058000,
+                'end_time': 1760059800,
+                'created_at': 1760057000,
+                'updated_at': 1760057100,
+                'is_removed': false,
+                'is_checked': false,
+                'has_note': false,
+                'version': 1,
+              },
+            ],
+          }),
+        );
+        await request.response.close();
+      });
+
+      final apiClient = ApiClient(
+        baseUrl: 'http://${server.address.address}:${server.port}',
+      );
+
+      try {
+        final events = await apiClient.fetchQueryAppointments(
+          bookUuid: 'book-1',
+          name: 'Kai',
+          recordNumber: 'K-001',
+          deviceId: 'device-1',
+          deviceToken: 'token-1',
+        );
+
+        expect(events, hasLength(1));
+        expect(requests.length, 1);
+        final request = requests.single;
+        expect(request.method, 'GET');
+        expect(request.uri.path, '/api/books/book-1/query-search');
+        expect(request.uri.queryParameters['name'], 'Kai');
+        expect(request.uri.queryParameters['recordNumber'], 'K-001');
+        expect(request.headers.value('x-device-id'), 'device-1');
+        expect(request.headers.value('x-device-token'), 'token-1');
+      } finally {
+        apiClient.dispose();
+        await server.close(force: true);
+      }
+    },
+  );
 }

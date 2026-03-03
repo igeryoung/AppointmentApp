@@ -375,21 +375,11 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         name,
         selectedRecordNumber!,
       );
-      final normalizedName = name.toLowerCase();
-      final normalizedRecordNumber = selectedRecordNumber!.trim().toLowerCase();
-      final filteredResults =
-          results
-              .where(
-                (event) =>
-                    event.title.trim().toLowerCase().contains(normalizedName) &&
-                    event.recordNumber.trim().toLowerCase() ==
-                        normalizedRecordNumber,
-              )
-              .toList()
-            ..sort((a, b) => b.startTime.compareTo(a.startTime));
+      final sortedResults = [...results]
+        ..sort((a, b) => b.startTime.compareTo(a.startTime));
 
       setState(() {
-        searchResults = filteredResults;
+        searchResults = sortedResults;
         isLoading = false;
         hasSearched = true;
       });

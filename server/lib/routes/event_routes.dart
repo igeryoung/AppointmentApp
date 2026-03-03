@@ -41,6 +41,7 @@ class EventRoutes {
         '/<bookUuid>/query-options/record-numbers',
         _getRecordNumberSuggestions,
       )
+      ..get('/<bookUuid>/query-search', _queryAppointments)
       ..get('/<bookUuid>/events', _getEventsByDateRange)
       ..post('/<bookUuid>/events', _createEvent)
       ..post('/<bookUuid>/heavy-test/events/bulk', _createEventsBulkHeavyTest)
@@ -266,6 +267,70 @@ class EventRoutes {
     }).toList();
   }
 
+  Future<List<Map<String, dynamic>>> _bookEventsWithRecords(
+    String bookUuid,
+  ) async {
+    final eventRows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += _queryPageSize) {
+      final batch = _rows(
+        await db.client
+            .from('events')
+            .select(
+              'id, book_uuid, record_uuid, title, event_types, has_charge_items, start_time, end_time, '
+              'created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, '
+              'is_checked, has_note, version',
+            )
+            .eq('book_uuid', bookUuid)
+            .eq('is_deleted', false)
+            .order('start_time', ascending: true)
+            .range(offset, offset + _queryPageSize - 1),
+      );
+      if (batch.isEmpty) {
+        break;
+      }
+      eventRows.addAll(batch);
+      if (batch.length < _queryPageSize) {
+        break;
+      }
+    }
+
+    final recordUuids = eventRows
+        .map((row) => row['record_uuid']?.toString() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+
+    final recordsById = <String, Map<String, dynamic>>{};
+    if (recordUuids.isNotEmpty) {
+      for (var i = 0; i < recordUuids.length; i += _queryPageSize) {
+        final chunk = recordUuids.sublist(
+          i,
+          (i + _queryPageSize).clamp(0, recordUuids.length),
+        );
+        final recordRows = _rows(
+          await db.client
+              .from('records')
+              .select('record_uuid, record_number, name, phone')
+              .inFilter('record_uuid', chunk)
+              .eq('is_deleted', false),
+        );
+        for (final row in recordRows) {
+          recordsById[row['record_uuid']?.toString() ?? ''] = row;
+        }
+      }
+    }
+
+    return eventRows.map((event) {
+      final record = recordsById[event['record_uuid']?.toString() ?? ''];
+      return {
+        ...event,
+        'record_name': _normalizedEventName(event, record),
+        'record_phone': record?['phone'],
+        'record_number': (record?['record_number'] ?? '').toString().trim(),
+      };
+    }).toList();
+  }
+
   String _normalizedEventName(
     Map<String, dynamic> event,
     Map<String, dynamic>? record,
@@ -450,6 +515,63 @@ class EventRoutes {
         body: jsonEncode({
           'success': false,
           'message': 'Failed to load record number suggestions: $e',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+  }
+
+  Future<Response> _queryAppointments(Request request, String bookUuid) async {
+    try {
+      final authError = await _authorizeBookAccess(request, bookUuid);
+      if (authError != null) {
+        return authError;
+      }
+
+      final name = request.url.queryParameters['name']?.trim() ?? '';
+      final recordNumber =
+          request.url.queryParameters['recordNumber']?.trim() ?? '';
+      if (name.isEmpty || recordNumber.isEmpty) {
+        return Response.ok(
+          jsonEncode({
+            'success': true,
+            'events': const <Map<String, dynamic>>[],
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+
+      final normalizedName = name.toLowerCase();
+      final matched =
+          (await _bookEventsWithRecords(bookUuid))
+              .where((event) {
+                final eventName = (event['record_name'] ?? '')
+                    .toString()
+                    .trim()
+                    .toLowerCase();
+                final eventRecordNumber = (event['record_number'] ?? '')
+                    .toString()
+                    .trim();
+                return eventName.startsWith(normalizedName) &&
+                    eventRecordNumber == recordNumber;
+              })
+              .map(_serializeEvent)
+              .toList()
+            ..sort((a, b) {
+              final aStart = (a['start_time'] as int?) ?? 0;
+              final bStart = (b['start_time'] as int?) ?? 0;
+              return bStart.compareTo(aStart);
+            });
+
+      return Response.ok(
+        jsonEncode({'success': true, 'events': matched}),
+        headers: {'Content-Type': 'application/json'},
+      );
+    } catch (e) {
+      return Response.internalServerError(
+        body: jsonEncode({
+          'success': false,
+          'message': 'Failed to search appointments: $e',
         }),
         headers: {'Content-Type': 'application/json'},
       );

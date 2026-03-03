@@ -428,6 +428,47 @@ class ApiClient {
     }
   }
 
+  /// Search appointments for a book by exact record number and name.
+  Future<List<Map<String, dynamic>>> fetchQueryAppointments({
+    required String bookUuid,
+    required String name,
+    required String recordNumber,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final uri = Uri.parse('$baseUrl/api/books/$bookUuid/query-search').replace(
+      queryParameters: {
+        'name': name.trim(),
+        'recordNumber': recordNumber.trim(),
+      },
+    );
+
+    final response = await _client
+        .get(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return (json['events'] as List<dynamic>? ?? const [])
+          .whereType<Map>()
+          .map((row) => Map<String, dynamic>.from(row))
+          .toList();
+    }
+
+    throw ApiException(
+      'Fetch query appointments failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
   /// Create event on server
   Future<Map<String, dynamic>> createEvent({
     required String bookUuid,

@@ -37,6 +37,9 @@ class _FakeApiClient extends ApiClient {
   final List<Map<String, dynamic>> responseEvents;
   int fetchCalls = 0;
   Object? fetchError;
+  List<Map<String, dynamic>> queryAppointmentsResponse = const [];
+  Object? queryAppointmentsError;
+  int queryAppointmentsCalls = 0;
   List<String> nameSuggestionsResponse = const [];
   Object? nameSuggestionsError;
   int nameSuggestionsCalls = 0;
@@ -57,6 +60,21 @@ class _FakeApiClient extends ApiClient {
       throw fetchError!;
     }
     return responseEvents;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> fetchQueryAppointments({
+    required String bookUuid,
+    required String name,
+    required String recordNumber,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    queryAppointmentsCalls += 1;
+    if (queryAppointmentsError != null) {
+      throw queryAppointmentsError!;
+    }
+    return queryAppointmentsResponse;
   }
 
   @override
@@ -386,6 +404,24 @@ void main() {
           'version': 1,
         },
       ]);
+      fakeApi.queryAppointmentsResponse = const [
+        {
+          'id': 'event-server-1',
+          'book_uuid': 'book-a',
+          'record_uuid': 'record-server-1',
+          'record_name': 'Server Alice',
+          'record_number': 'SRV-001',
+          'event_types': '["consultation"]',
+          'start_time': 1760950800,
+          'end_time': 1760954400,
+          'created_at': 1760947200,
+          'updated_at': 1760947200,
+          'is_removed': false,
+          'is_checked': false,
+          'has_note': false,
+          'version': 1,
+        },
+      ];
 
       final serverRepository = EventRepositoryImpl(
         () => dbService.database,
@@ -409,7 +445,8 @@ void main() {
       );
 
       // Assert
-      expect(fakeApi.fetchCalls, 4);
+      expect(fakeApi.fetchCalls, 3);
+      expect(fakeApi.queryAppointmentsCalls, 1);
       expect(names, ['Server Alice', 'Server Bob']);
       expect(pairs, const [
         NameRecordPair(name: 'Server Alice', recordNumber: 'SRV-001'),
@@ -444,6 +481,7 @@ void main() {
 
       final fakeApi = _FakeApiClient(const []);
       fakeApi.fetchError = Exception('network down');
+      fakeApi.queryAppointmentsError = Exception('network down');
       final serverRepository = EventRepositoryImpl(
         () => dbService.database,
         apiClient: fakeApi,
@@ -466,7 +504,8 @@ void main() {
       );
 
       // Assert
-      expect(fakeApi.fetchCalls, 4);
+      expect(fakeApi.fetchCalls, 3);
+      expect(fakeApi.queryAppointmentsCalls, 1);
       expect(names, ['Alice']);
       expect(pairs, const [
         NameRecordPair(name: 'Alice', recordNumber: 'A-001'),

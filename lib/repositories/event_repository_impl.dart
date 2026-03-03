@@ -564,23 +564,17 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     String name,
     String recordNumber,
   ) async {
-    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
+    final serverEvents = await _searchByNameAndRecordNumberFromServer(
+      bookUuid,
+      name,
+      recordNumber,
+    );
     if (serverEvents != null) {
-      final normalizedName = name.trim().toLowerCase();
-      final normalizedRecordNumber = recordNumber.trim();
-      final matched =
-          serverEvents
-              .where(
-                (event) =>
-                    event.title.trim().toLowerCase().contains(normalizedName) &&
-                    event.recordNumber.trim() == normalizedRecordNumber,
-              )
-              .toList()
-            ..sort((a, b) => b.startTime.compareTo(a.startTime));
-      return matched;
+      return serverEvents..sort((a, b) => b.startTime.compareTo(a.startTime));
     }
 
     final db = await getDatabaseFn();
+    final normalizedName = name.trim().toLowerCase();
     final result = await db.rawQuery(
       '''
       SELECT e.*
@@ -601,7 +595,7 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
         AND e.record_number = ?
       ORDER BY e.start_time DESC
     ''',
-      [bookUuid, '%${name.trim().toLowerCase()}%', recordNumber],
+      [bookUuid, '$normalizedName%', recordNumber],
     );
     return result.map((row) => Event.fromMap(row)).toList();
   }
@@ -726,6 +720,36 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
                 pair.recordNumber.trim().isNotEmpty,
           )
           .toList();
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<List<Event>?> _searchByNameAndRecordNumberFromServer(
+    String bookUuid,
+    String name,
+    String recordNumber,
+  ) async {
+    try {
+      final apiClient = _apiClient;
+      final deviceRepository = _deviceRepository;
+      if (apiClient == null || deviceRepository == null) {
+        return null;
+      }
+
+      final credentials = await deviceRepository.getCredentials();
+      if (credentials == null) {
+        return null;
+      }
+
+      final rows = await apiClient.fetchQueryAppointments(
+        bookUuid: bookUuid,
+        name: name,
+        recordNumber: recordNumber,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      return rows.map(Event.fromServerResponse).toList();
     } catch (_) {
       return null;
     }

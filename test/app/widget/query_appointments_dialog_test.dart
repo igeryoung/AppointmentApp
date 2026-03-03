@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/l10n/app_localizations.dart';
 import 'package:schedule_note_app/models/event.dart';
+import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/repositories/event_repository.dart';
 import 'package:schedule_note_app/services/database/mixins/event_operations_mixin.dart';
 import 'package:schedule_note_app/widgets/schedule/query_appointments_dialog.dart';
@@ -22,12 +23,15 @@ class _FakeEventRepository implements IEventRepository {
   _FakeEventRepository({
     required this.nameSuggestionsByPrefix,
     required this.recordSuggestionsByQuery,
+    this.searchResults = const [],
   });
 
   final Map<String, List<String>> nameSuggestionsByPrefix;
   final Map<String, List<NameRecordPair>> recordSuggestionsByQuery;
+  final List<Event> searchResults;
   final List<String> nameSuggestionRequests = [];
   final List<String> recordSuggestionRequests = [];
+  final List<String> searchRequests = [];
 
   @override
   Future<List<String>> fetchNameSuggestions(
@@ -55,7 +59,8 @@ class _FakeEventRepository implements IEventRepository {
     String name,
     String recordNumber,
   ) async {
-    return [];
+    searchRequests.add('$name|$recordNumber');
+    return searchResults;
   }
 
   @override
@@ -336,6 +341,61 @@ void main() {
         expect(repository.recordSuggestionRequests, ['|kai']);
         expect(find.text('Kai - 100'), findsOneWidget);
         expect(find.text('Kai - 145'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'QUERY-APPOINTMENTS-WIDGET-005: search shows repository results without re-filtering by title text',
+      (tester) async {
+        final repository = _FakeEventRepository(
+          nameSuggestionsByPrefix: {
+            'k': ['Kai'],
+          },
+          recordSuggestionsByQuery: {
+            '|kai': const [NameRecordPair(name: 'Kai', recordNumber: 'K-001')],
+          },
+          searchResults: [
+            Event(
+              id: 'event-1',
+              bookUuid: 'book-1',
+              recordUuid: 'record-1',
+              title: 'Consultation Slot',
+              recordNumber: 'K-001',
+              eventTypes: const [EventType.other],
+              startTime: DateTime.utc(2026, 3, 2, 9),
+              endTime: DateTime.utc(2026, 3, 2, 10),
+              createdAt: DateTime.utc(2026, 3, 2, 8),
+              updatedAt: DateTime.utc(2026, 3, 2, 8),
+            ),
+          ],
+        );
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _QueryAppointmentsDialogHost(repository: repository),
+          ),
+        );
+
+        await openDialog(tester);
+
+        await tester.enterText(find.byType(TextField).first, 'K');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Kai').last);
+        await tester.pumpAndSettle();
+
+        tester.binding.focusManager.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+
+        await tester.showKeyboard(find.byType(TextField).at(1));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Kai - K-001').last);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('搜尋').last);
+        await tester.pumpAndSettle();
+
+        expect(repository.searchRequests, ['Kai|K-001']);
+        expect(find.text('Consultation Slot'), findsOneWidget);
       },
     );
   });
