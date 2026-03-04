@@ -5,7 +5,6 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../database/connection.dart';
-import '../services/note_service.dart';
 
 class _PreparedEventCreate {
   final String eventId;
@@ -28,13 +27,17 @@ class _PreparedEventCreate {
 /// Event routes (record-based architecture)
 class EventRoutes {
   static const int _queryPageSize = 500;
+  static const String _eventSelectColumns =
+      'id, book_uuid, record_uuid, title, event_types, has_charge_items, '
+      'start_time, end_time, created_at, updated_at, is_removed, '
+      'removal_reason, original_event_id, new_event_id, is_checked, has_note, '
+      'version';
 
   final DatabaseConnection db;
   late final Router bookScopedRouter;
-  final NoteService _noteService;
   final _uuid = const Uuid();
 
-  EventRoutes(this.db) : _noteService = NoteService(db) {
+  EventRoutes(this.db) {
     bookScopedRouter = Router()
       ..get('/<bookUuid>/query-options/names', _getNameSuggestions)
       ..get(
@@ -128,6 +131,77 @@ class EventRoutes {
     return jsonEncode([value.toString()]);
   }
 
+  String _normalizeDeviceRole(dynamic value, {String fallback = 'write'}) {
+    final normalized = value?.toString().trim().toLowerCase() ?? '';
+    if (normalized == 'read') return 'read';
+    if (normalized == 'write') return 'write';
+    return fallback;
+  }
+
+  Future<String?> _authorizeBookRequest(
+    Request request,
+    String bookUuid, {
+    bool requireWrite = false,
+  }) async {
+    final deviceId = request.headers['x-device-id'];
+    final deviceToken = request.headers['x-device-token'];
+
+    if (deviceId == null || deviceToken == null) {
+      return 'missing_credentials';
+    }
+
+    final deviceRows = await db.client
+        .from('devices')
+        .select('id, device_token, is_active, device_role')
+        .eq('id', deviceId)
+        .limit(1);
+    final device = _first(deviceRows);
+    if (device == null) {
+      return 'invalid_credentials';
+    }
+
+    final isActive = device['is_active'] == true;
+    final matchedToken =
+        (device['device_token'] ?? '').toString() == deviceToken;
+    if (!isActive || !matchedToken) {
+      return 'invalid_credentials';
+    }
+
+    final deviceRole = _normalizeDeviceRole(device['device_role']);
+    if (requireWrite && deviceRole != 'write') {
+      return 'read_only_device';
+    }
+
+    final bookRows = await db.client
+        .from('books')
+        .select('book_uuid, device_id')
+        .eq('book_uuid', bookUuid)
+        .eq('is_deleted', false)
+        .limit(1);
+    final book = _first(bookRows);
+    if (book == null) {
+      return 'unauthorized';
+    }
+
+    final ownsBook = book['device_id']?.toString() == deviceId;
+    if (ownsBook) {
+      return null;
+    }
+
+    final accessRows = await db.client
+        .from('book_device_access')
+        .select('book_uuid')
+        .eq('book_uuid', bookUuid)
+        .eq('device_id', deviceId)
+        .limit(1);
+    final access = _first(accessRows);
+    if (access == null) {
+      return 'unauthorized';
+    }
+
+    return null;
+  }
+
   Future<Response?> _authorizeBookAccess(
     Request request,
     String bookUuid, {
@@ -147,29 +221,28 @@ class EventRoutes {
       );
     }
 
-    if (!await _noteService.verifyDeviceAccess(deviceId, deviceToken)) {
+    final failureCode = await _authorizeBookRequest(
+      request,
+      bookUuid,
+      requireWrite: requireWrite,
+    );
+    if (failureCode == 'invalid_credentials') {
       return Response.forbidden(
         jsonEncode({'success': false, 'message': 'Invalid device credentials'}),
         headers: {'Content-Type': 'application/json'},
       );
     }
-
-    final hasAccess = await _noteService.verifyBookAccess(
-      deviceId,
-      bookUuid,
-      requireWrite: requireWrite,
-    );
-    if (!hasAccess) {
-      if (requireWrite && !await _noteService.canDeviceWrite(deviceId)) {
-        return Response.forbidden(
-          jsonEncode({
-            'success': false,
-            'message': 'Read-only device cannot modify events',
-            'error': 'READ_ONLY_DEVICE',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
+    if (failureCode == 'read_only_device') {
+      return Response.forbidden(
+        jsonEncode({
+          'success': false,
+          'message': 'Read-only device cannot modify events',
+          'error': 'READ_ONLY_DEVICE',
+        }),
+        headers: {'Content-Type': 'application/json'},
+      );
+    }
+    if (failureCode == 'unauthorized') {
       return Response.forbidden(
         jsonEncode({
           'success': false,
@@ -188,11 +261,7 @@ class EventRoutes {
   ) async {
     final eventRows = await db.client
         .from('events')
-        .select(
-          'id, book_uuid, record_uuid, title, event_types, has_charge_items, start_time, end_time, '
-          'created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, '
-          'is_checked, has_note, version',
-        )
+        .select(_eventSelectColumns)
         .eq('id', eventId)
         .eq('book_uuid', bookUuid)
         .eq('is_deleted', false)
@@ -224,11 +293,7 @@ class EventRoutes {
     final eventRows = _rows(
       await db.client
           .from('events')
-          .select(
-            'id, book_uuid, record_uuid, title, event_types, has_charge_items, start_time, end_time, '
-            'created_at, updated_at, is_removed, removal_reason, original_event_id, new_event_id, '
-            'is_checked, has_note, version',
-          )
+          .select(_eventSelectColumns)
           .eq('book_uuid', bookUuid)
           .eq('is_deleted', false)
           .gte('start_time', startDate.toUtc().toIso8601String())
@@ -1625,69 +1690,115 @@ class EventRoutes {
         );
       }
 
-      final existingRows = await db.client
-          .from('events')
-          .select('*')
-          .eq('id', eventId)
-          .eq('book_uuid', bookUuid)
-          .eq('is_deleted', false)
-          .limit(1);
-      final existing = _first(existingRows);
-      if (existing == null) {
+      final result = await db.transaction(() async {
+        final existingRows = await db.client
+            .from('events')
+            .select('*')
+            .eq('id', eventId)
+            .eq('book_uuid', bookUuid)
+            .eq('is_deleted', false)
+            .limit(1);
+        final existing = _first(existingRows);
+        if (existing == null) {
+          return null;
+        }
+
+        final recordUuid = existing['record_uuid']?.toString() ?? '';
+        final record = recordUuid.isEmpty
+            ? null
+            : await _recordByUuid(recordUuid);
+        final generatedId = _uuid.v4();
+        final now = DateTime.now().toUtc().toIso8601String();
+        final serverVersion = (existing['version'] as num?)?.toInt() ?? 1;
+
+        final oldEventRow = {
+          ...existing,
+          'is_removed': true,
+          'removal_reason': reason,
+          'new_event_id': generatedId,
+          'updated_at': now,
+          'synced_at': now,
+          'version': serverVersion + 1,
+          'record_name': record?['name'],
+          'record_phone': record?['phone'],
+          'record_number': record?['record_number'],
+        };
+
+        final newEventRow = {
+          'id': generatedId,
+          'book_uuid': bookUuid,
+          'record_uuid': existing['record_uuid'],
+          'title': existing['title'],
+          'event_types': existing['event_types'],
+          'has_charge_items': _toBool(existing['has_charge_items']),
+          'start_time': newStart.toIso8601String(),
+          'end_time': newEnd?.toIso8601String(),
+          'created_at': now,
+          'updated_at': now,
+          'synced_at': now,
+          'version': 1,
+          'is_deleted': false,
+          'is_removed': false,
+          'removal_reason': null,
+          'original_event_id': eventId,
+          'new_event_id': null,
+          'is_checked': _toBool(existing['is_checked']),
+          'has_note': _toBool(existing['has_note']),
+          'record_name': record?['name'],
+          'record_phone': record?['phone'],
+          'record_number': record?['record_number'],
+        };
+
+        await db.client
+            .from('events')
+            .update({
+              'is_removed': true,
+              'removal_reason': reason,
+              'new_event_id': generatedId,
+              'updated_at': now,
+              'synced_at': now,
+              'version': serverVersion + 1,
+            })
+            .eq('id', eventId)
+            .eq('book_uuid', bookUuid)
+            .eq('is_deleted', false);
+
+        await db.client.from('events').insert({
+          'id': generatedId,
+          'book_uuid': bookUuid,
+          'record_uuid': existing['record_uuid'],
+          'title': existing['title'],
+          'event_types': existing['event_types'],
+          'has_charge_items': _toBool(existing['has_charge_items']),
+          'start_time': newStart.toIso8601String(),
+          'end_time': newEnd?.toIso8601String(),
+          'created_at': now,
+          'updated_at': now,
+          'synced_at': now,
+          'version': 1,
+          'is_deleted': false,
+          'is_removed': false,
+          'removal_reason': null,
+          'original_event_id': eventId,
+          'new_event_id': null,
+          'is_checked': _toBool(existing['is_checked']),
+          'has_note': _toBool(existing['has_note']),
+        });
+
+        return (oldEvent: oldEventRow, newEvent: newEventRow);
+      });
+      if (result == null) {
         return Response.notFound(
           jsonEncode({'success': false, 'message': 'Event not found'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
-      final generatedId = _uuid.v4();
-      final serverVersion = (existing['version'] as num?)?.toInt() ?? 1;
-
-      await db.client
-          .from('events')
-          .update({
-            'is_removed': true,
-            'removal_reason': reason,
-            'new_event_id': generatedId,
-            'updated_at': DateTime.now().toUtc().toIso8601String(),
-            'synced_at': DateTime.now().toUtc().toIso8601String(),
-            'version': serverVersion + 1,
-          })
-          .eq('id', eventId)
-          .eq('book_uuid', bookUuid)
-          .eq('is_deleted', false);
-
-      final now = DateTime.now().toUtc().toIso8601String();
-      await db.client.from('events').insert({
-        'id': generatedId,
-        'book_uuid': bookUuid,
-        'record_uuid': existing['record_uuid'],
-        'title': existing['title'],
-        'event_types': existing['event_types'],
-        'has_charge_items': _toBool(existing['has_charge_items']),
-        'start_time': newStart.toIso8601String(),
-        'end_time': newEnd?.toIso8601String(),
-        'created_at': now,
-        'updated_at': now,
-        'synced_at': now,
-        'version': 1,
-        'is_deleted': false,
-        'is_removed': false,
-        'removal_reason': null,
-        'original_event_id': eventId,
-        'new_event_id': null,
-        'is_checked': _toBool(existing['is_checked']),
-        'has_note': _toBool(existing['has_note']),
-      });
-
-      final oldEvent = await _eventWithRecord(bookUuid, eventId);
-      final newEvent = await _eventWithRecord(bookUuid, generatedId);
-
       return Response.ok(
         jsonEncode({
           'success': true,
-          'oldEvent': _serializeEvent(oldEvent!),
-          'newEvent': _serializeEvent(newEvent!),
+          'oldEvent': _serializeEvent(result.oldEvent),
+          'newEvent': _serializeEvent(result.newEvent),
         }),
         headers: {'Content-Type': 'application/json'},
       );
