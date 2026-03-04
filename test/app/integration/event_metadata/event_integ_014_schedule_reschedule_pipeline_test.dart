@@ -67,7 +67,6 @@ class _TrackingDeviceRepository implements IDeviceRepository {
     _getCredentialsCalls += 1;
     final stage = switch (_getCredentialsCalls) {
       1 => 'credentials_local_before_reschedule',
-      2 => 'credentials_local_before_reload',
       _ => 'credentials_local_extra_$_getCredentialsCalls',
     };
     return _probe.measure(stage, _inner.getCredentials);
@@ -95,11 +94,6 @@ class _TrackingApiClient extends ApiClient {
   _TrackingApiClient({required super.baseUrl, required this.probe});
 
   final _StageProbe probe;
-  int _fetchEventsCalls = 0;
-
-  void resetMeasuredRun() {
-    _fetchEventsCalls = 0;
-  }
 
   @override
   Future<Map<String, dynamic>> rescheduleEvent({
@@ -119,31 +113,6 @@ class _TrackingApiClient extends ApiClient {
         newStartTime: newStartTime,
         newEndTime: newEndTime,
         reason: reason,
-        deviceId: deviceId,
-        deviceToken: deviceToken,
-      ),
-    );
-  }
-
-  @override
-  Future<List<Map<String, dynamic>>> fetchEventsByDateRange({
-    required String bookUuid,
-    required DateTime startDate,
-    required DateTime endDate,
-    required String deviceId,
-    required String deviceToken,
-  }) {
-    _fetchEventsCalls += 1;
-    final stage = switch (_fetchEventsCalls) {
-      1 => 'fetch_events_window',
-      _ => 'fetch_events_window_extra_$_fetchEventsCalls',
-    };
-    return probe.measure(
-      stage,
-      () => super.fetchEventsByDateRange(
-        bookUuid: bookUuid,
-        startDate: startDate,
-        endDate: endDate,
         deviceId: deviceId,
         deviceToken: deviceToken,
       ),
@@ -252,7 +221,7 @@ DateTime _atUtcHour(DateTime baseUtc, int hour, int minute) {
 
 void registerEventInteg014({required LiveServerConfig? config}) {
   test(
-    'EVENT-INTEG-014: schedule time change request follows current reschedule pipeline and reports stage latency',
+    'EVENT-INTEG-014: schedule time change request patches schedule state from reschedule response and reports stage latency',
     () async {
       final live = config!;
       final probe = _StageProbe();
@@ -346,7 +315,6 @@ void registerEventInteg014({required LiveServerConfig? config}) {
 
         probe.reset();
         deviceRepository.resetMeasuredRun();
-        apiClient.resetMeasuredRun();
 
         final totalSw = Stopwatch()..start();
         final result = await cubit.changeEventTime(
@@ -365,8 +333,6 @@ void registerEventInteg014({required LiveServerConfig? config}) {
           equals(const [
             'credentials_local_before_reschedule',
             'reschedule_server_roundtrip',
-            'credentials_local_before_reload',
-            'fetch_events_window',
           ]),
         );
 
@@ -393,8 +359,7 @@ void registerEventInteg014({required LiveServerConfig? config}) {
 
         final report = <String, dynamic>{
           'test': 'EVENT-INTEG-014',
-          'pipeline':
-              'schedule_change_time_request_to_refetched_schedule_state',
+          'pipeline': 'schedule_change_time_request_to_patched_schedule_state',
           'stage_order': probe.order,
           'stages_ms': probe.singleRunMs(),
           'total_ms': totalMicros / 1000.0,

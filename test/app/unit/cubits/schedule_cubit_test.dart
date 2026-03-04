@@ -159,12 +159,14 @@ class _FakeApiClient extends ApiClient {
 
   final List<List<Map<String, dynamic>>> queuedResponses = [];
   final List<Object> queuedUpdateResults = [];
+  final List<Object> queuedRescheduleResults = [];
   final List<int?> updateRequestVersions = [];
   final List<(DateTime, DateTime)> fetchWindows = [];
   Object? fetchError;
   Object? createError;
   int fetchCount = 0;
   int createCalls = 0;
+  int rescheduleCalls = 0;
 
   @override
   Future<List<Map<String, dynamic>>> fetchEventsByDateRange({
@@ -230,6 +232,30 @@ class _FakeApiClient extends ApiClient {
       'has_note': false,
       'version': 1,
     };
+  }
+
+  @override
+  Future<Map<String, dynamic>> rescheduleEvent({
+    required String bookUuid,
+    required String eventId,
+    required DateTime newStartTime,
+    DateTime? newEndTime,
+    required String reason,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    rescheduleCalls += 1;
+    if (queuedRescheduleResults.isNotEmpty) {
+      final next = queuedRescheduleResults.removeAt(0);
+      if (next is Exception) {
+        throw next;
+      }
+      if (next is Error) {
+        throw next;
+      }
+      return next as Map<String, dynamic>;
+    }
+    throw UnimplementedError('No queued reschedule result configured');
   }
 }
 
@@ -569,7 +595,65 @@ void main() {
   );
 
   blocTest<ScheduleCubit, ScheduleState>(
-    'SCHEDULE-CUBIT-009: initialize + repeated refreshFromServer() perform fresh server fetch each time',
+    'SCHEDULE-CUBIT-009: changeEventTime() patches loaded schedule state from reschedule response without refetching window',
+    build: () {
+      deviceRepository.credentials = const DeviceCredentials(
+        deviceId: 'd1',
+        deviceToken: 't1',
+      );
+      apiClient.queuedResponses.add([
+        serverEventMap(eventId: 'event-1', startTime: fixedNow),
+      ]);
+      apiClient.queuedRescheduleResults.add({
+        'oldEvent': serverEventMap(eventId: 'event-1', startTime: fixedNow)
+          ..['is_removed'] = true
+          ..['removal_reason'] = 'rescheduled'
+          ..['new_event_id'] = 'event-2'
+          ..['version'] = 2,
+        'newEvent': serverEventMap(
+          eventId: 'event-2',
+          startTime: fixedNow.add(const Duration(hours: 2)),
+        )..['original_event_id'] = 'event-1',
+      });
+      return buildCubit();
+    },
+    act: (cubit) async {
+      await cubit.initialize('book-1');
+      final initial = cubit.state as ScheduleLoaded;
+      await cubit.changeEventTime(
+        initial.events.first,
+        fixedNow.add(const Duration(hours: 2)),
+        fixedNow.add(const Duration(hours: 2, minutes: 30)),
+        'rescheduled',
+      );
+    },
+    expect: () => [
+      isA<ScheduleLoading>(),
+      isA<ScheduleLoaded>().having(
+        (s) => s.events.map((e) => e.id).toList(),
+        'initial ids',
+        ['event-1'],
+      ),
+      isA<ScheduleLoaded>()
+          .having((s) => s.events.map((e) => e.id).toList(), 'patched ids', [
+            'event-1',
+            'event-2',
+          ])
+          .having((s) => s.events.first.isRemoved, 'old event removed', true)
+          .having(
+            (s) => s.events.last.originalEventId,
+            'new event original id',
+            'event-1',
+          ),
+    ],
+    verify: (_) {
+      expect(apiClient.rescheduleCalls, 1);
+      expect(apiClient.fetchCount, 1);
+    },
+  );
+
+  blocTest<ScheduleCubit, ScheduleState>(
+    'SCHEDULE-CUBIT-010: initialize + repeated refreshFromServer() perform fresh server fetch each time',
     build: () {
       deviceRepository.credentials = const DeviceCredentials(
         deviceId: 'd1',

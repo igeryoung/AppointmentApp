@@ -440,8 +440,14 @@ class ScheduleCubit extends Cubit<ScheduleState> {
         oldEvent: oldEvent,
       );
 
-      // Reload events to update UI
-      await loadEvents(generation: _currentRequestGeneration);
+      final currentState = state;
+      if (currentState is ScheduleLoaded) {
+        emit(
+          currentState.copyWith(
+            events: _applyTimeChangeResult(currentState.events, result),
+          ),
+        );
+      }
       return result;
     } catch (e) {
       emit(ScheduleError('Failed to change event time: $e'));
@@ -638,6 +644,34 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     if (index < 0) return events;
     final updatedEvents = List<Event>.from(events);
     updatedEvents[index] = updatedEvent;
+    return updatedEvents;
+  }
+
+  List<Event> _applyTimeChangeResult(
+    List<Event> events,
+    ChangeEventTimeResult result,
+  ) {
+    final updatedEvents = List<Event>.from(events);
+
+    final oldIndex = updatedEvents.indexWhere(
+      (event) => event.id == result.oldEvent.id,
+    );
+    if (oldIndex >= 0) {
+      updatedEvents[oldIndex] = result.oldEvent;
+    } else {
+      updatedEvents.add(result.oldEvent);
+    }
+
+    final newIndex = updatedEvents.indexWhere(
+      (event) => event.id == result.newEvent.id,
+    );
+    if (newIndex >= 0) {
+      updatedEvents[newIndex] = result.newEvent;
+    } else {
+      updatedEvents.add(result.newEvent);
+    }
+
+    updatedEvents.sort((a, b) => a.startTime.compareTo(b.startTime));
     return updatedEvents;
   }
 }
