@@ -14,6 +14,7 @@ import 'event_metadata/event_integ_009_drawing_contract_test.dart';
 import 'event_metadata/event_integ_010_device_session_contract_test.dart';
 import 'event_metadata/event_integ_011_multi_device_metadata_lww_test.dart';
 import 'event_metadata/event_integ_012_multi_device_note_conflict_resolution_test.dart';
+import 'event_metadata/event_integ_013_record_lookup_autofill_test.dart';
 import 'event_metadata/live_server_test_support.dart';
 
 void main() {
@@ -30,4 +31,5 @@ void main() {
   registerEventInteg010(config: config);
   registerEventInteg011(config: config);
   registerEventInteg012(config: config);
+  registerEventInteg013(config: config);
 }

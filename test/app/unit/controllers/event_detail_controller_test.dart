@@ -45,6 +45,10 @@ class _FakeEventMetadataApiClient extends ApiClient {
   String? lastRecordDeviceId;
   String? lastRecordDeviceToken;
   Map<String, dynamic>? lastGetOrCreateRecordData;
+  String? lastFetchedRecordNumber;
+  String? lastFetchRecordDeviceId;
+  String? lastFetchRecordDeviceToken;
+  final Map<String, Map<String, dynamic>?> fetchRecordByNumberResponses = {};
   Object? updateEventError;
   Object? updateEventDetailBundleError;
   Object? updateRecordError;
@@ -233,6 +237,19 @@ class _FakeEventMetadataApiClient extends ApiClient {
       'phone': phone,
       'created': !existed,
     };
+  }
+
+  @override
+  Future<Map<String, dynamic>?> fetchRecordByNumber({
+    required String recordNumber,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    lastFetchedRecordNumber = recordNumber;
+    lastFetchRecordDeviceId = deviceId;
+    lastFetchRecordDeviceToken = deviceToken;
+    final response = fetchRecordByNumberResponses[recordNumber];
+    return response == null ? null : Map<String, dynamic>.from(response);
   }
 }
 
@@ -886,6 +903,109 @@ void main() {
       expect(persisted, isNotNull);
       expect(persisted!.recordNumber, '001');
       expect(persisted.recordUuid, 'record-a1');
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-017: validateRecordNumberOnBlur() hydrates canonical record data for existing record number',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      final existingNote = makeNote(
+        recordUuid: 'record-server-lookup-1',
+        version: 4,
+      );
+      fakeApiClient.fetchRecordByNumberResponses['SRV-001'] = {
+        'record_uuid': 'record-server-lookup-1',
+        'record_number': 'SRV-001',
+        'name': 'Server Lookup',
+        'phone': '0900111222',
+      };
+      fakeNoteSyncAdapter.notesByRecordUuid['record-server-lookup-1'] =
+          existingNote;
+
+      final controller = buildNewController(
+        makeEvent(
+          id: 'event-lookup-blur-1',
+          bookUuid: 'book-a',
+          recordUuid: '',
+          title: '',
+          recordNumber: '',
+          eventTypes: const [EventType.consultation],
+        ),
+      );
+
+      controller.updateRecordNumber('SRV-001');
+      final isValid = await controller.validateRecordNumberOnBlur();
+
+      expect(isValid, isTrue);
+      expect(fakeApiClient.lastFetchedRecordNumber, 'SRV-001');
+      expect(controller.state.recordNumber, 'SRV-001');
+      expect(controller.state.name, 'Server Lookup');
+      expect(controller.state.phone, '0900111222');
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.recordUuid, 'record-server-lookup-1');
+      expect(controller.state.note!.version, 4);
+      expect(controller.state.isNameReadOnly, isTrue);
+      expect(controller.state.isLoadingFromServer, isFalse);
+      expect(controller.state.isValidatingRecordNumber, isFalse);
+      expect(controller.state.recordNumberError, isNull);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-018: onRecordNumberSelected() hydrates canonical record data without validation dialog state',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      final existingNote = makeNote(
+        recordUuid: 'record-server-lookup-2',
+        version: 6,
+      );
+      fakeApiClient.fetchRecordByNumberResponses['SRV-002'] = {
+        'record_uuid': 'record-server-lookup-2',
+        'record_number': 'SRV-002',
+        'name': 'Dropdown Match',
+        'phone': '0911333444',
+      };
+      fakeNoteSyncAdapter.notesByRecordUuid['record-server-lookup-2'] =
+          existingNote;
+
+      final controller = buildNewController(
+        makeEvent(
+          id: 'event-lookup-select-1',
+          bookUuid: 'book-a',
+          recordUuid: '',
+          title: '',
+          recordNumber: '',
+          eventTypes: const [EventType.consultation],
+        ),
+      );
+
+      await controller.onRecordNumberSelected('SRV-002');
+
+      expect(fakeApiClient.lastFetchedRecordNumber, 'SRV-002');
+      expect(controller.state.recordNumber, 'SRV-002');
+      expect(controller.state.name, 'Dropdown Match');
+      expect(controller.state.phone, '0911333444');
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.recordUuid, 'record-server-lookup-2');
+      expect(controller.state.note!.version, 6);
+      expect(controller.state.isNameReadOnly, isTrue);
+      expect(controller.state.isLoadingFromServer, isFalse);
+      expect(controller.state.recordNumberError, isNull);
     },
   );
 

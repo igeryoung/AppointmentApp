@@ -5,13 +5,11 @@ import '../../../l10n/app_localizations.dart';
 class EventDetailStatusBar extends StatelessWidget {
   final bool hasUnsyncedChanges;
   final bool isOffline;
-  final bool isLoadingFromServer;
 
   const EventDetailStatusBar({
     super.key,
     required this.hasUnsyncedChanges,
     required this.isOffline,
-    required this.isLoadingFromServer,
   });
 
   @override
@@ -45,10 +43,6 @@ class EventDetailStatusBar extends StatelessWidget {
               ),
             ),
           ),
-
-        // Background loading indicator
-        if (isLoadingFromServer && !hasUnsyncedChanges)
-          const LinearProgressIndicator(minHeight: 2),
       ],
     );
   }

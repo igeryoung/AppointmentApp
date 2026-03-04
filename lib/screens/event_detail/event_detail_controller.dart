@@ -88,10 +88,15 @@ class EventDetailController {
 
       // Step 2: Load initial data (now that ContentService is ready)
       if (!isNew) {
-        await _refreshEventFromServer();
-        await loadChargeItems(); // Load charge items from charge_items table
-        if (event.hasNewTime) {
-          await _loadNewEvent();
+        _updateState(_state.copyWith(isLoadingFromServer: true));
+        try {
+          await _refreshEventFromServer();
+          await loadChargeItems(); // Load charge items from charge_items table
+          if (event.hasNewTime) {
+            await _loadNewEvent();
+          }
+        } finally {
+          _updateState(_state.copyWith(isLoadingFromServer: false));
         }
       }
     } catch (e) {
@@ -181,7 +186,6 @@ class EventDetailController {
             clearNote: serverNote == null,
             lastKnownPages: serverNote?.pages ?? const [[]],
             erasedStrokesByEvent: serverNote?.erasedStrokesByEvent ?? const {},
-            isLoadingFromServer: false,
             hasUnsyncedChanges: false,
             isOffline: false,
           ),
@@ -191,9 +195,7 @@ class EventDetailController {
         await _logStateTime('after_state_update');
       }
     } catch (e) {
-      _updateState(
-        _state.copyWith(isOffline: true, isLoadingFromServer: false),
-      );
+      _updateState(_state.copyWith(isOffline: true));
     }
   }
 
@@ -961,11 +963,10 @@ class EventDetailController {
     // and the recordUuid is updated.
   }
 
-  /// Validate record number on blur (when user leaves the field)
-  /// Returns true if valid, false if there's a conflict
+  /// Validate record number on blur.
+  /// Existing record numbers hydrate matched data instead of showing conflicts.
   Future<bool> validateRecordNumberOnBlur() async {
     final recordNumber = _state.recordNumber.trim();
-    final name = _state.name.trim();
 
     // Empty record number is always valid (treated as "留空")
     if (recordNumber.isEmpty) {
@@ -973,81 +974,28 @@ class EventDetailController {
       return true;
     }
 
+    if (_state.isValidatingRecordNumber || _state.isLoadingFromServer) {
+      return false;
+    }
+
     _updateState(_state.copyWith(isValidatingRecordNumber: true));
 
     try {
-      // Check if we have PRD database service
-      if (_dbService is! PRDDatabaseService) {
-        _updateState(
-          _state.copyWith(
-            isValidatingRecordNumber: false,
-            clearRecordNumberError: true,
-          ),
-        );
-        return true;
-      }
-
-      final prdDb = _dbService as PRDDatabaseService;
-      final credentials = await prdDb.getDeviceCredentials();
-
-      if (credentials == null) {
-        // Truly offline - no credentials - fall back to local validation only
-        final localRecord = await prdDb.getRecordByRecordNumber(recordNumber);
-        if (localRecord != null &&
-            localRecord.name != null &&
-            localRecord.name != name) {
-          _updateState(
-            _state.copyWith(
-              isValidatingRecordNumber: false,
-              recordNumberError: '病例號已存在',
-              recordNumber: '', // Clear the record number field
-            ),
-          );
-          return false;
-        }
-        _updateState(
-          _state.copyWith(
-            isValidatingRecordNumber: false,
-            clearRecordNumberError: true,
-          ),
-        );
-        return true;
-      }
-
-      if (_contentService == null) {
-        // Online but not initialized yet - cannot validate properly
-        // Return false to prevent proceeding without validation
-        _updateState(
-          _state.copyWith(
-            isValidatingRecordNumber: false,
-            recordNumberError: '服務初始化中，請稍後再試',
-          ),
-        );
-        return false;
-      }
-
-      // Call server validation API
-      final result = await _contentService!.apiClient.validateRecordNumber(
-        recordNumber: recordNumber,
-        name: name,
-        deviceId: credentials.deviceId,
-        deviceToken: credentials.deviceToken,
+      final resolvedRecord = await _resolveRecordDataByRecordNumber(
+        recordNumber,
       );
-
-      if (result.hasConflict) {
-        _updateState(
-          _state.copyWith(
-            isValidatingRecordNumber: false,
-            recordNumberError: '病例號已存在',
-            recordNumber: '', // Clear the record number field
-          ),
+      if (resolvedRecord != null) {
+        _applyResolvedRecordData(
+          resolvedRecord,
+          isOffline: !resolvedRecord.loadedFromServer,
         );
-        return false;
+        return true;
       }
 
       _updateState(
         _state.copyWith(
           isValidatingRecordNumber: false,
+          isLoadingFromServer: false,
           clearRecordNumberError: true,
         ),
       );
@@ -1060,7 +1008,8 @@ class EventDetailController {
       _updateState(
         _state.copyWith(
           isValidatingRecordNumber: false,
-          recordNumberError: '驗證失敗，請稍後再試',
+          isLoadingFromServer: false,
+          recordNumberError: '載入病例資料失敗，請稍後再試',
         ),
       );
       return false;
@@ -1327,71 +1276,6 @@ class EventDetailController {
     _updateState(_state.copyWith(chargeItems: chargeItems, hasChanges: true));
   }
 
-  Future<Note?> _fetchExistingNoteForRecordNumber({
-    required String recordNumber,
-    String? name,
-    bool allowServerLookup = true,
-  }) async {
-    final trimmedRecordNumber = recordNumber.trim();
-    if (trimmedRecordNumber.isEmpty) {
-      return null;
-    }
-
-    final nameText = (name ?? _state.name).trim();
-    String recordUuid = '';
-
-    if (allowServerLookup &&
-        _contentService != null &&
-        _dbService is PRDDatabaseService &&
-        nameText.isNotEmpty) {
-      try {
-        final prdDb = _dbService as PRDDatabaseService;
-        final credentials = await prdDb.getDeviceCredentials();
-        if (credentials != null) {
-          final validation = await _contentService!.apiClient
-              .validateRecordNumber(
-                recordNumber: trimmedRecordNumber,
-                name: nameText,
-                deviceId: credentials.deviceId,
-                deviceToken: credentials.deviceToken,
-              );
-          if (validation.exists && validation.valid) {
-            recordUuid =
-                (validation.record?['record_uuid'] ??
-                        validation.record?['recordUuid'])
-                    ?.toString() ??
-                '';
-          }
-        }
-      } catch (e) {
-        return null;
-      }
-    }
-
-    if (recordUuid.isEmpty && _dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      final record = nameText.isNotEmpty
-          ? await prdDb.getRecordByNameAndRecordNumber(
-              nameText,
-              trimmedRecordNumber,
-            )
-          : null;
-      final fallbackRecord =
-          record ?? await prdDb.getRecordByRecordNumber(trimmedRecordNumber);
-      recordUuid = fallbackRecord?.recordUuid ?? '';
-    }
-
-    if (recordUuid.isEmpty) {
-      return null;
-    }
-
-    return _fetchExistingNoteForRecordUuid(
-      bookUuid: event.bookUuid,
-      recordUuid: recordUuid,
-      allowServerLookup: allowServerLookup,
-    );
-  }
-
   Future<Note?> _fetchExistingNoteForRecordUuid({
     required String bookUuid,
     required String recordUuid,
@@ -1426,29 +1310,14 @@ class EventDetailController {
     return null;
   }
 
-  /// Check for existing person note when record number is set (for NEW events only)
-  /// Returns the existing note if found, null otherwise
-  /// This is called when user finishes typing record number
-  Future<Note?> checkExistingPersonNote() async {
-    // Only check for new events
-    if (!isNew) {
-      return null;
-    }
-
-    final recordNumber = _state.recordNumber.trim();
-
-    if (recordNumber.isEmpty) {
-      return null;
-    }
-
-    return await _fetchExistingNoteForRecordNumber(recordNumber: recordNumber);
-  }
-
-  /// Load existing person note (when user chooses "載入現有")
-  /// Replaces current canvas with DB handwriting
+  /// Apply an already resolved shared note to the current editing state.
   Future<void> loadExistingPersonNote(Note existingNote) async {
     _updateState(
-      _state.copyWith(note: existingNote, lastKnownPages: existingNote.pages),
+      _state.copyWith(
+        note: existingNote,
+        lastKnownPages: existingNote.pages,
+        erasedStrokesByEvent: existingNote.erasedStrokesByEvent,
+      ),
     );
     _noteEditedInSession = false;
     _incrementNoteGeneration();
@@ -1523,43 +1392,43 @@ class EventDetailController {
 
   /// Handle record number selected - auto-fill name, phone, and note
   Future<void> onRecordNumberSelected(String recordNumber) async {
-    if (_dbService is! PRDDatabaseService) {
+    final trimmedRecordNumber = recordNumber.trim();
+    if (trimmedRecordNumber.isEmpty) {
       return;
     }
 
-    final prdDb = _dbService as PRDDatabaseService;
-    final name = await prdDb.getNameByRecordNumber(recordNumber);
-    if (name == null || name.isEmpty) {
+    if (_state.isValidatingRecordNumber || _state.isLoadingFromServer) {
       return;
     }
-
-    final phone = await prdDb.getPhoneByRecordNumber(recordNumber);
 
     _updateState(
       _state.copyWith(
-        name: name,
-        recordNumber: recordNumber,
-        phone: phone ?? '',
-        isNameReadOnly: true,
+        recordNumber: trimmedRecordNumber,
+        clearRecordNumberError: true,
         hasChanges: true,
       ),
     );
 
-    // Note: Charge items are loaded based on recordUuid from the event.
-    // For existing events, they're already loaded. For new events, they'll be
-    // loaded after the event is saved and the recordUuid is established.
-
-    // Load person note from server.
     try {
-      final noteToLoad = await _fetchExistingNoteForRecordNumber(
-        recordNumber: recordNumber,
-        name: name,
+      final resolvedRecord = await _resolveRecordDataByRecordNumber(
+        trimmedRecordNumber,
       );
-
-      if (noteToLoad != null && noteToLoad.isNotEmpty) {
-        loadExistingPersonNote(noteToLoad);
+      if (resolvedRecord != null) {
+        _applyResolvedRecordData(
+          resolvedRecord,
+          isOffline: !resolvedRecord.loadedFromServer,
+        );
+      } else {
+        _updateState(_state.copyWith(isLoadingFromServer: false));
       }
-    } catch (e) {}
+    } catch (e) {
+      _updateState(
+        _state.copyWith(
+          isLoadingFromServer: false,
+          recordNumberError: '載入病例資料失敗，請稍後再試',
+        ),
+      );
+    }
   }
 
   /// Handle name selected from autocomplete - set editable mode
@@ -1599,6 +1468,136 @@ class EventDetailController {
   void updatePages(List<List<Stroke>> pages) {
     _updateState(_state.copyWith(lastKnownPages: pages, hasChanges: true));
     _noteEditedInSession = true;
+    _incrementNoteGeneration();
+  }
+
+  Future<_ResolvedRecordData?> _resolveRecordDataByRecordNumber(
+    String recordNumber,
+  ) async {
+    final trimmedRecordNumber = recordNumber.trim();
+    if (trimmedRecordNumber.isEmpty) {
+      return null;
+    }
+
+    _updateState(_state.copyWith(isLoadingFromServer: true));
+
+    if (_dbService is! PRDDatabaseService) {
+      return null;
+    }
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final credentials = await prdDb.getDeviceCredentials();
+
+    if (_contentService != null && credentials != null) {
+      try {
+        final serverRecord = await _contentService!.apiClient
+            .fetchRecordByNumber(
+              recordNumber: trimmedRecordNumber,
+              deviceId: credentials.deviceId,
+              deviceToken: credentials.deviceToken,
+            );
+        if (serverRecord != null) {
+          final resolvedRecord = _ResolvedRecordData.fromServer(
+            recordNumber: trimmedRecordNumber,
+            data: serverRecord,
+          );
+          await _cacheResolvedRecordLocally(prdDb, resolvedRecord);
+          final note = await _fetchExistingNoteForRecordUuid(
+            bookUuid: event.bookUuid,
+            recordUuid: resolvedRecord.recordUuid,
+          );
+          return resolvedRecord.copyWith(note: note);
+        }
+      } catch (e) {
+        debugPrint('[EventDetailController] fetchRecordByNumber error: $e');
+      }
+    }
+
+    final localRecord = await prdDb.getRecordByRecordNumber(
+      trimmedRecordNumber,
+    );
+    if (localRecord == null || localRecord.recordUuid == null) {
+      return null;
+    }
+
+    final note = await _fetchExistingNoteForRecordUuid(
+      bookUuid: event.bookUuid,
+      recordUuid: localRecord.recordUuid!,
+      allowServerLookup: false,
+    );
+
+    return _ResolvedRecordData(
+      recordUuid: localRecord.recordUuid!,
+      recordNumber: trimmedRecordNumber,
+      name: localRecord.name ?? '',
+      phone: localRecord.phone,
+      note: note,
+      loadedFromServer: false,
+    );
+  }
+
+  Future<void> _cacheResolvedRecordLocally(
+    PRDDatabaseService prdDb,
+    _ResolvedRecordData resolvedRecord,
+  ) async {
+    final db = await prdDb.database;
+    final nowSeconds = DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000;
+    final existingRecord = await prdDb.getRecordByUuid(
+      resolvedRecord.recordUuid,
+    );
+    if (existingRecord == null) {
+      await db.insert('records', {
+        'record_uuid': resolvedRecord.recordUuid,
+        'record_number': resolvedRecord.recordNumber,
+        'name': resolvedRecord.name,
+        'phone': resolvedRecord.phone,
+        'created_at': nowSeconds,
+        'updated_at': nowSeconds,
+        'version': 1,
+        'is_dirty': 0,
+        'is_deleted': 0,
+      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      return;
+    }
+
+    await db.update(
+      'records',
+      {
+        'record_number': resolvedRecord.recordNumber,
+        'name': resolvedRecord.name,
+        'phone': resolvedRecord.phone,
+        'updated_at': nowSeconds,
+        'is_dirty': 0,
+        'is_deleted': 0,
+      },
+      where: 'record_uuid = ?',
+      whereArgs: [resolvedRecord.recordUuid],
+    );
+  }
+
+  void _applyResolvedRecordData(
+    _ResolvedRecordData resolvedRecord, {
+    required bool isOffline,
+  }) {
+    _updateState(
+      _state.copyWith(
+        name: resolvedRecord.name,
+        recordNumber: resolvedRecord.recordNumber,
+        phone: resolvedRecord.phone ?? '',
+        note: resolvedRecord.note,
+        clearNote: resolvedRecord.note == null,
+        lastKnownPages: resolvedRecord.note?.pages ?? const [[]],
+        erasedStrokesByEvent:
+            resolvedRecord.note?.erasedStrokesByEvent ?? const {},
+        isNameReadOnly: resolvedRecord.name.trim().isNotEmpty,
+        hasChanges: true,
+        isOffline: isOffline,
+        isLoadingFromServer: false,
+        isValidatingRecordNumber: false,
+        clearRecordNumberError: true,
+      ),
+    );
+    _noteEditedInSession = false;
     _incrementNoteGeneration();
   }
 
@@ -1692,4 +1691,50 @@ class RecordNumberOption {
 
   @override
   int get hashCode => recordNumber.hashCode ^ name.hashCode;
+}
+
+class _ResolvedRecordData {
+  final String recordUuid;
+  final String recordNumber;
+  final String name;
+  final String? phone;
+  final Note? note;
+  final bool loadedFromServer;
+
+  const _ResolvedRecordData({
+    required this.recordUuid,
+    required this.recordNumber,
+    required this.name,
+    required this.phone,
+    required this.note,
+    required this.loadedFromServer,
+  });
+
+  factory _ResolvedRecordData.fromServer({
+    required String recordNumber,
+    required Map<String, dynamic> data,
+  }) {
+    return _ResolvedRecordData(
+      recordUuid:
+          (data['record_uuid'] ?? data['recordUuid'])?.toString().trim() ?? '',
+      recordNumber:
+          (data['record_number'] ?? data['recordNumber'] ?? recordNumber)
+              .toString(),
+      name: (data['name'] ?? '').toString(),
+      phone: data['phone']?.toString(),
+      note: null,
+      loadedFromServer: true,
+    );
+  }
+
+  _ResolvedRecordData copyWith({Note? note}) {
+    return _ResolvedRecordData(
+      recordUuid: recordUuid,
+      recordNumber: recordNumber,
+      name: name,
+      phone: phone,
+      note: note ?? this.note,
+      loadedFromServer: loadedFromServer,
+    );
+  }
 }

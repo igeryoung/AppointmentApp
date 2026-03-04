@@ -5,7 +5,6 @@ import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/note.dart';
 import '../../services/database_service_interface.dart';
-import '../../services/save_sync_notifier.dart';
 import '../../services/service_locator.dart';
 import '../../utils/datetime_picker_utils.dart';
 import '../../utils/event_time_validator.dart';
@@ -46,9 +45,6 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   late TextEditingController _phoneController;
   final GlobalKey<HandwritingCanvasState> _canvasKey =
       GlobalKey<HandwritingCanvasState>();
-
-  // Track the last checked record number to prevent dialog loop
-  String? _lastCheckedRecordNumber;
 
   // Available record numbers for dropdown
   List<String> _availableRecordNumbers = [];
@@ -271,23 +267,10 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   void _handleRecordNumberChanged(String newRecordNumber) {
     _controller.updateRecordNumber(newRecordNumber);
-
-    // Reset tracker if value changed from last checked
-    if (newRecordNumber.trim() != _lastCheckedRecordNumber) {
-      setState(() {
-        _lastCheckedRecordNumber = null;
-      });
-    }
-    // Note: Don't call _checkAndShowPersonNoteDialog() here
-    // It should only be called on blur (after validation) or when selecting from dropdown
   }
 
   Future<void> _handleRecordNumberBlur() async {
-    final isValid = await _controller.validateRecordNumberOnBlur();
-    if (isValid) {
-      // Only check for existing notes if validation passed
-      await _checkAndShowPersonNoteDialog();
-    }
+    await _controller.validateRecordNumberOnBlur();
   }
 
   void _onPagesChanged(List<List<Stroke>> pages) {
@@ -297,70 +280,32 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   Size? _getCanvasSize() => _canvasKey.currentState?.canvasSize;
 
-  Future<void> _runSaveInBackground({
-    required bool isAutoSave,
-    required Size? canvasSize,
-  }) async {
-    try {
-      await _controller.saveEvent(
-        canvasSize: canvasSize,
-        isAutoSave: isAutoSave,
-      );
-    } catch (error) {
-      SaveSyncNotifier.instance.notifyFailure(
-        SaveSyncFailure(
-          bookUuid: widget.event.bookUuid,
-          eventId: widget.event.id,
-          errorMessage: '本地儲存失敗: $error',
-          occurredAt: DateTime.now(),
-        ),
-      );
-    }
-  }
-
-  void _saveInBackgroundAndPop({required bool isAutoSave}) {
+  Future<void> _saveAndPop({required bool isAutoSave}) async {
     final capturedCanvasSize = _getCanvasSize();
 
-    if (mounted) {
-      Navigator.pop(context, true);
-    }
-
-    // Let route pop animation complete before kicking off background save work.
-    unawaited(
-      Future<void>.delayed(const Duration(milliseconds: 800), () {
-        return _runSaveInBackground(
-          isAutoSave: isAutoSave,
-          canvasSize: capturedCanvasSize,
-        );
-      }),
-    );
-  }
-
-  Future<void> _saveEvent() async {
-    if (widget.isReadOnlyMode) {
-      return;
-    }
-    if (_nameController.text.trim().isEmpty) {
+    try {
+      await _controller.saveEvent(
+        canvasSize: capturedCanvasSize,
+        isAutoSave: isAutoSave,
+      );
+      if (mounted) {
+        Navigator.pop(context, true);
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(AppLocalizations.of(context)!.eventNameRequired),
-        ),
-      );
-      return;
-    }
-
-    // Check for record number validation error
-    if (_controller.state.recordNumberError != null) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('請修正病例號錯誤後再儲存'),
+          content: Text(
+            AppLocalizations.of(
+              context,
+            )!.errorSavingEventMessage(error.toString()),
+          ),
           backgroundColor: Colors.red,
         ),
       );
-      return;
     }
-
-    _saveInBackgroundAndPop(isAutoSave: false);
   }
 
   Future<void> _deleteEvent() async {
@@ -467,70 +412,6 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     }
   }
 
-  Future<void> _checkAndShowPersonNoteDialog() async {
-    // Only check for NEW events
-    if (!widget.isNew) return;
-
-    final currentRecordNumber = _controller.state.recordNumber.trim();
-
-    // Skip if we already checked this value
-    if (currentRecordNumber == _lastCheckedRecordNumber) {
-      return;
-    }
-
-    final existingNote = await _controller.checkExistingPersonNote();
-
-    if (existingNote != null && mounted) {
-      // Mark as checked BEFORE showing dialog to prevent re-triggering
-      setState(() {
-        _lastCheckedRecordNumber = currentRecordNumber;
-      });
-
-      // Check if current event has any handwriting
-      final canvasState = _canvasKey.currentState;
-      final currentStrokes = canvasState?.getStrokes() ?? [];
-      final hasCurrentHandwriting = currentStrokes.isNotEmpty;
-
-      // If current event has no handwriting, auto-load without dialog
-      if (!hasCurrentHandwriting) {
-        await _controller.loadExistingPersonNote(existingNote);
-        // Canvas will be updated by rebuilding HandwritingSection with new note pages
-        setState(() {});
-        return;
-      }
-
-      // Current event has handwriting, show confirmation dialog
-      final result = await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('提示'),
-          content: Text('此病歷號已有筆記，要載入現有筆記嗎？'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context, false),
-              child: const Text('保留當前'),
-            ),
-            TextButton(
-              onPressed: () => Navigator.pop(context, true),
-              child: const Text('載入現有'),
-            ),
-          ],
-        ),
-      );
-
-      // Unfocus the record number field to prevent re-triggering the dialog
-      if (mounted) {
-        FocusScope.of(context).unfocus();
-      }
-
-      if (result == true && mounted) {
-        await _controller.loadExistingPersonNote(existingNote);
-        // Canvas will be updated by rebuilding HandwritingSection with new note pages
-        setState(() {});
-      }
-    }
-  }
-
   Future<void> _selectStartTime() async {
     final result = await DateTimePickerUtils.pickDateTime(
       context,
@@ -597,6 +478,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     if (widget.isReadOnlyMode) {
       return true;
     }
+    if (_controller.state.isLoading) {
+      return false;
+    }
     final hasName = _nameController.text.trim().isNotEmpty;
 
     // Block auto-save if there's a record number validation error
@@ -613,7 +497,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     // For NEW events with a name (even without changes), auto-save
     // This handles the case where data is pre-filled from "schedule next appointment"
     if (widget.isNew && hasName) {
-      _saveInBackgroundAndPop(isAutoSave: true);
+      await _saveAndPop(isAutoSave: true);
       return false; // Prevent default pop (we already popped manually)
     }
 
@@ -639,7 +523,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     }
 
     // For EXISTING events with changes and a name, auto-save
-    _saveInBackgroundAndPop(isAutoSave: true);
+    await _saveAndPop(isAutoSave: true);
     return false; // Prevent default pop (we already popped manually)
   }
 
@@ -647,6 +531,11 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final state = _controller.state;
+    final isBlockingOverlayVisible =
+        state.isLoading || state.isLoadingFromServer;
+    final loadingMessage = state.isLoading
+        ? 'Syncing event...'
+        : 'Loading event...';
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -696,9 +585,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 !widget.isNew &&
                 !widget.event.isRemoved) ...[
               PopupMenuButton<String>(
-                enabled: !state.isLoading,
+                enabled: !isBlockingOverlayVisible,
                 onSelected: (value) {
-                  if (state.isLoading) return;
+                  if (isBlockingOverlayVisible) return;
                   switch (value) {
                     case 'remove':
                       _removeEvent();
@@ -714,18 +603,20 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 itemBuilder: (context) => [
                   PopupMenuItem(
                     value: 'remove',
-                    enabled: !state.isLoading,
+                    enabled: !isBlockingOverlayVisible,
                     child: Row(
                       children: [
                         Icon(
                           Icons.remove_circle_outline,
-                          color: state.isLoading ? Colors.grey : null,
+                          color: isBlockingOverlayVisible ? Colors.grey : null,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           'Remove Event',
                           style: TextStyle(
-                            color: state.isLoading ? Colors.grey : null,
+                            color: isBlockingOverlayVisible
+                                ? Colors.grey
+                                : null,
                           ),
                         ),
                       ],
@@ -733,18 +624,20 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   ),
                   PopupMenuItem(
                     value: 'changeTime',
-                    enabled: !state.isLoading,
+                    enabled: !isBlockingOverlayVisible,
                     child: Row(
                       children: [
                         Icon(
                           Icons.schedule,
-                          color: state.isLoading ? Colors.grey : null,
+                          color: isBlockingOverlayVisible ? Colors.grey : null,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           'Change Time',
                           style: TextStyle(
-                            color: state.isLoading ? Colors.grey : null,
+                            color: isBlockingOverlayVisible
+                                ? Colors.grey
+                                : null,
                           ),
                         ),
                       ],
@@ -752,12 +645,14 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   ),
                   PopupMenuItem(
                     value: 'delete',
-                    enabled: !state.isLoading,
+                    enabled: !isBlockingOverlayVisible,
                     child: Row(
                       children: [
                         Icon(
                           Icons.delete_forever,
-                          color: state.isLoading ? Colors.grey : Colors.red,
+                          color: isBlockingOverlayVisible
+                              ? Colors.grey
+                              : Colors.red,
                         ),
                         const SizedBox(width: 8),
                         const Text('Delete Permanently'),
@@ -767,23 +662,22 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                 ],
               ),
             ],
+            if (isBlockingOverlayVisible)
+              const Padding(
+                padding: EdgeInsets.only(right: 16),
+                child: SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2.2),
+                ),
+              ),
           ],
         ),
-        body: state.isLoading
-            ? const Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(),
-                    SizedBox(height: 16),
-                    Text(
-                      'Processing...',
-                      style: TextStyle(fontSize: 16, color: Colors.grey),
-                    ),
-                  ],
-                ),
-              )
-            : LayoutBuilder(
+        body: Stack(
+          children: [
+            AbsorbPointer(
+              absorbing: isBlockingOverlayVisible,
+              child: LayoutBuilder(
                 builder: (context, constraints) {
                   final isTablet = constraints.maxWidth > 600;
                   final screenHeight = constraints.maxHeight;
@@ -795,7 +689,6 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                       EventDetailStatusBar(
                         hasUnsyncedChanges: state.hasUnsyncedChanges,
                         isOffline: state.isOffline,
-                        isLoadingFromServer: state.isLoadingFromServer,
                       ),
                       // Event metadata section
                       Flexible(
@@ -836,8 +729,10 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                               onNameSelected: (name) =>
                                   _controller.onNameSelected(name),
                               onRecordNumberSelected: (recordNumber) =>
-                                  _controller.onRecordNumberSelected(
-                                    recordNumber,
+                                  unawaited(
+                                    _controller.onRecordNumberSelected(
+                                      recordNumber,
+                                    ),
                                   ),
                               isNameReadOnly: state.isNameReadOnly,
                               isReadOnlyMode: widget.isReadOnlyMode,
@@ -884,6 +779,65 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                   );
                 },
               ),
+            ),
+            if (isBlockingOverlayVisible)
+              Positioned.fill(
+                child: ColoredBox(
+                  color: state.isLoadingFromServer
+                      ? Colors.grey.withValues(alpha: 0.36)
+                      : Colors.black.withValues(alpha: 0.22),
+                  child: Center(
+                    child: _LoadingOverlayCard(message: loadingMessage),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _LoadingOverlayCard extends StatelessWidget {
+  final String message;
+
+  const _LoadingOverlayCard({required this.message});
+
+  @override
+  Widget build(BuildContext context) {
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: const [
+          BoxShadow(
+            color: Color(0x22000000),
+            blurRadius: 20,
+            offset: Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Padding(
+        padding: EdgeInsets.symmetric(horizontal: 24, vertical: 20),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const SizedBox(
+              width: 28,
+              height: 28,
+              child: CircularProgressIndicator(strokeWidth: 2.8),
+            ),
+            const SizedBox(height: 14),
+            Text(
+              message,
+              style: const TextStyle(
+                fontSize: 15,
+                fontWeight: FontWeight.w600,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

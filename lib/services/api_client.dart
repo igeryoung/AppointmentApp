@@ -120,6 +120,41 @@ class ApiClient {
     }
   }
 
+  /// Fetch a canonical record by exact record number.
+  Future<Map<String, dynamic>?> fetchRecordByNumber({
+    required String recordNumber,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    try {
+      final encodedRecordNumber = Uri.encodeComponent(recordNumber);
+      final response = await _client
+          .get(
+            Uri.parse('$baseUrl/api/records/by-number/$encodedRecordNumber'),
+            headers: {
+              'Content-Type': 'application/json',
+              'X-Device-ID': deviceId,
+              'X-Device-Token': deviceToken,
+            },
+          )
+          .timeout(timeout);
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      } else if (response.statusCode == 404) {
+        return null;
+      }
+
+      throw ApiException(
+        'Fetch record by number failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    } catch (e) {
+      rethrow;
+    }
+  }
+
   /// Resolve a canonical record on the server, creating one if needed.
   Future<Map<String, dynamic>> getOrCreateRecord({
     required String recordNumber,
