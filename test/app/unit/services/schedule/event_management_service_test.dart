@@ -80,7 +80,10 @@ void main() {
         onMenuStateChanged: (selectedEvent, _) => menuEvents.add(selectedEvent),
         onNavigate: (_) async => true,
         onReloadEvents: () {},
-        onUpdateEvent: (event) => updatedEvents.add(event),
+        onUpdateEvent: (event) async {
+          updatedEvents.add(event);
+          return event;
+        },
         onDeleteEvent: (_, __) async => null,
         onHardDeleteEvent: (_) async => null,
         onChangeEventTime: (_, __, ___, ____) async {},
@@ -116,6 +119,77 @@ void main() {
 
       expect(syncedEvents, isEmpty);
 
+      expect(snackbarMessages, isEmpty);
+    },
+  );
+
+  test(
+    'SCHEDULE-UNIT-002: toggleEventChecked() updates server state even when the legacy local book/event cache is missing',
+    () async {
+      final menuEvents = <Event?>[];
+      final updatedEvents = <Event>[];
+      final snackbarMessages = <String>[];
+
+      await db.delete('events', where: 'id = ?', whereArgs: [seededEvent.id]);
+      await db.delete(
+        'books',
+        where: 'book_uuid = ?',
+        whereArgs: [seededEvent.bookUuid],
+      );
+
+      final dateService = ScheduleDateService(
+        initialDate: DateTime.utc(2026, 1, 1),
+        onDateChanged: (_, __) {},
+        onSaveDrawing: () async {},
+        onLoadDrawing: () async {},
+        onUpdateCubit: (_) {},
+        onShowNotification: (_) {},
+        isMounted: () => true,
+        isInDrawingMode: () => false,
+        onCancelPendingSave: () {},
+      );
+
+      final service = EventManagementService(
+        dbService: dbService,
+        bookUuid: 'book-a',
+        onMenuStateChanged: (selectedEvent, _) => menuEvents.add(selectedEvent),
+        onNavigate: (_) async => true,
+        onReloadEvents: () {},
+        onUpdateEvent: (event) async {
+          final serverEvent = event.copyWith(version: event.version + 1);
+          updatedEvents.add(serverEvent);
+          return serverEvent;
+        },
+        onDeleteEvent: (_, __) async => null,
+        onHardDeleteEvent: (_) async => null,
+        onChangeEventTime: (_, __, ___, ____) async {},
+        onShowSnackbar: (message, {backgroundColor, durationSeconds}) {
+          snackbarMessages.add(message);
+        },
+        isMounted: () => true,
+        getLocalizedString: (_) => 'error',
+        onSyncEvent: (_) async {},
+        onSetPendingNextAppointment: (_) {},
+        dateService: dateService,
+      );
+
+      service.showEventContextMenu(seededEvent, const Offset(40, 60));
+
+      await service.toggleEventChecked(seededEvent, true);
+
+      expect(updatedEvents, hasLength(1));
+      expect(updatedEvents.single.isChecked, isTrue);
+      expect(updatedEvents.single.version, 2);
+
+      expect(service.selectedEventForMenu, isNotNull);
+      expect(service.selectedEventForMenu!.isChecked, isTrue);
+      expect(service.selectedEventForMenu!.version, 2);
+
+      expect(menuEvents.length, greaterThanOrEqualTo(2));
+      expect(menuEvents.last, isNotNull);
+      expect(menuEvents.last!.isChecked, isTrue);
+
+      expect(await dbService.getEventById(seededEvent.id!), isNull);
       expect(snackbarMessages, isEmpty);
     },
   );

@@ -43,6 +43,7 @@ class PRDDatabaseService
     return _instance!;
   }
 
+  @override
   Future<Database> get database async {
     _database ??= await _initDatabase();
     return _database!;
@@ -315,7 +316,11 @@ class PRDDatabaseService
     final db = await database;
     final data = event.toMap();
     data['is_dirty'] = 0; // Mark as clean since it's from server
-    await db.update('events', data, where: 'id = ?', whereArgs: [event.id]);
+    await db.insert(
+      'events',
+      data,
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
   }
 
   @override

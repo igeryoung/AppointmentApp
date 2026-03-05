@@ -41,7 +41,7 @@ class EventManagementService {
   final void Function() onReloadEvents;
 
   /// Callback to update event in cubit
-  final void Function(Event event) onUpdateEvent;
+  final Future<Event> Function(Event event) onUpdateEvent;
 
   /// Callback to delete event via cubit (soft delete with reason)
   /// Returns the updated event with isRemoved=true for syncing
@@ -110,6 +110,23 @@ class EventManagementService {
 
   /// Get menu position
   Offset? get menuPosition => _menuPosition;
+
+  Future<Event> _applyServerBackedEventUpdate(Event updatedEvent) async {
+    final syncedEvent = await onUpdateEvent(updatedEvent);
+
+    // Schedule events are server-first; refresh local cache opportunistically
+    // without blocking the UI when the legacy cache is incomplete.
+    try {
+      await _dbService.replaceEventWithServerData(syncedEvent);
+    } catch (_) {}
+
+    if (_selectedEventForMenu?.id == syncedEvent.id) {
+      _selectedEventForMenu = syncedEvent;
+      onMenuStateChanged(_selectedEventForMenu, _menuPosition);
+    }
+
+    return syncedEvent;
+  }
 
   /// Create a new event and navigate to detail screen
   Future<void> createEvent({
@@ -233,15 +250,7 @@ class EventManagementService {
         updatedAt: TimeService.instance.now(),
       );
 
-      final persistedEvent = await _dbService.updateEvent(updatedEvent);
-
-      // Keep context-menu state aligned with the event currently shown in menu.
-      if (_selectedEventForMenu?.id == persistedEvent.id) {
-        _selectedEventForMenu = persistedEvent;
-        onMenuStateChanged(_selectedEventForMenu, _menuPosition);
-      }
-
-      onUpdateEvent(persistedEvent);
+      await _applyServerBackedEventUpdate(updatedEvent);
     } catch (e) {
       if (isMounted()) {
         onShowSnackbar(
@@ -311,8 +320,7 @@ class EventManagementService {
             updatedAt: TimeService.instance.now(),
           );
 
-          await _dbService.updateEvent(updatedEvent);
-          onUpdateEvent(updatedEvent);
+          await _applyServerBackedEventUpdate(updatedEvent);
 
           if (isMounted()) {
             onShowSnackbar(getLocalizedString((l10n) => l10n.eventTypeChanged));

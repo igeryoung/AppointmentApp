@@ -232,10 +232,11 @@ class ScheduleCubit extends Cubit<ScheduleState> {
   }
 
   /// Update an existing event
-  Future<void> updateEvent(Event event) async {
+  Future<Event> updateEvent(Event event) async {
     if (event.id == null) {
-      emit(const ScheduleError('Cannot update event without ID'));
-      return;
+      const message = 'Cannot update event without ID';
+      emit(const ScheduleError(message));
+      throw ArgumentError(message);
     }
 
     final previousState = state;
@@ -274,8 +275,10 @@ class ScheduleCubit extends Cubit<ScheduleState> {
           ),
         );
       }
+      return updatedFromServer;
     } catch (e) {
       emit(ScheduleError('Failed to update event: $e'));
+      rethrow;
     }
   }
 
