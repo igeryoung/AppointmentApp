@@ -4,8 +4,10 @@ import 'package:flutter/material.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/note.dart';
+import '../../repositories/event_repository.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/service_locator.dart';
+import '../../utils/event_lookup_suggestion_helper.dart';
 import '../../utils/datetime_picker_utils.dart';
 import '../../utils/event_time_validator.dart';
 import '../../widgets/handwriting_canvas.dart';
@@ -62,10 +64,17 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   // Get database service from service locator
   final IDatabaseService _dbService = getIt<IDatabaseService>();
+  final EventLookupSuggestionHelper _lookupSuggestionHelper =
+      EventLookupSuggestionHelper();
   Timer? _notePollingTimer;
   bool _isAppResumed = true;
   bool _isNoteRefreshInFlight = false;
   bool _hasDeferredRefreshAfterStroke = false;
+  int _nameSuggestionGeneration = 0;
+  int _recordSuggestionGeneration = 0;
+  int _availableRecordNumbersGeneration = 0;
+  bool _isNameSuggestionsLoading = false;
+  bool _isRecordSuggestionsLoading = false;
 
   @override
   void initState() {
@@ -90,6 +99,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
       event: widget.event,
       isNew: widget.isNew,
       dbService: _dbService,
+      eventRepository: getIt<IEventRepository>(),
       onStateChanged: (state) {
         if (mounted) {
           // Update name controller if state changed (e.g., from record number selection)
@@ -126,7 +136,14 @@ class _EventDetailScreenState extends State<EventDetailScreen>
       _lastNameValue = newValue;
 
       // Fetch available record numbers when name changes
-      _fetchAvailableRecordNumbers();
+      unawaited(_fetchAvailableRecordNumbers());
+      unawaited(_refreshNameSuggestions(newValue));
+      unawaited(
+        _refreshRecordNumberSuggestions(
+          _controller.state.recordNumber,
+          nameConstraint: newValue,
+        ),
+      );
     });
 
     // Add listener for phone changes
@@ -140,11 +157,13 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   Future<void> _initialize() async {
     try {
-      // Fetch available record numbers after controller is ready
-      await _fetchAvailableRecordNumbers();
-      // Fetch all names and record numbers for autocomplete
-      await _fetchAllNamesAndRecordNumbers();
       await _controller.initialize();
+      await _fetchAvailableRecordNumbers();
+      await _refreshNameSuggestions(_nameController.text);
+      await _refreshRecordNumberSuggestions(
+        _controller.state.recordNumber,
+        nameConstraint: _nameController.text,
+      );
       _controller.setupConnectivityMonitoring();
       _startNotePolling();
     } catch (e) {
@@ -245,28 +264,135 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<void> _fetchAvailableRecordNumbers() async {
+    final requestGeneration = ++_availableRecordNumbersGeneration;
     final recordNumbers = await _controller.getRecordNumbersForCurrentName();
-    if (mounted) {
+    if (mounted && requestGeneration == _availableRecordNumbersGeneration) {
       setState(() {
         _availableRecordNumbers = recordNumbers;
       });
     }
   }
 
-  Future<void> _fetchAllNamesAndRecordNumbers() async {
-    final names = await _controller.getAllNamesForAutocomplete();
-    final recordNumbers = await _controller
-        .getAllRecordNumbersForAutocomplete();
+  Future<void> _refreshNameSuggestions(String query) async {
+    final requestGeneration = ++_nameSuggestionGeneration;
     if (mounted) {
       setState(() {
+        _isNameSuggestionsLoading = true;
+      });
+    }
+
+    try {
+      final names = await _lookupSuggestionHelper.getNameSuggestions(
+        query: query,
+        fetcher: (prefix) =>
+            _controller.getNameSuggestionsForAutocomplete(prefix),
+      );
+
+      if (!mounted || requestGeneration != _nameSuggestionGeneration) {
+        return;
+      }
+
+      setState(() {
         _allNames = names;
-        _allRecordNumberOptions = recordNumbers;
+        _isNameSuggestionsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted || requestGeneration != _nameSuggestionGeneration) {
+        return;
+      }
+      setState(() {
+        _allNames = [];
+        _isNameSuggestionsLoading = false;
+      });
+    }
+  }
+
+  Future<void> _refreshRecordNumberSuggestions(
+    String query, {
+    String? nameConstraint,
+    bool fromFocus = false,
+  }) async {
+    final requestGeneration = ++_recordSuggestionGeneration;
+    if (mounted) {
+      setState(() {
+        _isRecordSuggestionsLoading = true;
+      });
+    }
+
+    Future<List<NameRecordPair>> fetcher(String prefix, {String? namePrefix}) {
+      return _controller.getRecordNumberSuggestionsForAutocomplete(
+        query: prefix,
+        nameConstraint: namePrefix,
+      );
+    }
+
+    try {
+      final pairs = fromFocus
+          ? await _lookupSuggestionHelper.getRecordSuggestionsOnFocus(
+              nameConstraint: nameConstraint,
+              fetcher: fetcher,
+            )
+          : await _lookupSuggestionHelper.getRecordSuggestions(
+              query: query,
+              nameConstraint: nameConstraint,
+              fetcher: fetcher,
+            );
+
+      if (!mounted || requestGeneration != _recordSuggestionGeneration) {
+        return;
+      }
+
+      setState(() {
+        _allRecordNumberOptions = pairs
+            .map(
+              (item) => RecordNumberOption(
+                recordNumber: item.recordNumber,
+                name: item.name,
+              ),
+            )
+            .toList();
+        _isRecordSuggestionsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted || requestGeneration != _recordSuggestionGeneration) {
+        return;
+      }
+      setState(() {
+        _allRecordNumberOptions = [];
+        _isRecordSuggestionsLoading = false;
       });
     }
   }
 
   void _handleRecordNumberChanged(String newRecordNumber) {
     _controller.updateRecordNumber(newRecordNumber);
+    unawaited(
+      _refreshRecordNumberSuggestions(
+        newRecordNumber,
+        nameConstraint: _nameController.text,
+      ),
+    );
+  }
+
+  void _handleNameFocused() {
+    unawaited(_refreshNameSuggestions(_nameController.text));
+  }
+
+  void _handleRecordNumberFocused() {
+    final nameConstraint = _nameController.text;
+    if (nameConstraint.trim().isEmpty) {
+      return;
+    }
+
+    final currentRecordNumber = _controller.state.recordNumber;
+    _lookupSuggestionHelper.resetRecordCache();
+    unawaited(
+      _refreshRecordNumberSuggestions(
+        currentRecordNumber,
+        nameConstraint: nameConstraint,
+        fromFocus: currentRecordNumber.trim().isEmpty,
+      ),
+    );
   }
 
   Future<void> _handleRecordNumberBlur() async {
@@ -726,14 +852,35 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                               recordNumberFocusNode: _recordNumberFocusNode,
                               allNames: _allNames,
                               allRecordNumberOptions: _allRecordNumberOptions,
-                              onNameSelected: (name) =>
-                                  _controller.onNameSelected(name),
-                              onRecordNumberSelected: (recordNumber) =>
-                                  unawaited(
-                                    _controller.onRecordNumberSelected(
-                                      recordNumber,
-                                    ),
+                              isNameSuggestionsLoading:
+                                  _isNameSuggestionsLoading,
+                              isRecordNumberSuggestionsLoading:
+                                  _isRecordSuggestionsLoading,
+                              onNameFieldFocused: _handleNameFocused,
+                              onRecordNumberFieldFocused:
+                                  _handleRecordNumberFocused,
+                              onNameSelected: (name) {
+                                _controller.onNameSelected(name);
+                                unawaited(_fetchAvailableRecordNumbers());
+                                unawaited(_refreshNameSuggestions(name));
+                                unawaited(
+                                  _refreshRecordNumberSuggestions(
+                                    state.recordNumber,
+                                    nameConstraint: name,
                                   ),
+                                );
+                              },
+                              onRecordNumberSelected: (recordNumber) =>
+                                  unawaited(() async {
+                                    await _controller.onRecordNumberSelected(
+                                      recordNumber,
+                                    );
+                                    await _fetchAvailableRecordNumbers();
+                                    await _refreshRecordNumberSuggestions(
+                                      recordNumber,
+                                      nameConstraint: _nameController.text,
+                                    );
+                                  }()),
                               isNameReadOnly: state.isNameReadOnly,
                               isReadOnlyMode: widget.isReadOnlyMode,
                               // Record number validation

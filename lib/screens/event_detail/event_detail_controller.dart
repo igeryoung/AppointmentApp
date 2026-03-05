@@ -7,6 +7,7 @@ import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/charge_item.dart';
 import '../../models/note.dart';
+import '../../repositories/event_repository.dart';
 import '../../services/database_service_interface.dart';
 import '../../services/database/prd_database_service.dart';
 import '../../services/content_service.dart';
@@ -22,6 +23,7 @@ class EventDetailController {
   final Event event;
   final bool isNew;
   final IDatabaseService _dbService;
+  final IEventRepository? _eventRepository;
   final void Function(EventDetailState) onStateChanged;
 
   // Services
@@ -40,12 +42,14 @@ class EventDetailController {
     required this.event,
     required this.isNew,
     required IDatabaseService dbService,
+    IEventRepository? eventRepository,
     required this.onStateChanged,
     ContentService? contentService,
     NoteSyncAdapter? noteSyncAdapter,
     ServerHealthChecker? serverHealthChecker,
     ConnectivityWatcher? connectivityWatcher,
   }) : _dbService = dbService,
+       _eventRepository = eventRepository,
        _contentService = contentService,
        _noteSyncAdapter =
            noteSyncAdapter ??
@@ -1332,6 +1336,11 @@ class EventDetailController {
       return [];
     }
 
+    final eventRepository = _eventRepository;
+    if (eventRepository != null) {
+      return await eventRepository.getRecordNumbersByName(event.bookUuid, name);
+    }
+
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
       return await prdDb.getRecordNumbersByName(event.bookUuid, name);
@@ -1343,6 +1352,11 @@ class EventDetailController {
   /// Get all unique names for autocomplete
   /// Returns empty list if DB service is not PRD
   Future<List<String>> getAllNamesForAutocomplete() async {
+    final eventRepository = _eventRepository;
+    if (eventRepository != null) {
+      return await eventRepository.getAllNames(event.bookUuid);
+    }
+
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
       return await prdDb.getAllNamesInBook(event.bookUuid);
@@ -1353,6 +1367,21 @@ class EventDetailController {
   /// Get all record numbers with names for autocomplete
   /// Returns empty list if DB service is not PRD
   Future<List<RecordNumberOption>> getAllRecordNumbersForAutocomplete() async {
+    final eventRepository = _eventRepository;
+    if (eventRepository != null) {
+      final results = await eventRepository.getAllNameRecordPairs(
+        event.bookUuid,
+      );
+      return results
+          .map(
+            (item) => RecordNumberOption(
+              recordNumber: item.recordNumber,
+              name: item.name,
+            ),
+          )
+          .toList();
+    }
+
     if (_dbService is PRDDatabaseService) {
       final prdDb = _dbService as PRDDatabaseService;
       final results = await prdDb.getAllRecordNumbersWithNames(event.bookUuid);
@@ -1366,6 +1395,45 @@ class EventDetailController {
           .toList();
     }
     return [];
+  }
+
+  Future<List<String>> getNameSuggestionsForAutocomplete(String query) async {
+    final normalized = query.trim().toLowerCase();
+    if (normalized.isEmpty) {
+      return const [];
+    }
+    final eventRepository = _eventRepository;
+    if (eventRepository == null) {
+      return const [];
+    }
+    return await eventRepository.fetchNameSuggestions(
+      event.bookUuid,
+      normalized,
+    );
+  }
+
+  Future<List<NameRecordPair>> getRecordNumberSuggestionsForAutocomplete({
+    required String query,
+    String? nameConstraint,
+  }) async {
+    final normalizedQuery = query.trim().toLowerCase();
+    final normalizedNameConstraint = nameConstraint?.trim().toLowerCase();
+    if (normalizedQuery.isEmpty &&
+        (normalizedNameConstraint == null ||
+            normalizedNameConstraint.isEmpty)) {
+      return const [];
+    }
+
+    final eventRepository = _eventRepository;
+    if (eventRepository == null) {
+      return const [];
+    }
+
+    return await eventRepository.fetchRecordNumberSuggestions(
+      event.bookUuid,
+      normalizedQuery,
+      namePrefix: normalizedNameConstraint,
+    );
   }
 
   /// Handle name field focused - clear record number

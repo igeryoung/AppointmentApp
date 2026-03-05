@@ -35,6 +35,8 @@ class EventMetadataSection extends StatelessWidget {
   final FocusNode? recordNumberFocusNode;
   final List<String> allNames;
   final List<RecordNumberOption> allRecordNumberOptions;
+  final bool isNameSuggestionsLoading;
+  final bool isRecordNumberSuggestionsLoading;
   final VoidCallback? onNameFieldFocused;
   final VoidCallback? onRecordNumberFieldFocused;
   final ValueChanged<String>? onNameSelected;
@@ -69,6 +71,8 @@ class EventMetadataSection extends StatelessWidget {
     this.recordNumberFocusNode,
     this.allNames = const [],
     this.allRecordNumberOptions = const [],
+    this.isNameSuggestionsLoading = false,
+    this.isRecordNumberSuggestionsLoading = false,
     this.onNameFieldFocused,
     this.onRecordNumberFieldFocused,
     this.onNameSelected,
@@ -88,14 +92,24 @@ class EventMetadataSection extends StatelessWidget {
       return allRecordNumberOptions;
     }
 
-    // If name is not empty, filter by availableRecordNumbers (which are filtered by name)
-    // Convert availableRecordNumbers to a Set for O(1) lookup
+    // Suggestion results are already server-filtered by name when available.
+    // Fallback: if local availability list is stale/empty, keep server suggestions visible.
+    if (availableRecordNumbers.isEmpty) {
+      return allRecordNumberOptions;
+    }
+
+    // If name is not empty and availability list exists, narrow by that list.
+    // Convert availableRecordNumbers to a Set for O(1) lookup.
     final availableSet = availableRecordNumbers.toSet();
 
-    // Filter allRecordNumberOptions to only include those in availableRecordNumbers
-    return allRecordNumberOptions
+    // Filter allRecordNumberOptions to only include those in availableRecordNumbers.
+    final filtered = allRecordNumberOptions
         .where((option) => availableSet.contains(option.recordNumber))
         .toList();
+
+    // Fallback: keep server-filtered suggestions visible when local availability
+    // becomes temporarily stale and produces no intersection.
+    return filtered.isEmpty ? allRecordNumberOptions : filtered;
   }
 
   @override
@@ -216,6 +230,9 @@ class EventMetadataSection extends StatelessWidget {
                     labelText: l10n.eventName,
                     allNames: allNames,
                     isReadOnly: isNameReadOnly || isReadOnlyMode,
+                    isLoading: isNameSuggestionsLoading,
+                    focusNode: nameFocusNode,
+                    onFocused: onNameFieldFocused,
                     onNameSelected: onNameSelected,
                   ),
                   const SizedBox(height: 8),
@@ -256,6 +273,7 @@ class EventMetadataSection extends StatelessWidget {
                     onFocused: onRecordNumberFieldFocused,
                     errorText: recordNumberError,
                     isValidating: isValidatingRecordNumber,
+                    isLoadingSuggestions: isRecordNumberSuggestionsLoading,
                     onBlur: onRecordNumberBlur,
                   ),
                   const SizedBox(height: 8),
@@ -495,6 +513,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
   final VoidCallback? onFocused;
   final String? errorText;
   final bool isValidating;
+  final bool isLoadingSuggestions;
   final VoidCallback? onBlur;
 
   const _RecordNumberAutocomplete({
@@ -509,6 +528,7 @@ class _RecordNumberAutocomplete extends StatefulWidget {
     this.onFocused,
     this.errorText,
     this.isValidating = false,
+    this.isLoadingSuggestions = false,
     this.onBlur,
   });
 
@@ -519,13 +539,16 @@ class _RecordNumberAutocomplete extends StatefulWidget {
 
 class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   final TextEditingController _controller = TextEditingController();
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
+  late bool _ownsFocusNode;
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _ownsFocusNode = widget.focusNode == null;
     _controller.text = widget.value;
     _focusNode.addListener(_onFocusChanged);
     _controller.addListener(_onTextChanged);
@@ -534,10 +557,27 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   @override
   void didUpdateWidget(_RecordNumberAutocomplete oldWidget) {
     super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      _focusNode.removeListener(_onFocusChanged);
+      if (_ownsFocusNode) {
+        _focusNode.dispose();
+      }
+      _focusNode = widget.focusNode ?? FocusNode();
+      _ownsFocusNode = widget.focusNode == null;
+      _focusNode.addListener(_onFocusChanged);
+    }
+
     // Always sync controller with widget value to handle all state changes
     // This fixes the bug where record number disappears after reopening the event
     if (_controller.text != widget.value) {
       _controller.text = widget.value;
+    }
+
+    final optionsChanged =
+        oldWidget.allRecordNumberOptions != widget.allRecordNumberOptions ||
+        oldWidget.isEnabled != widget.isEnabled;
+    if (optionsChanged) {
+      _scheduleOverlaySync();
     }
   }
 
@@ -546,13 +586,16 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
     _focusNode.removeListener(_onFocusChanged);
     _controller.removeListener(_onTextChanged);
     _removeOverlay();
-    _focusNode.dispose();
+    if (_ownsFocusNode) {
+      _focusNode.dispose();
+    }
     _controller.dispose();
     super.dispose();
   }
 
   void _onFocusChanged() {
     if (_focusNode.hasFocus && widget.isEnabled) {
+      widget.onFocused?.call();
       _showOverlay();
     } else {
       _removeOverlay();
@@ -622,6 +665,17 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
     }
 
     _overlayEntry?.markNeedsBuild();
+  }
+
+  void _scheduleOverlaySync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_focusNode.hasFocus && widget.isEnabled) {
+        _updateOverlay();
+      } else {
+        _removeOverlay();
+      }
+    });
   }
 
   void _removeOverlay() {
@@ -707,7 +761,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
       child: TextField(
         controller: _controller,
         focusNode: _focusNode,
-        enabled: widget.isEnabled && !widget.isValidating,
+        enabled: widget.isEnabled,
         onChanged: (value) {
           // Notify parent when text changes (for new record numbers typed by user)
           widget.onRecordNumberChanged?.call(value);
@@ -720,7 +774,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
             vertical: 8,
           ),
           errorText: widget.errorText,
-          suffixIcon: widget.isValidating
+          suffixIcon: (widget.isValidating || widget.isLoadingSuggestions)
               ? const SizedBox(
                   width: 20,
                   height: 20,
@@ -765,6 +819,9 @@ class _NameAutocompleteField extends StatefulWidget {
   final String labelText;
   final List<String> allNames;
   final bool isReadOnly;
+  final bool isLoading;
+  final FocusNode? focusNode;
+  final VoidCallback? onFocused;
   final ValueChanged<String>? onNameSelected;
 
   const _NameAutocompleteField({
@@ -772,6 +829,9 @@ class _NameAutocompleteField extends StatefulWidget {
     required this.labelText,
     required this.allNames,
     required this.isReadOnly,
+    this.isLoading = false,
+    this.focusNode,
+    this.onFocused,
     this.onNameSelected,
   });
 
@@ -780,15 +840,40 @@ class _NameAutocompleteField extends StatefulWidget {
 }
 
 class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
-  final FocusNode _focusNode = FocusNode();
+  late FocusNode _focusNode;
+  late bool _ownsFocusNode;
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
 
   @override
   void initState() {
     super.initState();
+    _focusNode = widget.focusNode ?? FocusNode();
+    _ownsFocusNode = widget.focusNode == null;
     _focusNode.addListener(_onFocusChanged);
     widget.controller.addListener(_onTextChanged);
+  }
+
+  @override
+  void didUpdateWidget(_NameAutocompleteField oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.focusNode != widget.focusNode) {
+      _focusNode.removeListener(_onFocusChanged);
+      if (_ownsFocusNode) {
+        _focusNode.dispose();
+      }
+      _focusNode = widget.focusNode ?? FocusNode();
+      _ownsFocusNode = widget.focusNode == null;
+      _focusNode.addListener(_onFocusChanged);
+    }
+
+    final optionsChanged =
+        oldWidget.allNames != widget.allNames ||
+        oldWidget.isReadOnly != widget.isReadOnly ||
+        oldWidget.isLoading != widget.isLoading;
+    if (optionsChanged) {
+      _scheduleOverlaySync();
+    }
   }
 
   @override
@@ -796,12 +881,15 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
     _focusNode.removeListener(_onFocusChanged);
     widget.controller.removeListener(_onTextChanged);
     _removeOverlay();
-    _focusNode.dispose();
+    if (_ownsFocusNode) {
+      _focusNode.dispose();
+    }
     super.dispose();
   }
 
   void _onFocusChanged() {
     if (_focusNode.hasFocus && !widget.isReadOnly) {
+      widget.onFocused?.call();
       _showOverlay();
     } else {
       _removeOverlay();
@@ -832,6 +920,17 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
 
   void _updateOverlay() {
     _overlayEntry?.markNeedsBuild();
+  }
+
+  void _scheduleOverlaySync() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (_focusNode.hasFocus && !widget.isReadOnly) {
+        _updateOverlay();
+      } else {
+        _removeOverlay();
+      }
+    });
   }
 
   void _removeOverlay() {
@@ -920,7 +1019,16 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
           ),
           suffixIcon: widget.isReadOnly
               ? const Icon(Icons.lock_outline, size: 18)
-              : null,
+              : (widget.isLoading
+                    ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: Padding(
+                          padding: EdgeInsets.all(12.0),
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        ),
+                      )
+                    : null),
           filled: widget.isReadOnly,
           fillColor: widget.isReadOnly ? Colors.grey.shade100 : null,
         ),

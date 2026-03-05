@@ -267,10 +267,6 @@ void main() {
               NameRecordPair(name: 'Alice', recordNumber: '100'),
               NameRecordPair(name: 'Alfred', recordNumber: '145'),
             ],
-            '1|al': const [
-              NameRecordPair(name: 'Alice', recordNumber: '100'),
-              NameRecordPair(name: 'Alfred', recordNumber: '145'),
-            ],
           },
         );
 

@@ -8,6 +8,7 @@ import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../repositories/event_repository.dart';
 import '../../screens/event_detail/utils/event_type_localizations.dart';
+import '../../utils/event_lookup_suggestion_helper.dart';
 
 /// Show dialog to query appointments by name and record number
 Future<void> showQueryAppointmentsDialog(
@@ -43,13 +44,10 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   late TextEditingController recordNumberController;
   String? selectedRecordNumber;
   List<String> nameSuggestions = [];
-  List<String> _cachedNameSuggestions = [];
-  String? _nameFetchPrefix;
+  final EventLookupSuggestionHelper _lookupSuggestionHelper =
+      EventLookupSuggestionHelper();
   bool isNameSuggestionsLoading = false;
   List<NameRecordPair> recordSuggestions = [];
-  List<NameRecordPair> _cachedRecordSuggestions = [];
-  String? _recordFetchPrefix;
-  String? _recordNameConstraint;
   bool isRecordSuggestionsLoading = false;
   List<Event> searchResults = [];
   bool isLoading = false;
@@ -77,8 +75,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   void _clearNameSuggestionState() {
     setState(() {
       nameSuggestions = [];
-      _cachedNameSuggestions = [];
-      _nameFetchPrefix = null;
+      _lookupSuggestionHelper.resetNameCache();
       isNameSuggestionsLoading = false;
     });
   }
@@ -87,9 +84,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     setState(() {
       selectedRecordNumber = null;
       recordSuggestions = [];
-      _cachedRecordSuggestions = [];
-      _recordFetchPrefix = null;
-      _recordNameConstraint = null;
+      _lookupSuggestionHelper.resetRecordCache();
       isRecordSuggestionsLoading = false;
       if (clearInput) {
         recordNumberController.clear();
@@ -108,50 +103,26 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         .toList();
   }
 
-  List<NameRecordPair> _filterRecordSuggestions(
-    List<NameRecordPair> suggestions,
-    String query, {
-    String? nameConstraint,
-  }) {
-    final normalizedQuery = _normalize(query);
-    final normalizedNameConstraint = nameConstraint == null
-        ? null
-        : _normalize(nameConstraint);
-    return suggestions.where((pair) {
-      if (normalizedQuery.isNotEmpty &&
-          !_normalize(pair.recordNumber).startsWith(normalizedQuery)) {
-        return false;
-      }
-      if (normalizedNameConstraint != null &&
-          normalizedNameConstraint.isNotEmpty) {
-        return _normalize(pair.name).startsWith(normalizedNameConstraint);
-      }
-      return true;
-    }).toList();
-  }
-
-  Future<void> _fetchNameSuggestions({
-    required String fetchPrefix,
-    required String activeQuery,
-  }) async {
+  Future<void> _fetchNameSuggestions({required String activeQuery}) async {
     setState(() {
       isNameSuggestionsLoading = true;
       nameSuggestions = [];
     });
 
     try {
-      final suggestions = await widget.eventRepository.fetchNameSuggestions(
-        widget.bookUuid,
-        fetchPrefix,
+      final suggestions = await _lookupSuggestionHelper.getNameSuggestions(
+        query: activeQuery,
+        fetcher: (prefix) => widget.eventRepository.fetchNameSuggestions(
+          widget.bookUuid,
+          prefix,
+        ),
       );
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _nameFetchPrefix = fetchPrefix;
-        _cachedNameSuggestions = suggestions;
-        nameSuggestions = _filterNameSuggestions(suggestions, activeQuery);
+        nameSuggestions = suggestions;
         isNameSuggestionsLoading = false;
       });
     } catch (e) {
@@ -160,8 +131,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       }
 
       setState(() {
-        _nameFetchPrefix = null;
-        _cachedNameSuggestions = [];
+        _lookupSuggestionHelper.resetNameCache();
         nameSuggestions = [];
         isNameSuggestionsLoading = false;
       });
@@ -174,7 +144,6 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   }
 
   Future<void> _fetchRecordSuggestions({
-    required String fetchPrefix,
     required String activeQuery,
     String? nameConstraint,
   }) async {
@@ -184,27 +153,22 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     });
 
     try {
-      final suggestions = await widget.eventRepository
-          .fetchRecordNumberSuggestions(
-            widget.bookUuid,
-            fetchPrefix,
-            namePrefix: nameConstraint,
-          );
+      final suggestions = await _lookupSuggestionHelper.getRecordSuggestions(
+        query: activeQuery,
+        nameConstraint: nameConstraint,
+        fetcher: (prefix, {namePrefix}) =>
+            widget.eventRepository.fetchRecordNumberSuggestions(
+              widget.bookUuid,
+              prefix,
+              namePrefix: namePrefix,
+            ),
+      );
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _recordFetchPrefix = fetchPrefix;
-        _recordNameConstraint = nameConstraint == null
-            ? null
-            : _normalize(nameConstraint);
-        _cachedRecordSuggestions = suggestions;
-        recordSuggestions = _filterRecordSuggestions(
-          suggestions,
-          activeQuery,
-          nameConstraint: nameConstraint,
-        );
+        recordSuggestions = suggestions;
         isRecordSuggestionsLoading = false;
       });
     } catch (e) {
@@ -213,9 +177,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       }
 
       setState(() {
-        _recordFetchPrefix = null;
-        _recordNameConstraint = null;
-        _cachedRecordSuggestions = [];
+        _lookupSuggestionHelper.resetRecordCache();
         recordSuggestions = [];
         isRecordSuggestionsLoading = false;
       });
@@ -250,23 +212,7 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       return;
     }
 
-    final fetchPrefix = normalized[0];
-    final shouldFetch =
-        _nameFetchPrefix != fetchPrefix || _cachedNameSuggestions.isEmpty;
-    if (shouldFetch) {
-      await _fetchNameSuggestions(
-        fetchPrefix: fetchPrefix,
-        activeQuery: normalized,
-      );
-      return;
-    }
-
-    setState(() {
-      nameSuggestions = _filterNameSuggestions(
-        _cachedNameSuggestions,
-        normalized,
-      );
-    });
+    await _fetchNameSuggestions(activeQuery: normalized);
   }
 
   Future<void> _handleRecordNumberChanged(String value) async {
@@ -283,29 +229,10 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       return;
     }
 
-    final fetchPrefix = normalized[0];
-    final shouldFetch =
-        _cachedRecordSuggestions.isEmpty ||
-        (_recordNameConstraint ?? '') != nameConstraint ||
-        (_recordFetchPrefix != null &&
-            _recordFetchPrefix!.isNotEmpty &&
-            _recordFetchPrefix != fetchPrefix);
-    if (shouldFetch) {
-      await _fetchRecordSuggestions(
-        fetchPrefix: fetchPrefix,
-        activeQuery: normalized,
-        nameConstraint: nameConstraint.isEmpty ? null : nameConstraint,
-      );
-      return;
-    }
-
-    setState(() {
-      recordSuggestions = _filterRecordSuggestions(
-        _cachedRecordSuggestions,
-        normalized,
-        nameConstraint: nameConstraint,
-      );
-    });
+    await _fetchRecordSuggestions(
+      activeQuery: normalized,
+      nameConstraint: nameConstraint.isEmpty ? null : nameConstraint,
+    );
   }
 
   Future<void> _handleRecordNumberFocused() async {
@@ -315,25 +242,43 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       return;
     }
 
-    final shouldFetch =
-        _cachedRecordSuggestions.isEmpty ||
-        (_recordNameConstraint ?? '') != nameConstraint;
-    if (shouldFetch) {
-      await _fetchRecordSuggestions(
-        fetchPrefix: '',
-        activeQuery: '',
-        nameConstraint: nameConstraint,
-      );
-      return;
-    }
-
     setState(() {
-      recordSuggestions = _filterRecordSuggestions(
-        _cachedRecordSuggestions,
-        '',
-        nameConstraint: nameConstraint,
-      );
+      isRecordSuggestionsLoading = true;
+      recordSuggestions = [];
     });
+
+    try {
+      final suggestions = await _lookupSuggestionHelper
+          .getRecordSuggestionsOnFocus(
+            nameConstraint: nameConstraint,
+            fetcher: (prefix, {namePrefix}) =>
+                widget.eventRepository.fetchRecordNumberSuggestions(
+                  widget.bookUuid,
+                  prefix,
+                  namePrefix: namePrefix,
+                ),
+          );
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        recordSuggestions = suggestions;
+        isRecordSuggestionsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _lookupSuggestionHelper.resetRecordCache();
+        recordSuggestions = [];
+        isRecordSuggestionsLoading = false;
+      });
+      final l10n = AppLocalizations.of(context)!;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+    }
   }
 
   /// Validate and perform search
