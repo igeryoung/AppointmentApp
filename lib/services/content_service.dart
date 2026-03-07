@@ -31,7 +31,7 @@ class ContentService {
   final dynamic _db; // PRDDatabaseService or mock
 
   // RACE CONDITION FIX: Save operation queue to serialize drawing saves
-  final List<Future<void> Function()> _drawingSaveQueue = [];
+  final List<Future<ScheduleDrawing> Function()> _drawingSaveQueue = [];
   bool _isProcessingDrawingSaveQueue = false;
 
   ContentService(this._apiClient, this._db);
@@ -454,17 +454,19 @@ class ContentService {
 
   /// Save drawing (update server and cache)
   /// RACE CONDITION FIX: Uses queue to serialize save operations
-  Future<void> saveDrawing(ScheduleDrawing drawing) async {
+  Future<ScheduleDrawing> saveDrawing(ScheduleDrawing drawing) async {
     // Create a completer to wait for the queued operation to complete
-    final completer = Completer<void>();
+    final completer = Completer<ScheduleDrawing>();
 
     // Add save operation to queue
     _drawingSaveQueue.add(() async {
       try {
-        await _saveDrawingInternal(drawing);
-        completer.complete();
+        final savedDrawing = await _saveDrawingInternal(drawing);
+        completer.complete(savedDrawing);
+        return savedDrawing;
       } catch (e) {
         completer.completeError(e);
+        rethrow;
       }
     });
 
@@ -476,10 +478,11 @@ class ContentService {
   }
 
   /// Internal save drawing implementation (called from queue)
-  Future<void> _saveDrawingInternal(
+  Future<ScheduleDrawing> _saveDrawingInternal(
     ScheduleDrawing drawing, {
     int retryCount = 0,
   }) async {
+    const maxRetries = 2;
     try {
       // Get credentials
       final credentials = await _db.getDeviceCredentials();
@@ -493,15 +496,33 @@ class ContentService {
         'date': drawing.date.toIso8601String().split('T')[0],
         'viewMode': drawing.viewMode,
         'strokesData': drawingData['strokes_data'],
-        if (drawing.id != null) 'version': drawing.version,
+        'version': drawing.version,
       };
 
-      await _apiClient.saveDrawing(
+      final saved = await _apiClient.saveDrawing(
         bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
+      return ScheduleDrawing.fromMap(saved);
+    } on ApiConflictException catch (e) {
+      if (retryCount >= maxRetries) {
+        rethrow;
+      }
+
+      final serverVersion = e.serverVersion;
+      if (serverVersion == null) {
+        rethrow;
+      }
+
+      // LWW retry: keep the local payload, only advance to serverVersion + 1.
+      final retryDrawing = drawing.copyWith(
+        version: serverVersion + 1,
+        updatedAt: DateTime.now(),
+      );
+
+      return _saveDrawingInternal(retryDrawing, retryCount: retryCount + 1);
     } catch (e) {
       rethrow;
     }

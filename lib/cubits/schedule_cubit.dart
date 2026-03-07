@@ -497,12 +497,12 @@ class ScheduleCubit extends Cubit<ScheduleState> {
     }
 
     try {
-      await _drawingContentService.saveDrawing(drawing);
+      final savedDrawing = await _drawingContentService.saveDrawing(drawing);
 
       // Update state with saved drawing
       final currentState = state;
       if (currentState is ScheduleLoaded) {
-        emit(currentState.copyWith(drawing: drawing));
+        emit(currentState.copyWith(drawing: savedDrawing));
       }
     } catch (e) {
       emit(ScheduleError('Failed to save drawing: $e'));

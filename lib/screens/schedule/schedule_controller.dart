@@ -334,10 +334,6 @@ class ScheduleController extends ChangeNotifier {
   Future<void> saveDrawing(BuildContext context) async {
     try {
       await _drawingService?.saveDrawing(_selectedDate, viewMode: _viewMode);
-      final savedDrawing = _drawingService?.currentDrawing;
-      if (context.mounted && savedDrawing != null) {
-        context.read<ScheduleCubit>().saveDrawing(savedDrawing);
-      }
     } catch (e) {
       if (context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

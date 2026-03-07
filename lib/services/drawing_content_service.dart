@@ -14,7 +14,7 @@ class DrawingContentService {
   final IDeviceRepository _deviceRepository;
 
   // RACE CONDITION FIX: Save operation queue to serialize drawing saves
-  final List<Future<void> Function()> _drawingSaveQueue = [];
+  final List<Future<ScheduleDrawing> Function()> _drawingSaveQueue = [];
   bool _isProcessingDrawingSaveQueue = false;
 
   DrawingContentService(this._apiClient, this._deviceRepository);
@@ -61,17 +61,19 @@ class DrawingContentService {
 
   /// Save drawing to server
   /// RACE CONDITION FIX: Uses queue to serialize save operations
-  Future<void> saveDrawing(ScheduleDrawing drawing) async {
+  Future<ScheduleDrawing> saveDrawing(ScheduleDrawing drawing) async {
     // Create a completer to wait for the queued operation to complete
-    final completer = Completer<void>();
+    final completer = Completer<ScheduleDrawing>();
 
     // Add save operation to queue
     _drawingSaveQueue.add(() async {
       try {
-        await _saveDrawingInternal(drawing);
-        completer.complete();
+        final savedDrawing = await _saveDrawingInternal(drawing);
+        completer.complete(savedDrawing);
+        return savedDrawing;
       } catch (e) {
         completer.completeError(e);
+        rethrow;
       }
     });
 
@@ -101,11 +103,11 @@ class DrawingContentService {
 
   /// Internal save drawing implementation (called from queue)
   /// RACE CONDITION FIX: Handles version conflicts with retry logic
-  Future<void> _saveDrawingInternal(
+  Future<ScheduleDrawing> _saveDrawingInternal(
     ScheduleDrawing drawing, {
     int retryCount = 0,
   }) async {
-    const maxRetries = 3;
+    const maxRetries = 2;
 
     try {
       // Get credentials
@@ -116,63 +118,67 @@ class DrawingContentService {
 
       // Save to server
       final serverDrawingData = {
-        'date': drawing.date.toIso8601String(),
+        'date': drawing.date.toIso8601String().split('T')[0],
         'viewMode': drawing.viewMode,
         'strokesData': drawing.toMap()['strokes_data'],
-        if (drawing.id != null) 'version': drawing.version,
+        'version': drawing.version,
       };
 
-      await _apiClient.saveDrawing(
+      final saved = await _apiClient.saveDrawing(
         bookUuid: drawing.bookUuid,
         drawingData: serverDrawingData,
         deviceId: credentials.deviceId,
         deviceToken: credentials.deviceToken,
       );
+      return ScheduleDrawing.fromMap(saved);
 
       // Keep server call for authoritative write; no local cache state is stored.
-    } catch (e) {
-      // RACE CONDITION FIX: Detect version conflicts and retry with server version
-      if (e is ApiConflictException && retryCount < maxRetries) {
-        try {
-          // Get credentials for retry
-          final retryCredentials = await _deviceRepository.getCredentials();
-          if (retryCredentials == null) {
-            return;
-          }
-
-          // Fetch current server version
-          final serverDrawingMap = await _apiClient.fetchDrawing(
-            bookUuid: drawing.bookUuid,
-            date: drawing.date,
-            viewMode: drawing.viewMode,
-            deviceId: retryCredentials.deviceId,
-            deviceToken: retryCredentials.deviceToken,
-          );
-
-          if (serverDrawingMap != null && serverDrawingMap['version'] != null) {
-            final serverVersion = serverDrawingMap['version'] as int;
-            final serverDrawing = ScheduleDrawing.fromMap(serverDrawingMap);
-
-            // Merge: combine server strokes with new strokes
-            final mergedDrawing = ScheduleDrawing(
-              id: serverDrawing.id,
-              bookUuid: drawing.bookUuid,
-              date: drawing.date,
-              viewMode: drawing.viewMode,
-              strokes: [...serverDrawing.strokes, ...drawing.strokes],
-              version: serverVersion,
-              createdAt: serverDrawing.createdAt,
-              updatedAt: DateTime.now(),
-            );
-
-            // Retry with server version
-            return await _saveDrawingInternal(
-              mergedDrawing,
-              retryCount: retryCount + 1,
-            );
-          }
-        } catch (retryError) {}
+    } on ApiConflictException catch (e) {
+      if (retryCount >= maxRetries) {
+        rethrow;
       }
+
+      int? serverVersion = e.serverVersion;
+      int? serverId = (e.serverDrawing?['id'] as num?)?.toInt();
+      DateTime? serverCreatedAt;
+      final serverCreatedAtRaw = e.serverDrawing?['createdAt'];
+      if (serverCreatedAtRaw is String) {
+        serverCreatedAt = DateTime.tryParse(serverCreatedAtRaw)?.toUtc();
+      }
+
+      // Fallback to fresh read when conflict payload has no version.
+      if (serverVersion == null) {
+        final retryCredentials = await _deviceRepository.getCredentials();
+        if (retryCredentials == null) {
+          rethrow;
+        }
+        final serverDrawingMap = await _apiClient.fetchDrawing(
+          bookUuid: drawing.bookUuid,
+          date: drawing.date,
+          viewMode: drawing.viewMode,
+          deviceId: retryCredentials.deviceId,
+          deviceToken: retryCredentials.deviceToken,
+        );
+        if (serverDrawingMap == null || serverDrawingMap['version'] == null) {
+          rethrow;
+        }
+        serverVersion = (serverDrawingMap['version'] as num).toInt();
+        serverId = (serverDrawingMap['id'] as num?)?.toInt();
+        final fetchedCreatedAt = serverDrawingMap['createdAt'];
+        if (fetchedCreatedAt is String) {
+          serverCreatedAt = DateTime.tryParse(fetchedCreatedAt)?.toUtc();
+        }
+      }
+
+      // LWW retry: keep local strokes, only advance to serverVersion + 1.
+      final retryDrawing = drawing.copyWith(
+        id: drawing.id ?? serverId,
+        createdAt: serverCreatedAt ?? drawing.createdAt,
+        version: serverVersion + 1,
+        updatedAt: DateTime.now(),
+      );
+      return _saveDrawingInternal(retryDrawing, retryCount: retryCount + 1);
+    } catch (e) {
       rethrow;
     }
   }

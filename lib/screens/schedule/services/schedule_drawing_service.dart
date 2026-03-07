@@ -203,7 +203,7 @@ class ScheduleDrawingService {
           _currentDrawing!.date.day == effectiveDate.day) {
         drawingId = _currentDrawing!.id;
         createdAt = _currentDrawing!.createdAt;
-        version = _currentDrawing!.version;
+        version = _currentDrawing!.version + 1;
       }
 
       final drawing = ScheduleDrawing(
@@ -219,7 +219,7 @@ class ScheduleDrawingService {
 
       // Use ContentService (server-only)
       if (_contentService != null) {
-        await _contentService!.saveDrawing(drawing);
+        final savedDrawing = await _contentService!.saveDrawing(drawing);
 
         // RACE CONDITION FIX: Verify date hasn't changed during save
         final effectiveDateAfterSave = ScheduleLayoutUtils.getEffectiveDate(
@@ -237,7 +237,7 @@ class ScheduleDrawingService {
           return;
         }
 
-        _currentDrawing = drawing;
+        _currentDrawing = savedDrawing;
       } else {
         throw Exception('ContentService is not initialized');
       }
