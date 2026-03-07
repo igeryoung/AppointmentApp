@@ -1045,25 +1045,22 @@ class EventDetailController {
   /// UI handles "this event only" by prioritizing current-event items and
   /// diluting others instead of removing them from the list.
   Future<void> loadChargeItems() async {
-    // Need recordUuid to load charge items
-    if (event.recordUuid.isEmpty) {
-      _updateState(_state.copyWith(chargeItems: []));
-      return;
-    }
-
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
     try {
       final prdDb = _dbService as PRDDatabaseService;
+      final recordUuid = await _resolveActiveRecordUuid(prdDb);
+      if (recordUuid == null || recordUuid.isEmpty) {
+        _updateState(_state.copyWith(chargeItems: []));
+        return;
+      }
 
-      var chargeItems = await prdDb.getChargeItemsByRecordUuid(
-        event.recordUuid,
-      );
+      var chargeItems = await prdDb.getChargeItemsByRecordUuid(recordUuid);
       if (chargeItems.isEmpty && event.hasChargeItems) {
-        await _syncChargeItemsFromServer(prdDb);
-        chargeItems = await prdDb.getChargeItemsByRecordUuid(event.recordUuid);
+        await _syncChargeItemsFromServer(prdDb, recordUuid: recordUuid);
+        chargeItems = await prdDb.getChargeItemsByRecordUuid(recordUuid);
       }
 
       // Always get all items for the record.
@@ -1071,9 +1068,12 @@ class EventDetailController {
     } catch (e) {}
   }
 
-  Future<void> _syncChargeItemsFromServer(PRDDatabaseService prdDb) async {
+  Future<void> _syncChargeItemsFromServer(
+    PRDDatabaseService prdDb, {
+    required String recordUuid,
+  }) async {
     final contentService = _contentService;
-    if (contentService == null || event.recordUuid.isEmpty) {
+    if (contentService == null || recordUuid.isEmpty) {
       return;
     }
 
@@ -1083,7 +1083,7 @@ class EventDetailController {
     }
 
     final serverItems = await contentService.apiClient.fetchChargeItems(
-      recordUuid: event.recordUuid,
+      recordUuid: recordUuid,
       deviceId: credentials.deviceId,
       deviceToken: credentials.deviceToken,
     );
@@ -1099,6 +1099,32 @@ class EventDetailController {
       _state.copyWith(showOnlyThisEventItems: !_state.showOnlyThisEventItems),
     );
     await loadChargeItems();
+  }
+
+  /// Ensure charge-item operations can resolve a record UUID.
+  /// For newly created events this may trigger a metadata save first.
+  Future<bool> ensureChargeItemsReady() async {
+    if (_dbService is! PRDDatabaseService) {
+      return false;
+    }
+    final prdDb = _dbService as PRDDatabaseService;
+    final existingRecordUuid = await _resolveActiveRecordUuid(prdDb);
+    if (existingRecordUuid != null &&
+        existingRecordUuid.isNotEmpty &&
+        _isUuidLike(existingRecordUuid)) {
+      return true;
+    }
+
+    final recordNumber = _state.recordNumber.trim();
+    if (recordNumber.isEmpty) {
+      return false;
+    }
+
+    final serverRecordUuid = await _resolveServerRecordUuidForChargeItems(
+      prdDb,
+      recordNumber: recordNumber,
+    );
+    return serverRecordUuid.isNotEmpty;
   }
 
   /// Save phone number to record table
@@ -1137,42 +1163,49 @@ class EventDetailController {
   /// Add a new charge item and link it to the current event.
   /// This keeps "This event only" filter consistent for items created here.
   Future<void> addChargeItem(ChargeItem item) async {
-    if (event.recordUuid.isEmpty) {
-      return;
-    }
-
     if (_dbService is! PRDDatabaseService) {
       return;
     }
 
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
-      final associatedEventId = event.id;
-
-      // Check if item already exists
-      final exists = await prdDb.chargeItemExists(
-        recordUuid: event.recordUuid,
-        eventId: associatedEventId,
-        itemName: item.itemName,
-      );
-
-      if (exists) {
-        // TODO: Show error message to user
-        return;
+    final prdDb = _dbService as PRDDatabaseService;
+    final effectiveEvent = await _resolveActiveEventForChargeItems(prdDb);
+    var effectiveRecordUuid =
+        effectiveEvent?.recordUuid.trim().isNotEmpty == true
+        ? effectiveEvent!.recordUuid.trim()
+        : await _resolveActiveRecordUuid(prdDb);
+    final associatedEventId = isNew ? null : (effectiveEvent?.id ?? event.id);
+    if (effectiveRecordUuid == null || effectiveRecordUuid.isEmpty) {
+      throw Exception('Missing record UUID for charge item');
+    }
+    if (!_isUuidLike(effectiveRecordUuid)) {
+      final recordNumber = _state.recordNumber.trim();
+      if (recordNumber.isEmpty) {
+        throw Exception('Cannot resolve canonical record UUID');
       }
-
-      // Create charge item with recordUuid from event
-      final newItem = item.copyWith(
-        recordUuid: event.recordUuid,
-        eventId: associatedEventId,
+      effectiveRecordUuid = await _resolveServerRecordUuidForChargeItems(
+        prdDb,
+        recordNumber: recordNumber,
       );
+    }
 
-      // Save to database
-      await prdDb.saveChargeItem(newItem);
+    // Check if item already exists
+    final exists = await prdDb.chargeItemExists(
+      recordUuid: effectiveRecordUuid,
+      eventId: associatedEventId,
+      itemName: item.itemName,
+    );
 
-      // Reload all charge items
-      await loadChargeItems();
-    } catch (e) {}
+    if (exists) {
+      return;
+    }
+
+    final newItem = item.copyWith(
+      recordUuid: effectiveRecordUuid,
+      eventId: associatedEventId,
+    );
+
+    await _syncChargeItemUpsertToServer(prdDb, newItem);
+    await loadChargeItems();
   }
 
   /// Edit an existing charge item
@@ -1181,40 +1214,31 @@ class EventDetailController {
       return;
     }
 
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
+    final prdDb = _dbService as PRDDatabaseService;
 
-      // Check if new name conflicts with existing item
-      final exists = await prdDb.chargeItemExists(
-        recordUuid: item.recordUuid,
-        eventId: item.eventId,
-        itemName: item.itemName,
-        excludeId: item.id,
-      );
+    final exists = await prdDb.chargeItemExists(
+      recordUuid: item.recordUuid,
+      eventId: item.eventId,
+      itemName: item.itemName,
+      excludeId: item.id,
+    );
+    if (exists) {
+      return;
+    }
 
-      if (exists) {
-        // TODO: Show error message to user
-        return;
-      }
+    final existingItem = await prdDb.getChargeItemById(item.id);
+    if (existingItem == null) {
+      return;
+    }
 
-      // Get existing item
-      final existingItem = await prdDb.getChargeItemById(item.id);
-      if (existingItem == null) {
-        return;
-      }
+    final updatedItem = existingItem.copyWith(
+      itemName: item.itemName,
+      itemPrice: item.itemPrice,
+      receivedAmount: item.receivedAmount,
+    );
 
-      // Update item - preserve recordUuid and eventId
-      final updatedItem = existingItem.copyWith(
-        itemName: item.itemName,
-        itemPrice: item.itemPrice,
-        receivedAmount: item.receivedAmount,
-      );
-
-      await prdDb.saveChargeItem(updatedItem);
-
-      // Reload all charge items
-      await loadChargeItems();
-    } catch (e) {}
+    await _syncChargeItemUpsertToServer(prdDb, updatedItem);
+    await loadChargeItems();
   }
 
   /// Delete a charge item
@@ -1223,13 +1247,13 @@ class EventDetailController {
       return;
     }
 
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
-      await prdDb.deleteChargeItem(item.id);
-
-      // Reload all charge items
-      await loadChargeItems();
-    } catch (e) {}
+    final prdDb = _dbService as PRDDatabaseService;
+    await _syncChargeItemDeleteToServer(
+      prdDb,
+      item.id,
+      recordUuid: item.recordUuid,
+    );
+    await loadChargeItems();
   }
 
   /// Toggle paid status of a charge item
@@ -1239,18 +1263,11 @@ class EventDetailController {
       return;
     }
 
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
-      // Toggle: if not fully paid, set to full price; if fully paid, set to 0
-      final newReceivedAmount = item.isPaid ? 0 : item.itemPrice;
-      await prdDb.updateChargeItemReceivedAmount(
-        id: item.id,
-        receivedAmount: newReceivedAmount,
-      );
-
-      // Reload all charge items
-      await loadChargeItems();
-    } catch (e) {}
+    final prdDb = _dbService as PRDDatabaseService;
+    final newReceivedAmount = item.isPaid ? 0 : item.itemPrice;
+    final updatedItem = item.copyWith(receivedAmount: newReceivedAmount);
+    await _syncChargeItemUpsertToServer(prdDb, updatedItem);
+    await loadChargeItems();
   }
 
   /// Update the received amount of a charge item
@@ -1262,16 +1279,10 @@ class EventDetailController {
       return;
     }
 
-    try {
-      final prdDb = _dbService as PRDDatabaseService;
-      await prdDb.updateChargeItemReceivedAmount(
-        id: item.id,
-        receivedAmount: receivedAmount,
-      );
-
-      // Reload all charge items
-      await loadChargeItems();
-    } catch (e) {}
+    final prdDb = _dbService as PRDDatabaseService;
+    final updatedItem = item.copyWith(receivedAmount: receivedAmount);
+    await _syncChargeItemUpsertToServer(prdDb, updatedItem);
+    await loadChargeItems();
   }
 
   /// Update charge items (legacy method - kept for compatibility but now loads from database)
@@ -1280,6 +1291,158 @@ class EventDetailController {
   )
   void updateChargeItems(List<ChargeItem> chargeItems) {
     _updateState(_state.copyWith(chargeItems: chargeItems, hasChanges: true));
+  }
+
+  Future<Event?> _resolveActiveEventForChargeItems(
+    PRDDatabaseService prdDb,
+  ) async {
+    final currentRecordUuid = event.recordUuid.trim();
+    if (currentRecordUuid.isNotEmpty) {
+      return event;
+    }
+
+    final eventId = event.id?.trim();
+    if (eventId == null || eventId.isEmpty) {
+      return event;
+    }
+
+    return await prdDb.getEventById(eventId) ?? event;
+  }
+
+  Future<String?> _resolveActiveRecordUuid(PRDDatabaseService prdDb) async {
+    final currentRecordUuid = event.recordUuid.trim();
+    if (currentRecordUuid.isNotEmpty) {
+      return currentRecordUuid;
+    }
+
+    final latestEvent = await _resolveActiveEventForChargeItems(prdDb);
+    final latestRecordUuid = latestEvent?.recordUuid.trim() ?? '';
+    if (latestRecordUuid.isNotEmpty) {
+      return latestRecordUuid;
+    }
+
+    final recordNumber = _state.recordNumber.trim();
+    if (recordNumber.isEmpty) {
+      return null;
+    }
+
+    final resolvedRecord = await prdDb.getRecordByRecordNumber(recordNumber);
+    final resolvedRecordUuid = resolvedRecord?.recordUuid?.trim() ?? '';
+    if (resolvedRecordUuid.isEmpty) {
+      return null;
+    }
+    return resolvedRecordUuid;
+  }
+
+  Future<String> _resolveServerRecordUuidForChargeItems(
+    PRDDatabaseService prdDb, {
+    required String recordNumber,
+  }) async {
+    final contentService = _contentService;
+    if (contentService == null) {
+      throw Exception('Cannot resolve record on server: services unavailable');
+    }
+
+    final credentials = await prdDb.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception('Cannot resolve record on server: missing credentials');
+    }
+
+    final normalizedName = _state.name.trim();
+    final normalizedPhone = _state.phone.trim();
+
+    final record = await contentService.apiClient.getOrCreateRecord(
+      recordNumber: recordNumber,
+      name: normalizedName,
+      phone: normalizedPhone.isEmpty ? null : normalizedPhone,
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+    );
+
+    final resolvedRecord = _ResolvedRecordData.fromServer(
+      recordNumber: recordNumber,
+      data: record,
+    );
+    if (resolvedRecord.recordUuid.isEmpty) {
+      throw Exception('Server did not return a valid record_uuid');
+    }
+
+    await _cacheResolvedRecordLocally(prdDb, resolvedRecord);
+    return resolvedRecord.recordUuid;
+  }
+
+  Future<void> _syncChargeItemUpsertToServer(
+    PRDDatabaseService prdDb,
+    ChargeItem item,
+  ) async {
+    final contentService = _contentService;
+    if (contentService == null) {
+      throw Exception('Cannot sync charge item: services unavailable');
+    }
+
+    final credentials = await prdDb.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception('Cannot sync charge item: missing credentials');
+    }
+
+    final payload = Map<String, dynamic>.from(item.toServerMap())
+      ..['bookUuid'] = event.bookUuid;
+
+    final serverItem = await contentService.apiClient.saveChargeItem(
+      recordUuid: item.recordUuid,
+      chargeItemData: payload,
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+    );
+    await prdDb.applyServerChargeItemChange(serverItem);
+  }
+
+  Future<void> _syncChargeItemDeleteToServer(
+    PRDDatabaseService prdDb,
+    String chargeItemId, {
+    required String recordUuid,
+  }) async {
+    final contentService = _contentService;
+    if (contentService == null) {
+      throw Exception('Cannot sync charge item deletion: services unavailable');
+    }
+
+    final credentials = await prdDb.getDeviceCredentials();
+    if (credentials == null) {
+      throw Exception('Cannot sync charge item deletion: missing credentials');
+    }
+
+    await contentService.apiClient.deleteChargeItem(
+      chargeItemId: chargeItemId,
+      deviceId: credentials.deviceId,
+      deviceToken: credentials.deviceToken,
+      bookUuid: event.bookUuid,
+    );
+    final nowSeconds = DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    final db = await prdDb.database;
+    await db.update(
+      'charge_items',
+      {
+        'is_deleted': 1,
+        'is_dirty': 0,
+        'synced_at': nowSeconds,
+        'updated_at': nowSeconds,
+      },
+      where: 'id = ?',
+      whereArgs: [chargeItemId],
+    );
+    await prdDb.updateEventsHasChargeItemsFlag(recordUuid: recordUuid);
+  }
+
+  bool _isUuidLike(String value) {
+    final normalized = value.trim();
+    if (normalized.isEmpty) {
+      return false;
+    }
+    final uuidPattern = RegExp(
+      r'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89abAB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$',
+    );
+    return uuidPattern.hasMatch(normalized);
   }
 
   Future<Note?> _fetchExistingNoteForRecordUuid({

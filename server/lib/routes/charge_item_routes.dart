@@ -142,6 +142,68 @@ class ChargeItemRoutes {
     }
   }
 
+  Future<bool> _verifyBookAccess(String deviceId, String bookUuid) async {
+    final normalizedBookUuid = bookUuid.trim();
+    if (normalizedBookUuid.isEmpty) {
+      return false;
+    }
+    try {
+      final accessibleBooks = await _accessibleBookUuids(deviceId);
+      return accessibleBooks.contains(normalizedBookUuid);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<bool> _verifyRecordOrBookAccess({
+    required String deviceId,
+    required String recordUuid,
+    String? bookUuid,
+  }) async {
+    if (await _verifyRecordAccess(deviceId, recordUuid)) {
+      return true;
+    }
+    if (bookUuid == null || bookUuid.trim().isEmpty) {
+      return false;
+    }
+    return _verifyBookAccess(deviceId, bookUuid);
+  }
+
+  Future<String?> _resolvePersistedEventId({
+    required String recordUuid,
+    String? eventId,
+  }) async {
+    final normalizedEventId = eventId?.trim() ?? '';
+    if (normalizedEventId.isEmpty) {
+      return null;
+    }
+
+    try {
+      final rows = await db.client
+          .from('events')
+          .select('id, record_uuid, is_deleted')
+          .eq('id', normalizedEventId)
+          .limit(1);
+      final row = _first(rows);
+      if (row == null) {
+        return null;
+      }
+
+      if (_toBool(row['is_deleted'])) {
+        return null;
+      }
+
+      final rowRecordUuid = row['record_uuid']?.toString() ?? '';
+      if (rowRecordUuid != recordUuid) {
+        return null;
+      }
+
+      return normalizedEventId;
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _refreshEventChargeFlags(String recordUuid) async {
     final rows = await db.client
         .from('charge_items')
@@ -331,7 +393,20 @@ class ChargeItemRoutes {
           headers: {'Content-Type': 'application/json'},
         );
       }
-      if (!await _verifyRecordAccess(deviceId, recordUuid)) {
+
+      final body = await request.readAsString();
+      final json = jsonDecode(body) as Map<String, dynamic>;
+      final requestedBookUuid =
+          (json['bookUuid'] ??
+                  json['book_uuid'] ??
+                  request.headers['x-book-uuid'])
+              ?.toString()
+              .trim();
+      if (!await _verifyRecordOrBookAccess(
+        deviceId: deviceId,
+        recordUuid: recordUuid,
+        bookUuid: requestedBookUuid,
+      )) {
         return Response.forbidden(
           jsonEncode({
             'success': false,
@@ -341,16 +416,14 @@ class ChargeItemRoutes {
         );
       }
 
-      final body = await request.readAsString();
-      final json = jsonDecode(body) as Map<String, dynamic>;
-
       final id = (json['id'] ?? '').toString().trim();
       final rawEventId = (json['eventId'] ?? json['event_id'])
           ?.toString()
           .trim();
-      final eventId = (rawEventId == null || rawEventId.isEmpty)
-          ? null
-          : rawEventId;
+      final eventId = await _resolvePersistedEventId(
+        recordUuid: recordUuid,
+        eventId: rawEventId,
+      );
       final itemName = (json['itemName'] ?? json['item_name'] ?? '')
           .toString()
           .trim();
@@ -516,6 +589,9 @@ class ChargeItemRoutes {
       final chargeItemId = request.params['chargeItemId'] ?? '';
       final deviceId = request.headers['x-device-id'];
       final deviceToken = request.headers['x-device-token'];
+      final requestedBookUuid =
+          request.url.queryParameters['bookUuid'] ??
+          request.headers['x-book-uuid'];
 
       if (chargeItemId.isEmpty) {
         return Response.badRequest(
@@ -545,6 +621,16 @@ class ChargeItemRoutes {
           headers: {'Content-Type': 'application/json'},
         );
       }
+      if (!await _canDeviceWrite(deviceId)) {
+        return Response.forbidden(
+          jsonEncode({
+            'success': false,
+            'message': 'Read-only device cannot modify charge items',
+            'error': 'READ_ONLY_DEVICE',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
 
       final existingRows = await db.client
           .from('charge_items')
@@ -560,7 +646,11 @@ class ChargeItemRoutes {
       }
 
       final recordUuid = existing['record_uuid'].toString();
-      if (!await _verifyRecordAccess(deviceId, recordUuid)) {
+      if (!await _verifyRecordOrBookAccess(
+        deviceId: deviceId,
+        recordUuid: recordUuid,
+        bookUuid: requestedBookUuid,
+      )) {
         return Response.forbidden(
           jsonEncode({
             'success': false,

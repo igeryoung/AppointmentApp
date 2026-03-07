@@ -1198,11 +1198,17 @@ class ApiClient {
     required String chargeItemId,
     required String deviceId,
     required String deviceToken,
+    String? bookUuid,
   }) async {
     try {
+      final uri = Uri.parse('$baseUrl/api/charge-items/$chargeItemId').replace(
+        queryParameters: (bookUuid != null && bookUuid.trim().isNotEmpty)
+            ? {'bookUuid': bookUuid.trim()}
+            : null,
+      );
       final response = await _client
           .delete(
-            Uri.parse('$baseUrl/api/charge-items/$chargeItemId'),
+            uri,
             headers: {
               'Content-Type': 'application/json',
               'X-Device-ID': deviceId,

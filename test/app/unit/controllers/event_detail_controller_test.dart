@@ -28,6 +28,8 @@ class _FakeEventMetadataApiClient extends ApiClient {
   int createEventCalls = 0;
   int updateRecordCalls = 0;
   int getOrCreateRecordCalls = 0;
+  int saveChargeItemCalls = 0;
+  int deleteChargeItemCalls = 0;
 
   String? lastUpdateBookUuid;
   String? lastUpdateEventId;
@@ -45,6 +47,10 @@ class _FakeEventMetadataApiClient extends ApiClient {
   String? lastRecordDeviceId;
   String? lastRecordDeviceToken;
   Map<String, dynamic>? lastGetOrCreateRecordData;
+  String? lastSaveChargeItemRecordUuid;
+  Map<String, dynamic>? lastSaveChargeItemData;
+  String? lastDeleteChargeItemId;
+  String? lastDeleteChargeItemBookUuid;
   String? lastFetchedRecordNumber;
   String? lastFetchRecordDeviceId;
   String? lastFetchRecordDeviceToken;
@@ -52,6 +58,9 @@ class _FakeEventMetadataApiClient extends ApiClient {
   Object? updateEventError;
   Object? updateEventDetailBundleError;
   Object? updateRecordError;
+  Object? getOrCreateRecordError;
+  Object? saveChargeItemError;
+  Object? deleteChargeItemError;
   String? requiredRecordUuidForUpdate;
   bool failUpdateEventWithNotFound = false;
   final Map<String, String> recordUuidsByRecordNumber = {};
@@ -216,6 +225,7 @@ class _FakeEventMetadataApiClient extends ApiClient {
     required String deviceToken,
   }) async {
     getOrCreateRecordCalls += 1;
+    if (getOrCreateRecordError != null) throw getOrCreateRecordError!;
     lastGetOrCreateRecordData = {
       'record_number': recordNumber,
       'name': name,
@@ -250,6 +260,46 @@ class _FakeEventMetadataApiClient extends ApiClient {
     lastFetchRecordDeviceToken = deviceToken;
     final response = fetchRecordByNumberResponses[recordNumber];
     return response == null ? null : Map<String, dynamic>.from(response);
+  }
+
+  @override
+  Future<Map<String, dynamic>> saveChargeItem({
+    required String recordUuid,
+    required Map<String, dynamic> chargeItemData,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    saveChargeItemCalls += 1;
+    if (saveChargeItemError != null) throw saveChargeItemError!;
+    lastSaveChargeItemRecordUuid = recordUuid;
+    lastSaveChargeItemData = Map<String, dynamic>.from(chargeItemData);
+    return {
+      ...chargeItemData,
+      'record_uuid': chargeItemData['recordUuid'] ?? recordUuid,
+      'event_id': chargeItemData['eventId'],
+      'item_name': chargeItemData['itemName'],
+      'item_price': chargeItemData['itemPrice'],
+      'received_amount': chargeItemData['receivedAmount'],
+      'is_deleted': chargeItemData['isDeleted'] == true,
+      'is_dirty': 0,
+      'version': chargeItemData['version'] ?? 1,
+      'synced_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'created_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      'updated_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
+    };
+  }
+
+  @override
+  Future<void> deleteChargeItem({
+    required String chargeItemId,
+    required String deviceId,
+    required String deviceToken,
+    String? bookUuid,
+  }) async {
+    deleteChargeItemCalls += 1;
+    if (deleteChargeItemError != null) throw deleteChargeItemError!;
+    lastDeleteChargeItemId = chargeItemId;
+    lastDeleteChargeItemBookUuid = bookUuid;
   }
 }
 
@@ -1339,8 +1389,248 @@ void main() {
   );
 
   test(
+    'EVENT-DETAIL-UNIT-019: ensureChargeItemsReady() resolves record UUID via server and enables charge-item linkage',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      final newEvent = makeEvent(
+        id: 'event-new-charge-1',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'New Person',
+        recordNumber: 'NEW-CHARGE-001',
+        eventTypes: const [EventType.consultation],
+      );
+
+      final controller = buildNewController(newEvent);
+      controller.updateName('New Person');
+      controller.updateRecordNumber('NEW-CHARGE-001');
+
+      final ready = await controller.ensureChargeItemsReady();
+      expect(ready, isTrue);
+      expect(fakeApiClient.getOrCreateRecordCalls, 1);
+      expect(fakeApiClient.createEventCalls, 0);
+      expect(fakeApiClient.updateRecordCalls, 0);
+
+      await controller.addChargeItem(
+        ChargeItem(
+          recordUuid: 'ignored-by-controller',
+          itemName: 'CT',
+          itemPrice: 1800,
+        ),
+      );
+
+      final savedItems = await dbService.getChargeItemsByRecordUuid(
+        'generated-record-1',
+      );
+      expect(savedItems, hasLength(1));
+      expect(savedItems.single.itemName, 'CT');
+      expect(savedItems.single.eventId, isNull);
+      expect(controller.state.chargeItems, hasLength(1));
+      expect(controller.state.chargeItems.single.itemName, 'CT');
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-020: ensureChargeItemsReady() returns false when record number is missing and no record UUID exists',
+    () async {
+      final newEvent = makeEvent(
+        id: 'event-new-charge-2',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'WalkIn',
+        recordNumber: '',
+        eventTypes: const [EventType.consultation],
+      );
+
+      final controller = buildNewController(newEvent);
+      controller.updateName('WalkIn');
+      controller.updateRecordNumber('');
+
+      final ready = await controller.ensureChargeItemsReady();
+      expect(ready, isFalse);
+      expect(fakeApiClient.getOrCreateRecordCalls, 0);
+      expect(fakeApiClient.createEventCalls, 0);
+      expect(fakeApiClient.updateRecordCalls, 0);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-021: ensureChargeItemsReady() throws when server getOrCreate fails',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      fakeApiClient.getOrCreateRecordError = ApiException(
+        'Server error',
+        statusCode: 500,
+      );
+
+      final newEvent = makeEvent(
+        id: 'event-new-charge-3',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'Fallback Person',
+        recordNumber: 'LOCAL-FALLBACK-001',
+        eventTypes: const [EventType.consultation],
+      );
+
+      final controller = buildNewController(newEvent);
+      controller.updateName('Fallback Person');
+      controller.updateRecordNumber('LOCAL-FALLBACK-001');
+
+      await expectLater(
+        controller.ensureChargeItemsReady(),
+        throwsA(isA<ApiException>()),
+      );
+      expect(fakeApiClient.getOrCreateRecordCalls, 1);
+      expect(fakeApiClient.createEventCalls, 0);
+      expect(fakeApiClient.updateRecordCalls, 0);
+
+      final localRecord = await dbService.getRecordByRecordNumber(
+        'LOCAL-FALLBACK-001',
+      );
+      expect(localRecord, isNull);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-024: ensureChargeItemsReady() upgrades legacy non-UUID local record linkage via server getOrCreate',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      await seedRecord(
+        db,
+        recordUuid: 'legacy-record-id-1',
+        recordNumber: 'LEGACY-001',
+        name: 'Legacy Person',
+      );
+
+      final newEvent = makeEvent(
+        id: 'event-new-charge-legacy',
+        bookUuid: 'book-a',
+        recordUuid: '',
+        title: 'Legacy Person',
+        recordNumber: 'LEGACY-001',
+        eventTypes: const [EventType.consultation],
+      );
+
+      final controller = buildNewController(newEvent);
+      controller.updateName('Legacy Person');
+      controller.updateRecordNumber('LEGACY-001');
+
+      final ready = await controller.ensureChargeItemsReady();
+      expect(ready, isTrue);
+      expect(fakeApiClient.getOrCreateRecordCalls, 1);
+
+      await controller.addChargeItem(
+        ChargeItem(
+          recordUuid: 'ignored-by-controller',
+          itemName: 'Ultrasound',
+          itemPrice: 900,
+        ),
+      );
+
+      expect(fakeApiClient.saveChargeItemCalls, 1);
+      expect(
+        fakeApiClient.lastSaveChargeItemRecordUuid,
+        isNot('legacy-record-id-1'),
+      );
+      expect(fakeApiClient.lastSaveChargeItemRecordUuid, 'generated-record-1');
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-022: addChargeItem() syncs charge item to server when credentials are available',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      final controller = buildController();
+
+      await controller.addChargeItem(
+        ChargeItem(
+          recordUuid: 'ignored-by-controller',
+          itemName: 'MRI',
+          itemPrice: 2600,
+        ),
+      );
+
+      expect(fakeApiClient.saveChargeItemCalls, 1);
+      expect(fakeApiClient.lastSaveChargeItemRecordUuid, 'record-a1');
+      expect(fakeApiClient.lastSaveChargeItemData?['eventId'], 'event-a1');
+      expect(fakeApiClient.lastSaveChargeItemData?['bookUuid'], 'book-a');
+      expect(fakeApiClient.lastSaveChargeItemData?['itemName'], 'MRI');
+      expect(fakeApiClient.lastSaveChargeItemData?['itemPrice'], 2600);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-023: addChargeItem() throws when server save fails and keeps local database unchanged',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      fakeApiClient.saveChargeItemError = ApiException(
+        'server failed',
+        statusCode: 500,
+      );
+
+      final controller = buildController();
+
+      await expectLater(
+        controller.addChargeItem(
+          ChargeItem(
+            recordUuid: 'ignored-by-controller',
+            itemName: 'ServerOnly',
+            itemPrice: 1100,
+          ),
+        ),
+        throwsA(isA<ApiException>()),
+      );
+
+      final savedItems = await dbService.getChargeItemsByRecordUuid(
+        'record-a1',
+      );
+      expect(savedItems, isEmpty);
+    },
+  );
+
+  test(
     'EVENT-DETAIL-UNIT-011: addChargeItem() links new item to current event even when all-items filter is active',
     () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
       final controller = buildController();
       expect(controller.state.showOnlyThisEventItems, isFalse);
 
@@ -1418,6 +1708,14 @@ void main() {
   test(
     'EVENT-DETAIL-UNIT-013: editChargeItem() persists partial paid amount and marks full payment when received amount matches price',
     () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
       await dbService.saveChargeItem(
         ChargeItem(
           id: 'charge-edit-paid',

@@ -248,10 +248,27 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
   }
 
   Future<void> _addChargeItem() async {
-    if (!widget.hasRecordUuid) {
-      final l10n = AppLocalizations.of(context)!;
+    final l10n = AppLocalizations.of(context)!;
+    try {
+      final ready = await widget.controller.ensureChargeItemsReady();
+      if (!mounted) {
+        return;
+      }
+      if (!ready) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber)),
+        );
+        return;
+      }
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(l10n.chargeItemsRequireRecordNumber)),
+        SnackBar(
+          content: Text(l10n.errorSavingEventMessage(error.toString())),
+          backgroundColor: Colors.red,
+        ),
       );
       return;
     }
@@ -260,6 +277,9 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
       context: context,
       builder: (context) => const ChargeItemDialog(),
     );
+    if (!mounted) {
+      return;
+    }
 
     if (result == null) {
       return;
