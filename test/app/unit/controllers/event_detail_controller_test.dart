@@ -54,13 +54,19 @@ class _FakeEventMetadataApiClient extends ApiClient {
   String? lastFetchedRecordNumber;
   String? lastFetchRecordDeviceId;
   String? lastFetchRecordDeviceToken;
+  String? lastValidatedRecordNumber;
+  String? lastValidatedName;
+  String? lastValidateRecordDeviceId;
+  String? lastValidateRecordDeviceToken;
   final Map<String, Map<String, dynamic>?> fetchRecordByNumberResponses = {};
+  final Map<String, RecordValidationResult> validateRecordNumberResponses = {};
   Object? updateEventError;
   Object? updateEventDetailBundleError;
   Object? updateRecordError;
   Object? getOrCreateRecordError;
   Object? saveChargeItemError;
   Object? deleteChargeItemError;
+  Object? validateRecordNumberError;
   String? requiredRecordUuidForUpdate;
   bool failUpdateEventWithNotFound = false;
   final Map<String, String> recordUuidsByRecordNumber = {};
@@ -260,6 +266,24 @@ class _FakeEventMetadataApiClient extends ApiClient {
     lastFetchRecordDeviceToken = deviceToken;
     final response = fetchRecordByNumberResponses[recordNumber];
     return response == null ? null : Map<String, dynamic>.from(response);
+  }
+
+  @override
+  Future<RecordValidationResult> validateRecordNumber({
+    required String recordNumber,
+    required String name,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    lastValidatedRecordNumber = recordNumber;
+    lastValidatedName = name;
+    lastValidateRecordDeviceId = deviceId;
+    lastValidateRecordDeviceToken = deviceToken;
+    if (validateRecordNumberError != null) {
+      throw validateRecordNumberError!;
+    }
+    return validateRecordNumberResponses['$recordNumber::$name'] ??
+        RecordValidationResult(exists: false, valid: true);
   }
 
   @override
@@ -493,6 +517,8 @@ void main() {
               .cast<String>();
       expect(eventTypes, containsAll(['followUp', 'surgery']));
       expect(fakeApiClient.lastEventData?['phone'], '0900000000');
+      expect(fakeApiClient.lastEventData, isNot(contains('has_charge_items')));
+      expect(fakeApiClient.lastEventData, isNot(contains('hasChargeItems')));
       expect(fakeApiClient.lastEventData, isNot(contains('has_note')));
       expect(fakeApiClient.lastEventData, isNot(contains('hasNote')));
     },
@@ -1095,6 +1121,53 @@ void main() {
       expect(controller.state.isLoadingFromServer, isFalse);
       expect(controller.state.isValidatingRecordNumber, isFalse);
       expect(controller.state.recordNumberError, isNull);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-019: validateRecordNumberOnBlur() blocks fetch when record number conflicts with typed name',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      fakeApiClient.validateRecordNumberResponses['SRV-003::Alice Typed'] =
+          RecordValidationResult(exists: true, valid: false);
+      fakeApiClient.fetchRecordByNumberResponses['SRV-003'] = {
+        'record_uuid': 'record-server-lookup-3',
+        'record_number': 'SRV-003',
+        'name': 'Server Name',
+        'phone': '0933555666',
+      };
+
+      final controller = buildNewController(
+        makeEvent(
+          id: 'event-lookup-blur-2',
+          bookUuid: 'book-a',
+          recordUuid: '',
+          title: '',
+          recordNumber: '',
+          eventTypes: const [EventType.consultation],
+        ),
+      );
+
+      controller.updateName('Alice Typed');
+      controller.updateRecordNumber('SRV-003');
+      final isValid = await controller.validateRecordNumberOnBlur();
+
+      expect(isValid, isFalse);
+      expect(fakeApiClient.lastValidatedRecordNumber, 'SRV-003');
+      expect(fakeApiClient.lastValidatedName, 'Alice Typed');
+      expect(fakeApiClient.lastFetchedRecordNumber, isNull);
+      expect(controller.state.name, 'Alice Typed');
+      expect(controller.state.recordNumber, isEmpty);
+      expect(controller.state.recordNumberError, '病例號已存在，且其病人不為 Alice Typed.');
+      expect(controller.state.isLoadingFromServer, isFalse);
+      expect(controller.state.isValidatingRecordNumber, isFalse);
     },
   );
 

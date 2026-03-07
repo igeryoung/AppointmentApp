@@ -16,6 +16,7 @@ import 'event_metadata/event_integ_011_multi_device_metadata_lww_test.dart';
 import 'event_metadata/event_integ_012_multi_device_note_conflict_resolution_test.dart';
 import 'event_metadata/event_integ_013_record_lookup_autofill_test.dart';
 import 'event_metadata/event_integ_014_schedule_reschedule_pipeline_test.dart';
+import 'event_metadata/event_integ_015_charge_item_flag_test.dart';
 import 'event_metadata/live_server_test_support.dart';
 
 void main() {
@@ -34,4 +35,5 @@ void main() {
   registerEventInteg012(config: config);
   registerEventInteg013(config: config);
   registerEventInteg014(config: config);
+  registerEventInteg015(config: config);
 }

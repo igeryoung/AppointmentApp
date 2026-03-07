@@ -20,6 +20,15 @@ import 'adapters/note_sync_adapter.dart';
 
 /// Controller for Event Detail Screen business logic
 class EventDetailController {
+  static const String recordNumberNameConflictPrefix = '病例號已存在，且其病人不為 ';
+
+  static bool isRecordNumberNameConflictMessage(String? message) {
+    if (message == null) {
+      return false;
+    }
+    return message.startsWith(recordNumberNameConflictPrefix);
+  }
+
   final Event event;
   final bool isNew;
   final IDatabaseService _dbService;
@@ -895,6 +904,9 @@ class EventDetailController {
     required String? phone,
   }) {
     final payload = Map<String, dynamic>.from(eventData.toMap());
+    // has_charge_items must be server-derived from charge_items table.
+    payload.remove('has_charge_items');
+    payload.remove('hasChargeItems');
     // has_note must always be derived on server from stroke ownership.
     payload.remove('has_note');
     payload.remove('hasNote');
@@ -973,6 +985,7 @@ class EventDetailController {
   /// Existing record numbers hydrate matched data instead of showing conflicts.
   Future<bool> validateRecordNumberOnBlur() async {
     final recordNumber = _state.recordNumber.trim();
+    final name = _state.name.trim();
 
     // Empty record number is always valid (treated as "留空")
     if (recordNumber.isEmpty) {
@@ -987,6 +1000,24 @@ class EventDetailController {
     _updateState(_state.copyWith(isValidatingRecordNumber: true));
 
     try {
+      final conflictMessage = await _buildRecordNumberNameConflictMessage(
+        recordNumber: recordNumber,
+        name: name,
+      );
+      if (conflictMessage != null) {
+        _updateState(
+          _state.copyWith(
+            recordNumber: '',
+            isNameReadOnly: false,
+            hasChanges: true,
+            isValidatingRecordNumber: false,
+            isLoadingFromServer: false,
+            recordNumberError: conflictMessage,
+          ),
+        );
+        return false;
+      }
+
       final resolvedRecord = await _resolveRecordDataByRecordNumber(
         recordNumber,
       );
@@ -1021,6 +1052,56 @@ class EventDetailController {
       return false;
     }
   }
+
+  Future<String?> _buildRecordNumberNameConflictMessage({
+    required String recordNumber,
+    required String name,
+  }) async {
+    final trimmedRecordNumber = recordNumber.trim();
+    final trimmedName = name.trim();
+    if (trimmedRecordNumber.isEmpty || trimmedName.isEmpty) {
+      return null;
+    }
+
+    if (_dbService is! PRDDatabaseService) {
+      return null;
+    }
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final credentials = await prdDb.getDeviceCredentials();
+
+    if (_contentService != null && credentials != null) {
+      try {
+        final result = await _contentService!.apiClient.validateRecordNumber(
+          recordNumber: trimmedRecordNumber,
+          name: trimmedName,
+          deviceId: credentials.deviceId,
+          deviceToken: credentials.deviceToken,
+        );
+        if (result.hasConflict) {
+          return '$recordNumberNameConflictPrefix$trimmedName.';
+        }
+      } catch (e) {
+        debugPrint('[EventDetailController] validateRecordNumber error: $e');
+      }
+    }
+
+    final localRecord = await prdDb.getRecordByRecordNumber(
+      trimmedRecordNumber,
+    );
+    final localName = localRecord?.name?.trim() ?? '';
+    if (localName.isEmpty) {
+      return null;
+    }
+
+    if (_normalizeName(localName) != _normalizeName(trimmedName)) {
+      return '$recordNumberNameConflictPrefix$trimmedName.';
+    }
+
+    return null;
+  }
+
+  String _normalizeName(String value) => value.trim().toLowerCase();
 
   /// Clear record number validation error
   void clearRecordNumberError() {

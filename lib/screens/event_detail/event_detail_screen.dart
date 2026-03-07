@@ -396,7 +396,31 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   }
 
   Future<void> _handleRecordNumberBlur() async {
-    await _controller.validateRecordNumberOnBlur();
+    final isValid = await _controller.validateRecordNumberOnBlur();
+    if (!mounted || isValid) {
+      return;
+    }
+
+    final message = _controller.state.recordNumberError;
+    if (!EventDetailController.isRecordNumberNameConflictMessage(message)) {
+      return;
+    }
+
+    await showDialog<void>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('錯誤'),
+        content: Text(message!),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('確定'),
+          ),
+        ],
+      ),
+    );
+
+    _controller.clearRecordNumberError();
   }
 
   void _onPagesChanged(List<List<Stroke>> pages) {
