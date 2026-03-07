@@ -591,6 +591,95 @@ void main() {
   );
 
   test(
+    'EVENT-DETAIL-UNIT-018: new event with same record UUID saves edited shared note',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      final existingSharedNote = makeNote(
+        recordUuid: 'record-a1',
+        version: 4,
+        pages: const [
+          [
+            Stroke(
+              id: 'shared-stroke-a1',
+              eventUuid: 'event-origin-a1',
+              points: [StrokePoint(1, 1), StrokePoint(5, 5)],
+            ),
+          ],
+        ],
+      );
+      fakeNoteSyncAdapter.notesByRecordUuid['record-a1'] = existingSharedNote;
+      fakeNoteSyncAdapter.saveResponse = makeNote(
+        recordUuid: 'record-a1',
+        version: 5,
+        pages: const [
+          [
+            Stroke(
+              id: 'shared-stroke-a1',
+              eventUuid: 'event-origin-a1',
+              points: [StrokePoint(1, 1), StrokePoint(5, 5)],
+            ),
+            Stroke(
+              id: 'new-shared-stroke-a1',
+              eventUuid: 'event-new-same-record-a1',
+              points: [StrokePoint(8, 8), StrokePoint(12, 12)],
+            ),
+          ],
+        ],
+      );
+
+      final newEvent = makeEvent(
+        id: 'event-new-same-record-a1',
+        bookUuid: 'book-a',
+        recordUuid: 'record-a1',
+        title: 'Alice',
+        recordNumber: '001',
+        eventTypes: const [EventType.consultation],
+      );
+      final controller = buildNewController(newEvent);
+      await controller.loadExistingPersonNote(existingSharedNote);
+      controller.updatePages([
+        const [
+          Stroke(
+            id: 'shared-stroke-a1',
+            eventUuid: 'event-origin-a1',
+            points: [StrokePoint(1, 1), StrokePoint(5, 5)],
+          ),
+          Stroke(
+            id: 'new-shared-stroke-a1',
+            eventUuid: 'event-new-same-record-a1',
+            points: [StrokePoint(8, 8), StrokePoint(12, 12)],
+          ),
+        ],
+      ]);
+
+      await controller.saveEvent();
+      await waitForBackgroundSync();
+
+      expect(fakeNoteSyncAdapter.getNoteByRecordUuidCalls, 1);
+      expect(fakeNoteSyncAdapter.saveCalls, 1);
+      expect(fakeNoteSyncAdapter.lastSaveEventId, 'event-new-same-record-a1');
+      expect(fakeNoteSyncAdapter.lastSavedNote, isNotNull);
+      expect(fakeNoteSyncAdapter.lastSavedNote!.version, 5);
+
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.version, 5);
+      final savedStrokeIds = controller.state.note!.pages
+          .expand((page) => page)
+          .map((stroke) => stroke.id)
+          .whereType<String>()
+          .toSet();
+      expect(savedStrokeIds, contains('new-shared-stroke-a1'));
+    },
+  );
+
+  test(
     'EVENT-DETAIL-UNIT-006: saveEvent() refill record number reuses existing record UUID',
     () async {
       await dbService.saveDeviceCredentials(

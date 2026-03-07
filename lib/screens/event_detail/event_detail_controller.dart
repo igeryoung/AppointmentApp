@@ -552,9 +552,11 @@ class EventDetailController {
           bookUuid: savedEvent.bookUuid,
           recordUuid: savedEvent.recordUuid,
         );
+        final shouldKeepEditedNote = _noteEditedInSession;
         if (existingNote != null &&
             existingNote.isNotEmpty &&
-            !shouldCarryForwardCurrentNote) {
+            !shouldCarryForwardCurrentNote &&
+            !shouldKeepEditedNote) {
           _updateState(
             _state.copyWith(
               note: existingNote,
