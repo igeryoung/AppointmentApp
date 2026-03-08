@@ -8,7 +8,7 @@ void main() {}
 
 void registerEventInteg015({required LiveServerConfig? config}) {
   test(
-    'EVENT-INTEG-015A: create event after charge-item creation keeps charge item and sets has_charge_items',
+    'EVENT-INTEG-015A: create event after charge-item creation keeps charge item but does not inherit has_charge_items',
     () async {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
@@ -103,7 +103,7 @@ void registerEventInteg015({required LiveServerConfig? config}) {
             createdEvent,
             keys: const ['has_charge_items', 'hasChargeItems'],
           ),
-          isTrue,
+          isFalse,
         );
 
         final eventId = pickString(createdEvent, keys: const ['id']);
@@ -119,7 +119,7 @@ void registerEventInteg015({required LiveServerConfig? config}) {
             refreshedEvent!,
             keys: const ['has_charge_items', 'hasChargeItems'],
           ),
-          isTrue,
+          isFalse,
         );
 
         final chargeItems = await apiClient.fetchChargeItems(

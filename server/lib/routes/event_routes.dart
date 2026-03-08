@@ -960,20 +960,6 @@ class EventRoutes {
         .eq('record_uuid', recordUuid);
   }
 
-  Future<bool> _recordHasChargeItems(String recordUuid) async {
-    try {
-      final rows = await db.client
-          .from('charge_items')
-          .select('id')
-          .eq('record_uuid', recordUuid)
-          .eq('is_deleted', false)
-          .limit(1);
-      return _first(rows) != null;
-    } catch (_) {
-      return false;
-    }
-  }
-
   _PreparedEventCreate _prepareEventCreateInput({
     required Map<String, dynamic> json,
     required String bookUuid,
@@ -1201,13 +1187,7 @@ class EventRoutes {
       final prepared = _prepareEventCreateInput(json: json, bookUuid: bookUuid);
       final eventPayload = Map<String, dynamic>.from(
         prepared.eventInsertPayload,
-      );
-      final hasRecordChargeItems = await _recordHasChargeItems(
-        prepared.recordUuid,
-      );
-      if (hasRecordChargeItems) {
-        eventPayload['has_charge_items'] = true;
-      }
+      )..['has_charge_items'] = false;
 
       await _ensureRecord(
         recordUuid: prepared.recordUuid,

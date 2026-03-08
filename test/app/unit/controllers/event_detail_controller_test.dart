@@ -1072,6 +1072,49 @@ void main() {
   );
 
   test(
+    'EVENT-DETAIL-UNIT-025: initialize() hydrates prefilled new event with existing note and charge items',
+    () async {
+      final note = makeNote(recordUuid: 'record-a1', version: 3);
+      final noteMap = Map<String, dynamic>.from(note.toMap())..remove('id');
+      await db.insert('notes', noteMap);
+
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-prefill-1',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Follow-up Fee',
+          itemPrice: 1200,
+          receivedAmount: 300,
+        ),
+      );
+
+      final controller = buildNewController(
+        makeEvent(
+          id: 'event-next-prefill-1',
+          bookUuid: 'book-a',
+          recordUuid: '',
+          title: 'Alice',
+          recordNumber: '001',
+          eventTypes: const [EventType.followUp],
+        ),
+      );
+
+      await controller.initialize();
+
+      expect(controller.state.recordNumber, '001');
+      expect(controller.state.name, 'Alice');
+      expect(controller.state.note, isNotNull);
+      expect(controller.state.note!.recordUuid, 'record-a1');
+      expect(controller.state.note!.version, 3);
+      expect(controller.state.chargeItems, hasLength(1));
+      expect(controller.state.chargeItems.single.itemName, 'Follow-up Fee');
+      expect(controller.state.isLoadingFromServer, isFalse);
+      expect(controller.state.isValidatingRecordNumber, isFalse);
+    },
+  );
+
+  test(
     'EVENT-DETAIL-UNIT-017: validateRecordNumberOnBlur() hydrates canonical record data for existing record number',
     () async {
       await dbService.saveDeviceCredentials(
@@ -1775,6 +1818,39 @@ void main() {
         controller.state.chargeItems.map((item) => item.id),
         containsAll(<String>['charge-this-event', 'charge-other-event']),
       );
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-026: updateEventsHasChargeItemsFlag() marks only events linked by charge_item.event_id',
+    () async {
+      final otherEvent = makeEvent(
+        id: 'event-a2',
+        bookUuid: 'book-a',
+        recordUuid: 'record-a1',
+        title: 'Alice',
+        recordNumber: '001',
+        eventTypes: const [EventType.consultation],
+      );
+      await seedEvent(db, event: otherEvent);
+
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-flag-event-a1',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Scoped Item',
+          itemPrice: 500,
+        ),
+      );
+      await dbService.updateEventsHasChargeItemsFlag(recordUuid: 'record-a1');
+
+      final eventA1 = await dbService.getEventById('event-a1');
+      final eventA2 = await dbService.getEventById('event-a2');
+      expect(eventA1, isNotNull);
+      expect(eventA2, isNotNull);
+      expect(eventA1!.hasChargeItems, isTrue);
+      expect(eventA2!.hasChargeItems, isFalse);
     },
   );
 

@@ -205,22 +205,32 @@ class ChargeItemRoutes {
   }
 
   Future<void> _refreshEventChargeFlags(String recordUuid) async {
-    final rows = await db.client
-        .from('charge_items')
-        .select('id')
-        .eq('record_uuid', recordUuid)
-        .eq('is_deleted', false)
-        .limit(1);
-    final hasItems = _first(rows) != null;
+    final nowIso = DateTime.now().toUtc().toIso8601String();
 
     await db.client
         .from('events')
-        .update({
-          'has_charge_items': hasItems,
-          'updated_at': DateTime.now().toUtc().toIso8601String(),
-        })
+        .update({'has_charge_items': false, 'updated_at': nowIso})
         .eq('record_uuid', recordUuid)
         .eq('is_deleted', false);
+
+    final linkedRows = await db.client
+        .from('charge_items')
+        .select('event_id')
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false);
+    final linkedEventIds = _rows(linkedRows)
+        .map((row) => row['event_id']?.toString().trim() ?? '')
+        .where((id) => id.isNotEmpty)
+        .toSet();
+
+    for (final eventId in linkedEventIds) {
+      await db.client
+          .from('events')
+          .update({'has_charge_items': true, 'updated_at': nowIso})
+          .eq('id', eventId)
+          .eq('record_uuid', recordUuid)
+          .eq('is_deleted', false);
+    }
   }
 
   int _toInt(dynamic value, {int fallback = 0}) {

@@ -217,10 +217,7 @@ mixin ChargeItemOperationsMixin {
       totalReceived += item.receivedAmount;
     }
 
-    return {
-      'total': totalPrice,
-      'received': totalReceived,
-    };
+    return {'total': totalPrice, 'received': totalReceived};
   }
 
   /// Get all dirty (unsynced) charge items
@@ -241,10 +238,7 @@ mixin ChargeItemOperationsMixin {
     final db = await database;
     await db.update(
       'charge_items',
-      {
-        'is_dirty': 0,
-        'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000,
-      },
+      {'is_dirty': 0, 'synced_at': syncedAt.millisecondsSinceEpoch ~/ 1000},
       where: 'id = ?',
       whereArgs: [id],
     );
@@ -261,24 +255,38 @@ mixin ChargeItemOperationsMixin {
     );
   }
 
-  /// Update has_charge_items flag for all events matching the record_uuid
-  /// Should be called after adding or deleting charge items
+  /// Update has_charge_items per event for the given record.
+  /// Only events with at least one non-deleted charge item linked by event_id
+  /// should show the charge indicator.
   Future<void> updateEventsHasChargeItemsFlag({
     required String recordUuid,
   }) async {
     final db = await database;
+    await db.transaction((txn) async {
+      await txn.update(
+        'events',
+        {'has_charge_items': 0},
+        where: 'record_uuid = ?',
+        whereArgs: [recordUuid],
+      );
 
-    // Check if any charge items exist for this record
-    final chargeItems = await getChargeItemsByRecordUuid(recordUuid);
-    final hasChargeItems = chargeItems.isNotEmpty;
-
-    // Update all events for this record to set has_charge_items flag
-    await db.update(
-      'events',
-      {'has_charge_items': hasChargeItems ? 1 : 0},
-      where: 'record_uuid = ?',
-      whereArgs: [recordUuid],
-    );
+      await txn.rawUpdate(
+        '''
+        UPDATE events
+        SET has_charge_items = 1
+        WHERE record_uuid = ?
+          AND id IN (
+            SELECT DISTINCT event_id
+            FROM charge_items
+            WHERE record_uuid = ?
+              AND is_deleted = 0
+              AND event_id IS NOT NULL
+              AND TRIM(event_id) != ''
+          )
+        ''',
+        [recordUuid, recordUuid],
+      );
+    });
   }
 
   /// Apply server charge item change to local database
@@ -314,10 +322,9 @@ mixin ChargeItemOperationsMixin {
     }
 
     final chargeItem = ChargeItem.fromMap(data);
-    final itemData = chargeItem.copyWith(
-      isDirty: false,
-      syncedAt: DateTime.now(),
-    ).toMap();
+    final itemData = chargeItem
+        .copyWith(isDirty: false, syncedAt: DateTime.now())
+        .toMap();
 
     if (existing == null) {
       // Insert new item

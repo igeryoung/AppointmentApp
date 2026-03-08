@@ -111,6 +111,8 @@ class EventDetailController {
         } finally {
           _updateState(_state.copyWith(isLoadingFromServer: false));
         }
+      } else {
+        await _hydratePrefilledRecordDataForNewEvent();
       }
     } catch (e) {
       // Mark services as ready anyway to avoid blocking UI forever
@@ -1026,6 +1028,7 @@ class EventDetailController {
           resolvedRecord,
           isOffline: !resolvedRecord.loadedFromServer,
         );
+        await loadChargeItems();
         return true;
       }
 
@@ -1099,6 +1102,41 @@ class EventDetailController {
     }
 
     return null;
+  }
+
+  Future<void> _hydratePrefilledRecordDataForNewEvent() async {
+    final prefilledRecordNumber = _state.recordNumber.trim();
+    if (prefilledRecordNumber.isEmpty) {
+      return;
+    }
+
+    try {
+      final resolvedRecord = await _resolveRecordDataByRecordNumber(
+        prefilledRecordNumber,
+      );
+      if (resolvedRecord != null) {
+        _applyResolvedRecordData(
+          resolvedRecord,
+          isOffline: !resolvedRecord.loadedFromServer,
+        );
+      } else {
+        _updateState(
+          _state.copyWith(
+            isLoadingFromServer: false,
+            isValidatingRecordNumber: false,
+          ),
+        );
+      }
+      await loadChargeItems();
+    } catch (_) {
+      _updateState(
+        _state.copyWith(
+          isLoadingFromServer: false,
+          isValidatingRecordNumber: false,
+          isOffline: true,
+        ),
+      );
+    }
   }
 
   String _normalizeName(String value) => value.trim().toLowerCase();
@@ -1732,6 +1770,7 @@ class EventDetailController {
           resolvedRecord,
           isOffline: !resolvedRecord.loadedFromServer,
         );
+        await loadChargeItems();
       } else {
         _updateState(_state.copyWith(isLoadingFromServer: false));
       }
