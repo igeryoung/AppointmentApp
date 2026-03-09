@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
+import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
 import '../../models/event_type.dart';
 import '../../models/schedule_drawing.dart';
@@ -483,8 +484,8 @@ class _ScheduleBodyState extends State<ScheduleBody> {
 
   /// Build date headers for multi-day view
   Widget _buildDateHeaders(BuildContext context, double height) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
-    const todayLabel = 'Today';
 
     return SizedBox(
       height: height,
@@ -534,7 +535,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                           borderRadius: BorderRadius.circular(10),
                         ),
                         child: Text(
-                          todayLabel,
+                          l10n.today,
                           style:
                               theme.textTheme.labelSmall?.copyWith(
                                 color: theme.colorScheme.primary,

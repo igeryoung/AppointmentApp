@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/database/prd_database_service.dart';
 import '../../../services/api_client.dart';
 
@@ -61,11 +62,13 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return AlertDialog(
       title: Text(
         _currentStep == _DialogStep.urlInput
-            ? 'Server Settings'
-            : 'Device Registration',
+            ? l10n.serverSettings
+            : l10n.deviceRegistrationTitle,
       ),
       content: Form(
         key: _formKey,
@@ -74,9 +77,9 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (_currentStep == _DialogStep.urlInput)
-              ..._buildUrlStep()
+              ..._buildUrlStep(l10n)
             else
-              ..._buildRegistrationStep(),
+              ..._buildRegistrationStep(l10n),
             if (_errorMessage != null) ...[
               const SizedBox(height: 12),
               Text(
@@ -91,34 +94,34 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
           ],
         ),
       ),
-      actions: _buildActions(),
+      actions: _buildActions(l10n),
     );
   }
 
-  List<Widget> _buildUrlStep() {
+  List<Widget> _buildUrlStep(AppLocalizations l10n) {
     return [
-      const Text(
-        'Configure the server URL for server data operations.',
-        style: TextStyle(fontSize: 14, color: Colors.grey),
+      Text(
+        l10n.configureServerUrlDescription,
+        style: const TextStyle(fontSize: 14, color: Colors.grey),
       ),
       const SizedBox(height: 16),
       TextFormField(
         controller: _urlController,
-        decoration: const InputDecoration(
-          labelText: 'Server URL',
-          hintText: 'http://192.168.1.100:8080',
-          border: OutlineInputBorder(),
-          helperText: 'Example: http://your-mac-ip:8080',
+        decoration: InputDecoration(
+          labelText: l10n.serverUrlLabel,
+          hintText: l10n.serverUrlHint,
+          border: const OutlineInputBorder(),
+          helperText: l10n.serverUrlExample,
         ),
         validator: (value) {
           if (value == null || value.trim().isEmpty) {
-            return 'Server URL is required';
+            return l10n.serverUrlRequired;
           }
           final uri = Uri.tryParse(value.trim());
           if (uri == null ||
               (!uri.hasScheme ||
                   (uri.scheme != 'http' && uri.scheme != 'https'))) {
-            return 'Invalid URL format (must start with http:// or https://)';
+            return l10n.serverUrlInvalid;
           }
           return null;
         },
@@ -130,24 +133,24 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
     ];
   }
 
-  List<Widget> _buildRegistrationStep() {
+  List<Widget> _buildRegistrationStep(AppLocalizations l10n) {
     return [
-      const Text(
-        'This device is not registered with the server. Please enter the registration password to continue.',
-        style: TextStyle(fontSize: 14, color: Colors.grey),
+      Text(
+        l10n.deviceRegistrationSubtitle,
+        style: const TextStyle(fontSize: 14, color: Colors.grey),
       ),
       const SizedBox(height: 16),
       TextFormField(
         controller: _passwordController,
-        decoration: const InputDecoration(
-          labelText: 'Registration Password',
-          hintText: 'Enter password',
-          border: OutlineInputBorder(),
-          helperText: 'Contact your server administrator for the password',
+        decoration: InputDecoration(
+          labelText: l10n.registrationPasswordLabel,
+          hintText: l10n.enterPasswordHint,
+          border: const OutlineInputBorder(),
+          helperText: l10n.contactServerAdminForPassword,
         ),
         validator: (value) {
           if (value == null || value.trim().isEmpty) {
-            return 'Password is required';
+            return l10n.passwordRequired;
           }
           return null;
         },
@@ -160,21 +163,21 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
     ];
   }
 
-  List<Widget> _buildActions() {
+  List<Widget> _buildActions(AppLocalizations l10n) {
     return [
       TextButton(
         onPressed: _isLoading ? null : () => Navigator.pop(context),
-        child: const Text('Cancel'),
+        child: Text(l10n.cancel),
       ),
       if (_currentStep == _DialogStep.urlInput)
         ElevatedButton(
           onPressed: _isLoading ? null : _handleUrlSubmit,
-          child: const Text('Next'),
+          child: Text(l10n.nextButton),
         )
       else
         ElevatedButton(
           onPressed: _isLoading ? null : _handleRegistration,
-          child: const Text('Register'),
+          child: Text(l10n.registerButton),
         ),
     ];
   }
@@ -208,8 +211,9 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
         _isLoading = false;
       });
     } catch (e) {
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
-        _errorMessage = 'Error checking device registration: $e';
+        _errorMessage = l10n.errorCheckingDeviceRegistration(e.toString());
         _isLoading = false;
       });
     }
@@ -260,11 +264,12 @@ class _ServerSettingsDialogState extends State<ServerSettingsDialog> {
         Navigator.pop(context, serverUrl);
       }
     } catch (e) {
+      final l10n = AppLocalizations.of(context)!;
       setState(() {
         if (e.toString().contains('Invalid registration password')) {
-          _errorMessage = 'Invalid password. Please try again.';
+          _errorMessage = l10n.invalidPasswordTryAgain;
         } else {
-          _errorMessage = 'Registration failed: $e';
+          _errorMessage = l10n.registrationFailed(e.toString());
         }
         _isLoading = false;
       });

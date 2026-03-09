@@ -788,4 +788,288 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String get backButton => 'Back';
+
+  @override
+  String get showMenu => 'Show menu';
+
+  @override
+  String get hideMenu => 'Hide menu';
+
+  @override
+  String get enterDrawingMode => 'Enter Drawing Mode';
+
+  @override
+  String get exitDrawingMode => 'Exit Drawing Mode';
+
+  @override
+  String get duration => 'Duration';
+
+  @override
+  String get hoursUnit => 'hours';
+
+  @override
+  String get minutesUnit => 'min';
+
+  @override
+  String get selectReason => 'Please select a reason';
+
+  @override
+  String get enterOtherReasonHint => 'Please enter another reason...';
+
+  @override
+  String get enterOtherReasonRequired => 'Please enter another reason';
+
+  @override
+  String get today => 'Today';
+
+  @override
+  String selectedTypesCount(Object count) {
+    return 'Selected: $count type(s)';
+  }
+
+  @override
+  String eventTypesOverflowSummary(
+    Object firstType,
+    Object remainingCount,
+    Object secondType,
+  ) {
+    return '$firstType, $secondType, +$remainingCount more';
+  }
+
+  @override
+  String errorInitializingServices(Object error) {
+    return 'Failed to initialize services. Some features may not work. Error: $error';
+  }
+
+  @override
+  String endTimeCleared(Object error) {
+    return 'End time cleared: $error';
+  }
+
+  @override
+  String get syncingEvent => 'Syncing event...';
+
+  @override
+  String get loadingEvent => 'Loading event...';
+
+  @override
+  String get viewEvent => 'View Event';
+
+  @override
+  String get unsyncedChangesLabel => 'Unsynced changes';
+
+  @override
+  String get offlineLabel => 'Offline';
+
+  @override
+  String get readOnlyModeTooltip =>
+      'Read-only mode: data editing and handwriting are disabled.';
+
+  @override
+  String get readOnlyModeLabel => 'Read-only mode';
+
+  @override
+  String daysBackwardTooltip(Object days) {
+    return '-$days days';
+  }
+
+  @override
+  String daysForwardTooltip(Object days) {
+    return '+$days days';
+  }
+
+  @override
+  String errorMessage(Object message) {
+    return 'Error: $message';
+  }
+
+  @override
+  String get dismiss => 'Dismiss';
+
+  @override
+  String get readOnlyBookModeActive =>
+      'Read mode active: view-only access, edit actions are disabled.';
+
+  @override
+  String get importFromServer => 'Import from Server';
+
+  @override
+  String get serverSettings => 'Server Settings';
+
+  @override
+  String get importBookFromServer => 'Import Book from Server';
+
+  @override
+  String get noServerBooksAvailable => 'No server books available';
+
+  @override
+  String bookUuidShort(Object id) {
+    return 'Book UUID: $id...';
+  }
+
+  @override
+  String ownerDeviceShort(Object id) {
+    return 'Owner Device: $id...';
+  }
+
+  @override
+  String get serverUrlHint => 'http://192.168.1.100:8080';
+
+  @override
+  String get cannotConnectToServerCheckUrl =>
+      'Cannot connect to server. Please check the URL.';
+
+  @override
+  String get configureServerUrlDescription =>
+      'Configure the server URL for server data operations.';
+
+  @override
+  String get serverUrlExample => 'Example: http://your-mac-ip:8080';
+
+  @override
+  String get enterPasswordHint => 'Enter password';
+
+  @override
+  String get contactServerAdminForPassword =>
+      'Contact your server administrator for the password';
+
+  @override
+  String errorCheckingDeviceRegistration(Object error) {
+    return 'Error checking device registration: $error';
+  }
+
+  @override
+  String get invalidPasswordTryAgain => 'Invalid password. Please try again.';
+
+  @override
+  String registrationFailed(Object error) {
+    return 'Registration failed: $error';
+  }
+
+  @override
+  String get bookPassword => 'Book Password';
+
+  @override
+  String get details => 'Details';
+
+  @override
+  String get success => 'Success';
+
+  @override
+  String get errorLabel => 'Error';
+
+  @override
+  String get warning => 'Warning';
+
+  @override
+  String get info => 'Info';
+
+  @override
+  String get messageCopiedToClipboard => 'Message copied to clipboard';
+
+  @override
+  String get copy => 'Copy';
+
+  @override
+  String get readOnlyCreateBookDisabled =>
+      'Read-only mode: book creation is disabled';
+
+  @override
+  String get readOnlyRenameDisabled => 'Read-only mode: rename is disabled';
+
+  @override
+  String get readOnlyArchiveDisabled => 'Read-only mode: archive is disabled';
+
+  @override
+  String get readOnlyDeleteDisabled => 'Read-only mode: delete is disabled';
+
+  @override
+  String get enterBookPassword => 'Enter Book Password';
+
+  @override
+  String get importBookPasswordRequiredDescription =>
+      'Required to import this book from server.';
+
+  @override
+  String get bookImportedSuccessfully => 'Book imported successfully';
+
+  @override
+  String get importFailedBookAlreadyExists =>
+      'Import failed: this book already exists on this device.';
+
+  @override
+  String get importFailedInvalidBookPassword =>
+      'Import failed: invalid book password.';
+
+  @override
+  String get importFailedApiBooksNotFound =>
+      'Import failed: /api/books not found on server. Update/restart server and verify URL in Server Settings.';
+
+  @override
+  String get importFailedInvalidDeviceCredentials =>
+      'Import failed: device credentials are invalid. Re-register this device in server setup.';
+
+  @override
+  String failedToLoadServerBooks(Object error) {
+    return 'Failed to load server books: $error';
+  }
+
+  @override
+  String serverUrlUpdated(Object url) {
+    return 'Server URL updated to: $url';
+  }
+
+  @override
+  String failedToUpdateServerUrl(Object error) {
+    return 'Failed to update server URL: $error';
+  }
+
+  @override
+  String cannotMoveEndTimeExceedsLimit(Object hour, Object minute) {
+    return 'Cannot move: end time would be $hour:$minute (exceeds 21:00)';
+  }
+
+  @override
+  String get eventsCannotSpanAcrossDates => 'Events cannot span across dates';
+
+  @override
+  String get testTimeDialogPlaceholder =>
+      'Test time dialog - feature extracted';
+
+  @override
+  String get otherEventType => 'Other';
+
+  @override
+  String chargeAmountSummary(Object received, Object total) {
+    return 'NT\$$received / NT\$$total';
+  }
+
+  @override
+  String get thisEventTime => 'This Event Time';
+
+  @override
+  String get thisEventFocus => 'This event focus (others diluted)';
+
+  @override
+  String get allItems => 'All items';
+
+  @override
+  String get highlighterWidth => 'Highlighter Width';
+
+  @override
+  String syncedOfflineNotes(Object total) {
+    return 'Synced $total offline notes';
+  }
+
+  @override
+  String syncPartialNotesFailed(Object failed, Object success, Object total) {
+    return 'Synced $success/$total notes. $failed failed - check server book availability';
+  }
+
+  @override
+  String get syncFailedTitle => 'Sync Failed';
+
+  @override
+  String get syncFailedDetail =>
+      'Some notes failed to sync because the book doesn\'t exist on the server yet.\\n\\nSolution: create or import the book from server first.';
 }

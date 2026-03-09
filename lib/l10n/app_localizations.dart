@@ -1466,6 +1466,472 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'返回'**
   String get backButton;
+
+  /// No description provided for @showMenu.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'顯示選單'**
+  String get showMenu;
+
+  /// No description provided for @hideMenu.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'隱藏選單'**
+  String get hideMenu;
+
+  /// No description provided for @enterDrawingMode.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'進入繪圖模式'**
+  String get enterDrawingMode;
+
+  /// No description provided for @exitDrawingMode.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'離開繪圖模式'**
+  String get exitDrawingMode;
+
+  /// No description provided for @duration.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'時長'**
+  String get duration;
+
+  /// No description provided for @hoursUnit.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'小時'**
+  String get hoursUnit;
+
+  /// No description provided for @minutesUnit.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'分'**
+  String get minutesUnit;
+
+  /// No description provided for @selectReason.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請選擇原因'**
+  String get selectReason;
+
+  /// No description provided for @enterOtherReasonHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請輸入其他原因...'**
+  String get enterOtherReasonHint;
+
+  /// No description provided for @enterOtherReasonRequired.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請輸入其他原因'**
+  String get enterOtherReasonRequired;
+
+  /// No description provided for @today.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'今天'**
+  String get today;
+
+  /// No description provided for @selectedTypesCount.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已選擇：{count} 種'**
+  String selectedTypesCount(Object count);
+
+  /// No description provided for @eventTypesOverflowSummary.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'{firstType}、{secondType}，另外 {remainingCount} 種'**
+  String eventTypesOverflowSummary(
+    Object firstType,
+    Object remainingCount,
+    Object secondType,
+  );
+
+  /// No description provided for @errorInitializingServices.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'初始化服務失敗，部分功能可能無法使用：{error}'**
+  String errorInitializingServices(Object error);
+
+  /// No description provided for @endTimeCleared.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已清除結束時間：{error}'**
+  String endTimeCleared(Object error);
+
+  /// No description provided for @syncingEvent.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在同步活動...'**
+  String get syncingEvent;
+
+  /// No description provided for @loadingEvent.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'正在載入活動...'**
+  String get loadingEvent;
+
+  /// No description provided for @viewEvent.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢視活動'**
+  String get viewEvent;
+
+  /// No description provided for @unsyncedChangesLabel.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'未同步變更'**
+  String get unsyncedChangesLabel;
+
+  /// No description provided for @offlineLabel.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'離線'**
+  String get offlineLabel;
+
+  /// No description provided for @readOnlyModeTooltip.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'唯讀模式：已停用資料編輯與手寫功能。'**
+  String get readOnlyModeTooltip;
+
+  /// No description provided for @readOnlyModeLabel.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'唯讀模式'**
+  String get readOnlyModeLabel;
+
+  /// No description provided for @daysBackwardTooltip.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'往前 {days} 天'**
+  String daysBackwardTooltip(Object days);
+
+  /// No description provided for @daysForwardTooltip.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'往後 {days} 天'**
+  String daysForwardTooltip(Object days);
+
+  /// No description provided for @errorMessage.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'錯誤：{message}'**
+  String errorMessage(Object message);
+
+  /// No description provided for @dismiss.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'關閉'**
+  String get dismiss;
+
+  /// No description provided for @readOnlyBookModeActive.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已啟用唯讀模式：僅可檢視，編輯功能已停用。'**
+  String get readOnlyBookModeActive;
+
+  /// No description provided for @importFromServer.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'從伺服器匯入'**
+  String get importFromServer;
+
+  /// No description provided for @serverSettings.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'伺服器設定'**
+  String get serverSettings;
+
+  /// No description provided for @importBookFromServer.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'從伺服器匯入簿冊'**
+  String get importBookFromServer;
+
+  /// No description provided for @noServerBooksAvailable.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'伺服器上沒有可匯入的簿冊'**
+  String get noServerBooksAvailable;
+
+  /// No description provided for @bookUuidShort.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'簿冊 UUID：{id}...'**
+  String bookUuidShort(Object id);
+
+  /// No description provided for @ownerDeviceShort.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'擁有者裝置：{id}...'**
+  String ownerDeviceShort(Object id);
+
+  /// No description provided for @serverUrlHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'http://192.168.1.100:8080'**
+  String get serverUrlHint;
+
+  /// No description provided for @cannotConnectToServerCheckUrl.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法連線到伺服器，請檢查網址。'**
+  String get cannotConnectToServerCheckUrl;
+
+  /// No description provided for @configureServerUrlDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'設定伺服器網址以進行伺服器資料操作。'**
+  String get configureServerUrlDescription;
+
+  /// No description provided for @serverUrlExample.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'範例：http://your-mac-ip:8080'**
+  String get serverUrlExample;
+
+  /// No description provided for @enterPasswordHint.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請輸入密碼'**
+  String get enterPasswordHint;
+
+  /// No description provided for @contactServerAdminForPassword.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請向伺服器管理員取得密碼'**
+  String get contactServerAdminForPassword;
+
+  /// No description provided for @errorCheckingDeviceRegistration.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'檢查裝置註冊狀態時發生錯誤：{error}'**
+  String errorCheckingDeviceRegistration(Object error);
+
+  /// No description provided for @invalidPasswordTryAgain.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'密碼錯誤，請再試一次。'**
+  String get invalidPasswordTryAgain;
+
+  /// No description provided for @registrationFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'註冊失敗：{error}'**
+  String registrationFailed(Object error);
+
+  /// No description provided for @bookPassword.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'簿冊密碼'**
+  String get bookPassword;
+
+  /// No description provided for @details.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'詳情'**
+  String get details;
+
+  /// No description provided for @success.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'成功'**
+  String get success;
+
+  /// No description provided for @errorLabel.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'錯誤'**
+  String get errorLabel;
+
+  /// No description provided for @warning.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'警告'**
+  String get warning;
+
+  /// No description provided for @info.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'資訊'**
+  String get info;
+
+  /// No description provided for @messageCopiedToClipboard.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'訊息已複製到剪貼簿'**
+  String get messageCopiedToClipboard;
+
+  /// No description provided for @copy.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'複製'**
+  String get copy;
+
+  /// No description provided for @readOnlyCreateBookDisabled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'唯讀模式：無法建立簿冊'**
+  String get readOnlyCreateBookDisabled;
+
+  /// No description provided for @readOnlyRenameDisabled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'唯讀模式：無法重新命名簿冊'**
+  String get readOnlyRenameDisabled;
+
+  /// No description provided for @readOnlyArchiveDisabled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'唯讀模式：無法封存簿冊'**
+  String get readOnlyArchiveDisabled;
+
+  /// No description provided for @readOnlyDeleteDisabled.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'唯讀模式：無法刪除簿冊'**
+  String get readOnlyDeleteDisabled;
+
+  /// No description provided for @enterBookPassword.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'輸入簿冊密碼'**
+  String get enterBookPassword;
+
+  /// No description provided for @importBookPasswordRequiredDescription.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入此簿冊需要密碼。'**
+  String get importBookPasswordRequiredDescription;
+
+  /// No description provided for @bookImportedSuccessfully.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'簿冊匯入成功'**
+  String get bookImportedSuccessfully;
+
+  /// No description provided for @importFailedBookAlreadyExists.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入失敗：此裝置已存在該簿冊。'**
+  String get importFailedBookAlreadyExists;
+
+  /// No description provided for @importFailedInvalidBookPassword.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入失敗：簿冊密碼錯誤。'**
+  String get importFailedInvalidBookPassword;
+
+  /// No description provided for @importFailedApiBooksNotFound.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入失敗：伺服器找不到 /api/books。請更新或重啟伺服器，並確認伺服器設定中的網址。'**
+  String get importFailedApiBooksNotFound;
+
+  /// No description provided for @importFailedInvalidDeviceCredentials.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'匯入失敗：裝置憑證無效。請在伺服器設定中重新註冊此裝置。'**
+  String get importFailedInvalidDeviceCredentials;
+
+  /// No description provided for @failedToLoadServerBooks.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'載入伺服器簿冊失敗：{error}'**
+  String failedToLoadServerBooks(Object error);
+
+  /// No description provided for @serverUrlUpdated.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'伺服器網址已更新為：{url}'**
+  String serverUrlUpdated(Object url);
+
+  /// No description provided for @failedToUpdateServerUrl.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'更新伺服器網址失敗：{error}'**
+  String failedToUpdateServerUrl(Object error);
+
+  /// No description provided for @cannotMoveEndTimeExceedsLimit.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'無法移動：結束時間將為 {hour}:{minute}（超過 21:00）'**
+  String cannotMoveEndTimeExceedsLimit(Object hour, Object minute);
+
+  /// No description provided for @eventsCannotSpanAcrossDates.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'活動不可跨日期'**
+  String get eventsCannotSpanAcrossDates;
+
+  /// No description provided for @testTimeDialogPlaceholder.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'測試時間對話框（功能已拆分）'**
+  String get testTimeDialogPlaceholder;
+
+  /// No description provided for @otherEventType.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'其他'**
+  String get otherEventType;
+
+  /// No description provided for @chargeAmountSummary.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'NT\${received} / NT\${total}'**
+  String chargeAmountSummary(Object received, Object total);
+
+  /// No description provided for @thisEventTime.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'此次活動時間'**
+  String get thisEventTime;
+
+  /// No description provided for @thisEventFocus.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'聚焦此次活動（其他淡化）'**
+  String get thisEventFocus;
+
+  /// No description provided for @allItems.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'全部項目'**
+  String get allItems;
+
+  /// No description provided for @highlighterWidth.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'螢光筆寬度'**
+  String get highlighterWidth;
+
+  /// No description provided for @syncedOfflineNotes.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已同步 {total} 筆離線筆記'**
+  String syncedOfflineNotes(Object total);
+
+  /// No description provided for @syncPartialNotesFailed.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已同步 {success}/{total} 筆筆記，{failed} 筆失敗，請確認伺服器上已有該簿冊'**
+  String syncPartialNotesFailed(Object failed, Object success, Object total);
+
+  /// No description provided for @syncFailedTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'同步失敗'**
+  String get syncFailedTitle;
+
+  /// No description provided for @syncFailedDetail.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'部分筆記同步失敗，可能因為伺服器尚未有此簿冊。\\n\\n解決方式：請先在伺服器建立或匯入該簿冊。'**
+  String get syncFailedDetail;
 }
 
 class _AppLocalizationsDelegate

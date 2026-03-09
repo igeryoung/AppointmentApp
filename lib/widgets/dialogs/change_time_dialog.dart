@@ -50,27 +50,36 @@ class ChangeTimeDialog {
 
         return StatefulBuilder(
           builder: (context, setState) {
-            final showAdditionalField = ChangeReasons.requiresAdditionalInput(selectedReason);
-            final bool hasValidReason = selectedReason != null &&
-                (!showAdditionalField || additionalTextController.text.trim().isNotEmpty);
+            final showAdditionalField = ChangeReasons.requiresAdditionalInput(
+              selectedReason,
+            );
+            final bool hasValidReason =
+                selectedReason != null &&
+                (!showAdditionalField ||
+                    additionalTextController.text.trim().isNotEmpty);
 
             // Calculate end time from start time + duration
             DateTime? calculatedEndTime;
             if (durationHours > 0 || durationMinutes > 0) {
-              calculatedEndTime = newStartTime.add(Duration(
-                hours: durationHours,
-                minutes: durationMinutes,
-              ));
+              calculatedEndTime = newStartTime.add(
+                Duration(hours: durationHours, minutes: durationMinutes),
+              );
             }
 
             // Validate time range
-            final timeError = EventTimeValidator.validateTimeRange(newStartTime, calculatedEndTime);
+            final timeError = EventTimeValidator.validateTimeRange(
+              newStartTime,
+              calculatedEndTime,
+            );
             final bool hasValidTime = timeError == null;
 
             return AlertDialog(
               title: Text(
                 l10n.changeEventTimeTitle,
-                style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               contentPadding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               content: SingleChildScrollView(
@@ -98,48 +107,70 @@ class ChangeTimeDialog {
                           // Start Time
                           Row(
                             children: [
-                              Icon(Icons.access_time, size: 20, color: Colors.blue[700]),
+                              Icon(
+                                Icons.access_time,
+                                size: 20,
+                                color: Colors.blue[700],
+                              ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'Start Time',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              Text(
+                                l10n.startTime,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           InkWell(
                             onTap: () async {
-                              final result = await DateTimePickerUtils.pickDateTime(
-                                context,
-                                initialDateTime: newStartTime,
-                                validateBusinessHours: true,
-                                isEndTime: false,
-                              );
+                              final result =
+                                  await DateTimePickerUtils.pickDateTime(
+                                    context,
+                                    initialDateTime: newStartTime,
+                                    validateBusinessHours: true,
+                                    isEndTime: false,
+                                  );
                               if (result == null) return;
 
                               setState(() {
                                 newStartTime = result;
                                 // Adjust duration if it would exceed end of day
-                                final maxMinutes = EventTimeValidator.getMaxDurationMinutes(result);
-                                final currentDurationMinutes = durationHours * 60 + durationMinutes;
+                                final maxMinutes =
+                                    EventTimeValidator.getMaxDurationMinutes(
+                                      result,
+                                    );
+                                final currentDurationMinutes =
+                                    durationHours * 60 + durationMinutes;
                                 if (currentDurationMinutes > maxMinutes) {
                                   durationHours = maxMinutes ~/ 60;
-                                  durationMinutes = ((maxMinutes % 60) ~/ 15) * 15;
+                                  durationMinutes =
+                                      ((maxMinutes % 60) ~/ 15) * 15;
                                 }
                               });
                             },
                             borderRadius: BorderRadius.circular(8),
                             child: Container(
                               width: double.infinity,
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 12,
+                              ),
                               decoration: BoxDecoration(
                                 color: Colors.white,
                                 borderRadius: BorderRadius.circular(8),
                                 border: Border.all(color: Colors.grey[300]!),
                               ),
                               child: Text(
-                                DateFormat('MMM d, yyyy • HH:mm', Localizations.localeOf(context).toString()).format(newStartTime),
-                                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                                DateFormat(
+                                  'MMM d, yyyy • HH:mm',
+                                  Localizations.localeOf(context).toString(),
+                                ).format(newStartTime),
+                                style: const TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w500,
+                                ),
                               ),
                             ),
                           ),
@@ -151,11 +182,18 @@ class ChangeTimeDialog {
                           // Duration
                           Row(
                             children: [
-                              Icon(Icons.timer_outlined, size: 20, color: Colors.orange[700]),
+                              Icon(
+                                Icons.timer_outlined,
+                                size: 20,
+                                color: Colors.orange[700],
+                              ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'Duration',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              Text(
+                                l10n.duration,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                               const Spacer(),
                               if (durationHours > 0 || durationMinutes > 0)
@@ -165,11 +203,18 @@ class ChangeTimeDialog {
                                     durationMinutes = 0;
                                   }),
                                   icon: const Icon(Icons.clear, size: 16),
-                                  label: const Text('Clear', style: TextStyle(fontSize: 12)),
+                                  label: Text(
+                                    l10n.clear,
+                                    style: const TextStyle(fontSize: 12),
+                                  ),
                                   style: TextButton.styleFrom(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 8,
+                                      vertical: 4,
+                                    ),
                                     minimumSize: Size.zero,
-                                    tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                                    tapTargetSize:
+                                        MaterialTapTargetSize.shrinkWrap,
                                   ),
                                 ),
                             ],
@@ -179,20 +224,29 @@ class ChangeTimeDialog {
                           Builder(
                             builder: (context) {
                               // Calculate max duration based on start time
-                              final maxDurationMinutes = EventTimeValidator.getMaxDurationMinutes(newStartTime);
+                              final maxDurationMinutes =
+                                  EventTimeValidator.getMaxDurationMinutes(
+                                    newStartTime,
+                                  );
                               final maxHours = maxDurationMinutes ~/ 60;
 
                               // Clamp current selection to valid range
-                              final clampedHours = durationHours.clamp(0, maxHours);
+                              final clampedHours = durationHours.clamp(
+                                0,
+                                maxHours,
+                              );
 
                               // Calculate available minutes for the selected hours
                               final isAtMaxHours = clampedHours == maxHours;
                               final maxMinutesForHour = isAtMaxHours
                                   ? ((maxDurationMinutes % 60) ~/ 15) * 15
                                   : 45;
-                              final availableMinutes = [0, 15, 30, 45]
-                                  .where((m) => m <= maxMinutesForHour)
-                                  .toList();
+                              final availableMinutes = [
+                                0,
+                                15,
+                                30,
+                                45,
+                              ].where((m) => m <= maxMinutesForHour).toList();
 
                               return Container(
                                 height: 150,
@@ -208,7 +262,10 @@ class ChangeTimeDialog {
                                     Expanded(
                                       flex: 2,
                                       child: CupertinoPicker(
-                                        scrollController: FixedExtentScrollController(initialItem: clampedHours),
+                                        scrollController:
+                                            FixedExtentScrollController(
+                                              initialItem: clampedHours,
+                                            ),
                                         itemExtent: 36,
                                         squeeze: 1.2,
                                         diameterRatio: 1.5,
@@ -216,8 +273,11 @@ class ChangeTimeDialog {
                                           setState(() {
                                             durationHours = index;
                                             // If at max hours, clamp minutes
-                                            if (index == maxHours && durationMinutes > maxMinutesForHour) {
-                                              durationMinutes = maxMinutesForHour;
+                                            if (index == maxHours &&
+                                                durationMinutes >
+                                                    maxMinutesForHour) {
+                                              durationMinutes =
+                                                  maxMinutesForHour;
                                             }
                                           });
                                         },
@@ -231,23 +291,28 @@ class ChangeTimeDialog {
                                             ),
                                           ),
                                         ),
-                                        children: List<Widget>.generate(maxHours + 1, (int index) {
-                                          return Center(
-                                            child: Text(
-                                              '$index',
-                                              style: const TextStyle(
-                                                fontSize: 24,
-                                                fontWeight: FontWeight.w400,
+                                        children: List<Widget>.generate(
+                                          maxHours + 1,
+                                          (int index) {
+                                            return Center(
+                                              child: Text(
+                                                '$index',
+                                                style: const TextStyle(
+                                                  fontSize: 24,
+                                                  fontWeight: FontWeight.w400,
+                                                ),
                                               ),
-                                            ),
-                                          );
-                                        }),
+                                            );
+                                          },
+                                        ),
                                       ),
                                     ),
                                     Padding(
-                                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                                      padding: const EdgeInsets.symmetric(
+                                        horizontal: 8,
+                                      ),
                                       child: Text(
-                                        'hours',
+                                        l10n.hoursUnit,
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w500,
@@ -259,15 +324,27 @@ class ChangeTimeDialog {
                                     Expanded(
                                       flex: 2,
                                       child: CupertinoPicker(
-                                        scrollController: FixedExtentScrollController(
-                                          initialItem: availableMinutes.indexOf(durationMinutes.clamp(0, maxMinutesForHour)).clamp(0, availableMinutes.length - 1),
-                                        ),
+                                        scrollController:
+                                            FixedExtentScrollController(
+                                              initialItem: availableMinutes
+                                                  .indexOf(
+                                                    durationMinutes.clamp(
+                                                      0,
+                                                      maxMinutesForHour,
+                                                    ),
+                                                  )
+                                                  .clamp(
+                                                    0,
+                                                    availableMinutes.length - 1,
+                                                  ),
+                                            ),
                                         itemExtent: 36,
                                         squeeze: 1.2,
                                         diameterRatio: 1.5,
                                         onSelectedItemChanged: (int index) {
                                           setState(() {
-                                            durationMinutes = availableMinutes[index];
+                                            durationMinutes =
+                                                availableMinutes[index];
                                           });
                                         },
                                         selectionOverlay: Container(
@@ -280,7 +357,9 @@ class ChangeTimeDialog {
                                             ),
                                           ),
                                         ),
-                                        children: availableMinutes.map((int minute) {
+                                        children: availableMinutes.map((
+                                          int minute,
+                                        ) {
                                           return Center(
                                             child: Text(
                                               '$minute',
@@ -294,9 +373,12 @@ class ChangeTimeDialog {
                                       ),
                                     ),
                                     Padding(
-                                      padding: const EdgeInsets.only(right: 16, left: 8),
+                                      padding: const EdgeInsets.only(
+                                        right: 16,
+                                        left: 8,
+                                      ),
                                       child: Text(
-                                        'min',
+                                        l10n.minutesUnit,
                                         style: TextStyle(
                                           fontSize: 14,
                                           fontWeight: FontWeight.w500,
@@ -317,33 +399,52 @@ class ChangeTimeDialog {
                           // End Time (styled like Start Time)
                           Row(
                             children: [
-                              Icon(Icons.event_available, size: 20, color: Colors.blue[700]),
+                              Icon(
+                                Icons.event_available,
+                                size: 20,
+                                color: Colors.blue[700],
+                              ),
                               const SizedBox(width: 8),
-                              const Text(
-                                'End Time',
-                                style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+                              Text(
+                                l10n.endTime,
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ],
                           ),
                           const SizedBox(height: 8),
                           Container(
                             width: double.infinity,
-                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 12,
+                            ),
                             decoration: BoxDecoration(
                               color: Colors.white,
                               borderRadius: BorderRadius.circular(8),
                               border: Border.all(
-                                color: timeError != null ? Colors.red : Colors.grey[300]!,
+                                color: timeError != null
+                                    ? Colors.red
+                                    : Colors.grey[300]!,
                               ),
                             ),
                             child: Text(
                               calculatedEndTime != null
-                                  ? DateFormat('MMM d, yyyy • HH:mm', Localizations.localeOf(context).toString()).format(calculatedEndTime)
-                                  : 'No end time (open-ended)',
+                                  ? DateFormat(
+                                      'MMM d, yyyy • HH:mm',
+                                      Localizations.localeOf(
+                                        context,
+                                      ).toString(),
+                                    ).format(calculatedEndTime)
+                                  : l10n.openEnded,
                               style: TextStyle(
                                 fontSize: 15,
                                 fontWeight: FontWeight.w500,
-                                color: calculatedEndTime != null ? Colors.black87 : Colors.grey[500],
+                                color: calculatedEndTime != null
+                                    ? Colors.black87
+                                    : Colors.grey[500],
                               ),
                             ),
                           ),
@@ -367,13 +468,16 @@ class ChangeTimeDialog {
                     // Reason Section
                     Text(
                       l10n.reasonForTimeChangeField,
-                      style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                     const SizedBox(height: 10),
                     DropdownButtonFormField<String>(
                       value: selectedReason,
                       decoration: InputDecoration(
-                        hintText: '請選擇原因',
+                        hintText: l10n.selectReason,
                         hintStyle: TextStyle(color: Colors.grey[500]),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
@@ -385,19 +489,28 @@ class ChangeTimeDialog {
                         ),
                         focusedBorder: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(8),
-                          borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                          borderSide: BorderSide(
+                            color: Theme.of(context).primaryColor,
+                            width: 2,
+                          ),
                         ),
                         errorText: reasonErrorMessage,
                         filled: true,
                         fillColor: Colors.white,
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 14,
+                        ),
                       ),
                       isExpanded: true,
                       icon: const Icon(Icons.arrow_drop_down),
                       items: ChangeReasons.allReasons.map((reason) {
                         return DropdownMenuItem(
                           value: reason,
-                          child: Text(reason, style: const TextStyle(fontSize: 14)),
+                          child: Text(
+                            reason,
+                            style: const TextStyle(fontSize: 14),
+                          ),
                         );
                       }).toList(),
                       onChanged: (value) {
@@ -417,7 +530,7 @@ class ChangeTimeDialog {
                       TextField(
                         controller: additionalTextController,
                         decoration: InputDecoration(
-                          hintText: '請輸入其他原因...',
+                          hintText: l10n.enterOtherReasonHint,
                           hintStyle: TextStyle(color: Colors.grey[500]),
                           border: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
@@ -429,11 +542,17 @@ class ChangeTimeDialog {
                           ),
                           focusedBorder: OutlineInputBorder(
                             borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(color: Theme.of(context).primaryColor, width: 2),
+                            borderSide: BorderSide(
+                              color: Theme.of(context).primaryColor,
+                              width: 2,
+                            ),
                           ),
                           filled: true,
                           fillColor: Colors.white,
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
                         maxLines: 2,
                         autofocus: true,
@@ -450,7 +569,10 @@ class ChangeTimeDialog {
                 TextButton(
                   onPressed: () => Navigator.pop(context, null),
                   style: TextButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -462,40 +584,51 @@ class ChangeTimeDialog {
                 ),
                 const SizedBox(width: 8),
                 ElevatedButton(
-                  onPressed: (hasValidReason && hasValidTime) ? () {
-                    // Validation
-                    if (selectedReason == null) {
-                      setState(() {
-                        reasonErrorMessage = '請選擇原因';
-                      });
-                      return;
-                    }
+                  onPressed: (hasValidReason && hasValidTime)
+                      ? () {
+                          // Validation
+                          if (selectedReason == null) {
+                            setState(() {
+                              reasonErrorMessage = l10n.selectReason;
+                            });
+                            return;
+                          }
 
-                    // Format the reason based on selection
-                    String finalReason;
-                    if (showAdditionalField) {
-                      final additionalText = additionalTextController.text.trim();
-                      if (additionalText.isEmpty) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('請輸入其他原因')),
-                        );
-                        return;
-                      }
-                      finalReason = ChangeReasons.formatReason(selectedReason!, additionalText);
-                    } else {
-                      finalReason = selectedReason!;
-                    }
+                          // Format the reason based on selection
+                          String finalReason;
+                          if (showAdditionalField) {
+                            final additionalText = additionalTextController.text
+                                .trim();
+                            if (additionalText.isEmpty) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(l10n.enterOtherReasonRequired),
+                                ),
+                              );
+                              return;
+                            }
+                            finalReason = ChangeReasons.formatReason(
+                              selectedReason!,
+                              additionalText,
+                            );
+                          } else {
+                            finalReason = selectedReason!;
+                          }
 
-                    Navigator.pop(context, {
-                      'startTime': newStartTime,
-                      'endTime': calculatedEndTime,
-                      'reason': finalReason,
-                    });
-                  } : null,
+                          Navigator.pop(context, {
+                            'startTime': newStartTime,
+                            'endTime': calculatedEndTime,
+                            'reason': finalReason,
+                          });
+                        }
+                      : null,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: Theme.of(context).primaryColor,
                     foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 24,
+                      vertical: 12,
+                    ),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
@@ -505,7 +638,10 @@ class ChangeTimeDialog {
                   ),
                   child: Text(
                     l10n.changeTimeButton,
-                    style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600),
+                    style: const TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
                 ),
               ],
@@ -523,5 +659,4 @@ class ChangeTimeDialog {
       reason: result['reason'],
     );
   }
-
 }

@@ -341,9 +341,21 @@ class _ScheduleScreenState extends State<ScheduleScreen>
     _foregroundSyncTimer = null;
   }
 
+  bool _isServerConnectionError(String message) {
+    final normalized = message.toLowerCase();
+    return normalized.contains('server connection is required') ||
+        normalized.contains('cannot connect to server') ||
+        normalized.contains('failed to load events');
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final scheduleState = context.watch<ScheduleCubit>().state;
+    final showServerWarning =
+        (scheduleState is ScheduleLoaded && scheduleState.isOffline) ||
+        (scheduleState is ScheduleError &&
+            _isServerConnectionError(scheduleState.message));
 
     return AnimatedBuilder(
       animation: _controller,
@@ -391,7 +403,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                               minHeight: 28,
                             ),
                             padding: EdgeInsets.zero,
-                            tooltip: '-180 days',
+                            tooltip: l10n.daysBackwardTooltip(180),
                           ),
                           IconButton(
                             onPressed: () => _controller.dateService
@@ -409,7 +421,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                               minHeight: 28,
                             ),
                             padding: EdgeInsets.zero,
-                            tooltip: '-90 days',
+                            tooltip: l10n.daysBackwardTooltip(90),
                           ),
                           BlocBuilder<ScheduleCubit, ScheduleState>(
                             builder: (context, state) {
@@ -430,7 +442,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                                   minHeight: 28,
                                 ),
                                 padding: EdgeInsets.zero,
-                                tooltip: '-$windowSize days',
+                                tooltip: l10n.daysBackwardTooltip(windowSize),
                               );
                             },
                           ),
@@ -472,7 +484,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                                   minHeight: 28,
                                 ),
                                 padding: EdgeInsets.zero,
-                                tooltip: '+$windowSize days',
+                                tooltip: l10n.daysForwardTooltip(windowSize),
                               );
                             },
                           ),
@@ -492,7 +504,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                               minHeight: 28,
                             ),
                             padding: EdgeInsets.zero,
-                            tooltip: '+90 days',
+                            tooltip: l10n.daysForwardTooltip(90),
                           ),
                           IconButton(
                             onPressed: () =>
@@ -510,7 +522,7 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                               minHeight: 28,
                             ),
                             padding: EdgeInsets.zero,
-                            tooltip: '+180 days',
+                            tooltip: l10n.daysForwardTooltip(180),
                           ),
                         ],
                       ),
@@ -589,11 +601,12 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                               ? state.showDrawing
                               : true;
                           if (widget.isReadOnlyMode) {
-                            return const Padding(
-                              padding: EdgeInsets.symmetric(horizontal: 6),
+                            return Padding(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 6,
+                              ),
                               child: Tooltip(
-                                message:
-                                    'Read-only mode: editing, drag, and handwriting are disabled.',
+                                message: l10n.readOnlyModeTooltip,
                                 child: Icon(Icons.lock_outline, size: 20),
                               ),
                             );
@@ -620,26 +633,70 @@ class _ScheduleScreenState extends State<ScheduleScreen>
                         tooltip: l10n.goToToday,
                       ),
                     ],
+                    bottom: showServerWarning
+                        ? PreferredSize(
+                            preferredSize: const Size.fromHeight(36),
+                            child: Container(
+                              width: double.infinity,
+                              color: Colors.orange.shade100,
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 8,
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    Icons.wifi_off,
+                                    size: 16,
+                                    color: Colors.orange.shade900,
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Expanded(
+                                    child: Text(
+                                      l10n.cannotConnectToServerCheckUrl,
+                                      style: TextStyle(
+                                        color: Colors.orange.shade900,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          )
+                        : null,
                   ),
                   body: BlocBuilder<ScheduleCubit, ScheduleState>(
                     builder: (context, state) {
                       if (state is ScheduleError) {
+                        final isServerError = _isServerConnectionError(
+                          state.message,
+                        );
                         return Center(
                           child: Column(
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
-                              const Icon(
-                                Icons.error_outline,
+                              Icon(
+                                isServerError
+                                    ? Icons.wifi_off
+                                    : Icons.error_outline,
                                 size: 48,
-                                color: Colors.red,
+                                color: isServerError
+                                    ? Colors.orange
+                                    : Colors.red,
                               ),
                               const SizedBox(height: 16),
-                              Text('Error: ${state.message}'),
+                              Text(
+                                isServerError
+                                    ? l10n.cannotConnectToServerCheckUrl
+                                    : l10n.errorMessage(state.message),
+                              ),
                               const SizedBox(height: 16),
                               ElevatedButton(
                                 onPressed: () =>
                                     context.read<ScheduleCubit>().loadEvents(),
-                                child: const Text('Retry'),
+                                child: Text(l10n.retry),
                               ),
                             ],
                           ),

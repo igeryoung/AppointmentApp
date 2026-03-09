@@ -70,7 +70,7 @@ class BookListController extends ChangeNotifier {
         _state.copyWith(
           isLoading: false,
           isReadOnlyDevice: false,
-          errorMessage: 'Error loading books: $e',
+          errorMessage: '載入簿冊失敗：$e',
         ),
       );
     }
@@ -79,10 +79,8 @@ class BookListController extends ChangeNotifier {
   /// Show create book dialog and create book if confirmed
   Future<void> promptCreate(BuildContext context) async {
     if (_state.isReadOnlyDevice) {
-      SnackBarUtils.showInfo(
-        context,
-        'Read-only mode: book creation is disabled',
-      );
+      final l10n = AppLocalizations.of(context)!;
+      SnackBarUtils.showInfo(context, l10n.readOnlyCreateBookDisabled);
       return;
     }
     final input = await CreateBookDialog.show(context);
@@ -119,7 +117,8 @@ class BookListController extends ChangeNotifier {
   /// Show rename dialog and rename book if confirmed
   Future<void> promptRename(BuildContext context, Book book) async {
     if (_state.isReadOnlyDevice) {
-      SnackBarUtils.showInfo(context, 'Read-only mode: rename is disabled');
+      final l10n = AppLocalizations.of(context)!;
+      SnackBarUtils.showInfo(context, l10n.readOnlyRenameDisabled);
       return;
     }
     final newName = await RenameBookDialog.show(context, book: book);
@@ -150,7 +149,8 @@ class BookListController extends ChangeNotifier {
   /// Show archive confirmation and archive book if confirmed
   Future<void> promptArchive(BuildContext context, Book book) async {
     if (_state.isReadOnlyDevice) {
-      SnackBarUtils.showInfo(context, 'Read-only mode: archive is disabled');
+      final l10n = AppLocalizations.of(context)!;
+      SnackBarUtils.showInfo(context, l10n.readOnlyArchiveDisabled);
       return;
     }
     final confirmed = await ArchiveBookConfirmDialog.show(context, book: book);
@@ -180,7 +180,8 @@ class BookListController extends ChangeNotifier {
   /// Show delete confirmation and delete book if confirmed
   Future<void> promptDelete(BuildContext context, Book book) async {
     if (_state.isReadOnlyDevice) {
-      SnackBarUtils.showInfo(context, 'Read-only mode: delete is disabled');
+      final l10n = AppLocalizations.of(context)!;
+      SnackBarUtils.showInfo(context, l10n.readOnlyDeleteDisabled);
       return;
     }
     final confirmed = await DeleteBookConfirmDialog.show(context, book: book);
@@ -228,6 +229,7 @@ class BookListController extends ChangeNotifier {
 
   /// Show server import flow
   Future<void> openImportFromServerFlow(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     _setState(_state.copyWith(isLoading: true));
     try {
       final serverBooks = await repo.listServerBooks();
@@ -235,7 +237,7 @@ class BookListController extends ChangeNotifier {
 
       if (serverBooks.isEmpty) {
         if (context.mounted) {
-          SnackBarUtils.showInfo(context, 'No server books available');
+          SnackBarUtils.showInfo(context, l10n.noServerBooksAvailable);
         }
         return;
       }
@@ -249,8 +251,8 @@ class BookListController extends ChangeNotifier {
         if (selectedBookUuid != null && selectedBookUuid.isNotEmpty) {
           final password = await BookPasswordDialog.show(
             context,
-            title: 'Enter Book Password',
-            description: 'Required to import this book from server.',
+            title: l10n.enterBookPassword,
+            description: l10n.importBookPasswordRequiredDescription,
           );
           if (password == null || password.isEmpty) {
             return;
@@ -263,7 +265,7 @@ class BookListController extends ChangeNotifier {
         }
       }
     } catch (e) {
-      final message = _buildImportErrorMessage(e);
+      final message = _buildImportErrorMessage(e, l10n);
       _setState(_state.copyWith(isLoading: false, errorMessage: message));
       if (context.mounted) {
         SnackBarUtils.showError(context, message);
@@ -277,6 +279,7 @@ class BookListController extends ChangeNotifier {
     String bookUuid, {
     required String password,
   }) async {
+    final l10n = AppLocalizations.of(context)!;
     _setState(_state.copyWith(isLoading: true));
     try {
       await repo.pullBookFromServer(
@@ -289,13 +292,13 @@ class BookListController extends ChangeNotifier {
       await _loadBooks();
 
       if (context.mounted) {
-        SnackBarUtils.showSuccess(context, 'Book imported successfully');
+        SnackBarUtils.showSuccess(context, l10n.bookImportedSuccessfully);
       }
     } catch (e) {
       final isPasswordError =
           _isInvalidBookPasswordError(e) || _isForbiddenImportError(e);
       final isAlreadyExistsError = _isBookAlreadyExistsError(e);
-      final message = _buildImportErrorMessage(e);
+      final message = _buildImportErrorMessage(e, l10n);
       _setState(
         _state.copyWith(
           isLoading: false,
@@ -384,23 +387,23 @@ class BookListController extends ChangeNotifier {
         text.contains('already exists locally');
   }
 
-  String _buildImportErrorMessage(Object error) {
+  String _buildImportErrorMessage(Object error, AppLocalizations l10n) {
     if (_isBookAlreadyExistsError(error)) {
-      return 'Import failed: this book already exists on this device.';
+      return l10n.importFailedBookAlreadyExists;
     }
     if (_isInvalidBookPasswordError(error) || _isForbiddenImportError(error)) {
-      return 'Import failed: invalid book password.';
+      return l10n.importFailedInvalidBookPassword;
     }
     if (error is ApiException) {
       final code = error.statusCode;
       if (code == 404) {
-        return 'Import failed: /api/books not found on server. Update/restart server and verify URL in Server Settings.';
+        return l10n.importFailedApiBooksNotFound;
       }
       if (code == 401 || code == 403) {
-        return 'Import failed: device credentials are invalid. Re-register this device in server setup.';
+        return l10n.importFailedInvalidDeviceCredentials;
       }
     }
-    return 'Failed to load server books: $error';
+    return l10n.failedToLoadServerBooks(error.toString());
   }
 
   /// Clear current error state.
@@ -410,6 +413,7 @@ class BookListController extends ChangeNotifier {
 
   /// Show server settings flow
   Future<void> openServerSettingsFlow(BuildContext context) async {
+    final l10n = AppLocalizations.of(context)!;
     final currentUrl = await serverConfig.getUrlOrDefault();
 
     if (!context.mounted) return;
@@ -428,11 +432,14 @@ class BookListController extends ChangeNotifier {
         await registerContentServices(apiClient);
 
         if (context.mounted) {
-          SnackBarUtils.showSuccess(context, 'Server URL updated to: $newUrl');
+          SnackBarUtils.showSuccess(context, l10n.serverUrlUpdated(newUrl));
         }
       } catch (e) {
         if (context.mounted) {
-          SnackBarUtils.showError(context, 'Failed to update server URL: $e');
+          SnackBarUtils.showError(
+            context,
+            l10n.failedToUpdateServerUrl(e.toString()),
+          );
         }
       }
     }

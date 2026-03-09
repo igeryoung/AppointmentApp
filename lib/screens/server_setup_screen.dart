@@ -81,7 +81,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                       controller: _urlController,
                       decoration: InputDecoration(
                         labelText: l10n.serverUrlLabel,
-                        hintText: 'http://192.168.1.100:8080',
+                        hintText: l10n.serverUrlHint,
                         border: const OutlineInputBorder(),
                         prefixIcon: const Icon(Icons.link),
                       ),
@@ -224,7 +224,9 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     try {
       final isHealthy = await apiClient.healthCheck();
       if (!isHealthy) {
-        throw Exception('Cannot connect to server. Please check the URL.');
+        throw Exception(
+          AppLocalizations.of(context)!.cannotConnectToServerCheckUrl,
+        );
       }
 
       // Server is reachable, move to registration step

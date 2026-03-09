@@ -6,20 +6,20 @@ import '../../../l10n/app_localizations.dart';
 class BookPasswordDialog extends StatefulWidget {
   final String title;
   final String? description;
-  final String confirmLabel;
+  final String? confirmLabel;
 
   const BookPasswordDialog({
     super.key,
     required this.title,
     this.description,
-    this.confirmLabel = 'Confirm',
+    this.confirmLabel,
   });
 
   static Future<String?> show(
     BuildContext context, {
     required String title,
     String? description,
-    String confirmLabel = 'Confirm',
+    String? confirmLabel,
   }) {
     return showDialog<String>(
       context: context,
@@ -67,7 +67,7 @@ class _BookPasswordDialogState extends State<BookPasswordDialog> {
               controller: _passwordController,
               obscureText: _obscurePassword,
               decoration: InputDecoration(
-                labelText: 'Book Password',
+                labelText: l10n.bookPassword,
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: Icon(
@@ -95,7 +95,10 @@ class _BookPasswordDialogState extends State<BookPasswordDialog> {
           onPressed: () => Navigator.pop(context),
           child: Text(l10n.cancel),
         ),
-        ElevatedButton(onPressed: _submit, child: Text(widget.confirmLabel)),
+        ElevatedButton(
+          onPressed: _submit,
+          child: Text(widget.confirmLabel ?? l10n.confirm),
+        ),
       ],
     );
   }

@@ -782,6 +782,280 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String get backButton => '返回';
+
+  @override
+  String get showMenu => '显示菜单';
+
+  @override
+  String get hideMenu => '隐藏菜单';
+
+  @override
+  String get enterDrawingMode => '进入绘图模式';
+
+  @override
+  String get exitDrawingMode => '退出绘图模式';
+
+  @override
+  String get duration => '时长';
+
+  @override
+  String get hoursUnit => '小时';
+
+  @override
+  String get minutesUnit => '分';
+
+  @override
+  String get selectReason => '请选择原因';
+
+  @override
+  String get enterOtherReasonHint => '请输入其他原因...';
+
+  @override
+  String get enterOtherReasonRequired => '请输入其他原因';
+
+  @override
+  String get today => '今天';
+
+  @override
+  String selectedTypesCount(Object count) {
+    return '已选择：$count 种';
+  }
+
+  @override
+  String eventTypesOverflowSummary(
+    Object firstType,
+    Object remainingCount,
+    Object secondType,
+  ) {
+    return '$firstType、$secondType，另外 $remainingCount 种';
+  }
+
+  @override
+  String errorInitializingServices(Object error) {
+    return '初始化服务失败，部分功能可能无法使用：$error';
+  }
+
+  @override
+  String endTimeCleared(Object error) {
+    return '已清除结束时间：$error';
+  }
+
+  @override
+  String get syncingEvent => '正在同步活动...';
+
+  @override
+  String get loadingEvent => '正在加载活动...';
+
+  @override
+  String get viewEvent => '查看活动';
+
+  @override
+  String get unsyncedChangesLabel => '未同步变更';
+
+  @override
+  String get offlineLabel => '离线';
+
+  @override
+  String get readOnlyModeTooltip => '只读模式：已停用数据编辑与手写功能。';
+
+  @override
+  String get readOnlyModeLabel => '只读模式';
+
+  @override
+  String daysBackwardTooltip(Object days) {
+    return '向前 $days 天';
+  }
+
+  @override
+  String daysForwardTooltip(Object days) {
+    return '向后 $days 天';
+  }
+
+  @override
+  String errorMessage(Object message) {
+    return '错误：$message';
+  }
+
+  @override
+  String get dismiss => '关闭';
+
+  @override
+  String get readOnlyBookModeActive => '已启用只读模式：仅可查看，编辑功能已停用。';
+
+  @override
+  String get importFromServer => '从服务器导入';
+
+  @override
+  String get serverSettings => '服务器设置';
+
+  @override
+  String get importBookFromServer => '从服务器导入簿册';
+
+  @override
+  String get noServerBooksAvailable => '服务器上没有可导入的簿册';
+
+  @override
+  String bookUuidShort(Object id) {
+    return '簿册 UUID：$id...';
+  }
+
+  @override
+  String ownerDeviceShort(Object id) {
+    return '拥有者设备：$id...';
+  }
+
+  @override
+  String get serverUrlHint => 'http://192.168.1.100:8080';
+
+  @override
+  String get cannotConnectToServerCheckUrl => '无法连接到服务器，请检查网址。';
+
+  @override
+  String get configureServerUrlDescription => '配置服务器网址以进行服务器数据操作。';
+
+  @override
+  String get serverUrlExample => '示例：http://your-mac-ip:8080';
+
+  @override
+  String get enterPasswordHint => '请输入密码';
+
+  @override
+  String get contactServerAdminForPassword => '请向服务器管理员获取密码';
+
+  @override
+  String errorCheckingDeviceRegistration(Object error) {
+    return '检查设备注册状态时发生错误：$error';
+  }
+
+  @override
+  String get invalidPasswordTryAgain => '密码错误，请重试。';
+
+  @override
+  String registrationFailed(Object error) {
+    return '注册失败：$error';
+  }
+
+  @override
+  String get bookPassword => '簿册密码';
+
+  @override
+  String get details => '详情';
+
+  @override
+  String get success => '成功';
+
+  @override
+  String get errorLabel => '错误';
+
+  @override
+  String get warning => '警告';
+
+  @override
+  String get info => '信息';
+
+  @override
+  String get messageCopiedToClipboard => '消息已复制到剪贴板';
+
+  @override
+  String get copy => '复制';
+
+  @override
+  String get readOnlyCreateBookDisabled => '只读模式：无法创建簿册';
+
+  @override
+  String get readOnlyRenameDisabled => '只读模式：无法重命名簿册';
+
+  @override
+  String get readOnlyArchiveDisabled => '只读模式：无法封存簿册';
+
+  @override
+  String get readOnlyDeleteDisabled => '只读模式：无法删除簿册';
+
+  @override
+  String get enterBookPassword => '输入簿册密码';
+
+  @override
+  String get importBookPasswordRequiredDescription => '导入此簿册需要密码。';
+
+  @override
+  String get bookImportedSuccessfully => '簿册导入成功';
+
+  @override
+  String get importFailedBookAlreadyExists => '导入失败：此设备已存在该簿册。';
+
+  @override
+  String get importFailedInvalidBookPassword => '导入失败：簿册密码错误。';
+
+  @override
+  String get importFailedApiBooksNotFound =>
+      '导入失败：服务器找不到 /api/books。请更新或重启服务器，并确认服务器设置中的网址。';
+
+  @override
+  String get importFailedInvalidDeviceCredentials =>
+      '导入失败：设备凭证无效。请在服务器设置中重新注册此设备。';
+
+  @override
+  String failedToLoadServerBooks(Object error) {
+    return '加载服务器簿册失败：$error';
+  }
+
+  @override
+  String serverUrlUpdated(Object url) {
+    return '服务器网址已更新为：$url';
+  }
+
+  @override
+  String failedToUpdateServerUrl(Object error) {
+    return '更新服务器网址失败：$error';
+  }
+
+  @override
+  String cannotMoveEndTimeExceedsLimit(Object hour, Object minute) {
+    return '无法移动：结束时间将为 $hour:$minute（超过 21:00）';
+  }
+
+  @override
+  String get eventsCannotSpanAcrossDates => '活动不可跨日期';
+
+  @override
+  String get testTimeDialogPlaceholder => '测试时间对话框（功能已拆分）';
+
+  @override
+  String get otherEventType => '其他';
+
+  @override
+  String chargeAmountSummary(Object received, Object total) {
+    return 'NT\$$received / NT\$$total';
+  }
+
+  @override
+  String get thisEventTime => '此次活动时间';
+
+  @override
+  String get thisEventFocus => '聚焦此次活动（其他淡化）';
+
+  @override
+  String get allItems => '全部项目';
+
+  @override
+  String get highlighterWidth => '荧光笔宽度';
+
+  @override
+  String syncedOfflineNotes(Object total) {
+    return '已同步 $total 条离线笔记';
+  }
+
+  @override
+  String syncPartialNotesFailed(Object failed, Object success, Object total) {
+    return '已同步 $success/$total 条笔记，$failed 条失败，请确认服务器上已有该簿册';
+  }
+
+  @override
+  String get syncFailedTitle => '同步失败';
+
+  @override
+  String get syncFailedDetail =>
+      '部分笔记同步失败，可能因为服务器尚未有此簿册。\\n\\n解决方式：请先在服务器创建或导入该簿册。';
 }
 
 /// The translations for Chinese, as used in Taiwan (`zh_TW`).
@@ -1562,4 +1836,278 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get backButton => '返回';
+
+  @override
+  String get showMenu => '顯示選單';
+
+  @override
+  String get hideMenu => '隱藏選單';
+
+  @override
+  String get enterDrawingMode => '進入繪圖模式';
+
+  @override
+  String get exitDrawingMode => '離開繪圖模式';
+
+  @override
+  String get duration => '時長';
+
+  @override
+  String get hoursUnit => '小時';
+
+  @override
+  String get minutesUnit => '分';
+
+  @override
+  String get selectReason => '請選擇原因';
+
+  @override
+  String get enterOtherReasonHint => '請輸入其他原因...';
+
+  @override
+  String get enterOtherReasonRequired => '請輸入其他原因';
+
+  @override
+  String get today => '今天';
+
+  @override
+  String selectedTypesCount(Object count) {
+    return '已選擇：$count 種';
+  }
+
+  @override
+  String eventTypesOverflowSummary(
+    Object firstType,
+    Object remainingCount,
+    Object secondType,
+  ) {
+    return '$firstType、$secondType，另外 $remainingCount 種';
+  }
+
+  @override
+  String errorInitializingServices(Object error) {
+    return '初始化服務失敗，部分功能可能無法使用：$error';
+  }
+
+  @override
+  String endTimeCleared(Object error) {
+    return '已清除結束時間：$error';
+  }
+
+  @override
+  String get syncingEvent => '正在同步活動...';
+
+  @override
+  String get loadingEvent => '正在載入活動...';
+
+  @override
+  String get viewEvent => '檢視活動';
+
+  @override
+  String get unsyncedChangesLabel => '未同步變更';
+
+  @override
+  String get offlineLabel => '離線';
+
+  @override
+  String get readOnlyModeTooltip => '唯讀模式：已停用資料編輯與手寫功能。';
+
+  @override
+  String get readOnlyModeLabel => '唯讀模式';
+
+  @override
+  String daysBackwardTooltip(Object days) {
+    return '往前 $days 天';
+  }
+
+  @override
+  String daysForwardTooltip(Object days) {
+    return '往後 $days 天';
+  }
+
+  @override
+  String errorMessage(Object message) {
+    return '錯誤：$message';
+  }
+
+  @override
+  String get dismiss => '關閉';
+
+  @override
+  String get readOnlyBookModeActive => '已啟用唯讀模式：僅可檢視，編輯功能已停用。';
+
+  @override
+  String get importFromServer => '從伺服器匯入';
+
+  @override
+  String get serverSettings => '伺服器設定';
+
+  @override
+  String get importBookFromServer => '從伺服器匯入簿冊';
+
+  @override
+  String get noServerBooksAvailable => '伺服器上沒有可匯入的簿冊';
+
+  @override
+  String bookUuidShort(Object id) {
+    return '簿冊 UUID：$id...';
+  }
+
+  @override
+  String ownerDeviceShort(Object id) {
+    return '擁有者裝置：$id...';
+  }
+
+  @override
+  String get serverUrlHint => 'http://192.168.1.100:8080';
+
+  @override
+  String get cannotConnectToServerCheckUrl => '無法連線到伺服器，請檢查網址。';
+
+  @override
+  String get configureServerUrlDescription => '設定伺服器網址以進行伺服器資料操作。';
+
+  @override
+  String get serverUrlExample => '範例：http://your-mac-ip:8080';
+
+  @override
+  String get enterPasswordHint => '請輸入密碼';
+
+  @override
+  String get contactServerAdminForPassword => '請向伺服器管理員取得密碼';
+
+  @override
+  String errorCheckingDeviceRegistration(Object error) {
+    return '檢查裝置註冊狀態時發生錯誤：$error';
+  }
+
+  @override
+  String get invalidPasswordTryAgain => '密碼錯誤，請再試一次。';
+
+  @override
+  String registrationFailed(Object error) {
+    return '註冊失敗：$error';
+  }
+
+  @override
+  String get bookPassword => '簿冊密碼';
+
+  @override
+  String get details => '詳情';
+
+  @override
+  String get success => '成功';
+
+  @override
+  String get errorLabel => '錯誤';
+
+  @override
+  String get warning => '警告';
+
+  @override
+  String get info => '資訊';
+
+  @override
+  String get messageCopiedToClipboard => '訊息已複製到剪貼簿';
+
+  @override
+  String get copy => '複製';
+
+  @override
+  String get readOnlyCreateBookDisabled => '唯讀模式：無法建立簿冊';
+
+  @override
+  String get readOnlyRenameDisabled => '唯讀模式：無法重新命名簿冊';
+
+  @override
+  String get readOnlyArchiveDisabled => '唯讀模式：無法封存簿冊';
+
+  @override
+  String get readOnlyDeleteDisabled => '唯讀模式：無法刪除簿冊';
+
+  @override
+  String get enterBookPassword => '輸入簿冊密碼';
+
+  @override
+  String get importBookPasswordRequiredDescription => '匯入此簿冊需要密碼。';
+
+  @override
+  String get bookImportedSuccessfully => '簿冊匯入成功';
+
+  @override
+  String get importFailedBookAlreadyExists => '匯入失敗：此裝置已存在該簿冊。';
+
+  @override
+  String get importFailedInvalidBookPassword => '匯入失敗：簿冊密碼錯誤。';
+
+  @override
+  String get importFailedApiBooksNotFound =>
+      '匯入失敗：伺服器找不到 /api/books。請更新或重啟伺服器，並確認伺服器設定中的網址。';
+
+  @override
+  String get importFailedInvalidDeviceCredentials =>
+      '匯入失敗：裝置憑證無效。請在伺服器設定中重新註冊此裝置。';
+
+  @override
+  String failedToLoadServerBooks(Object error) {
+    return '載入伺服器簿冊失敗：$error';
+  }
+
+  @override
+  String serverUrlUpdated(Object url) {
+    return '伺服器網址已更新為：$url';
+  }
+
+  @override
+  String failedToUpdateServerUrl(Object error) {
+    return '更新伺服器網址失敗：$error';
+  }
+
+  @override
+  String cannotMoveEndTimeExceedsLimit(Object hour, Object minute) {
+    return '無法移動：結束時間將為 $hour:$minute（超過 21:00）';
+  }
+
+  @override
+  String get eventsCannotSpanAcrossDates => '活動不可跨日期';
+
+  @override
+  String get testTimeDialogPlaceholder => '測試時間對話框（功能已拆分）';
+
+  @override
+  String get otherEventType => '其他';
+
+  @override
+  String chargeAmountSummary(Object received, Object total) {
+    return 'NT\$$received / NT\$$total';
+  }
+
+  @override
+  String get thisEventTime => '此次活動時間';
+
+  @override
+  String get thisEventFocus => '聚焦此次活動（其他淡化）';
+
+  @override
+  String get allItems => '全部項目';
+
+  @override
+  String get highlighterWidth => '螢光筆寬度';
+
+  @override
+  String syncedOfflineNotes(Object total) {
+    return '已同步 $total 筆離線筆記';
+  }
+
+  @override
+  String syncPartialNotesFailed(Object failed, Object success, Object total) {
+    return '已同步 $success/$total 筆筆記，$failed 筆失敗，請確認伺服器上已有該簿冊';
+  }
+
+  @override
+  String get syncFailedTitle => '同步失敗';
+
+  @override
+  String get syncFailedDetail =>
+      '部分筆記同步失敗，可能因為伺服器尚未有此簿冊。\\n\\n解決方式：請先在伺服器建立或匯入該簿冊。';
 }

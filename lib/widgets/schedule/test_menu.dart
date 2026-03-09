@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../../l10n/app_localizations.dart';
 
 /// Helper class for schedule test menu functionality
 ///
@@ -8,8 +9,9 @@ class ScheduleTestMenuHelper {
   static Future<void> showTestTimeDialog(BuildContext context) async {
     // This is a simplified version - full implementation should match schedule_screen's original
     // For now, just show a placeholder
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Test time dialog - feature extracted')),
-    );
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(l10n.testTimeDialogPlaceholder)));
   }
 }

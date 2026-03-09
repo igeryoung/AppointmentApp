@@ -23,6 +23,16 @@ class NameRecordPair {
   int get hashCode => name.hashCode ^ recordNumber.hashCode;
 }
 
+/// Thrown when a repository operation requires a reachable server.
+class ServerConnectionRequiredException implements Exception {
+  final String message;
+
+  const ServerConnectionRequiredException(this.message);
+
+  @override
+  String toString() => 'ServerConnectionRequiredException: $message';
+}
+
 /// Repository interface for Event entity operations
 /// Defines the contract for event data access
 abstract class IEventRepository {

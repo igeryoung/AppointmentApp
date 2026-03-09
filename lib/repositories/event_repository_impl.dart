@@ -20,6 +20,9 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
   }) : _apiClient = apiClient,
        _deviceRepository = deviceRepository;
 
+  bool get _isServerModeEnabled =>
+      _apiClient != null || _deviceRepository != null;
+
   @override
   String get tableName => 'events';
 
@@ -247,8 +250,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
 
   @override
   Future<List<String>> getAllNames(String bookUuid) async {
-    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
-    if (serverEvents != null) {
+    if (_isServerModeEnabled) {
+      final serverEvents = await _fetchAllEventsFromServer(bookUuid);
       final names = serverEvents
           .map((event) => event.title.trim())
           .where((name) => name.isNotEmpty)
@@ -300,12 +303,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
       return const [];
     }
 
-    final serverNames = await _fetchNameSuggestionsFromServer(
-      bookUuid,
-      normalizedPrefix,
-    );
-    if (serverNames != null) {
-      return serverNames;
+    if (_isServerModeEnabled) {
+      return await _fetchNameSuggestionsFromServer(bookUuid, normalizedPrefix);
     }
 
     final db = await getDatabaseFn();
@@ -367,8 +366,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
 
   @override
   Future<List<NameRecordPair>> getAllNameRecordPairs(String bookUuid) async {
-    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
-    if (serverEvents != null) {
+    if (_isServerModeEnabled) {
+      final serverEvents = await _fetchAllEventsFromServer(bookUuid);
       final pairMap = <String, NameRecordPair>{};
       for (final event in serverEvents) {
         final name = event.title.trim();
@@ -443,13 +442,12 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
       return const [];
     }
 
-    final serverPairs = await _fetchRecordNumberSuggestionsFromServer(
-      bookUuid,
-      normalizedPrefix,
-      namePrefix: normalizedNamePrefix,
-    );
-    if (serverPairs != null) {
-      return serverPairs;
+    if (_isServerModeEnabled) {
+      return await _fetchRecordNumberSuggestionsFromServer(
+        bookUuid,
+        normalizedPrefix,
+        namePrefix: normalizedNamePrefix,
+      );
     }
 
     final db = await getDatabaseFn();
@@ -516,8 +514,8 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     String bookUuid,
     String name,
   ) async {
-    final serverEvents = await _fetchAllEventsFromServer(bookUuid);
-    if (serverEvents != null) {
+    if (_isServerModeEnabled) {
+      final serverEvents = await _fetchAllEventsFromServer(bookUuid);
       final normalizedName = name.trim().toLowerCase();
       final recordNumbers = serverEvents
           .where(
@@ -564,12 +562,12 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     String name,
     String recordNumber,
   ) async {
-    final serverEvents = await _searchByNameAndRecordNumberFromServer(
-      bookUuid,
-      name,
-      recordNumber,
-    );
-    if (serverEvents != null) {
+    if (_isServerModeEnabled) {
+      final serverEvents = await _searchByNameAndRecordNumberFromServer(
+        bookUuid,
+        name,
+        recordNumber,
+      );
       return serverEvents..sort((a, b) => b.startTime.compareTo(a.startTime));
     }
 
@@ -626,19 +624,23 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
     return getById(serverId);
   }
 
-  Future<List<Event>?> _fetchAllEventsFromServer(String bookUuid) async {
+  Future<List<Event>> _fetchAllEventsFromServer(String bookUuid) async {
+    final apiClient = _apiClient;
+    final deviceRepository = _deviceRepository;
+    if (apiClient == null || deviceRepository == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
+    final credentials = await deviceRepository.getCredentials();
+    if (credentials == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
     try {
-      final apiClient = _apiClient;
-      final deviceRepository = _deviceRepository;
-      if (apiClient == null || deviceRepository == null) {
-        return null;
-      }
-
-      final credentials = await deviceRepository.getCredentials();
-      if (credentials == null) {
-        return null;
-      }
-
       final nowUtc = DateTime.now().toUtc();
       final serverEvents = await apiClient.fetchEventsByDateRange(
         bookUuid: bookUuid,
@@ -652,26 +654,32 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
           .map((event) => Event.fromServerResponse(event))
           .toList();
     } catch (_) {
-      return null;
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
   }
 
-  Future<List<String>?> _fetchNameSuggestionsFromServer(
+  Future<List<String>> _fetchNameSuggestionsFromServer(
     String bookUuid,
     String prefix,
   ) async {
+    final apiClient = _apiClient;
+    final deviceRepository = _deviceRepository;
+    if (apiClient == null || deviceRepository == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
+    final credentials = await deviceRepository.getCredentials();
+    if (credentials == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
     try {
-      final apiClient = _apiClient;
-      final deviceRepository = _deviceRepository;
-      if (apiClient == null || deviceRepository == null) {
-        return null;
-      }
-
-      final credentials = await deviceRepository.getCredentials();
-      if (credentials == null) {
-        return null;
-      }
-
       return await apiClient.fetchNameSuggestions(
         bookUuid: bookUuid,
         prefix: prefix,
@@ -679,27 +687,33 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
         deviceToken: credentials.deviceToken,
       );
     } catch (_) {
-      return null;
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
   }
 
-  Future<List<NameRecordPair>?> _fetchRecordNumberSuggestionsFromServer(
+  Future<List<NameRecordPair>> _fetchRecordNumberSuggestionsFromServer(
     String bookUuid,
     String prefix, {
     String? namePrefix,
   }) async {
+    final apiClient = _apiClient;
+    final deviceRepository = _deviceRepository;
+    if (apiClient == null || deviceRepository == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
+    final credentials = await deviceRepository.getCredentials();
+    if (credentials == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
     try {
-      final apiClient = _apiClient;
-      final deviceRepository = _deviceRepository;
-      if (apiClient == null || deviceRepository == null) {
-        return null;
-      }
-
-      final credentials = await deviceRepository.getCredentials();
-      if (credentials == null) {
-        return null;
-      }
-
       final pairs = await apiClient.fetchRecordNumberSuggestions(
         bookUuid: bookUuid,
         prefix: prefix,
@@ -721,27 +735,33 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
           )
           .toList();
     } catch (_) {
-      return null;
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
   }
 
-  Future<List<Event>?> _searchByNameAndRecordNumberFromServer(
+  Future<List<Event>> _searchByNameAndRecordNumberFromServer(
     String bookUuid,
     String name,
     String recordNumber,
   ) async {
+    final apiClient = _apiClient;
+    final deviceRepository = _deviceRepository;
+    if (apiClient == null || deviceRepository == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
+    final credentials = await deviceRepository.getCredentials();
+    if (credentials == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
     try {
-      final apiClient = _apiClient;
-      final deviceRepository = _deviceRepository;
-      if (apiClient == null || deviceRepository == null) {
-        return null;
-      }
-
-      final credentials = await deviceRepository.getCredentials();
-      if (credentials == null) {
-        return null;
-      }
-
       final rows = await apiClient.fetchQueryAppointments(
         bookUuid: bookUuid,
         name: name,
@@ -751,7 +771,9 @@ class EventRepositoryImpl extends BaseRepository<Event, String>
       );
       return rows.map(Event.fromServerResponse).toList();
     } catch (_) {
-      return null;
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
   }
 }

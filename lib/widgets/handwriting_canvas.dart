@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:uuid/uuid.dart';
+import '../l10n/app_localizations.dart';
 import '../models/note.dart';
 import 'handwriting/handwriting_operations.dart';
 
@@ -13,8 +14,10 @@ class HandwritingCanvas extends StatefulWidget {
   final List<Stroke> initialStrokes;
   final VoidCallback? onStrokesChanged;
   final String? currentEventUuid; // Event UUID for tracking stroke origin
-  final bool showOnlyCurrentEvent; // Focus current event by graying non-current strokes
-  final void Function(List<String> erasedStrokeIds)? onStrokesErased; // Callback for erased stroke IDs
+  final bool
+  showOnlyCurrentEvent; // Focus current event by graying non-current strokes
+  final void Function(List<String> erasedStrokeIds)?
+  onStrokesErased; // Callback for erased stroke IDs
 
   const HandwritingCanvas({
     super.key,
@@ -31,13 +34,15 @@ class HandwritingCanvas extends StatefulWidget {
 
 class HandwritingCanvasState extends State<HandwritingCanvas> {
   List<Stroke> _strokes = [];
-  List<CanvasOperation> _operationHistory = []; // Track all completed operations
+  List<CanvasOperation> _operationHistory =
+      []; // Track all completed operations
   List<CanvasOperation> _redoStack = []; // Track operations that can be redone
   Stroke? _currentStroke;
 
   // Track erase operation state
   List<Stroke>? _strokesBeforeErase;
-  List<String> _erasedStrokeIdsInSession = []; // Track erased stroke IDs in current erase session
+  List<String> _erasedStrokeIdsInSession =
+      []; // Track erased stroke IDs in current erase session
 
   // Drawing settings
   DrawingTool _currentTool = DrawingTool.pen;
@@ -79,7 +84,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     super.didUpdateWidget(oldWidget);
     // Update strokes if initialStrokes changed (e.g., when note loads)
     if (oldWidget.initialStrokes != widget.initialStrokes) {
-
       // ENHANCED LOGIC: Update canvas strokes when:
       // 1. Canvas is currently empty AND we have strokes to load (note loading)
       // 2. We're getting MORE strokes than the widget had before (external update)
@@ -98,16 +102,15 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       final hasNewWidgetContent = newStrokeCount > oldStrokeCount;
       final isLoadingContent = isCanvasEmpty && newStrokeCount > 0;
       final widgetStrokeCountUnchanged = newStrokeCount == oldStrokeCount;
-      final wouldLoseUserWork = currentStrokeCount > 0 && newStrokeCount < currentStrokeCount;
+      final wouldLoseUserWork =
+          currentStrokeCount > 0 && newStrokeCount < currentStrokeCount;
       final hasUserWork = currentStrokeCount > 0 && oldStrokeCount == 0;
 
       // Determine if we should update
-      final shouldUpdate = isLoadingContent ||
-                          (hasNewWidgetContent && !wouldLoseUserWork);
-
+      final shouldUpdate =
+          isLoadingContent || (hasNewWidgetContent && !wouldLoseUserWork);
 
       if (shouldUpdate) {
-
         // Validate state before update
         validateState();
 
@@ -123,9 +126,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         if (newStrokeCount > 0 && oldStrokeCount == 0) {
           // Loading saved content into empty canvas - clear current stroke
           _currentStroke = null;
-        } else {
-        }
-
+        } else {}
 
         // Trigger a rebuild to show the loaded strokes
         WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -134,8 +135,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
             validateState();
           }
         });
-      } else {
-      }
+      } else {}
     }
   }
 
@@ -194,12 +194,10 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
   /// Validate canvas internal state
   void validateState() {
-
     // Validate stroke integrity
     for (int i = 0; i < _strokes.length; i++) {
       final stroke = _strokes[i];
-      if (stroke.points.isEmpty) {
-      }
+      if (stroke.points.isEmpty) {}
     }
   }
 
@@ -246,7 +244,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
       setState(() {});
       return;
     }
-
 
     final clippedPoint = _clipPointToBounds(point);
 
@@ -327,7 +324,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     // Only complete stroke if this was a single-touch gesture
     if (_activePointers.isEmpty) {
       if (_currentStroke != null && _currentStroke!.points.isNotEmpty) {
-
         // Assign ID and event UUID to the new stroke
         final strokeWithId = _currentStroke!.copyWith(
           id: _uuid.v4(),
@@ -367,7 +363,9 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
             // Report erased stroke IDs if any were erased
             if (_erasedStrokeIdsInSession.isNotEmpty) {
-              widget.onStrokesErased?.call(List.from(_erasedStrokeIdsInSession));
+              widget.onStrokesErased?.call(
+                List.from(_erasedStrokeIdsInSession),
+              );
             }
           }
           _strokesBeforeErase = null;
@@ -412,24 +410,36 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
     final List<Stroke> newStrokes = [];
 
     for (final stroke in _strokes) {
-      final splitStrokes = _splitStrokeByEraser(stroke, point, eraserRadiusSquared);
+      final splitStrokes = _splitStrokeByEraser(
+        stroke,
+        point,
+        eraserRadiusSquared,
+      );
       // If the stroke was modified (split or removed), track its ID as erased
-      if (splitStrokes.length != 1 || (splitStrokes.isEmpty || splitStrokes.first.points.length != stroke.points.length)) {
-        if (stroke.id != null && !_erasedStrokeIdsInSession.contains(stroke.id)) {
+      if (splitStrokes.length != 1 ||
+          (splitStrokes.isEmpty ||
+              splitStrokes.first.points.length != stroke.points.length)) {
+        if (stroke.id != null &&
+            !_erasedStrokeIdsInSession.contains(stroke.id)) {
           _erasedStrokeIdsInSession.add(stroke.id!);
         }
       }
       newStrokes.addAll(splitStrokes);
     }
 
-    if (newStrokes.length != _strokes.length || _erasedStrokeIdsInSession.isNotEmpty) {
+    if (newStrokes.length != _strokes.length ||
+        _erasedStrokeIdsInSession.isNotEmpty) {
       _strokes = newStrokes;
     }
   }
 
   /// Split a stroke by removing portions that intersect with eraser circle
   /// Returns list of stroke segments that remain after erasing
-  List<Stroke> _splitStrokeByEraser(Stroke stroke, Offset eraserPoint, double eraserRadiusSquared) {
+  List<Stroke> _splitStrokeByEraser(
+    Stroke stroke,
+    Offset eraserPoint,
+    double eraserRadiusSquared,
+  ) {
     if (stroke.points.isEmpty) return [];
 
     final List<Stroke> resultStrokes = [];
@@ -464,14 +474,16 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
         // Point or segment is inside eraser - this breaks the stroke
         if (currentSegment.isNotEmpty) {
           // Save the current segment as a new stroke with new ID but same eventUuid
-          resultStrokes.add(Stroke(
-            id: _uuid.v4(), // New ID for split segment
-            eventUuid: stroke.eventUuid, // Preserve original event
-            points: currentSegment,
-            strokeWidth: stroke.strokeWidth,
-            color: stroke.color,
-            strokeType: stroke.strokeType,
-          ));
+          resultStrokes.add(
+            Stroke(
+              id: _uuid.v4(), // New ID for split segment
+              eventUuid: stroke.eventUuid, // Preserve original event
+              points: currentSegment,
+              strokeWidth: stroke.strokeWidth,
+              color: stroke.color,
+              strokeType: stroke.strokeType,
+            ),
+          );
           currentSegment = [];
         }
       }
@@ -479,14 +491,16 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
     // Add any remaining segment
     if (currentSegment.isNotEmpty) {
-      resultStrokes.add(Stroke(
-        id: _uuid.v4(), // New ID for split segment
-        eventUuid: stroke.eventUuid, // Preserve original event
-        points: currentSegment,
-        strokeWidth: stroke.strokeWidth,
-        color: stroke.color,
-        strokeType: stroke.strokeType,
-      ));
+      resultStrokes.add(
+        Stroke(
+          id: _uuid.v4(), // New ID for split segment
+          eventUuid: stroke.eventUuid, // Preserve original event
+          points: currentSegment,
+          strokeWidth: stroke.strokeWidth,
+          color: stroke.color,
+          strokeType: stroke.strokeType,
+        ),
+      );
     }
 
     return resultStrokes;
@@ -514,9 +528,11 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
     // Calculate parameter t for closest point on line segment
     // t = 0 means lineStart, t = 1 means lineEnd
-    final t = (((circleCenter.dx - lineStart.dx) * dx +
-                 (circleCenter.dy - lineStart.dy) * dy) /
-               lengthSquared).clamp(0.0, 1.0);
+    final t =
+        (((circleCenter.dx - lineStart.dx) * dx +
+                    (circleCenter.dy - lineStart.dy) * dy) /
+                lengthSquared)
+            .clamp(0.0, 1.0);
 
     // Find closest point on line segment
     final closestX = lineStart.dx + t * dx;
@@ -551,7 +567,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
         // Increment canvas version to track state changes
         _canvasVersion++;
-
       });
 
       // Wait for setState to complete before allowing next operation
@@ -584,7 +599,6 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
 
         // Increment canvas version to track state changes
         _canvasVersion++;
-
       });
 
       // Wait for setState to complete before allowing next operation
@@ -681,7 +695,8 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
           return Listener(
             // Listener uses raw pointer events - no gesture arena delay!
             // onPointerDown fires IMMEDIATELY on touch
-            onPointerDown: (event) => _startStroke(event.localPosition, event.pointer),
+            onPointerDown: (event) =>
+                _startStroke(event.localPosition, event.pointer),
             // onPointerMove fires for EVERY pixel of movement - no threshold
             onPointerMove: (event) => _addPointToStroke(event.localPosition),
             // onPointerUp fires when finger lifts
@@ -719,7 +734,8 @@ class HandwritingPainter extends CustomPainter {
   final Stroke? currentStroke;
   final DrawingTool currentTool;
   final double eraserRadius;
-  final Offset? pointerPosition; // Position in screen space for eraser indicator
+  final Offset?
+  pointerPosition; // Position in screen space for eraser indicator
   final bool showOnlyCurrentEvent;
   final String? currentEventUuid;
 
@@ -825,7 +841,11 @@ class HandwritingPainter extends CustomPainter {
   }
 
   /// Draw a single stroke
-  void _drawStroke(Canvas canvas, _RenderableStroke renderable, {bool isCurrentStroke = false}) {
+  void _drawStroke(
+    Canvas canvas,
+    _RenderableStroke renderable, {
+    bool isCurrentStroke = false,
+  }) {
     final stroke = renderable.stroke;
     if (stroke.points.isEmpty) return;
 
@@ -877,12 +897,12 @@ class HandwritingPainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant HandwritingPainter oldDelegate) {
     return oldDelegate.strokes != strokes ||
-           oldDelegate.currentStroke != currentStroke ||
-           oldDelegate.pointerPosition != pointerPosition ||
-           oldDelegate.currentTool != currentTool ||
-           oldDelegate.eraserRadius != eraserRadius ||
-           oldDelegate.showOnlyCurrentEvent != showOnlyCurrentEvent ||
-           oldDelegate.currentEventUuid != currentEventUuid;
+        oldDelegate.currentStroke != currentStroke ||
+        oldDelegate.pointerPosition != pointerPosition ||
+        oldDelegate.currentTool != currentTool ||
+        oldDelegate.eraserRadius != eraserRadius ||
+        oldDelegate.showOnlyCurrentEvent != showOnlyCurrentEvent ||
+        oldDelegate.currentEventUuid != currentEventUuid;
   }
 }
 
@@ -890,23 +910,19 @@ class _RenderableStroke {
   final Stroke stroke;
   final bool isDeemphasized;
 
-  const _RenderableStroke({
-    required this.stroke,
-    required this.isDeemphasized,
-  });
+  const _RenderableStroke({required this.stroke, required this.isDeemphasized});
 }
 
 /// Drawing tools panel for handwriting canvas
 class DrawingToolsPanel extends StatelessWidget {
   final HandwritingCanvasState canvasState;
 
-  const DrawingToolsPanel({
-    super.key,
-    required this.canvasState,
-  });
+  const DrawingToolsPanel({super.key, required this.canvasState});
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -927,16 +943,16 @@ class DrawingToolsPanel extends StatelessWidget {
             children: [
               // Pen/Eraser toggle
               SegmentedButton<bool>(
-                segments: const [
+                segments: [
                   ButtonSegment<bool>(
                     value: false,
                     icon: Icon(Icons.edit, size: 18),
-                    label: Text('Pen'),
+                    label: Text(l10n.pen),
                   ),
                   ButtonSegment<bool>(
                     value: true,
                     icon: Icon(Icons.auto_fix_high, size: 18),
-                    label: Text('Eraser'),
+                    label: Text(l10n.eraser),
                   ),
                 ],
                 selected: {canvasState.isErasing},
@@ -950,7 +966,7 @@ class DrawingToolsPanel extends StatelessWidget {
           // Width/Radius control - changes based on mode
           Row(
             children: [
-              Text(canvasState.isErasing ? 'Eraser Radius: ' : 'Pen Width: '),
+              Text(canvasState.isErasing ? l10n.eraserSize : l10n.penWidth),
               Expanded(
                 child: Slider(
                   value: canvasState.isErasing
@@ -971,9 +987,11 @@ class DrawingToolsPanel extends StatelessWidget {
                   },
                 ),
               ),
-              Text(canvasState.isErasing
-                  ? '${canvasState.eraserRadius.toInt()}px'
-                  : '${canvasState.strokeWidth.toInt()}px'),
+              Text(
+                canvasState.isErasing
+                    ? '${canvasState.eraserRadius.toInt()}px'
+                    : '${canvasState.strokeWidth.toInt()}px',
+              ),
             ],
           ),
           const SizedBox(height: 12),
@@ -981,13 +999,14 @@ class DrawingToolsPanel extends StatelessWidget {
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              const Text('Color: ', style: TextStyle(fontWeight: FontWeight.w500)),
+              Text(
+                l10n.color,
+                style: const TextStyle(fontWeight: FontWeight.w500),
+              ),
               const SizedBox(height: 8),
               SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: _buildColorOptions(),
-                ),
+                child: Row(children: _buildColorOptions()),
               ),
             ],
           ),
@@ -999,17 +1018,17 @@ class DrawingToolsPanel extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: canvasState.canUndo ? canvasState.undo : null,
                 icon: const Icon(Icons.undo, size: 18),
-                label: const Text('Undo'),
+                label: Text(l10n.undo),
               ),
               ElevatedButton.icon(
                 onPressed: canvasState.canRedo ? canvasState.redo : null,
                 icon: const Icon(Icons.redo, size: 18),
-                label: const Text('Redo'),
+                label: Text(l10n.redo),
               ),
               ElevatedButton.icon(
                 onPressed: canvasState.clear,
                 icon: const Icon(Icons.clear, size: 18),
-                label: const Text('Clear'),
+                label: Text(l10n.clear),
                 style: ElevatedButton.styleFrom(
                   backgroundColor: Colors.red.shade100,
                   foregroundColor: Colors.red.shade700,
@@ -1076,7 +1095,9 @@ class DrawingToolsPanel extends StatelessWidget {
               ? Icon(
                   Icons.check,
                   size: 18,
-                  color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                  color: color.computeLuminance() > 0.5
+                      ? Colors.black
+                      : Colors.white,
                 )
               : null,
         ),

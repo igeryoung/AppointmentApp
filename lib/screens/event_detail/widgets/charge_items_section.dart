@@ -134,7 +134,10 @@ class ChargeItemsSection extends StatelessWidget {
                     ),
                     const SizedBox(width: 12),
                     Text(
-                      'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
+                      l10n.chargeAmountSummary(
+                        _receivedAmount.toString(),
+                        _totalAmount.toString(),
+                      ),
                       style: theme.textTheme.labelLarge?.copyWith(
                         fontWeight: FontWeight.w700,
                         color: theme.colorScheme.primary,
@@ -228,11 +231,12 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
   }
 
   String _formatCurrentEventTimeRange() {
+    final l10n = AppLocalizations.of(context)!;
     final start = _controller.event.startTime;
     final end = _controller.event.endTime;
     final dateText = _formatEventDate(start);
     final startText = _formatEventTime(start);
-    final endText = end == null ? 'Open end' : _formatEventTime(end);
+    final endText = end == null ? l10n.openEnded : _formatEventTime(end);
     return '$dateText  $startText - $endText';
   }
 
@@ -370,7 +374,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'This Event Time',
+                    l10n.thisEventTime,
                     style: theme.textTheme.labelMedium?.copyWith(
                       color: theme.colorScheme.onSecondaryContainer,
                       fontWeight: FontWeight.w700,
@@ -404,7 +408,10 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                     children: [
                       Expanded(
                         child: Text(
-                          'NT\$${_receivedAmount.toString()} / NT\$${_totalAmount.toString()}',
+                          l10n.chargeAmountSummary(
+                            _receivedAmount.toString(),
+                            _totalAmount.toString(),
+                          ),
                           style: theme.textTheme.titleMedium?.copyWith(
                             color: theme.colorScheme.onPrimaryContainer,
                             fontWeight: FontWeight.w700,
@@ -445,9 +452,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
               onChanged: (_) => _toggleFilter(),
               contentPadding: const EdgeInsets.symmetric(horizontal: 8),
               title: Text(
-                _showOnlyThisEventItems
-                    ? 'This event focus (others diluted)'
-                    : 'All items',
+                _showOnlyThisEventItems ? l10n.thisEventFocus : l10n.allItems,
               ),
             ),
           ),
@@ -532,7 +537,10 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
-                                        'NT\$${item.receivedAmount} / NT\$${item.itemPrice}',
+                                        l10n.chargeAmountSummary(
+                                          item.receivedAmount.toString(),
+                                          item.itemPrice.toString(),
+                                        ),
                                         style: theme.textTheme.bodySmall
                                             ?.copyWith(
                                               color: item.isPaid
@@ -550,7 +558,7 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                   crossAxisAlignment: CrossAxisAlignment.end,
                                   children: [
                                     Text(
-                                      'NT\$${remainingAmount.toString()}',
+                                      'NT\$$remainingAmount',
                                       style: theme.textTheme.labelLarge
                                           ?.copyWith(
                                             color: item.isPaid

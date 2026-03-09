@@ -44,12 +44,13 @@ class ScheduleFabMenuHelper {
     required Function(DateTime) onDateChange,
   }) {
     if (!isMenuVisible) {
+      final l10n = AppLocalizations.of(context)!;
       return FloatingActionButton(
         heroTag: 'toggle_fab_menu',
         onPressed: onToggleMenu,
         backgroundColor: Colors.grey.shade600,
         child: const Icon(Icons.menu),
-        tooltip: 'Show menu',
+        tooltip: l10n.showMenu,
       );
     }
 
@@ -111,7 +112,7 @@ class ScheduleFabMenuHelper {
           onPressed: toggleDrawingMode,
           backgroundColor: isDrawingMode ? Colors.orange : Colors.blue,
           child: Icon(isDrawingMode ? Icons.draw : Icons.draw_outlined),
-          tooltip: isDrawingMode ? 'Exit Drawing Mode' : 'Enter Drawing Mode',
+          tooltip: isDrawingMode ? l10n.exitDrawingMode : l10n.enterDrawingMode,
         ),
         const SizedBox(height: 12),
         // Create event FAB (disabled in drawing mode)
@@ -129,7 +130,7 @@ class ScheduleFabMenuHelper {
           onPressed: onToggleMenu,
           backgroundColor: Colors.grey.shade600,
           child: const Icon(Icons.close),
-          tooltip: 'Hide menu',
+          tooltip: l10n.hideMenu,
         ),
       ],
     );

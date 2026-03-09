@@ -73,7 +73,7 @@ class _CreateBookDialogState extends State<CreateBookDialog> {
               controller: _passwordController,
               obscureText: _obscurePassword,
               decoration: InputDecoration(
-                labelText: 'Book Password',
+                labelText: l10n.bookPassword,
                 border: const OutlineInputBorder(),
                 suffixIcon: IconButton(
                   icon: Icon(

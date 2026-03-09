@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
+import '../../../l10n/app_localizations.dart';
 import '../../../services/database_service_interface.dart';
 import '../../../services/database/prd_database_service.dart';
 import '../../../services/content_service.dart';
@@ -56,6 +57,8 @@ class ScheduleConnectivityService {
   /// Callback to update drawing service with ContentService
   final void Function(ContentService? contentService)
   onUpdateDrawingServiceContentService;
+  final String Function(String Function(AppLocalizations) getter)
+  getLocalizedString;
 
   ScheduleConnectivityService({
     required IDatabaseService dbService,
@@ -65,6 +68,7 @@ class ScheduleConnectivityService {
     required this.onShowSnackbar,
     required this.isMounted,
     required this.onUpdateDrawingServiceContentService,
+    required this.getLocalizedString,
   }) : _dbService = dbService,
        _bookUuid = bookUuid;
 
@@ -188,19 +192,23 @@ class ScheduleConnectivityService {
         if (result.nothingToSync) {
         } else if (result.allSucceeded) {
           onShowSnackbar(
-            'Synced ${result.total} offline note${result.total > 1 ? 's' : ''}',
+            getLocalizedString((l10n) => l10n.syncedOfflineNotes(result.total)),
             backgroundColor: Colors.green,
             durationSeconds: 2,
           );
         } else if (result.hasFailures) {
           onShowSnackbar(
-            'Synced ${result.success}/${result.total} notes. ${result.failed} failed - check server book availability',
+            getLocalizedString(
+              (l10n) => l10n.syncPartialNotesFailed(
+                result.success,
+                result.total,
+                result.failed,
+              ),
+            ),
             backgroundColor: Colors.orange,
             durationSeconds: 5,
-            detailTitle: 'Sync Failed',
-            detailMessage:
-                'Some notes failed to sync because the book doesn\'t exist on the server yet.\n\n'
-                'Solution: create or import the book from server first.',
+            detailTitle: getLocalizedString((l10n) => l10n.syncFailedTitle),
+            detailMessage: getLocalizedString((l10n) => l10n.syncFailedDetail),
           );
         }
       }

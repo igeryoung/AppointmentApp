@@ -63,7 +63,7 @@ class _ChangeEventTypeDialogState extends State<_ChangeEventTypeDialog> {
           Padding(
             padding: const EdgeInsets.only(bottom: 8.0),
             child: Text(
-              'Selected: ${selectedTypes.length} type${selectedTypes.length != 1 ? 's' : ''}',
+              widget.l10n.selectedTypesCount(selectedTypes.length),
               style: Theme.of(context).textTheme.bodySmall,
             ),
           ),
@@ -99,11 +99,13 @@ class _ChangeEventTypeDialogState extends State<_ChangeEventTypeDialog> {
           onPressed: selectedTypes.isNotEmpty
               ? () {
                   // Sort alphabetically before returning
-                  final sorted = EventType.sortAlphabetically(selectedTypes.toList());
+                  final sorted = EventType.sortAlphabetically(
+                    selectedTypes.toList(),
+                  );
                   Navigator.pop(context, sorted);
                 }
               : null,
-          child: const Text('OK'),
+          child: Text(widget.l10n.ok),
         ),
       ],
     );

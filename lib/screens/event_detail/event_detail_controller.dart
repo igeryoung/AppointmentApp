@@ -82,19 +82,19 @@ class EventDetailController {
   /// Initialize ContentService and load initial data
   Future<void> initialize() async {
     try {
-      // Step 1: Initialize ContentService with correct server URL
-      final prdDb = _dbService as PRDDatabaseService;
-      final serverConfig = ServerConfigService(prdDb);
+      // Step 1: Initialize ContentService with correct server URL (unless injected).
+      if (_contentService == null) {
+        final prdDb = _dbService as PRDDatabaseService;
+        final serverConfig = ServerConfigService(prdDb);
+        final serverUrl = await serverConfig.getServerUrlOrDefault(
+          defaultUrl: 'http://localhost:8080',
+        );
 
-      // Get server URL from device settings (or use localhost:8080 as fallback)
-      final serverUrl = await serverConfig.getServerUrlOrDefault(
-        defaultUrl: 'http://localhost:8080',
-      );
-
-      final apiClient = ApiClient(baseUrl: serverUrl);
-      _contentService = ContentService(apiClient, _dbService);
-      _noteSyncAdapter = NoteSyncAdapter(_contentService!);
-      _serverHealthChecker = ServerHealthChecker(_contentService!);
+        final apiClient = ApiClient(baseUrl: serverUrl);
+        _contentService = ContentService(apiClient, _dbService);
+      }
+      _noteSyncAdapter ??= NoteSyncAdapter(_contentService!);
+      _serverHealthChecker ??= ServerHealthChecker(_contentService!);
 
       // Mark services as ready
       _updateState(_state.copyWith(isServicesReady: true, isOffline: false));
@@ -1073,32 +1073,26 @@ class EventDetailController {
     final prdDb = _dbService as PRDDatabaseService;
     final credentials = await prdDb.getDeviceCredentials();
 
-    if (_contentService != null && credentials != null) {
-      try {
-        final result = await _contentService!.apiClient.validateRecordNumber(
-          recordNumber: trimmedRecordNumber,
-          name: trimmedName,
-          deviceId: credentials.deviceId,
-          deviceToken: credentials.deviceToken,
-        );
-        if (result.hasConflict) {
-          return '$recordNumberNameConflictPrefix$trimmedName.';
-        }
-      } catch (e) {
-        debugPrint('[EventDetailController] validateRecordNumber error: $e');
+    if (_contentService == null || credentials == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
+    try {
+      final result = await _contentService!.apiClient.validateRecordNumber(
+        recordNumber: trimmedRecordNumber,
+        name: trimmedName,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      if (result.hasConflict) {
+        return '$recordNumberNameConflictPrefix$trimmedName.';
       }
-    }
-
-    final localRecord = await prdDb.getRecordByRecordNumber(
-      trimmedRecordNumber,
-    );
-    final localName = localRecord?.name?.trim() ?? '';
-    if (localName.isEmpty) {
-      return null;
-    }
-
-    if (_normalizeName(localName) != _normalizeName(trimmedName)) {
-      return '$recordNumberNameConflictPrefix$trimmedName.';
+    } catch (_) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
 
     return null;
@@ -1138,8 +1132,6 @@ class EventDetailController {
       );
     }
   }
-
-  String _normalizeName(String value) => value.trim().toLowerCase();
 
   /// Clear record number validation error
   void clearRecordNumberError() {
@@ -1573,29 +1565,23 @@ class EventDetailController {
       return null;
     }
 
-    if (allowServerLookup && _noteSyncAdapter != null) {
-      try {
-        final serverNote = await _noteSyncAdapter!.getNoteByRecordUuid(
-          bookUuid,
-          recordUuid,
-        );
-        if (serverNote != null) {
-          return serverNote;
-        }
-      } catch (e) {
-        return null;
-      }
+    if (!allowServerLookup) {
+      return null;
     }
 
-    if (_dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      final localNote = await prdDb.getNoteByRecordUuid(recordUuid);
-      if (localNote != null && localNote.isNotEmpty) {
-        return localNote;
-      }
+    if (_noteSyncAdapter == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
 
-    return null;
+    try {
+      return await _noteSyncAdapter!.getNoteByRecordUuid(bookUuid, recordUuid);
+    } catch (_) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
   }
 
   /// Apply an already resolved shared note to the current editing state.
@@ -1625,12 +1611,9 @@ class EventDetailController {
       return await eventRepository.getRecordNumbersByName(event.bookUuid, name);
     }
 
-    if (_dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.getRecordNumbersByName(event.bookUuid, name);
-    }
-
-    return [];
+    throw const ServerConnectionRequiredException(
+      'Server connection is required for this operation.',
+    );
   }
 
   /// Get all unique names for autocomplete
@@ -1641,11 +1624,9 @@ class EventDetailController {
       return await eventRepository.getAllNames(event.bookUuid);
     }
 
-    if (_dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      return await prdDb.getAllNamesInBook(event.bookUuid);
-    }
-    return [];
+    throw const ServerConnectionRequiredException(
+      'Server connection is required for this operation.',
+    );
   }
 
   /// Get all record numbers with names for autocomplete
@@ -1666,19 +1647,9 @@ class EventDetailController {
           .toList();
     }
 
-    if (_dbService is PRDDatabaseService) {
-      final prdDb = _dbService as PRDDatabaseService;
-      final results = await prdDb.getAllRecordNumbersWithNames(event.bookUuid);
-      return results
-          .map(
-            (item) => RecordNumberOption(
-              recordNumber: item['recordNumber']!,
-              name: item['name']!,
-            ),
-          )
-          .toList();
-    }
-    return [];
+    throw const ServerConnectionRequiredException(
+      'Server connection is required for this operation.',
+    );
   }
 
   Future<List<String>> getNameSuggestionsForAutocomplete(String query) async {
@@ -1841,52 +1812,36 @@ class EventDetailController {
     final prdDb = _dbService as PRDDatabaseService;
     final credentials = await prdDb.getDeviceCredentials();
 
-    if (_contentService != null && credentials != null) {
-      try {
-        final serverRecord = await _contentService!.apiClient
-            .fetchRecordByNumber(
-              recordNumber: trimmedRecordNumber,
-              deviceId: credentials.deviceId,
-              deviceToken: credentials.deviceToken,
-            );
-        if (serverRecord != null) {
-          final resolvedRecord = _ResolvedRecordData.fromServer(
-            recordNumber: trimmedRecordNumber,
-            data: serverRecord,
-          );
-          await _cacheResolvedRecordLocally(prdDb, resolvedRecord);
-          final note = await _fetchExistingNoteForRecordUuid(
-            bookUuid: event.bookUuid,
-            recordUuid: resolvedRecord.recordUuid,
-          );
-          return resolvedRecord.copyWith(note: note);
-        }
-      } catch (e) {
-        debugPrint('[EventDetailController] fetchRecordByNumber error: $e');
+    if (_contentService == null || credentials == null) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
+    }
+
+    try {
+      final serverRecord = await _contentService!.apiClient.fetchRecordByNumber(
+        recordNumber: trimmedRecordNumber,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+      if (serverRecord == null) {
+        return null;
       }
+      final resolvedRecord = _ResolvedRecordData.fromServer(
+        recordNumber: trimmedRecordNumber,
+        data: serverRecord,
+      );
+      await _cacheResolvedRecordLocally(prdDb, resolvedRecord);
+      final note = await _fetchExistingNoteForRecordUuid(
+        bookUuid: event.bookUuid,
+        recordUuid: resolvedRecord.recordUuid,
+      );
+      return resolvedRecord.copyWith(note: note);
+    } catch (_) {
+      throw const ServerConnectionRequiredException(
+        'Server connection is required for this operation.',
+      );
     }
-
-    final localRecord = await prdDb.getRecordByRecordNumber(
-      trimmedRecordNumber,
-    );
-    if (localRecord == null || localRecord.recordUuid == null) {
-      return null;
-    }
-
-    final note = await _fetchExistingNoteForRecordUuid(
-      bookUuid: event.bookUuid,
-      recordUuid: localRecord.recordUuid!,
-      allowServerLookup: false,
-    );
-
-    return _ResolvedRecordData(
-      recordUuid: localRecord.recordUuid!,
-      recordNumber: trimmedRecordNumber,
-      name: localRecord.name ?? '',
-      phone: localRecord.phone,
-      note: note,
-      loadedFromServer: false,
-    );
   }
 
   Future<void> _cacheResolvedRecordLocally(

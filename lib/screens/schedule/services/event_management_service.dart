@@ -604,7 +604,9 @@ class EventManagementService {
         final endHour = potentialNewEndTime.hour.toString().padLeft(2, '0');
         final endMin = potentialNewEndTime.minute.toString().padLeft(2, '0');
         onShowSnackbar(
-          'Cannot move: end time would be $endHour:$endMin (exceeds 21:00)',
+          getLocalizedString(
+            (l10n) => l10n.cannotMoveEndTimeExceedsLimit(endHour, endMin),
+          ),
           backgroundColor: Colors.orange,
         );
         closeEventMenu();
@@ -614,7 +616,7 @@ class EventManagementService {
       // Validate same day
       if (!EventTimeValidator.isSameDay(newStartTime, potentialNewEndTime)) {
         onShowSnackbar(
-          'Events cannot span across dates',
+          getLocalizedString((l10n) => l10n.eventsCannotSpanAcrossDates),
           backgroundColor: Colors.orange,
         );
         closeEventMenu();
@@ -639,7 +641,7 @@ class EventManagementService {
             );
 
             return AlertDialog(
-              title: Text(l10n.changeEventType),
+              title: Text(l10n.changeEventTimeTitle),
               content: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
@@ -648,7 +650,7 @@ class EventManagementService {
                     value: selectedReason,
                     decoration: InputDecoration(
                       labelText: l10n.reasonForTimeChangeLabel,
-                      hintText: '請選擇原因',
+                      hintText: l10n.selectReason,
                       errorText: errorMessage,
                     ),
                     isExpanded: true,
@@ -674,7 +676,9 @@ class EventManagementService {
                     const SizedBox(height: 12),
                     TextField(
                       controller: additionalTextController,
-                      decoration: const InputDecoration(hintText: '請輸入其他原因...'),
+                      decoration: InputDecoration(
+                        hintText: l10n.enterOtherReasonHint,
+                      ),
                       maxLines: 2,
                       autofocus: true,
                     ),
@@ -691,7 +695,7 @@ class EventManagementService {
                     // Validation
                     if (selectedReason == null) {
                       setState(() {
-                        errorMessage = '請選擇原因';
+                        errorMessage = l10n.selectReason;
                       });
                       return;
                     }
@@ -702,7 +706,9 @@ class EventManagementService {
                           .trim();
                       if (additionalText.isEmpty) {
                         ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('請輸入其他原因')),
+                          SnackBar(
+                            content: Text(l10n.enterOtherReasonRequired),
+                          ),
                         );
                         return;
                       }
@@ -771,7 +777,7 @@ class EventManagementService {
       case EventType.treatment:
         return l10n.treatment;
       case EventType.other:
-        return 'Other'; // Default for unspecified types
+        return l10n.otherEventType;
     }
   }
 

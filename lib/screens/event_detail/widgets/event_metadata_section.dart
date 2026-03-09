@@ -155,9 +155,9 @@ class EventMetadataSection extends StatelessWidget {
                     Text(
                       event.isRemoved
                           ? (event.hasNewTime
-                                ? 'Event Time Changed'
-                                : 'Event Removed')
-                          : 'Time Changed',
+                                ? l10n.eventTimeChanged
+                                : l10n.eventRemoved)
+                          : l10n.eventTimeChanged,
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
                         color: event.isRemoved
@@ -170,7 +170,7 @@ class EventMetadataSection extends StatelessWidget {
                 if (event.removalReason != null) ...[
                   const SizedBox(height: 8),
                   Text(
-                    'Reason: ${event.removalReason}',
+                    l10n.reason(event.removalReason!),
                     style: TextStyle(
                       color: event.isRemoved
                           ? Colors.red.shade600
@@ -198,7 +198,12 @@ class EventMetadataSection extends StatelessWidget {
                         const SizedBox(width: 8),
                         Expanded(
                           child: Text(
-                            'Moved to: ${DateFormat('EEEE, MMM d, y - HH:mm', Localizations.localeOf(context).toString()).format(newEvent!.startTime)}',
+                            l10n.movedTo(
+                              DateFormat(
+                                'EEEE, MMM d, y - HH:mm',
+                                Localizations.localeOf(context).toString(),
+                              ).format(newEvent!.startTime),
+                            ),
                             style: TextStyle(
                               color: Colors.red.shade700,
                               fontSize: 13,
@@ -427,7 +432,7 @@ class EventMetadataSection extends StatelessWidget {
                                 'MMM d, y - HH:mm',
                                 Localizations.localeOf(context).toString(),
                               ).format(endTime!)
-                            : 'Open-ended',
+                            : l10n.openEnded,
                       ),
                       trailing: const Icon(Icons.access_time),
                       onTap: isReadOnlyMode ? null : onEndTimeTap,
@@ -473,9 +478,14 @@ class EventMetadataSection extends StatelessWidget {
       }
     }
 
-    // Show first 2 types and "+N more"
+    // Show first 2 types and remaining count
     final remaining = typeNames.length - 2;
-    return '${typeNames[0]}, ${typeNames[1]}, +$remaining more';
+    final l10n = AppLocalizations.of(context)!;
+    return l10n.eventTypesOverflowSummary(
+      typeNames[0],
+      typeNames[1],
+      remaining,
+    );
   }
 
   /// Compact clear button used inside the end time rows so the tile height

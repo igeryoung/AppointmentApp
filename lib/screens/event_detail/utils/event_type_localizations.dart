@@ -21,18 +21,18 @@ class EventTypeLocalizations {
       case EventType.treatment:
         return l10n.treatment;
       case EventType.other:
-        return 'Other';
+        return l10n.otherEventType;
     }
   }
 
   /// Common event types for quick selection
   static List<EventType> get commonEventTypes => [
-        EventType.consultation,
-        EventType.surgery,
-        EventType.followUp,
-        EventType.emergency,
-        EventType.checkUp,
-        EventType.treatment,
-        EventType.other,
-      ];
+    EventType.consultation,
+    EventType.surgery,
+    EventType.followUp,
+    EventType.emergency,
+    EventType.checkUp,
+    EventType.treatment,
+    EventType.other,
+  ];
 }

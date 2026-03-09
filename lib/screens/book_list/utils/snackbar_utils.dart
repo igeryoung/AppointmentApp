@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../../../l10n/app_localizations.dart';
 
 /// Utility class for showing standardized SnackBars
 class SnackBarUtils {
@@ -8,6 +9,7 @@ class SnackBarUtils {
   /// Show a success message with a "Details" button
   static void showSuccess(BuildContext context, String message) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -15,10 +17,10 @@ class SnackBarUtils {
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
-            _showDetailsDialog(context, 'Success', message);
+            _showDetailsDialog(context, l10n.success, message);
           },
         ),
       ),
@@ -28,6 +30,7 @@ class SnackBarUtils {
   /// Show an error message with a "Details" button
   static void showError(BuildContext context, String message) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -35,10 +38,10 @@ class SnackBarUtils {
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
-            _showDetailsDialog(context, 'Error', message);
+            _showDetailsDialog(context, l10n.errorLabel, message);
           },
         ),
       ),
@@ -48,6 +51,7 @@ class SnackBarUtils {
   /// Show a warning message with a "Details" button
   static void showWarning(BuildContext context, String message) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -55,10 +59,10 @@ class SnackBarUtils {
         backgroundColor: Colors.orange,
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
-            _showDetailsDialog(context, 'Warning', message);
+            _showDetailsDialog(context, l10n.warning, message);
           },
         ),
       ),
@@ -68,16 +72,17 @@ class SnackBarUtils {
   /// Show an info message with a "Details" button
   static void showInfo(BuildContext context, String message) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
-            _showDetailsDialog(context, 'Info', message);
+            _showDetailsDialog(context, l10n.info, message);
           },
         ),
       ),
@@ -92,6 +97,7 @@ class SnackBarUtils {
     required String detailMessage,
   }) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -99,7 +105,7 @@ class SnackBarUtils {
         backgroundColor: Colors.green,
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
             _showDetailsDialog(context, detailTitle, detailMessage);
@@ -117,6 +123,7 @@ class SnackBarUtils {
     required String detailMessage,
   }) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -124,7 +131,7 @@ class SnackBarUtils {
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 4),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
             _showDetailsDialog(context, detailTitle, detailMessage);
@@ -142,6 +149,7 @@ class SnackBarUtils {
     required String detailMessage,
   }) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -149,7 +157,7 @@ class SnackBarUtils {
         backgroundColor: Colors.orange,
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
             _showDetailsDialog(context, detailTitle, detailMessage);
@@ -167,13 +175,14 @@ class SnackBarUtils {
     required String detailMessage,
   }) {
     if (!context.mounted) return;
+    final l10n = AppLocalizations.of(context)!;
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         duration: const Duration(seconds: 3),
         action: SnackBarAction(
-          label: 'Details',
+          label: l10n.details,
           textColor: Colors.white,
           onPressed: () {
             _showDetailsDialog(context, detailTitle, detailMessage);
@@ -212,29 +221,29 @@ class SnackBarUtils {
     String title,
     String message,
   ) {
+    final l10n = AppLocalizations.of(context)!;
+
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: Text(title),
-        content: SingleChildScrollView(
-          child: Text(message),
-        ),
+        content: SingleChildScrollView(child: Text(message)),
         actions: [
           TextButton(
             onPressed: () {
               Clipboard.setData(ClipboardData(text: message));
               ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('Message copied to clipboard'),
-                  duration: Duration(seconds: 2),
+                SnackBar(
+                  content: Text(l10n.messageCopiedToClipboard),
+                  duration: const Duration(seconds: 2),
                 ),
               );
             },
-            child: const Text('Copy'),
+            child: Text(l10n.copy),
           ),
           TextButton(
             onPressed: () => Navigator.pop(context),
-            child: const Text('OK'),
+            child: Text(l10n.ok),
           ),
         ],
       ),

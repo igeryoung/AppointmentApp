@@ -68,7 +68,7 @@ class ScheduleDrawingService {
     return _canvasKeys[pageId]!;
   }
 
-  /// Load drawing for the selected date (cache-first with server fallback)
+  /// Load drawing for the selected date (server-required mode)
   Future<void> loadDrawing(
     DateTime selectedDate, {
     required int viewMode,

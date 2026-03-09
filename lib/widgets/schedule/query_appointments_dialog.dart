@@ -55,6 +55,30 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
   bool _isProgrammaticNameChange = false; // Flag to prevent race condition
   String? nameError;
   String? recordNumberError;
+  DateTime? _lastServerWarningAt;
+
+  bool _isServerConnectionIssue(Object error) {
+    return error is ServerConnectionRequiredException;
+  }
+
+  void _showServerConnectionWarning() {
+    if (!mounted) {
+      return;
+    }
+    final now = DateTime.now();
+    if (_lastServerWarningAt != null &&
+        now.difference(_lastServerWarningAt!) < const Duration(seconds: 3)) {
+      return;
+    }
+    _lastServerWarningAt = now;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.cannotConnectToServerCheckUrl),
+        backgroundColor: Colors.orange,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -137,9 +161,13 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       });
 
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      if (_isServerConnectionIssue(e)) {
+        _showServerConnectionWarning();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      }
     }
   }
 
@@ -183,9 +211,13 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
       });
 
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      if (_isServerConnectionIssue(e)) {
+        _showServerConnectionWarning();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      }
     }
   }
 
@@ -275,9 +307,13 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         isRecordSuggestionsLoading = false;
       });
       final l10n = AppLocalizations.of(context)!;
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      if (_isServerConnectionIssue(e)) {
+        _showServerConnectionWarning();
+      } else {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(l10n.errorLoadingData)));
+      }
     }
   }
 
@@ -335,9 +371,13 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
         searchResults = [];
       });
       if (mounted) {
-        ScaffoldMessenger.of(
-          context,
-        ).showSnackBar(SnackBar(content: Text(l10n.errorSearching)));
+        if (_isServerConnectionIssue(e)) {
+          _showServerConnectionWarning();
+        } else {
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text(l10n.errorSearching)));
+        }
       }
     }
   }

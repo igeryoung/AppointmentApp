@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../../../l10n/app_localizations.dart';
 import '../utils/date_format_utils.dart';
 
 /// Dialog for selecting a server book to import.
@@ -21,14 +22,16 @@ class ImportServerBookDialog extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
+
     return AlertDialog(
-      title: const Text('Import Book from Server'),
+      title: Text(l10n.importBookFromServer),
       content: SizedBox(
         width: double.maxFinite,
         child: books.isEmpty
-            ? const Padding(
+            ? Padding(
                 padding: EdgeInsets.all(16.0),
-                child: Text('No server books available'),
+                child: Text(l10n.noServerBooksAvailable),
               )
             : ListView.builder(
                 shrinkWrap: true,
@@ -42,7 +45,7 @@ class ImportServerBookDialog extends StatelessWidget {
       actions: [
         TextButton(
           onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
+          child: Text(l10n.cancel),
         ),
       ],
     );
@@ -74,17 +77,27 @@ class ImportServerBookDialog extends StatelessWidget {
             const SizedBox(height: 4),
             if (bookUuid.isNotEmpty)
               Text(
-                'Book UUID: ${bookUuid.substring(0, bookUuid.length >= 8 ? 8 : bookUuid.length)}...',
+                AppLocalizations.of(context)!.bookUuidShort(
+                  bookUuid.substring(
+                    0,
+                    bookUuid.length >= 8 ? 8 : bookUuid.length,
+                  ),
+                ),
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
             if (deviceId != null && deviceId.isNotEmpty)
               Text(
-                'Owner Device: ${deviceId.substring(0, deviceId.length >= 8 ? 8 : deviceId.length)}...',
+                AppLocalizations.of(context)!.ownerDeviceShort(
+                  deviceId.substring(
+                    0,
+                    deviceId.length >= 8 ? 8 : deviceId.length,
+                  ),
+                ),
                 style: TextStyle(color: Colors.grey[600], fontSize: 12),
               ),
             if (createdAt != null)
               Text(
-                'Created: ${DateFormatUtils.formatDateTimeWithTime(createdAt, context)}',
+                '${AppLocalizations.of(context)!.createdLabel}${DateFormatUtils.formatDateTimeWithTime(createdAt, context)}',
               ),
           ],
         ),

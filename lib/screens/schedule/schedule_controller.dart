@@ -195,6 +195,7 @@ class ScheduleController extends ChangeNotifier {
           _drawingService!.contentService = contentService;
         }
       },
+      getLocalizedString: (getter) => getter(AppLocalizations.of(context)!),
     );
 
     _eventService = EventManagementService(

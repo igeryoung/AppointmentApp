@@ -458,7 +458,7 @@ void main() {
   );
 
   test(
-    'EVENT-UNIT-005: name/record lookup APIs fall back to local data when server fetch fails',
+    'EVENT-UNIT-005: name/record lookup APIs require server and throw when server fetch fails',
     () async {
       // Arrange
       await seedBook(db, bookUuid: 'book-a');
@@ -490,28 +490,29 @@ void main() {
         ),
       );
 
-      // Act
-      final names = await serverRepository.getAllNames('book-a');
-      final pairs = await serverRepository.getAllNameRecordPairs('book-a');
-      final numbers = await serverRepository.getRecordNumbersByName(
-        'book-a',
-        'ali',
+      await expectLater(
+        serverRepository.getAllNames('book-a'),
+        throwsA(isA<ServerConnectionRequiredException>()),
       );
-      final search = await serverRepository.searchByNameAndRecordNumber(
-        'book-a',
-        'alice',
-        'A-001',
+      await expectLater(
+        serverRepository.getAllNameRecordPairs('book-a'),
+        throwsA(isA<ServerConnectionRequiredException>()),
+      );
+      await expectLater(
+        serverRepository.getRecordNumbersByName('book-a', 'ali'),
+        throwsA(isA<ServerConnectionRequiredException>()),
+      );
+      await expectLater(
+        serverRepository.searchByNameAndRecordNumber(
+          'book-a',
+          'alice',
+          'A-001',
+        ),
+        throwsA(isA<ServerConnectionRequiredException>()),
       );
 
-      // Assert
       expect(fakeApi.fetchCalls, 3);
       expect(fakeApi.queryAppointmentsCalls, 1);
-      expect(names, ['Alice']);
-      expect(pairs, const [
-        NameRecordPair(name: 'Alice', recordNumber: 'A-001'),
-      ]);
-      expect(numbers, ['A-001']);
-      expect(search.map((e) => e.id).toList(), ['event-1']);
     },
   );
 
@@ -575,7 +576,7 @@ void main() {
   );
 
   test(
-    'EVENT-UNIT-007: fetchNameSuggestions prefers server prefix results and falls back locally on failure',
+    'EVENT-UNIT-007: fetchNameSuggestions requires server and throws on connection failure',
     () async {
       await seedBook(db, bookUuid: 'book-a');
       await seedRecord(
@@ -628,16 +629,16 @@ void main() {
       expect(fakeApi.nameSuggestionsCalls, 1);
 
       fakeApi.nameSuggestionsError = Exception('offline');
-      expect(await serverRepository.fetchNameSuggestions('book-a', 'a'), [
-        'Alice',
-        'Amy',
-      ]);
+      await expectLater(
+        serverRepository.fetchNameSuggestions('book-a', 'a'),
+        throwsA(isA<ServerConnectionRequiredException>()),
+      );
       expect(fakeApi.nameSuggestionsCalls, 2);
     },
   );
 
   test(
-    'EVENT-UNIT-008: fetchRecordNumberSuggestions constrains by name prefix and falls back locally on failure',
+    'EVENT-UNIT-008: fetchRecordNumberSuggestions requires server and throws on connection failure',
     () async {
       await seedBook(db, bookUuid: 'book-a');
       await seedRecord(
@@ -712,16 +713,13 @@ void main() {
       expect(fakeApi.recordSuggestionsCalls, 1);
 
       fakeApi.recordSuggestionsError = Exception('offline');
-      expect(
-        await serverRepository.fetchRecordNumberSuggestions(
+      await expectLater(
+        serverRepository.fetchRecordNumberSuggestions(
           'book-a',
           '1',
           namePrefix: 'al',
         ),
-        const [
-          NameRecordPair(name: 'Alice', recordNumber: '100'),
-          NameRecordPair(name: 'Alfred', recordNumber: '145'),
-        ],
+        throwsA(isA<ServerConnectionRequiredException>()),
       );
       expect(fakeApi.recordSuggestionsCalls, 2);
     },

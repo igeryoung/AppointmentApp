@@ -61,7 +61,9 @@ class _BookListScreenState extends State<BookListScreen> {
                           actions: [
                             TextButton(
                               onPressed: controller.clearError,
-                              child: const Text('Dismiss'),
+                              child: Text(
+                                AppLocalizations.of(context)!.dismiss,
+                              ),
                             ),
                           ],
                         ),
@@ -100,6 +102,7 @@ class _BookListScreenState extends State<BookListScreen> {
   }
 
   Widget _buildReadOnlyBanner(BuildContext context) {
+    final l10n = AppLocalizations.of(context)!;
     final theme = Theme.of(context);
     return Container(
       margin: const EdgeInsets.fromLTRB(16, 12, 16, 0),
@@ -117,7 +120,7 @@ class _BookListScreenState extends State<BookListScreen> {
           const SizedBox(width: 10),
           Expanded(
             child: Text(
-              'Read mode active: view-only access, edit actions are disabled.',
+              l10n.readOnlyBookModeActive,
               style: theme.textTheme.bodyMedium?.copyWith(
                 fontWeight: FontWeight.w600,
               ),
@@ -142,14 +145,14 @@ class _BookListScreenState extends State<BookListScreen> {
         if (!PlatformUtils.isWeb)
           IconButton(
             icon: const Icon(Icons.cloud_download),
-            tooltip: 'Import from Server',
+            tooltip: l10n.importFromServer,
             onPressed: () => controller.openImportFromServerFlow(context),
           ),
         // Server Settings
         if (!PlatformUtils.isWeb)
           IconButton(
             icon: const Icon(Icons.settings),
-            tooltip: 'Server Settings',
+            tooltip: l10n.serverSettings,
             onPressed: () => controller.openServerSettingsFlow(context),
           ),
       ],

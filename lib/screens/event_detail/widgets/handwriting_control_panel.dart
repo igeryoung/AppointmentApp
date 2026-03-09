@@ -61,29 +61,32 @@ class HandwritingControlPanel extends StatelessWidget {
                 children: [
                   // Size Control
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
                     child: Row(
                       children: [
                         Icon(
                           currentTool == DrawingTool.eraser
                               ? Icons.radio_button_unchecked
                               : currentTool == DrawingTool.highlighter
-                                  ? Icons.highlight
-                                  : Icons.edit,
+                              ? Icons.highlight
+                              : Icons.edit,
                           size: 18,
                           color: currentTool == DrawingTool.eraser
                               ? Colors.orange.shade700
                               : currentTool == DrawingTool.highlighter
-                                  ? Colors.amber.shade700
-                                  : Colors.blue.shade700,
+                              ? Colors.amber.shade700
+                              : Colors.blue.shade700,
                         ),
                         const SizedBox(width: 8),
                         Text(
                           currentTool == DrawingTool.eraser
                               ? l10n.eraserSize
                               : currentTool == DrawingTool.highlighter
-                                  ? 'Highlighter Width'
-                                  : l10n.penWidth,
+                              ? l10n.highlighterWidth
+                              : l10n.penWidth,
                           style: TextStyle(
                             fontSize: 13,
                             fontWeight: FontWeight.w500,
@@ -96,32 +99,33 @@ class HandwritingControlPanel extends StatelessWidget {
                             value: currentTool == DrawingTool.eraser
                                 ? currentEraserRadius
                                 : currentTool == DrawingTool.highlighter
-                                    ? currentHighlighterWidth
-                                    : currentWidth,
+                                ? currentHighlighterWidth
+                                : currentWidth,
                             min: currentTool == DrawingTool.eraser
                                 ? 5.0
                                 : currentTool == DrawingTool.highlighter
-                                    ? 5.0
-                                    : 1.0,
+                                ? 5.0
+                                : 1.0,
                             max: currentTool == DrawingTool.eraser
                                 ? 50.0
                                 : currentTool == DrawingTool.highlighter
-                                    ? 20.0
-                                    : 10.0,
+                                ? 20.0
+                                : 10.0,
                             divisions: currentTool == DrawingTool.eraser
                                 ? 45
                                 : currentTool == DrawingTool.highlighter
-                                    ? 15
-                                    : 9,
+                                ? 15
+                                : 9,
                             activeColor: currentTool == DrawingTool.eraser
                                 ? Colors.orange.shade700
                                 : currentTool == DrawingTool.highlighter
-                                    ? Colors.amber.shade700
-                                    : Colors.blue.shade700,
+                                ? Colors.amber.shade700
+                                : Colors.blue.shade700,
                             onChanged: (value) {
                               if (currentTool == DrawingTool.eraser) {
                                 onEraserRadiusChanged(value);
-                              } else if (currentTool == DrawingTool.highlighter) {
+                              } else if (currentTool ==
+                                  DrawingTool.highlighter) {
                                 onHighlighterWidthChanged(value);
                               } else {
                                 onWidthChanged(value);
@@ -131,32 +135,39 @@ class HandwritingControlPanel extends StatelessWidget {
                         ),
                         const SizedBox(width: 12),
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 6,
+                          ),
                           decoration: BoxDecoration(
                             color: currentTool == DrawingTool.eraser
                                 ? Colors.orange.shade50
                                 : currentTool == DrawingTool.highlighter
-                                    ? Colors.yellow.shade50
-                                    : Colors.blue.shade50,
+                                ? Colors.yellow.shade50
+                                : Colors.blue.shade50,
                             borderRadius: BorderRadius.circular(4),
                             border: Border.all(
                               color: currentTool == DrawingTool.eraser
                                   ? Colors.orange.shade200
                                   : currentTool == DrawingTool.highlighter
-                                      ? Colors.amber.shade200
-                                      : Colors.blue.shade200,
+                                  ? Colors.amber.shade200
+                                  : Colors.blue.shade200,
                             ),
                           ),
                           child: Text(
-                            '${(currentTool == DrawingTool.eraser ? currentEraserRadius : currentTool == DrawingTool.highlighter ? currentHighlighterWidth : currentWidth).toInt()} px',
+                            '${(currentTool == DrawingTool.eraser
+                                ? currentEraserRadius
+                                : currentTool == DrawingTool.highlighter
+                                ? currentHighlighterWidth
+                                : currentWidth).toInt()} px',
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.bold,
                               color: currentTool == DrawingTool.eraser
                                   ? Colors.orange.shade700
                                   : currentTool == DrawingTool.highlighter
-                                      ? Colors.amber.shade700
-                                      : Colors.blue.shade700,
+                                  ? Colors.amber.shade700
+                                  : Colors.blue.shade700,
                             ),
                           ),
                         ),
@@ -166,7 +177,11 @@ class HandwritingControlPanel extends StatelessWidget {
                   // Color Palette (show for pen and highlighter modes)
                   if (currentTool != DrawingTool.eraser)
                     Container(
-                      padding: const EdgeInsets.only(left: 16, right: 16, bottom: 12),
+                      padding: const EdgeInsets.only(
+                        left: 16,
+                        right: 16,
+                        bottom: 12,
+                      ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
@@ -184,8 +199,14 @@ class HandwritingControlPanel extends StatelessWidget {
                             scrollDirection: Axis.horizontal,
                             child: Row(
                               children: currentTool == DrawingTool.highlighter
-                                  ? _buildHighlighterColorPalette(currentHighlighterColor, onHighlighterColorSelected)
-                                  : _buildColorPalette(currentColor, onColorSelected),
+                                  ? _buildHighlighterColorPalette(
+                                      currentHighlighterColor,
+                                      onHighlighterColorSelected,
+                                    )
+                                  : _buildColorPalette(
+                                      currentColor,
+                                      onColorSelected,
+                                    ),
                             ),
                           ),
                         ],
@@ -198,7 +219,10 @@ class HandwritingControlPanel extends StatelessWidget {
     );
   }
 
-  List<Widget> _buildColorPalette(Color currentColor, Function(Color) onColorSelected) {
+  List<Widget> _buildColorPalette(
+    Color currentColor,
+    Function(Color) onColorSelected,
+  ) {
     final colors = [
       Colors.black,
       Colors.grey.shade700,
@@ -245,7 +269,9 @@ class HandwritingControlPanel extends StatelessWidget {
               ? Icon(
                   Icons.check,
                   size: 20,
-                  color: color.computeLuminance() > 0.5 ? Colors.black : Colors.white,
+                  color: color.computeLuminance() > 0.5
+                      ? Colors.black
+                      : Colors.white,
                 )
               : null,
         ),
@@ -253,7 +279,10 @@ class HandwritingControlPanel extends StatelessWidget {
     }).toList();
   }
 
-  List<Widget> _buildHighlighterColorPalette(Color currentColor, Function(Color) onColorSelected) {
+  List<Widget> _buildHighlighterColorPalette(
+    Color currentColor,
+    Function(Color) onColorSelected,
+  ) {
     // Highlighter colors with transparency (40% opacity)
     final colors = [
       const Color(0x66FFEB3B), // Yellow
@@ -305,13 +334,7 @@ class HandwritingControlPanel extends StatelessWidget {
               ),
               // Check icon if selected
               if (isSelected)
-                Center(
-                  child: Icon(
-                    Icons.check,
-                    size: 20,
-                    color: Colors.black,
-                  ),
-                ),
+                Center(child: Icon(Icons.check, size: 20, color: Colors.black)),
             ],
           ),
         ),

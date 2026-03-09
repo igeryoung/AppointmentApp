@@ -1074,9 +1074,22 @@ void main() {
   test(
     'EVENT-DETAIL-UNIT-025: initialize() hydrates prefilled new event with existing note and charge items',
     () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
       final note = makeNote(recordUuid: 'record-a1', version: 3);
-      final noteMap = Map<String, dynamic>.from(note.toMap())..remove('id');
-      await db.insert('notes', noteMap);
+      fakeApiClient.fetchRecordByNumberResponses['001'] = {
+        'record_uuid': 'record-a1',
+        'record_number': '001',
+        'name': 'Alice',
+        'phone': null,
+      };
+      fakeNoteSyncAdapter.notesByRecordUuid['record-a1'] = note;
 
       await dbService.saveChargeItem(
         ChargeItem(

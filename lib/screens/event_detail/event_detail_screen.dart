@@ -75,6 +75,29 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   int _availableRecordNumbersGeneration = 0;
   bool _isNameSuggestionsLoading = false;
   bool _isRecordSuggestionsLoading = false;
+  DateTime? _lastServerWarningAt;
+
+  bool _isServerConnectionIssue(Object error) {
+    return error is ServerConnectionRequiredException;
+  }
+
+  void _showServerConnectionWarning() {
+    if (!mounted) return;
+    final now = DateTime.now();
+    if (_lastServerWarningAt != null &&
+        now.difference(_lastServerWarningAt!) < const Duration(seconds: 3)) {
+      return;
+    }
+    _lastServerWarningAt = now;
+    final l10n = AppLocalizations.of(context)!;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(l10n.cannotConnectToServerCheckUrl),
+        backgroundColor: Colors.orange,
+        duration: const Duration(seconds: 4),
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -168,11 +191,13 @@ class _EventDetailScreenState extends State<EventDetailScreen>
       _startNotePolling();
     } catch (e) {
       if (mounted) {
+        final l10n = AppLocalizations.of(context)!;
+        final message = _isServerConnectionIssue(e)
+            ? l10n.cannotConnectToServerCheckUrl
+            : l10n.errorInitializingServices(e.toString());
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(
-              'Failed to initialize services. Some features may not work. Error: $e',
-            ),
+            content: Text(message),
             backgroundColor: Colors.red,
             duration: const Duration(seconds: 5),
           ),
@@ -265,11 +290,23 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   Future<void> _fetchAvailableRecordNumbers() async {
     final requestGeneration = ++_availableRecordNumbersGeneration;
-    final recordNumbers = await _controller.getRecordNumbersForCurrentName();
-    if (mounted && requestGeneration == _availableRecordNumbersGeneration) {
+    try {
+      final recordNumbers = await _controller.getRecordNumbersForCurrentName();
+      if (mounted && requestGeneration == _availableRecordNumbersGeneration) {
+        setState(() {
+          _availableRecordNumbers = recordNumbers;
+        });
+      }
+    } catch (e) {
+      if (!mounted || requestGeneration != _availableRecordNumbersGeneration) {
+        return;
+      }
       setState(() {
-        _availableRecordNumbers = recordNumbers;
+        _availableRecordNumbers = [];
       });
+      if (_isServerConnectionIssue(e)) {
+        _showServerConnectionWarning();
+      }
     }
   }
 
@@ -304,6 +341,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         _allNames = [];
         _isNameSuggestionsLoading = false;
       });
+      if (_isServerConnectionIssue(e)) {
+        _showServerConnectionWarning();
+      }
     }
   }
 
@@ -361,6 +401,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         _allRecordNumberOptions = [];
         _isRecordSuggestionsLoading = false;
       });
+      if (_isServerConnectionIssue(e)) {
+        _showServerConnectionWarning();
+      }
     }
   }
 
@@ -582,11 +625,12 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         currentEndTime,
       );
       if (error != null) {
+        final l10n = AppLocalizations.of(context)!;
         _controller.clearEndTime();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
-              content: Text('End time cleared: $error'),
+              content: Text(l10n.endTimeCleared(error)),
               backgroundColor: Colors.orange,
             ),
           );
@@ -684,8 +728,8 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     final isBlockingOverlayVisible =
         state.isLoading || state.isLoadingFromServer;
     final loadingMessage = state.isLoading
-        ? 'Syncing event...'
-        : 'Loading event...';
+        ? l10n.syncingEvent
+        : l10n.loadingEvent;
 
     return WillPopScope(
       onWillPop: _onWillPop,
@@ -693,40 +737,72 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         appBar: AppBar(
           title: Text(
             widget.isReadOnlyMode
-                ? 'View Event'
+                ? l10n.viewEvent
                 : (widget.isNew ? l10n.newEvent : l10n.editEvent),
           ),
+          bottom: state.isOffline
+              ? PreferredSize(
+                  preferredSize: const Size.fromHeight(36),
+                  child: Container(
+                    width: double.infinity,
+                    color: Colors.orange.shade100,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    child: Row(
+                      children: [
+                        Icon(
+                          Icons.wifi_off,
+                          size: 16,
+                          color: Colors.orange.shade900,
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            l10n.cannotConnectToServerCheckUrl,
+                            style: TextStyle(
+                              color: Colors.orange.shade900,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              : null,
           actions: [
             // Sync status indicators in AppBar
             if (state.hasUnsyncedChanges)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
                 child: Icon(
                   Icons.cloud_upload,
                   color: Colors.orange,
-                  semanticLabel: 'Unsynced changes',
+                  semanticLabel: l10n.unsyncedChangesLabel,
                   size: 24,
                 ),
               ),
             if (state.isOffline && !state.hasUnsyncedChanges)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
                 child: Icon(
                   Icons.cloud_off,
                   color: Colors.grey,
-                  semanticLabel: 'Offline',
+                  semanticLabel: l10n.offlineLabel,
                   size: 24,
                 ),
               ),
             if (widget.isReadOnlyMode)
-              const Padding(
-                padding: EdgeInsets.only(right: 8),
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
                 child: Tooltip(
-                  message:
-                      'Read-only mode: data editing and handwriting are disabled.',
+                  message: l10n.readOnlyModeTooltip,
                   child: Icon(
                     Icons.lock_outline,
-                    semanticLabel: 'Read-only mode',
+                    semanticLabel: l10n.readOnlyModeLabel,
                     size: 20,
                   ),
                 ),
@@ -762,7 +838,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Remove Event',
+                          l10n.removeEvent,
                           style: TextStyle(
                             color: isBlockingOverlayVisible
                                 ? Colors.grey
@@ -783,7 +859,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                         ),
                         const SizedBox(width: 8),
                         Text(
-                          'Change Time',
+                          l10n.changeTime,
                           style: TextStyle(
                             color: isBlockingOverlayVisible
                                 ? Colors.grey
@@ -805,7 +881,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                               : Colors.red,
                         ),
                         const SizedBox(width: 8),
-                        const Text('Delete Permanently'),
+                        Text(l10n.deletePermanently),
                       ],
                     ),
                   ),

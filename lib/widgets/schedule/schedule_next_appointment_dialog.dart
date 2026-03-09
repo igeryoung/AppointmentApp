@@ -47,10 +47,12 @@ class _ScheduleNextAppointmentDialog extends StatefulWidget {
   });
 
   @override
-  State<_ScheduleNextAppointmentDialog> createState() => _ScheduleNextAppointmentDialogState();
+  State<_ScheduleNextAppointmentDialog> createState() =>
+      _ScheduleNextAppointmentDialogState();
 }
 
-class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointmentDialog> {
+class _ScheduleNextAppointmentDialogState
+    extends State<_ScheduleNextAppointmentDialog> {
   late TextEditingController daysController;
   late List<EventType> selectedEventTypes;
   String? daysError;
@@ -158,7 +160,10 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
               decoration: InputDecoration(
                 labelText: widget.l10n.appointmentType,
                 border: const OutlineInputBorder(),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                contentPadding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 suffixIcon: const Icon(Icons.arrow_drop_down),
               ),
               child: Text(
@@ -206,10 +211,7 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
           onPressed: () => Navigator.of(context).pop(),
           child: Text(widget.l10n.cancel),
         ),
-        FilledButton(
-          onPressed: _confirm,
-          child: Text(widget.l10n.confirm),
-        ),
+        FilledButton(onPressed: _confirm, child: Text(widget.l10n.confirm)),
       ],
     );
   }
@@ -223,7 +225,9 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
 
     // Get localized names
     final typeNames = types
-        .map((type) => EventTypeLocalizations.getLocalizedEventType(context, type))
+        .map(
+          (type) => EventTypeLocalizations.getLocalizedEventType(context, type),
+        )
         .toList();
 
     // If only 1-2 types, show all
@@ -240,8 +244,12 @@ class _ScheduleNextAppointmentDialogState extends State<_ScheduleNextAppointment
       }
     }
 
-    // Show first 2 types and "+N more"
+    // Show first 2 types and remaining count
     final remaining = typeNames.length - 2;
-    return '${typeNames[0]}, ${typeNames[1]}, +$remaining more';
+    return widget.l10n.eventTypesOverflowSummary(
+      typeNames[0],
+      typeNames[1],
+      remaining,
+    );
   }
 }
