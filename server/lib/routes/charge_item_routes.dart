@@ -322,16 +322,6 @@ class ChargeItemRoutes {
           headers: {'Content-Type': 'application/json'},
         );
       }
-      if (!await _canDeviceWrite(deviceId)) {
-        return Response.forbidden(
-          jsonEncode({
-            'success': false,
-            'message': 'Read-only device cannot modify charge items',
-            'error': 'READ_ONLY_DEVICE',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
 
       final rows = await db.client
           .from('charge_items')

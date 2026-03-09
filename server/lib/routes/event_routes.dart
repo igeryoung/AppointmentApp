@@ -290,16 +290,27 @@ class EventRoutes {
     required DateTime startDate,
     required DateTime endDate,
   }) async {
-    final eventRows = _rows(
-      await db.client
-          .from('events')
-          .select(_eventSelectColumns)
-          .eq('book_uuid', bookUuid)
-          .eq('is_deleted', false)
-          .gte('start_time', startDate.toUtc().toIso8601String())
-          .lt('start_time', endDate.toUtc().toIso8601String())
-          .order('start_time', ascending: true),
-    );
+    final eventRows = <Map<String, dynamic>>[];
+    for (var offset = 0; ; offset += _queryPageSize) {
+      final batch = _rows(
+        await db.client
+            .from('events')
+            .select(_eventSelectColumns)
+            .eq('book_uuid', bookUuid)
+            .eq('is_deleted', false)
+            .gte('start_time', startDate.toUtc().toIso8601String())
+            .lt('start_time', endDate.toUtc().toIso8601String())
+            .order('start_time', ascending: true)
+            .range(offset, offset + _queryPageSize - 1),
+      );
+      if (batch.isEmpty) {
+        break;
+      }
+      eventRows.addAll(batch);
+      if (batch.length < _queryPageSize) {
+        break;
+      }
+    }
 
     final recordUuids = eventRows
         .map((row) => row['record_uuid']?.toString() ?? '')
@@ -309,15 +320,21 @@ class EventRoutes {
 
     final recordsById = <String, Map<String, dynamic>>{};
     if (recordUuids.isNotEmpty) {
-      final recordRows = _rows(
-        await db.client
-            .from('records')
-            .select('record_uuid, record_number, name, phone')
-            .inFilter('record_uuid', recordUuids)
-            .eq('is_deleted', false),
-      );
-      for (final row in recordRows) {
-        recordsById[row['record_uuid'].toString()] = row;
+      for (var i = 0; i < recordUuids.length; i += _queryPageSize) {
+        final chunk = recordUuids.sublist(
+          i,
+          (i + _queryPageSize).clamp(0, recordUuids.length),
+        );
+        final recordRows = _rows(
+          await db.client
+              .from('records')
+              .select('record_uuid, record_number, name, phone')
+              .inFilter('record_uuid', chunk)
+              .eq('is_deleted', false),
+        );
+        for (final row in recordRows) {
+          recordsById[row['record_uuid'].toString()] = row;
+        }
       }
     }
 
@@ -759,6 +776,15 @@ class EventRoutes {
           body: jsonEncode({
             'success': false,
             'message': 'Invalid date format. Use ISO8601 format.',
+          }),
+          headers: {'Content-Type': 'application/json'},
+        );
+      }
+      if (!endDate.toUtc().isAfter(startDate.toUtc())) {
+        return Response.badRequest(
+          body: jsonEncode({
+            'success': false,
+            'message': 'endDate must be after startDate',
           }),
           headers: {'Content-Type': 'application/json'},
         );
