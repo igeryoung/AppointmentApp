@@ -158,15 +158,20 @@ class _EventDetailScreenState extends State<EventDetailScreen>
       _controller.updateName(newValue);
       _lastNameValue = newValue;
 
-      // Fetch available record numbers when name changes
-      unawaited(_fetchAvailableRecordNumbers());
-      unawaited(_refreshNameSuggestions(newValue));
-      unawaited(
-        _refreshRecordNumberSuggestions(
-          _controller.state.recordNumber,
-          nameConstraint: newValue,
-        ),
-      );
+      if (_shouldFetchNameLookupData) {
+        unawaited(_refreshNameSuggestions(newValue));
+      }
+
+      if (_shouldFetchRecordLookupData) {
+        // Fetch available record numbers when name changes
+        unawaited(_fetchAvailableRecordNumbers());
+        unawaited(
+          _refreshRecordNumberSuggestions(
+            _controller.state.recordNumber,
+            nameConstraint: newValue,
+          ),
+        );
+      }
     });
 
     // Add listener for phone changes
@@ -181,12 +186,14 @@ class _EventDetailScreenState extends State<EventDetailScreen>
   Future<void> _initialize() async {
     try {
       await _controller.initialize();
-      await _fetchAvailableRecordNumbers();
-      await _refreshNameSuggestions(_nameController.text);
-      await _refreshRecordNumberSuggestions(
-        _controller.state.recordNumber,
-        nameConstraint: _nameController.text,
-      );
+      if (widget.isNew) {
+        await _fetchAvailableRecordNumbers();
+        await _refreshNameSuggestions(_nameController.text);
+        await _refreshRecordNumberSuggestions(
+          _controller.state.recordNumber,
+          nameConstraint: _nameController.text,
+        );
+      }
       _controller.setupConnectivityMonitoring();
       _startNotePolling();
     } catch (e) {
@@ -409,6 +416,9 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
   void _handleRecordNumberChanged(String newRecordNumber) {
     _controller.updateRecordNumber(newRecordNumber);
+    if (!_shouldFetchRecordLookupData) {
+      return;
+    }
     unawaited(
       _refreshRecordNumberSuggestions(
         newRecordNumber,
@@ -429,6 +439,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
     final currentRecordNumber = _controller.state.recordNumber;
     _lookupSuggestionHelper.resetRecordCache();
+    unawaited(_fetchAvailableRecordNumbers());
     unawaited(
       _refreshRecordNumberSuggestions(
         currentRecordNumber,
@@ -436,6 +447,20 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         fromFocus: currentRecordNumber.trim().isEmpty,
       ),
     );
+  }
+
+  bool get _shouldFetchNameLookupData {
+    if (widget.isNew) {
+      return true;
+    }
+    return _nameFocusNode.hasFocus;
+  }
+
+  bool get _shouldFetchRecordLookupData {
+    if (widget.isNew) {
+      return true;
+    }
+    return _recordNumberFocusNode.hasFocus;
   }
 
   Future<void> _handleRecordNumberBlur() async {
@@ -961,14 +986,16 @@ class _EventDetailScreenState extends State<EventDetailScreen>
                                   _handleRecordNumberFocused,
                               onNameSelected: (name) {
                                 _controller.onNameSelected(name);
-                                unawaited(_fetchAvailableRecordNumbers());
                                 unawaited(_refreshNameSuggestions(name));
-                                unawaited(
-                                  _refreshRecordNumberSuggestions(
-                                    state.recordNumber,
-                                    nameConstraint: name,
-                                  ),
-                                );
+                                if (_shouldFetchRecordLookupData) {
+                                  unawaited(_fetchAvailableRecordNumbers());
+                                  unawaited(
+                                    _refreshRecordNumberSuggestions(
+                                      state.recordNumber,
+                                      nameConstraint: name,
+                                    ),
+                                  );
+                                }
                               },
                               onRecordNumberSelected: (recordNumber) =>
                                   unawaited(() async {
