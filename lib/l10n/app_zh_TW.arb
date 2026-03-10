@@ -1447,6 +1447,31 @@
   "enterOtherReasonHint": "請輸入其他原因...",
   "enterOtherReasonRequired": "請輸入其他原因",
   "today": "今天",
+  "dayEventSummaryTooltip": "顯示當天活動摘要",
+  "dayEventSummaryTitle": "當天活動摘要",
+  "dayEventSummaryTotalEvents": "活動總數：{count}",
+  "@dayEventSummaryTotalEvents": {
+    "description": "Summary line showing total active events for a date",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dayEventSummaryTypeBreakdown": "類型統計",
+  "dayEventSummaryNoEvents": "這一天沒有活動。",
+  "dayEventSummaryTypeCount": "{type}：{count}",
+  "@dayEventSummaryTypeCount": {
+    "description": "Summary line showing event type count for the day",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "selectedTypesCount": "已選擇：{count} 種",
   "eventTypesOverflowSummary": "{firstType}、{secondType}，另外 {remainingCount} 種",
   "errorInitializingServices": "初始化服務失敗，部分功能可能無法使用：{error}",

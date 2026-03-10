@@ -823,6 +823,28 @@ class AppLocalizationsEn extends AppLocalizations {
   String get today => 'Today';
 
   @override
+  String get dayEventSummaryTooltip => 'Show day event summary';
+
+  @override
+  String get dayEventSummaryTitle => 'Day Event Summary';
+
+  @override
+  String dayEventSummaryTotalEvents(int count) {
+    return 'Total events: $count';
+  }
+
+  @override
+  String get dayEventSummaryTypeBreakdown => 'Type breakdown';
+
+  @override
+  String get dayEventSummaryNoEvents => 'No events for this day.';
+
+  @override
+  String dayEventSummaryTypeCount(String type, int count) {
+    return '$type: $count';
+  }
+
+  @override
   String selectedTypesCount(Object count) {
     return 'Selected: $count type(s)';
   }

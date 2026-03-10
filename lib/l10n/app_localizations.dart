@@ -1533,6 +1533,42 @@ abstract class AppLocalizations {
   /// **'今天'**
   String get today;
 
+  /// No description provided for @dayEventSummaryTooltip.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'顯示當天活動摘要'**
+  String get dayEventSummaryTooltip;
+
+  /// No description provided for @dayEventSummaryTitle.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'當天活動摘要'**
+  String get dayEventSummaryTitle;
+
+  /// Summary line showing total active events for a date
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'活動總數：{count}'**
+  String dayEventSummaryTotalEvents(int count);
+
+  /// No description provided for @dayEventSummaryTypeBreakdown.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'類型統計'**
+  String get dayEventSummaryTypeBreakdown;
+
+  /// No description provided for @dayEventSummaryNoEvents.
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'這一天沒有活動。'**
+  String get dayEventSummaryNoEvents;
+
+  /// Summary line showing event type count for the day
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'{type}：{count}'**
+  String dayEventSummaryTypeCount(String type, int count);
+
   /// No description provided for @selectedTypesCount.
   ///
   /// In zh_TW, this message translates to:

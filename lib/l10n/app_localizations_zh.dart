@@ -817,6 +817,28 @@ class AppLocalizationsZh extends AppLocalizations {
   String get today => '今天';
 
   @override
+  String get dayEventSummaryTooltip => '显示当天活动汇总';
+
+  @override
+  String get dayEventSummaryTitle => '当天活动汇总';
+
+  @override
+  String dayEventSummaryTotalEvents(int count) {
+    return '活动总数：$count';
+  }
+
+  @override
+  String get dayEventSummaryTypeBreakdown => '类型统计';
+
+  @override
+  String get dayEventSummaryNoEvents => '这一天没有活动。';
+
+  @override
+  String dayEventSummaryTypeCount(String type, int count) {
+    return '$type：$count';
+  }
+
+  @override
   String selectedTypesCount(Object count) {
     return '已选择：$count 种';
   }
@@ -1869,6 +1891,28 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get today => '今天';
+
+  @override
+  String get dayEventSummaryTooltip => '顯示當天活動摘要';
+
+  @override
+  String get dayEventSummaryTitle => '當天活動摘要';
+
+  @override
+  String dayEventSummaryTotalEvents(int count) {
+    return '活動總數：$count';
+  }
+
+  @override
+  String get dayEventSummaryTypeBreakdown => '類型統計';
+
+  @override
+  String get dayEventSummaryNoEvents => '這一天沒有活動。';
+
+  @override
+  String dayEventSummaryTypeCount(String type, int count) {
+    return '$type：$count';
+  }
 
   @override
   String selectedTypesCount(Object count) {

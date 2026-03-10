@@ -1014,6 +1014,31 @@
   "enterOtherReasonHint": "请输入其他原因...",
   "enterOtherReasonRequired": "请输入其他原因",
   "today": "今天",
+  "dayEventSummaryTooltip": "显示当天活动汇总",
+  "dayEventSummaryTitle": "当天活动汇总",
+  "dayEventSummaryTotalEvents": "活动总数：{count}",
+  "@dayEventSummaryTotalEvents": {
+    "description": "Summary line showing total active events for a date",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dayEventSummaryTypeBreakdown": "类型统计",
+  "dayEventSummaryNoEvents": "这一天没有活动。",
+  "dayEventSummaryTypeCount": "{type}：{count}",
+  "@dayEventSummaryTypeCount": {
+    "description": "Summary line showing event type count for the day",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "selectedTypesCount": "已选择：{count} 种",
   "eventTypesOverflowSummary": "{firstType}、{secondType}，另外 {remainingCount} 种",
   "errorInitializingServices": "初始化服务失败，部分功能可能无法使用：{error}",

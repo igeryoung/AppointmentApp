@@ -8,6 +8,7 @@ import '../../models/schedule_drawing.dart';
 import '../../utils/schedule/schedule_layout_utils.dart';
 import '../../widgets/handwriting_canvas.dart';
 import '../../widgets/schedule/event_tile.dart';
+import '../event_detail/utils/event_type_localizations.dart';
 import 'schedule_context_menu.dart';
 import 'schedule_drawing_overlay.dart';
 import 'schedule_event_overlay.dart';
@@ -88,6 +89,105 @@ class _ScheduleBodyState extends State<ScheduleBody> {
       return lhs.id == rhs.id;
     }
     return identical(lhs, rhs);
+  }
+
+  bool _isSameDay(DateTime lhs, DateTime rhs) {
+    return lhs.year == rhs.year && lhs.month == rhs.month && lhs.day == rhs.day;
+  }
+
+  List<Event> _activeEventsForDate(DateTime date) {
+    return widget.events
+        .where((event) => !event.isRemoved && _isSameDay(event.startTime, date))
+        .toList();
+  }
+
+  Map<EventType, int> _buildTypeCounts(List<Event> events) {
+    final counts = <EventType, int>{};
+    for (final event in events) {
+      for (final eventType in event.eventTypes.toSet()) {
+        counts[eventType] = (counts[eventType] ?? 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  void _showDaySummaryDialog(BuildContext context, DateTime date) {
+    final l10n = AppLocalizations.of(context)!;
+    final dayEvents = _activeEventsForDate(date);
+    final typeCounts = _buildTypeCounts(dayEvents);
+    final sortedTypeCounts = typeCounts.entries.toList()
+      ..sort((lhs, rhs) {
+        final countCompare = rhs.value.compareTo(lhs.value);
+        if (countCompare != 0) return countCompare;
+        final lhsName = EventTypeLocalizations.getLocalizedEventType(
+          context,
+          lhs.key,
+        );
+        final rhsName = EventTypeLocalizations.getLocalizedEventType(
+          context,
+          rhs.key,
+        );
+        return lhsName.compareTo(rhsName);
+      });
+
+    final locale = Localizations.localeOf(context).toString();
+    final dayDisplay = DateFormat('M / d (EEE)', locale).format(date);
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.dayEventSummaryTitle),
+              const SizedBox(height: 4),
+              Text(
+                dayDisplay,
+                style: Theme.of(dialogContext).textTheme.bodyMedium,
+              ),
+            ],
+          ),
+          content: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(l10n.dayEventSummaryTotalEvents(dayEvents.length)),
+              const SizedBox(height: 12),
+              if (sortedTypeCounts.isEmpty)
+                Text(l10n.dayEventSummaryNoEvents)
+              else ...[
+                Text(
+                  l10n.dayEventSummaryTypeBreakdown,
+                  style: Theme.of(dialogContext).textTheme.titleSmall,
+                ),
+                const SizedBox(height: 8),
+                ...sortedTypeCounts.map((entry) {
+                  final localizedType =
+                      EventTypeLocalizations.getLocalizedEventType(
+                        dialogContext,
+                        entry.key,
+                      );
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      l10n.dayEventSummaryTypeCount(localizedType, entry.value),
+                    ),
+                  );
+                }),
+              ],
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(),
+              child: Text(l10n.dismiss),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _startLongPressDrag(
@@ -505,50 +605,87 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                 alignment: Alignment.center,
                 decoration: BoxDecoration(
                   color: isToday
-                      ? theme.colorScheme.primary.withOpacity(0.06)
+                      ? theme.colorScheme.primary.withValues(alpha: 0.06)
                       : null,
                   border: Border.all(
                     color: isToday
-                        ? theme.colorScheme.primary.withOpacity(0.3)
+                        ? theme.colorScheme.primary.withValues(alpha: 0.3)
                         : Colors.grey.shade300,
                   ),
                 ),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Text(
-                      DateFormat(
-                        'M / d (EEE)',
-                        Localizations.localeOf(context).toString(),
-                      ).format(date),
-                      style: headerTextStyle,
-                    ),
-                    if (isToday)
-                      Container(
-                        margin: const EdgeInsets.only(top: 2),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 6,
-                          vertical: 1,
-                        ),
-                        decoration: BoxDecoration(
-                          color: theme.colorScheme.primary.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          l10n.today,
-                          style:
-                              theme.textTheme.labelSmall?.copyWith(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                              ) ??
-                              TextStyle(
-                                color: theme.colorScheme.primary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 10,
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              DateFormat(
+                                'M / d (EEE)',
+                                Localizations.localeOf(context).toString(),
+                              ).format(date),
+                              style: headerTextStyle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              textAlign: TextAlign.center,
+                            ),
+                            const SizedBox(width: 1),
+                            SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: Tooltip(
+                                message: l10n.dayEventSummaryTooltip,
+                                child: Material(
+                                  color: Colors.transparent,
+                                  child: InkWell(
+                                    borderRadius: BorderRadius.circular(5),
+                                    onTap: () =>
+                                        _showDaySummaryDialog(context, date),
+                                    child: const Icon(
+                                      Icons.summarize_outlined,
+                                      size: 13,
+                                    ),
+                                  ),
+                                ),
                               ),
+                            ),
+                          ],
                         ),
                       ),
-                  ],
+                      if (isToday)
+                        Container(
+                          margin: const EdgeInsets.only(top: 1),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 1,
+                          ),
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.primary.withValues(
+                              alpha: 0.12,
+                            ),
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Text(
+                            l10n.today,
+                            style:
+                                theme.textTheme.labelSmall?.copyWith(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 9,
+                                ) ??
+                                TextStyle(
+                                  color: theme.colorScheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 9,
+                                ),
+                          ),
+                        ),
+                    ],
+                  ),
                 ),
               ),
             );

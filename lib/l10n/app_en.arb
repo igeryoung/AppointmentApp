@@ -224,6 +224,31 @@
   "enterOtherReasonHint": "Please enter another reason...",
   "enterOtherReasonRequired": "Please enter another reason",
   "today": "Today",
+  "dayEventSummaryTooltip": "Show day event summary",
+  "dayEventSummaryTitle": "Day Event Summary",
+  "dayEventSummaryTotalEvents": "Total events: {count}",
+  "@dayEventSummaryTotalEvents": {
+    "description": "Summary line showing total active events for a date",
+    "placeholders": {
+      "count": {
+        "type": "int"
+      }
+    }
+  },
+  "dayEventSummaryTypeBreakdown": "Type breakdown",
+  "dayEventSummaryNoEvents": "No events for this day.",
+  "dayEventSummaryTypeCount": "{type}: {count}",
+  "@dayEventSummaryTypeCount": {
+    "description": "Summary line showing event type count for the day",
+    "placeholders": {
+      "type": {
+        "type": "String"
+      },
+      "count": {
+        "type": "int"
+      }
+    }
+  },
   "selectedTypesCount": "Selected: {count} type(s)",
   "eventTypesOverflowSummary": "{firstType}, {secondType}, +{remainingCount} more",
   "errorInitializingServices": "Failed to initialize services. Some features may not work. Error: {error}",
