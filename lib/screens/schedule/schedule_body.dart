@@ -76,6 +76,7 @@ class ScheduleBody extends StatefulWidget {
 class _ScheduleBodyState extends State<ScheduleBody> {
   static const double _timeColumnWidth = 60.0;
   static const double _dateHeaderHeight = 50.0;
+  static const int _inactiveBottomRows = 1;
 
   final GlobalKey _contentKey = GlobalKey();
   Event? _longPressDraggingEvent;
@@ -197,7 +198,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
     required double slotHeight,
     required double dateHeaderHeight,
     required double contentWidth,
-    required double contentHeight,
+    required double activeGridBottom,
   }) {
     if (event.isRemoved) return;
 
@@ -206,7 +207,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
       slotHeight: slotHeight,
       dateHeaderHeight: dateHeaderHeight,
       contentWidth: contentWidth,
-      contentHeight: contentHeight,
+      activeGridBottom: activeGridBottom,
     );
     widget.onCloseEventMenu();
     final rawAnchor = globalPosition - originBounds.topLeft;
@@ -229,7 +230,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
     required double slotHeight,
     required double dateHeaderHeight,
     required double contentWidth,
-    required double contentHeight,
+    required double activeGridBottom,
   }) {
     if (event.isRemoved) return;
 
@@ -241,7 +242,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
       slotHeight: slotHeight,
       dateHeaderHeight: dateHeaderHeight,
       contentWidth: contentWidth,
-      contentHeight: contentHeight,
+      activeGridBottom: activeGridBottom,
     );
     setState(() {
       _hoveredDropStartTime = hoveredStartTime;
@@ -255,7 +256,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
     required double slotHeight,
     required double dateHeaderHeight,
     required double contentWidth,
-    required double contentHeight,
+    required double activeGridBottom,
   }) {
     if (event.isRemoved) return;
 
@@ -278,7 +279,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
       slotHeight: slotHeight,
       dateHeaderHeight: dateHeaderHeight,
       contentWidth: contentWidth,
-      contentHeight: contentHeight,
+      activeGridBottom: activeGridBottom,
     );
     if (dropStartTime != null) {
       widget.onEventDrop(event, dropStartTime);
@@ -308,13 +309,13 @@ class _ScheduleBodyState extends State<ScheduleBody> {
     required double slotHeight,
     required double dateHeaderHeight,
     required double contentWidth,
-    required double contentHeight,
+    required double activeGridBottom,
   }) {
     final localPosition = _contentLocalFromGlobal(globalPosition);
     if (localPosition == null) return null;
 
     final gridTop = dateHeaderHeight;
-    final gridBottom = contentHeight;
+    final gridBottom = activeGridBottom;
     final gridLeft = _timeColumnWidth;
     final gridRight = contentWidth;
 
@@ -407,18 +408,22 @@ class _ScheduleBodyState extends State<ScheduleBody> {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        // Calculate dynamic slot height to fit screen perfectly
+        // Calculate slot height from all visible rows (active + inactive).
         final dateHeaderHeight = widget.dates.length > 1
             ? _dateHeaderHeight
             : 0.0;
-        final availableHeightForSlots =
-            constraints.maxHeight - dateHeaderHeight;
-        final slotHeight =
-            availableHeightForSlots / ScheduleLayoutUtils.totalSlots;
+        final totalDisplayRows =
+            ScheduleLayoutUtils.totalSlots + _inactiveBottomRows;
+        final availableHeightForRows = constraints.maxHeight - dateHeaderHeight;
+        final slotHeight = availableHeightForRows / totalDisplayRows;
+        final activeGridHeight = slotHeight * ScheduleLayoutUtils.totalSlots;
+        final inactiveBottomHeight = slotHeight * _inactiveBottomRows;
 
-        // Content dimensions - exactly match screen
+        // Keep one extra inactive row under the grid; it zooms/pans with content.
         final contentWidth = constraints.maxWidth;
-        final contentHeight = constraints.maxHeight;
+        final activeGridBottom = dateHeaderHeight + activeGridHeight;
+        final contentHeight =
+            dateHeaderHeight + activeGridHeight + inactiveBottomHeight;
         final resolvedMenuPosition = widget.menuPosition != null
             ? _resolveMenuPosition(
                 rawPosition: widget.menuPosition!,
@@ -431,7 +436,8 @@ class _ScheduleBodyState extends State<ScheduleBody> {
           minScale: 1.0, // Cannot zoom out - this IS the most zoomed out
           maxScale: 4.0, // Max zoom in
           boundaryMargin: EdgeInsets.zero, // Strict boundaries - no blank space
-          constrained: true, // Respect size constraints
+          constrained: false, // Allow extra inactive bottom row in content.
+          alignment: Alignment.topLeft,
           panEnabled: !widget.isDrawingMode, // Disable pan when drawing
           scaleEnabled: true, // Always allow pinch zoom
           child: SizedBox(
@@ -491,7 +497,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                         slotHeight: slotHeight,
                                         dateHeaderHeight: dateHeaderHeight,
                                         contentWidth: contentWidth,
-                                        contentHeight: contentHeight,
+                                        activeGridBottom: activeGridBottom,
                                       );
                                     },
                                 onLongPressDragUpdate: (event, globalPosition) {
@@ -505,7 +511,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                     slotHeight: slotHeight,
                                     dateHeaderHeight: dateHeaderHeight,
                                     contentWidth: contentWidth,
-                                    contentHeight: contentHeight,
+                                    activeGridBottom: activeGridBottom,
                                   );
                                 },
                                 onLongPressDragEnd: (event, globalPosition) {
@@ -519,7 +525,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                                     slotHeight: slotHeight,
                                     dateHeaderHeight: dateHeaderHeight,
                                     contentWidth: contentWidth,
-                                    contentHeight: contentHeight,
+                                    activeGridBottom: activeGridBottom,
                                   );
                                 },
                                 onLongPressDragCancel: (event) {
@@ -574,6 +580,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                     ],
                   ),
                 ),
+                SizedBox(height: inactiveBottomHeight),
               ],
             ),
           ),
