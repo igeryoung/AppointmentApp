@@ -1,6 +1,6 @@
 # User Pipeline Automation
 
-This automation is based on `/Users/yangping/Studio/side-project/scheduleNote/docs/testing/physical_device_test_checklist.md` and executes test steps in user-flow order.
+This automation is based on `/Users/yangping/Studio/side-project/scheduleNote/test/physical_device_test_checklist.md` and executes test steps in user-flow order.
 
 ## Command
 
@@ -81,7 +81,7 @@ Report includes:
 
 After each run, the script also updates:
 
-- `/Users/yangping/Studio/side-project/scheduleNote/docs/testing/physical_device_test_checklist.md`
+- `/Users/yangping/Studio/side-project/scheduleNote/test/physical_device_test_checklist.md`
 
 It fills the `Auto Test` column with:
 

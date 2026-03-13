@@ -1,6 +1,6 @@
 import 'dart:io';
 
-const _checklistPath = 'docs/testing/physical_device_test_checklist.md';
+const _checklistPath = 'test/physical_device_test_checklist.md';
 const _reportDir = 'docs/testing/reports';
 
 const Map<String, List<String>> _operationToPipelineSteps = {
@@ -33,8 +33,14 @@ const Map<String, List<String>> _operationToPipelineSteps = {
   'Open import-from-server flow, search by keyword, pull one book': [
     'Pipeline 04 - Rename/Reorder/Server Import Guards',
   ],
+  'Try pulling a book with wrong password': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
+  ],
   'Try pulling a book that already exists locally': [
     'Pipeline 04 - Rename/Reorder/Server Import Guards',
+  ],
+  '(If read-only device/book role exists) try creating or modifying a book': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
   ],
   'In a selected book, create an event in schedule': [
     'Pipeline 05 - Create/Update/Delete/Reschedule Event',
@@ -51,6 +57,14 @@ const Map<String, List<String>> _operationToPipelineSteps = {
   'Delete event permanently': [
     'Pipeline 05 - Create/Update/Delete/Reschedule Event',
   ],
+  'Enter an existing record number while editing event details': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
+  ],
+  'On two write devices, edit the same record metadata and save both': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
+  ],
+  '(If read-only device/book role exists) try creating, editing, or rescheduling an event':
+      ['Pipeline 12 - Live Event Metadata Roundtrip'],
   'Navigate across day range/week and return': [],
   'Open Event Detail note and write strokes, then save': [
     'Pipeline 07 - Note Save/Load/Sync Apply',
@@ -72,6 +86,13 @@ const Map<String, List<String>> _operationToPipelineSteps = {
   '(If note clear/delete action exists) clear note cache/content': [
     'Pipeline 07 - Note Save/Load/Sync Apply',
   ],
+  '(If read-only device/book role exists) try editing or deleting a shared note':
+      ['Pipeline 12 - Live Event Metadata Roundtrip'],
+  'On a write-role device after pulling a shared book, edit the shared note and save':
+      ['Pipeline 12 - Live Event Metadata Roundtrip'],
+  'On two write devices, save the same shared note from stale versions': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
+  ],
   'Draw on schedule overlay, leave screen, return to same date': [
     'Pipeline 08 - Drawing Save/Load/Update/Clear',
   ],
@@ -84,6 +105,16 @@ const Map<String, List<String>> _operationToPipelineSteps = {
   ],
   '(If clear action exists) clear drawing for date': [
     'Pipeline 08 - Drawing Save/Load/Update/Clear',
+  ],
+  '(If read-only device/book role exists) pull a shared book, open its drawing, then try editing it':
+      ['Pipeline 12 - Live Event Metadata Roundtrip'],
+  'On a write-role device after pulling a shared book, edit the shared drawing and save':
+      ['Pipeline 12 - Live Event Metadata Roundtrip'],
+  'Create an event for a record that already has charge items': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
+  ],
+  'Add a charge item to an existing event': [
+    'Pipeline 12 - Live Event Metadata Roundtrip',
   ],
   'Complete setup once, then relaunch app multiple times': [
     'Pipeline 01 - Device Registration Gate',
@@ -177,8 +208,19 @@ List<String> _updateChecklist({
       output.add('| Done | Auto Test | Operation | Expected Behavior |');
       continue;
     }
+    if (line.trim() ==
+        '| Done | Auto Test | Operation | Expected Behavior | Trace |') {
+      output.add(
+        '| Done | Auto Test | Operation | Expected Behavior | Trace |',
+      );
+      continue;
+    }
     if (line.trim() == '|---|---|---|') {
       output.add('|---|---|---|---|');
+      continue;
+    }
+    if (line.trim() == '|---|---|---|---|---|') {
+      output.add('|---|---|---|---|---|');
       continue;
     }
 
@@ -208,6 +250,16 @@ List<String> _updateChecklist({
       final expected = cells[3];
       final auto = _autoCell(operation, pipelineStatus);
       output.add('| $done | $auto | $operation | $expected |');
+      continue;
+    }
+
+    if (cells.length == 5 && _isDoneCell(cells[0])) {
+      final done = cells[0];
+      final operation = cells[2];
+      final expected = cells[3];
+      final trace = cells[4];
+      final auto = _autoCell(operation, pipelineStatus);
+      output.add('| $done | $auto | $operation | $expected | $trace |');
       continue;
     }
 

@@ -225,7 +225,7 @@ Date: $(date '+%Y-%m-%d %H:%M:%S %Z')
 Mode: \`${MODE}\`
 Overall Status: **${OVERALL_STATUS}**
 Report Path: \`${REPORT_FILE}\`
-Checklist Source: \`docs/testing/physical_device_test_checklist.md\`
+Checklist Source: \`test/physical_device_test_checklist.md\`
 
 ## Execution Summary
 
@@ -245,13 +245,14 @@ Checklist Source: \`docs/testing/physical_device_test_checklist.md\`
 | Checklist Section | Automation Status | Coverage Notes |
 |---|---|---|
 | 1. App Launch & Setup | Partial | Automated: device credential persistence + app bootstrap widget (\`test/widget_test.dart\`, device repository tests). Manual-only: physical install/uninstall and real setup UI navigation. |
-| 2. Book Behavior | High (Partial) | Automated: create/blank-name validation, rename trim, archive visibility, delete, reorder persistence logic, server import + duplicate guard. Manual-only: physical drag/drop gesture feel. |
-| 3. Event Behavior | High (Partial) | Automated: create/edit/remove/reschedule/delete/query/sync-upsert via event repository + controller flow tests. Manual-only: full schedule screen rendering across day/week on physical device. |
-| 4. Note Behavior | Partial | Automated: record-shared note semantics, save/update/delete/batch/sync apply + event-detail save flow + has-note indicator scope (only events that actually edit note show note tag). Manual-only: handwriting UX validation on real touch device. |
-| 5. Drawing Behavior | Partial | Automated: save/update/load/clear/range preload/batch semantics plus 2-day page/window mapping regression checks (no previous-page leakage) in drawing and schedule layout utility tests. Manual-only: canvas interaction smoothness and visual fidelity on device. |
-| 6. Device Credentials & Session | Partial | Automated: save/get/replace credential behavior. Manual-only: repeated relaunch behavior on actual installed app binary. |
-| 7. Offline / Online Connectivity | Partial | Automated: server-side credential gating and live feature roundtrip contracts (\`event_metadata_server_smoke_test.dart\`) when server env configured. Manual-only: airplane-mode OS-level toggling and UX messaging. |
-| 8. Performance Sanity (Manual) | Manual-only | Not automatable in current unit/integration test stack; requires physical profiling and user-perceived latency checks. |
+| 2. Book Behavior | High (Partial) | Automated: create/blank-name validation, rename trim, archive visibility, delete, reorder persistence logic, server import + duplicate guard, wrong-password import guard, and read-only book write blocking. Manual-only: physical drag/drop gesture feel and UI affordances on target device. |
+| 3. Event Behavior | High (Partial) | Automated: create/edit/remove/reschedule/delete/query/sync-upsert via event repository + controller flow tests, record-number autofill, read-only event write blocking, and multi-device metadata last-writer-wins. Manual-only: full schedule screen rendering across day/week on physical device. |
+| 4. Note Behavior | High (Partial) | Automated: record-shared note semantics, save/update/delete/batch/sync apply, event-detail save flow, has-note indicator scope, read-only shared-note blocking, pulled write-device note updates, and stale-version conflict handling. Manual-only: handwriting UX validation on real touch device. |
+| 5. Drawing Behavior | High (Partial) | Automated: save/update/load/clear/range preload/batch semantics, 2-day page/window mapping regression checks, read-only shared-drawing blocking, and pulled write-device drawing updates. Manual-only: canvas interaction smoothness and visual fidelity on device. |
+| 6. Charge Item Behavior | Partial | Automated: event-level has-charge-items flag behavior plus charge-item server sync linkage through controller and live server tests. Manual-only: full dialog/form entry feel and hardware-input UX on device. |
+| 7. Device Credentials & Session | Partial | Automated: save/get/replace credential behavior plus live registration/credential gating contracts. Manual-only: repeated relaunch behavior on actual installed app binary. |
+| 8. Offline / Online Connectivity | Partial | Automated: server-side credential gating and live feature roundtrip contracts (\`event_metadata_server_smoke_test.dart\`) when server env configured. Manual-only: airplane-mode OS-level toggling and UX messaging. |
+| 9. Performance Sanity (Manual) | Manual-only | Not automatable in current unit/integration test stack; requires physical profiling and user-perceived latency checks. |
 
 ## Manual-Only Items (Explicit)
 
