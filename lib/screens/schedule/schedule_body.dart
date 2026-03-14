@@ -418,6 +418,10 @@ class _ScheduleBodyState extends State<ScheduleBody> {
         final slotHeight = availableHeightForRows / totalDisplayRows;
         final activeGridHeight = slotHeight * ScheduleLayoutUtils.totalSlots;
         final inactiveBottomHeight = slotHeight * _inactiveBottomRows;
+        final overlaySize = Size(
+          constraints.maxWidth,
+          activeGridHeight + inactiveBottomHeight,
+        );
 
         // Keep one extra inactive row under the grid; it zooms/pans with content.
         final contentWidth = constraints.maxWidth;
@@ -568,6 +572,7 @@ class _ScheduleBodyState extends State<ScheduleBody> {
                         ScheduleContextMenu(
                           event: widget.selectedEventForMenu!,
                           position: resolvedMenuPosition,
+                          boundarySize: overlaySize,
                           onClose: widget.onCloseEventMenu,
                           onChangeType: widget.onChangeType!,
                           onChangeTime: widget.onChangeTime!,

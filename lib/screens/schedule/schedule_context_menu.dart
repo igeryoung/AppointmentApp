@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
@@ -7,8 +9,13 @@ import '../event_detail/utils/event_type_localizations.dart';
 
 /// Context menu overlay for event actions
 class ScheduleContextMenu extends StatefulWidget {
+  static const double menuWidth = 200.0;
+  static const double horizontalPadding = 20.0;
+  static const double verticalGap = 4.0;
+
   final Event event;
   final Offset position;
+  final Size boundarySize;
   final VoidCallback onClose;
   final VoidCallback onChangeType;
   final VoidCallback onChangeTime;
@@ -21,6 +28,7 @@ class ScheduleContextMenu extends StatefulWidget {
     super.key,
     required this.event,
     required this.position,
+    required this.boundarySize,
     required this.onClose,
     required this.onChangeType,
     required this.onChangeTime,
@@ -30,8 +38,37 @@ class ScheduleContextMenu extends StatefulWidget {
     required this.onCheckedChanged,
   });
 
+  static ScheduleContextMenuPlacement resolvePlacement({
+    required Offset position,
+    required Size boundarySize,
+  }) {
+    final maxLeft = math.max(horizontalPadding, boundarySize.width - menuWidth);
+    final left = position.dx.clamp(horizontalPadding, maxLeft).toDouble();
+    final showAbove = position.dy > boundarySize.height / 2;
+
+    return ScheduleContextMenuPlacement(
+      left: left,
+      top: showAbove ? null : position.dy + verticalGap,
+      bottom: showAbove
+          ? boundarySize.height - position.dy + verticalGap
+          : null,
+    );
+  }
+
   @override
   State<ScheduleContextMenu> createState() => _ScheduleContextMenuState();
+}
+
+class ScheduleContextMenuPlacement {
+  final double left;
+  final double? top;
+  final double? bottom;
+
+  const ScheduleContextMenuPlacement({
+    required this.left,
+    this.top,
+    this.bottom,
+  });
 }
 
 class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
@@ -55,7 +92,6 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
-    final screenSize = MediaQuery.of(context).size;
     final localizedEventTypes =
         EventType.sortAlphabetically(widget.event.eventTypes)
             .map(
@@ -63,22 +99,20 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                   EventTypeLocalizations.getLocalizedEventType(context, type),
             )
             .join(', ');
-    const menuVerticalGap = 4.0;
-
-    // Determine if menu should appear above or below
-    final showAbove = widget.position.dy > screenSize.height / 2;
+    final placement = ScheduleContextMenu.resolvePlacement(
+      position: widget.position,
+      boundarySize: widget.boundarySize,
+    );
 
     return Positioned(
-      left: widget.position.dx.clamp(20.0, screenSize.width - 200),
-      top: showAbove ? null : widget.position.dy + menuVerticalGap,
-      bottom: showAbove
-          ? screenSize.height - widget.position.dy + menuVerticalGap
-          : null,
+      left: placement.left,
+      top: placement.top,
+      bottom: placement.bottom,
       child: Material(
         elevation: 8,
         borderRadius: BorderRadius.circular(8),
         child: Container(
-          width: 200,
+          width: ScheduleContextMenu.menuWidth,
           decoration: BoxDecoration(
             color: Colors.white,
             borderRadius: BorderRadius.circular(8),
