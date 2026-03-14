@@ -71,12 +71,14 @@ class _AppInitializerState extends State<_AppInitializer> {
         final serverUrl = rows.first['server_url'] as String;
         // Server is configured, initialize services
         await setupServices(serverUrl: serverUrl);
+        if (!mounted) return;
         setState(() {
           _isServerConfigured = true;
           _isLoading = false;
         });
       } else {
         // Server not configured, show setup screen
+        if (!mounted) return;
         setState(() {
           _isServerConfigured = false;
           _isLoading = false;
@@ -84,6 +86,7 @@ class _AppInitializerState extends State<_AppInitializer> {
       }
     } catch (e) {
       // On error, show setup screen
+      if (!mounted) return;
       setState(() {
         _isServerConfigured = false;
         _isLoading = false;

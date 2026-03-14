@@ -24,6 +24,7 @@ class BookListController extends ChangeNotifier {
 
   BookListState _state = BookListState.initial();
   BookListState get state => _state;
+  bool _isDisposed = false;
 
   BookListController({
     required this.repo,
@@ -84,6 +85,7 @@ class BookListController extends ChangeNotifier {
       return;
     }
     final input = await CreateBookDialog.show(context);
+    if (!context.mounted) return;
     if (input != null && input.name.isNotEmpty) {
       await createBook(
         context: context,
@@ -122,6 +124,7 @@ class BookListController extends ChangeNotifier {
       return;
     }
     final newName = await RenameBookDialog.show(context, book: book);
+    if (!context.mounted) return;
     if (newName != null && newName != book.name) {
       await renameBook(context: context, book: book, newName: newName);
     }
@@ -154,6 +157,7 @@ class BookListController extends ChangeNotifier {
       return;
     }
     final confirmed = await ArchiveBookConfirmDialog.show(context, book: book);
+    if (!context.mounted) return;
     if (confirmed == true) {
       await archiveBook(context: context, book: book);
     }
@@ -185,6 +189,7 @@ class BookListController extends ChangeNotifier {
       return;
     }
     final confirmed = await DeleteBookConfirmDialog.show(context, book: book);
+    if (!context.mounted) return;
     if (confirmed == true) {
       await deleteBook(context: context, book: book);
     }
@@ -234,35 +239,34 @@ class BookListController extends ChangeNotifier {
     try {
       final serverBooks = await repo.listServerBooks();
       _setState(_state.copyWith(isLoading: false, errorMessage: null));
+      if (!context.mounted) return;
 
       if (serverBooks.isEmpty) {
-        if (context.mounted) {
-          SnackBarUtils.showInfo(context, l10n.noServerBooksAvailable);
-        }
+        SnackBarUtils.showInfo(context, l10n.noServerBooksAvailable);
         return;
       }
 
-      if (context.mounted) {
-        final selectedBookUuid = await ImportServerBookDialog.show(
-          context,
-          books: serverBooks,
-        );
+      final selectedBookUuid = await ImportServerBookDialog.show(
+        context,
+        books: serverBooks,
+      );
+      if (!context.mounted) return;
 
-        if (selectedBookUuid != null && selectedBookUuid.isNotEmpty) {
-          final password = await BookPasswordDialog.show(
-            context,
-            title: l10n.enterBookPassword,
-            description: l10n.importBookPasswordRequiredDescription,
-          );
-          if (password == null || password.isEmpty) {
-            return;
-          }
-          await _importBookFromServer(
-            context,
-            selectedBookUuid,
-            password: password,
-          );
+      if (selectedBookUuid != null && selectedBookUuid.isNotEmpty) {
+        final password = await BookPasswordDialog.show(
+          context,
+          title: l10n.enterBookPassword,
+          description: l10n.importBookPasswordRequiredDescription,
+        );
+        if (!context.mounted) return;
+        if (password == null || password.isEmpty) {
+          return;
         }
+        await _importBookFromServer(
+          context,
+          selectedBookUuid,
+          password: password,
+        );
       }
     } catch (e) {
       final message = _buildImportErrorMessage(e, l10n);
@@ -447,7 +451,14 @@ class BookListController extends ChangeNotifier {
 
   /// Update state and notify listeners
   void _setState(BookListState newState) {
+    if (_isDisposed) return;
     _state = newState;
     notifyListeners();
+  }
+
+  @override
+  void dispose() {
+    _isDisposed = true;
+    super.dispose();
   }
 }

@@ -28,15 +28,22 @@ final getIt = GetIt.instance;
 /// [serverUrl] - Required server URL (must be configured before calling this)
 Future<void> setupServices({required String serverUrl}) async {
   // Database Service - Register as singleton since database should only be initialized once
-  getIt.registerSingleton<IDatabaseService>(PRDDatabaseService());
+  if (!getIt.isRegistered<IDatabaseService>()) {
+    getIt.registerSingleton<IDatabaseService>(PRDDatabaseService());
+  }
 
   // Time Service - Singleton (uses its own singleton instance)
-  getIt.registerSingleton<TimeService>(TimeService.instance);
+  if (!getIt.isRegistered<TimeService>()) {
+    getIt.registerSingleton<TimeService>(TimeService.instance);
+  }
 
   // Server Config Service - Lazy singleton
-  getIt.registerLazySingleton<ServerConfigService>(
-    () => ServerConfigService(getIt<IDatabaseService>() as PRDDatabaseService),
-  );
+  if (!getIt.isRegistered<ServerConfigService>()) {
+    getIt.registerLazySingleton<ServerConfigService>(
+      () =>
+          ServerConfigService(getIt<IDatabaseService>() as PRDDatabaseService),
+    );
+  }
 
   // Create ApiClient with the provided server URL
   final apiClient = ApiClient(baseUrl: serverUrl);
@@ -53,9 +60,11 @@ Future<void> setupServices({required String serverUrl}) async {
       ),
     );
 
-    getIt.registerLazySingleton<IDeviceRepository>(
-      () => DeviceRepositoryImpl(() => db.database),
-    );
+    if (!getIt.isRegistered<IDeviceRepository>()) {
+      getIt.registerLazySingleton<IDeviceRepository>(
+        () => DeviceRepositoryImpl(() => db.database),
+      );
+    }
 
     getIt.registerLazySingleton<IEventRepository>(
       () => EventRepositoryImpl(
@@ -65,20 +74,29 @@ Future<void> setupServices({required String serverUrl}) async {
       ),
     );
 
-    getIt.registerLazySingleton<INoteRepository>(
-      () => NoteRepositoryImpl(() => db.database),
-    );
+    if (!getIt.isRegistered<INoteRepository>()) {
+      getIt.registerLazySingleton<INoteRepository>(
+        () => NoteRepositoryImpl(() => db.database),
+      );
+    }
 
-    getIt.registerLazySingleton<IDrawingRepository>(
-      () => DrawingRepositoryImpl(() => db.database),
-    );
+    if (!getIt.isRegistered<IDrawingRepository>()) {
+      getIt.registerLazySingleton<IDrawingRepository>(
+        () => DrawingRepositoryImpl(() => db.database),
+      );
+    }
   }
 
   // Book Order Service - Lazy singleton
-  getIt.registerLazySingleton<BookOrderService>(() => BookOrderService());
+  if (!getIt.isRegistered<BookOrderService>()) {
+    getIt.registerLazySingleton<BookOrderService>(() => BookOrderService());
+  }
 
   // Phase 4 Cubits - Factories (each screen gets fresh instance)
   // BookListCubit
+  if (getIt.isRegistered<BookListCubit>()) {
+    getIt.unregister<BookListCubit>();
+  }
   getIt.registerFactory<BookListCubit>(
     () => BookListCubit(getIt<IBookRepository>(), getIt<BookOrderService>()),
   );

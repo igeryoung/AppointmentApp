@@ -7,10 +7,7 @@ void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Lock orientation to portrait mode
-  await SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
 
   // Initialize date formatting for Traditional Chinese
   await initializeDateFormatting('zh_TW', null);

@@ -218,18 +218,18 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
 
   Future<void> _handleUrlSubmit() async {
     final serverUrl = _urlController.text.trim();
+    final l10n = AppLocalizations.of(context)!;
 
     // Test connection by creating a temporary ApiClient
     final apiClient = ApiClient(baseUrl: serverUrl);
     try {
       final isHealthy = await apiClient.healthCheck();
       if (!isHealthy) {
-        throw Exception(
-          AppLocalizations.of(context)!.cannotConnectToServerCheckUrl,
-        );
+        throw Exception(l10n.cannotConnectToServerCheckUrl);
       }
 
       // Server is reachable, move to registration step
+      if (!mounted) return;
       setState(() {
         _currentStep = _SetupStep.registration;
         _isLoading = false;
@@ -274,11 +274,10 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       await setupServices(serverUrl: serverUrl);
 
       // Navigate to main app
-      if (mounted) {
-        Navigator.of(context).pushReplacement(
-          MaterialPageRoute(builder: (context) => const BookListScreen()),
-        );
-      }
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (context) => const BookListScreen()),
+      );
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
         throw Exception('Invalid registration password');
