@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../models/event.dart';
+import '../../models/event_type.dart';
+import '../event_detail/utils/event_type_localizations.dart';
 
 /// Context menu overlay for event actions
 class ScheduleContextMenu extends StatefulWidget {
@@ -54,6 +56,13 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
     final screenSize = MediaQuery.of(context).size;
+    final localizedEventTypes =
+        EventType.sortAlphabetically(widget.event.eventTypes)
+            .map(
+              (type) =>
+                  EventTypeLocalizations.getLocalizedEventType(context, type),
+            )
+            .join(', ');
     const menuVerticalGap = 4.0;
 
     // Determine if menu should appear above or below
@@ -123,6 +132,27 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                       padding: EdgeInsets.zero,
                       constraints: const BoxConstraints(),
                       onPressed: widget.onClose,
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 10,
+                ),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        '約診內容：$localizedEventTypes',
+                        style: const TextStyle(
+                          fontSize: 14,
+                          color: Colors.black,
+                        ),
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     ),
                   ],
                 ),
