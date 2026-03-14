@@ -51,7 +51,7 @@
     "description": "Title for delete book dialog"
   },
 
-  "deleteBookConfirmation": "您確定要永久刪除「{bookName}」及其所有活動嗎？",
+  "deleteBookConfirmation": "您確定要永久刪除「{bookName}」及其所有約診嗎？",
   "@deleteBookConfirmation": {
     "description": "Confirmation message for deleting a book",
     "placeholders": {
@@ -236,12 +236,12 @@
     "description": "Text for hiding drawing"
   },
 
-  "createEvent": "建立活動",
+  "createEvent": "建立約診",
   "@createEvent": {
     "description": "Tooltip for create event button"
   },
 
-  "errorLoadingEvents": "載入活動時發生錯誤：{error}",
+  "errorLoadingEvents": "載入約診時發生錯誤：{error}",
   "@errorLoadingEvents": {
     "description": "Error message when loading events fails",
     "placeholders": {
@@ -281,22 +281,22 @@
     }
   },
 
-  "newEvent": "新活動",
+  "newEvent": "新約診",
   "@newEvent": {
     "description": "Title for new event screen"
   },
 
-  "editEvent": "編輯活動",
+  "editEvent": "編輯約診",
   "@editEvent": {
     "description": "Title for edit event screen"
   },
 
-  "eventName": "活動名稱 *",
+  "eventName": "約診名稱 *",
   "@eventName": {
     "description": "Label for event name field"
   },
 
-  "eventNameRequired": "活動名稱為必填項目",
+  "eventNameRequired": "約診名稱為必填項目",
   "@eventNameRequired": {
     "description": "Validation error for empty event name"
   },
@@ -381,12 +381,12 @@
     "description": "Validation error when paid amount exceeds cost"
   },
 
-  "eventType": "活動類型 *",
+  "eventType": "約診類型 *",
   "@eventType": {
     "description": "Label for event type field"
   },
 
-  "eventTypeRequired": "活動類型為必填項目",
+  "eventTypeRequired": "約診類型為必填項目",
   "@eventTypeRequired": {
     "description": "Validation error for empty event type"
   },
@@ -411,7 +411,7 @@
     "description": "Title for delete event dialog"
   },
 
-  "deleteEventConfirmation": "您確定要刪除此活動及其筆記嗎？",
+  "deleteEventConfirmation": "您確定要刪除此約診及其筆記嗎？",
   "@deleteEventConfirmation": {
     "description": "Confirmation message for deleting event"
   },
@@ -421,7 +421,7 @@
     "description": "Title for remove event dialog and menu item"
   },
 
-  "removeEventDescription": "此活動將被標記為已移除，但仍會以刪除線顯示。",
+  "removeEventDescription": "此約診將被標記為已移除，但仍會以刪除線顯示。",
   "@removeEventDescription": {
     "description": "Description for remove event action"
   },
@@ -451,12 +451,12 @@
     "description": "Title for change event type dialog and menu item"
   },
 
-  "eventTypeChanged": "活動類型已更新",
+  "eventTypeChanged": "約診類型已更新",
   "@eventTypeChanged": {
     "description": "Success message after changing event type"
   },
 
-  "errorUpdatingEvent": "更新活動時發生錯誤：{error}",
+  "errorUpdatingEvent": "更新約診時發生錯誤：{error}",
   "@errorUpdatingEvent": {
     "description": "Error message when updating event fails",
     "placeholders": {
@@ -467,7 +467,7 @@
     }
   },
 
-  "eventDeleted": "活動已刪除",
+  "eventDeleted": "約診已刪除",
   "@eventDeleted": {
     "description": "Success message after deleting event"
   },
@@ -483,7 +483,7 @@
     }
   },
 
-  "changeTimeDescription": "這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。",
+  "changeTimeDescription": "這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。",
   "@changeTimeDescription": {
     "description": "Description for change time action"
   },
@@ -528,7 +528,7 @@
     "description": "Validation error for empty reason"
   },
 
-  "reasonRequiredMessage": "必須提供原因才能變更活動時間。",
+  "reasonRequiredMessage": "必須提供原因才能變更約診時間。",
   "@reasonRequiredMessage": {
     "description": "Error message when reason is required"
   },
@@ -538,12 +538,12 @@
     "description": "Change time button text"
   },
 
-  "eventTimeChangedSuccess": "活動時間變更成功",
+  "eventTimeChangedSuccess": "約診時間變更成功",
   "@eventTimeChangedSuccess": {
     "description": "Success message for time change"
   },
 
-  "errorChangingEventTime": "變更活動時間時發生錯誤：{error}",
+  "errorChangingEventTime": "變更約診時間時發生錯誤：{error}",
   "@errorChangingEventTime": {
     "description": "Error message when changing time fails",
     "placeholders": {
@@ -568,12 +568,12 @@
     "description": "Processing message"
   },
 
-  "eventTimeChanged": "活動時間已變更",
+  "eventTimeChanged": "約診時間已變更",
   "@eventTimeChanged": {
     "description": "Label for event time changed status"
   },
 
-  "eventRemoved": "活動已移除",
+  "eventRemoved": "約診已移除",
   "@eventRemoved": {
     "description": "Label for event removed status"
   },
@@ -658,7 +658,7 @@
     }
   },
 
-  "errorSavingEvent": "儲存活動時發生錯誤：{error}",
+  "errorSavingEvent": "儲存約診時發生錯誤：{error}",
   "@errorSavingEvent": {
     "description": "Error message when saving event fails",
     "placeholders": {
@@ -668,12 +668,12 @@
     }
   },
 
-  "eventSavedNoteFailure": "活動已儲存，但筆記儲存失敗",
+  "eventSavedNoteFailure": "約診已儲存，但筆記儲存失敗",
   "@eventSavedNoteFailure": {
     "description": "Message when event saves but note save fails"
   },
 
-  "errorDeletingEvent": "刪除活動時發生錯誤：{error}",
+  "errorDeletingEvent": "刪除約診時發生錯誤：{error}",
   "@errorDeletingEvent": {
     "description": "Error message when deleting event fails",
     "placeholders": {
@@ -683,7 +683,7 @@
     }
   },
 
-  "errorRemovingEvent": "移除活動時發生錯誤：{error}",
+  "errorRemovingEvent": "移除約診時發生錯誤：{error}",
   "@errorRemovingEvent": {
     "description": "Error message when removing event fails",
     "placeholders": {
@@ -926,7 +926,7 @@
     "description": "Validation error for invalid days value"
   },
 
-  "eventOptions": "活動選項",
+  "eventOptions": "約診選項",
   "@eventOptions": {
     "description": "Default header for event context menu when event has no name"
   },

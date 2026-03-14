@@ -38,7 +38,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String deleteBookConfirmation(String bookName) {
-    return '您確定要永久刪除「$bookName」及其所有活動嗎？';
+    return '您確定要永久刪除「$bookName」及其所有約診嗎？';
   }
 
   @override
@@ -142,11 +142,11 @@ class AppLocalizationsZh extends AppLocalizations {
   String get hideDrawing => '隱藏繪圖';
 
   @override
-  String get createEvent => '建立活動';
+  String get createEvent => '建立約診';
 
   @override
   String errorLoadingEvents(String error) {
-    return '載入活動時發生錯誤：$error';
+    return '載入約診時發生錯誤：$error';
   }
 
   @override
@@ -166,16 +166,16 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get newEvent => '新活動';
+  String get newEvent => '新約診';
 
   @override
-  String get editEvent => '編輯活動';
+  String get editEvent => '編輯約診';
 
   @override
-  String get eventName => '活動名稱 *';
+  String get eventName => '約診名稱 *';
 
   @override
-  String get eventNameRequired => '活動名稱為必填項目';
+  String get eventNameRequired => '約診名稱為必填項目';
 
   @override
   String get recordNumber => '紀錄編號';
@@ -226,10 +226,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chargeItemPaidAmountExceedsCost => '已付金額不可超過費用';
 
   @override
-  String get eventType => '活動類型 *';
+  String get eventType => '約診類型 *';
 
   @override
-  String get eventTypeRequired => '活動類型為必填項目';
+  String get eventTypeRequired => '約診類型為必填項目';
 
   @override
   String get startTime => '開始時間';
@@ -244,13 +244,13 @@ class AppLocalizationsZh extends AppLocalizations {
   String get deleteEvent => '刪除約診';
 
   @override
-  String get deleteEventConfirmation => '您確定要刪除此活動及其筆記嗎？';
+  String get deleteEventConfirmation => '您確定要刪除此約診及其筆記嗎？';
 
   @override
   String get removeEvent => '取消約診';
 
   @override
-  String get removeEventDescription => '此活動將被標記為已移除，但仍會以刪除線顯示。';
+  String get removeEventDescription => '此約診將被標記為已移除，但仍會以刪除線顯示。';
 
   @override
   String get reasonForRemoval => '移除原因：';
@@ -268,15 +268,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changeEventType => '變更約診類型';
 
   @override
-  String get eventTypeChanged => '活動類型已更新';
+  String get eventTypeChanged => '約診類型已更新';
 
   @override
   String errorUpdatingEvent(String error) {
-    return '更新活動時發生錯誤：$error';
+    return '更新約診時發生錯誤：$error';
   }
 
   @override
-  String get eventDeleted => '活動已刪除';
+  String get eventDeleted => '約診已刪除';
 
   @override
   String confirmDeleteEvent(String eventName) {
@@ -284,7 +284,7 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get changeTimeDescription => '這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。';
+  String get changeTimeDescription => '這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。';
 
   @override
   String startTimeLabel(String time) {
@@ -309,17 +309,17 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reasonRequired => '原因為必填項目';
 
   @override
-  String get reasonRequiredMessage => '必須提供原因才能變更活動時間。';
+  String get reasonRequiredMessage => '必須提供原因才能變更約診時間。';
 
   @override
   String get changeTime => '變更時間';
 
   @override
-  String get eventTimeChangedSuccess => '活動時間變更成功';
+  String get eventTimeChangedSuccess => '約診時間變更成功';
 
   @override
   String errorChangingEventTime(String error) {
-    return '變更活動時間時發生錯誤：$error';
+    return '變更約診時間時發生錯誤：$error';
   }
 
   @override
@@ -332,10 +332,10 @@ class AppLocalizationsZh extends AppLocalizations {
   String get processing => '處理中...';
 
   @override
-  String get eventTimeChanged => '活動時間已變更';
+  String get eventTimeChanged => '約診時間已變更';
 
   @override
-  String get eventRemoved => '活動已移除';
+  String get eventRemoved => '約診已移除';
 
   @override
   String reason(String reason) {
@@ -384,20 +384,20 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String errorSavingEvent(String error) {
-    return '儲存活動時發生錯誤：$error';
+    return '儲存約診時發生錯誤：$error';
   }
 
   @override
-  String get eventSavedNoteFailure => '活動已儲存，但筆記儲存失敗';
+  String get eventSavedNoteFailure => '約診已儲存，但筆記儲存失敗';
 
   @override
   String errorDeletingEvent(String error) {
-    return '刪除活動時發生錯誤：$error';
+    return '刪除約診時發生錯誤：$error';
   }
 
   @override
   String errorRemovingEvent(String error) {
-    return '移除活動時發生錯誤：$error';
+    return '移除約診時發生錯誤：$error';
   }
 
   @override
@@ -434,7 +434,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get ok => '確定';
 
   @override
-  String get eventTimeChangedSuccessfully => '活動時間變更成功';
+  String get eventTimeChangedSuccessfully => '約診時間變更成功';
 
   @override
   String errorChangingTime(String error) {
@@ -450,27 +450,27 @@ class AppLocalizationsZh extends AppLocalizations {
   String get reasonForRemovalLabel => '移除原因';
 
   @override
-  String get eventRemovedSuccessfully => '活動已成功移除';
+  String get eventRemovedSuccessfully => '約診已成功移除';
 
   @override
   String errorRemovingEventMessage(String error) {
-    return '移除活動時發生錯誤：$error';
+    return '移除約診時發生錯誤：$error';
   }
 
   @override
-  String get generateRandomEvents => '產生隨機活動';
+  String get generateRandomEvents => '產生隨機約診';
 
   @override
-  String get numberOfEvents => '活動數量';
+  String get numberOfEvents => '約診數量';
 
   @override
   String get enterNumber => '輸入數字（1-50）';
 
   @override
-  String get clearAllExistingEventsFirst => '先清除所有現有活動';
+  String get clearAllExistingEventsFirst => '先清除所有現有約診';
 
   @override
-  String get generateOpenEndedEventsOnly => '僅產生不設結束時間的活動';
+  String get generateOpenEndedEventsOnly => '僅產生不設結束時間的約診';
 
   @override
   String get noEndTime => '無結束時間';
@@ -496,49 +496,49 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String clearedAndGeneratedEvents(int count) {
-    return '已清除所有活動並產生 $count 個活動';
+    return '已清除所有約診並產生 $count 個約診';
   }
 
   @override
   String clearedAndGeneratedEventsSomeFull(int count) {
-    return '已清除所有活動並產生 $count 個活動（部分時段已滿）';
+    return '已清除所有約診並產生 $count 個約診（部分時段已滿）';
   }
 
   @override
   String clearedAndGeneratedOpenEndedEvents(int count) {
-    return '已清除所有活動並產生 $count 個不設結束時間的活動';
+    return '已清除所有約診並產生 $count 個不設結束時間的約診';
   }
 
   @override
   String clearedAndGeneratedOpenEndedEventsSomeFull(int count) {
-    return '已清除所有活動並產生 $count 個不設結束時間的活動（部分時段已滿）';
+    return '已清除所有約診並產生 $count 個不設結束時間的約診（部分時段已滿）';
   }
 
   @override
   String generatedEvents(int count) {
-    return '已產生 $count 個隨機活動';
+    return '已產生 $count 個隨機約診';
   }
 
   @override
   String generatedEventsSomeFull(int count) {
-    return '已產生 $count 個活動（部分時段已滿）';
+    return '已產生 $count 個約診（部分時段已滿）';
   }
 
   @override
   String generatedOpenEndedEvents(int count) {
-    return '已產生 $count 個不設結束時間的活動';
+    return '已產生 $count 個不設結束時間的約診';
   }
 
   @override
   String generatedOpenEndedEventsSomeFull(int count) {
-    return '已產生 $count 個不設結束時間的活動（部分時段已滿）';
+    return '已產生 $count 個不設結束時間的約診（部分時段已滿）';
   }
 
   @override
   String get goToTodayTooltip => '前往今天';
 
   @override
-  String get eventOptions => '活動選項';
+  String get eventOptions => '約診選項';
 
   @override
   String get scheduleNextAppointment => '預約下次約診';
@@ -578,32 +578,32 @@ class AppLocalizationsZh extends AppLocalizations {
   }
 
   @override
-  String get eventSavedButNoteFailed => '活動已儲存，但筆記儲存失敗';
+  String get eventSavedButNoteFailed => '約診已儲存，但筆記儲存失敗';
 
   @override
   String errorSavingEventMessage(String error) {
-    return '儲存活動時發生錯誤：$error';
+    return '儲存約診時發生錯誤：$error';
   }
 
   @override
   String get deleteEventTitle => '刪除約診';
 
   @override
-  String get deleteEventConfirmMessage => '您確定要刪除此活動及其筆記嗎？';
+  String get deleteEventConfirmMessage => '您確定要刪除此約診及其筆記嗎？';
 
   @override
   String get deleteButton => '刪除';
 
   @override
   String errorDeletingEventMessage(String error) {
-    return '刪除活動時發生錯誤：$error';
+    return '刪除約診時發生錯誤：$error';
   }
 
   @override
   String get removeEventTitle => '取消約診';
 
   @override
-  String get removeEventMessage => '此活動將被標記為已移除，但仍會以刪除線顯示。';
+  String get removeEventMessage => '此約診將被標記為已移除，但仍會以刪除線顯示。';
 
   @override
   String get reasonForRemovalField => '移除原因：';
@@ -615,7 +615,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get changeEventTimeTitle => '變更約診時間';
 
   @override
-  String get changeTimeMessage => '這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。';
+  String get changeTimeMessage => '這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。';
 
   @override
   String get reasonForTimeChangeField => '時間變更原因： *';
@@ -625,7 +625,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String errorChangingEventTimeMessage(String error) {
-    return '變更活動時間時發生錯誤：$error';
+    return '變更約診時間時發生錯誤：$error';
   }
 
   @override
@@ -1114,7 +1114,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String deleteBookConfirmation(String bookName) {
-    return '您確定要永久刪除「$bookName」及其所有活動嗎？';
+    return '您確定要永久刪除「$bookName」及其所有約診嗎？';
   }
 
   @override
@@ -1218,11 +1218,11 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get hideDrawing => '隱藏繪圖';
 
   @override
-  String get createEvent => '建立活動';
+  String get createEvent => '建立約診';
 
   @override
   String errorLoadingEvents(String error) {
-    return '載入活動時發生錯誤：$error';
+    return '載入約診時發生錯誤：$error';
   }
 
   @override
@@ -1245,7 +1245,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get newEvent => '新約診';
 
   @override
-  String get editEvent => '編輯活動';
+  String get editEvent => '編輯約診';
 
   @override
   String get eventName => '姓名 *';
@@ -1320,13 +1320,13 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get deleteEvent => '刪除約診';
 
   @override
-  String get deleteEventConfirmation => '您確定要刪除此活動及其筆記嗎？';
+  String get deleteEventConfirmation => '您確定要刪除此約診及其筆記嗎？';
 
   @override
   String get removeEvent => '取消約診';
 
   @override
-  String get removeEventDescription => '此活動將被標記為已移除，但仍會以刪除線顯示。';
+  String get removeEventDescription => '此約診將被標記為已移除，但仍會以刪除線顯示。';
 
   @override
   String get reasonForRemoval => '移除原因：';
@@ -1344,15 +1344,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get changeEventType => '變更約診類型';
 
   @override
-  String get eventTypeChanged => '活動類型已更新';
+  String get eventTypeChanged => '約診類型已更新';
 
   @override
   String errorUpdatingEvent(String error) {
-    return '更新活動時發生錯誤：$error';
+    return '更新約診時發生錯誤：$error';
   }
 
   @override
-  String get eventDeleted => '活動已刪除';
+  String get eventDeleted => '約診已刪除';
 
   @override
   String confirmDeleteEvent(String eventName) {
@@ -1360,7 +1360,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get changeTimeDescription => '這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。';
+  String get changeTimeDescription => '這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。';
 
   @override
   String startTimeLabel(String time) {
@@ -1385,17 +1385,17 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get reasonRequired => '必須填寫原因';
 
   @override
-  String get reasonRequiredMessage => '必須提供變更活動時間的原因。';
+  String get reasonRequiredMessage => '必須提供變更約診時間的原因。';
 
   @override
   String get changeTime => '變更時間';
 
   @override
-  String get eventTimeChangedSuccess => '活動時間變更成功';
+  String get eventTimeChangedSuccess => '約診時間變更成功';
 
   @override
   String errorChangingEventTime(String error) {
-    return '變更活動時間時發生錯誤：$error';
+    return '變更約診時間時發生錯誤：$error';
   }
 
   @override
@@ -1408,10 +1408,10 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get processing => '處理中...';
 
   @override
-  String get eventTimeChanged => '活動時間已變更';
+  String get eventTimeChanged => '約診時間已變更';
 
   @override
-  String get eventRemoved => '活動已移除';
+  String get eventRemoved => '約診已移除';
 
   @override
   String reason(String reason) {
@@ -1460,20 +1460,20 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String errorSavingEvent(String error) {
-    return '儲存活動時發生錯誤：$error';
+    return '儲存約診時發生錯誤：$error';
   }
 
   @override
-  String get eventSavedNoteFailure => '活動已儲存，但筆記儲存失敗';
+  String get eventSavedNoteFailure => '約診已儲存，但筆記儲存失敗';
 
   @override
   String errorDeletingEvent(String error) {
-    return '刪除活動時發生錯誤：$error';
+    return '刪除約診時發生錯誤：$error';
   }
 
   @override
   String errorRemovingEvent(String error) {
-    return '移除活動時發生錯誤：$error';
+    return '移除約診時發生錯誤：$error';
   }
 
   @override
@@ -1510,7 +1510,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get ok => '確定';
 
   @override
-  String get eventTimeChangedSuccessfully => '活動時間變更成功';
+  String get eventTimeChangedSuccessfully => '約診時間變更成功';
 
   @override
   String errorChangingTime(String error) {
@@ -1526,27 +1526,27 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get reasonForRemovalLabel => '移除原因';
 
   @override
-  String get eventRemovedSuccessfully => '活動已成功移除';
+  String get eventRemovedSuccessfully => '約診已成功移除';
 
   @override
   String errorRemovingEventMessage(String error) {
-    return '移除活動時發生錯誤：$error';
+    return '移除約診時發生錯誤：$error';
   }
 
   @override
-  String get generateRandomEvents => '產生隨機活動';
+  String get generateRandomEvents => '產生隨機約診';
 
   @override
-  String get numberOfEvents => '活動數量';
+  String get numberOfEvents => '約診數量';
 
   @override
   String get enterNumber => '輸入數字（1-50）';
 
   @override
-  String get clearAllExistingEventsFirst => '先清除所有現有活動';
+  String get clearAllExistingEventsFirst => '先清除所有現有約診';
 
   @override
-  String get generateOpenEndedEventsOnly => '僅產生不設結束時間的活動';
+  String get generateOpenEndedEventsOnly => '僅產生不設結束時間的約診';
 
   @override
   String get noEndTime => '無結束時間';
@@ -1572,49 +1572,49 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String clearedAndGeneratedEvents(int count) {
-    return '已清除所有活動並產生 $count 個活動';
+    return '已清除所有約診並產生 $count 個約診';
   }
 
   @override
   String clearedAndGeneratedEventsSomeFull(int count) {
-    return '已清除所有活動並產生 $count 個活動（部分時段已滿）';
+    return '已清除所有約診並產生 $count 個約診（部分時段已滿）';
   }
 
   @override
   String clearedAndGeneratedOpenEndedEvents(int count) {
-    return '已清除所有活動並產生 $count 個不設結束時間的活動';
+    return '已清除所有約診並產生 $count 個不設結束時間的約診';
   }
 
   @override
   String clearedAndGeneratedOpenEndedEventsSomeFull(int count) {
-    return '已清除所有活動並產生 $count 個不設結束時間的活動（部分時段已滿）';
+    return '已清除所有約診並產生 $count 個不設結束時間的約診（部分時段已滿）';
   }
 
   @override
   String generatedEvents(int count) {
-    return '已產生 $count 個隨機活動';
+    return '已產生 $count 個隨機約診';
   }
 
   @override
   String generatedEventsSomeFull(int count) {
-    return '已產生 $count 個活動（部分時段已滿）';
+    return '已產生 $count 個約診（部分時段已滿）';
   }
 
   @override
   String generatedOpenEndedEvents(int count) {
-    return '已產生 $count 個不設結束時間的活動';
+    return '已產生 $count 個不設結束時間的約診';
   }
 
   @override
   String generatedOpenEndedEventsSomeFull(int count) {
-    return '已產生 $count 個不設結束時間的活動（部分時段已滿）';
+    return '已產生 $count 個不設結束時間的約診（部分時段已滿）';
   }
 
   @override
   String get goToTodayTooltip => '前往今天';
 
   @override
-  String get eventOptions => '活動選項';
+  String get eventOptions => '約診選項';
 
   @override
   String get scheduleNextAppointment => '預約下次約診';
@@ -1654,32 +1654,32 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get eventSavedButNoteFailed => '活動已儲存，但筆記儲存失敗';
+  String get eventSavedButNoteFailed => '約診已儲存，但筆記儲存失敗';
 
   @override
   String errorSavingEventMessage(String error) {
-    return '儲存活動時發生錯誤：$error';
+    return '儲存約診時發生錯誤：$error';
   }
 
   @override
   String get deleteEventTitle => '刪除約診';
 
   @override
-  String get deleteEventConfirmMessage => '您確定要刪除此活動及其筆記嗎？';
+  String get deleteEventConfirmMessage => '您確定要刪除此約診及其筆記嗎？';
 
   @override
   String get deleteButton => '刪除';
 
   @override
   String errorDeletingEventMessage(String error) {
-    return '刪除活動時發生錯誤：$error';
+    return '刪除約診時發生錯誤：$error';
   }
 
   @override
   String get removeEventTitle => '取消約診';
 
   @override
-  String get removeEventMessage => '此活動將被標記為已移除，但仍會以刪除線顯示。';
+  String get removeEventMessage => '此約診將被標記為已移除，但仍會以刪除線顯示。';
 
   @override
   String get reasonForRemovalField => '移除原因：';
@@ -1691,7 +1691,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get changeEventTimeTitle => '變更約診時間';
 
   @override
-  String get changeTimeMessage => '這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。';
+  String get changeTimeMessage => '這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。';
 
   @override
   String get reasonForTimeChangeField => '時間變更原因： *';
@@ -1701,7 +1701,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String errorChangingEventTimeMessage(String error) {
-    return '變更活動時間時發生錯誤：$error';
+    return '變更約診時間時發生錯誤：$error';
   }
 
   @override
@@ -1709,7 +1709,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String get heavyLoadTestWarning =>
-      '此測試將產生 2,928 個活動與約 8,800 萬個資料點，可能需要數分鐘時間。';
+      '此測試將產生 2,928 個約診與約 8,800 萬個資料點，可能需要數分鐘時間。';
 
   @override
   String get heavyLoadTestConfirm => '開始重量測試';
@@ -1721,17 +1721,17 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String heavyLoadTestComplete(int events, int strokes, String time) {
-    return '已產生 $events 個活動，共 $strokes 個筆畫，耗時 $time';
+    return '已產生 $events 個約診，共 $strokes 個筆畫，耗時 $time';
   }
 
   @override
-  String get clearExistingEvents => '清除現有活動';
+  String get clearExistingEvents => '清除現有約診';
 
   @override
-  String get generatingEvents => '產生活動中...';
+  String get generatingEvents => '產生約診中...';
 
   @override
-  String get stage1Creating => '階段 1/2：建立活動';
+  String get stage1Creating => '階段 1/2：建立約診';
 
   @override
   String get stage2AddingStrokes => '階段 2/2：加入筆畫';
@@ -1743,19 +1743,19 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get heavyLoadStage2Only => '重量測試 - 階段2';
 
   @override
-  String get stage1OnlyWarning => '建立 11,712 個空白活動（不含筆畫）\n每個格子4個活動';
+  String get stage1OnlyWarning => '建立 11,712 個空白約診（不含筆畫）\n每個格子4個約診';
 
   @override
-  String get stage2OnlyWarning => '為現有 HEAVY- 活動加入筆畫（750筆畫/活動）';
+  String get stage2OnlyWarning => '為現有 HEAVY- 約診加入筆畫（750筆畫/約診）';
 
   @override
   String stage1Complete(int events) {
-    return '階段1完成：已建立 $events 個活動';
+    return '階段1完成：已建立 $events 個約診';
   }
 
   @override
   String stage2Complete(int events, int strokes, String time) {
-    return '階段2完成：已加入 $strokes 個筆畫到 $events 個活動，耗時 $time';
+    return '階段2完成：已加入 $strokes 個筆畫到 $events 個約診，耗時 $time';
   }
 
   @override
@@ -1893,21 +1893,21 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get today => '今天';
 
   @override
-  String get dayEventSummaryTooltip => '顯示當天活動摘要';
+  String get dayEventSummaryTooltip => '顯示當天約診摘要';
 
   @override
-  String get dayEventSummaryTitle => '當天活動摘要';
+  String get dayEventSummaryTitle => '當天約診摘要';
 
   @override
   String dayEventSummaryTotalEvents(int count) {
-    return '活動總數：$count';
+    return '約診總數：$count';
   }
 
   @override
   String get dayEventSummaryTypeBreakdown => '類型統計';
 
   @override
-  String get dayEventSummaryNoEvents => '這一天沒有活動。';
+  String get dayEventSummaryNoEvents => '這一天沒有約診。';
 
   @override
   String dayEventSummaryTypeCount(String type, int count) {
@@ -1939,13 +1939,13 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get syncingEvent => '正在同步活動...';
+  String get syncingEvent => '正在同步約診...';
 
   @override
-  String get loadingEvent => '正在載入活動...';
+  String get loadingEvent => '正在載入約診...';
 
   @override
-  String get viewEvent => '檢視活動';
+  String get viewEvent => '檢視約診';
 
   @override
   String get unsyncedChangesLabel => '未同步變更';
@@ -2113,7 +2113,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get eventsCannotSpanAcrossDates => '活動不可跨日期';
+  String get eventsCannotSpanAcrossDates => '約診不可跨日期';
 
   @override
   String get testTimeDialogPlaceholder => '測試時間對話框（功能已拆分）';
@@ -2127,10 +2127,10 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   }
 
   @override
-  String get thisEventTime => '此次活動時間';
+  String get thisEventTime => '此次約診時間';
 
   @override
-  String get thisEventFocus => '聚焦此次活動（其他淡化）';
+  String get thisEventFocus => '聚焦此次約診（其他淡化）';
 
   @override
   String get allItems => '全部項目';

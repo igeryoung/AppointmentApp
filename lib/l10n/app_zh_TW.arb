@@ -51,7 +51,7 @@
     "description": "Title for delete book dialog"
   },
 
-  "deleteBookConfirmation": "您確定要永久刪除「{bookName}」及其所有活動嗎？",
+  "deleteBookConfirmation": "您確定要永久刪除「{bookName}」及其所有約診嗎？",
   "@deleteBookConfirmation": {
     "description": "Confirmation message for deleting a book",
     "placeholders": {
@@ -236,12 +236,12 @@
     "description": "Text for hiding drawing"
   },
 
-  "createEvent": "建立活動",
+  "createEvent": "建立約診",
   "@createEvent": {
     "description": "Tooltip for create event button"
   },
 
-  "errorLoadingEvents": "載入活動時發生錯誤：{error}",
+  "errorLoadingEvents": "載入約診時發生錯誤：{error}",
   "@errorLoadingEvents": {
     "description": "Error message when loading events fails",
     "placeholders": {
@@ -286,7 +286,7 @@
     "description": "Title for new event screen"
   },
 
-  "editEvent": "編輯活動",
+  "editEvent": "編輯約診",
   "@editEvent": {
     "description": "Title for edit event screen"
   },
@@ -411,7 +411,7 @@
     "description": "Title for delete event dialog"
   },
 
-  "deleteEventConfirmation": "您確定要刪除此活動及其筆記嗎？",
+  "deleteEventConfirmation": "您確定要刪除此約診及其筆記嗎？",
   "@deleteEventConfirmation": {
     "description": "Confirmation message for deleting event"
   },
@@ -421,7 +421,7 @@
     "description": "Title for remove event dialog and menu item"
   },
 
-  "removeEventDescription": "此活動將被標記為已移除，但仍會以刪除線顯示。",
+  "removeEventDescription": "此約診將被標記為已移除，但仍會以刪除線顯示。",
   "@removeEventDescription": {
     "description": "Description for remove event action"
   },
@@ -451,12 +451,12 @@
     "description": "Title for change event type dialog and menu item"
   },
 
-  "eventTypeChanged": "活動類型已更新",
+  "eventTypeChanged": "約診類型已更新",
   "@eventTypeChanged": {
     "description": "Success message after changing event type"
   },
 
-  "errorUpdatingEvent": "更新活動時發生錯誤：{error}",
+  "errorUpdatingEvent": "更新約診時發生錯誤：{error}",
   "@errorUpdatingEvent": {
     "description": "Error message when updating event fails",
     "placeholders": {
@@ -467,7 +467,7 @@
     }
   },
 
-  "eventDeleted": "活動已刪除",
+  "eventDeleted": "約診已刪除",
   "@eventDeleted": {
     "description": "Success message after deleting event"
   },
@@ -483,7 +483,7 @@
     }
   },
 
-  "changeTimeDescription": "這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。",
+  "changeTimeDescription": "這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。",
   "@changeTimeDescription": {
     "description": "Description for change time action"
   },
@@ -528,7 +528,7 @@
     "description": "Validation error for empty reason"
   },
 
-  "reasonRequiredMessage": "必須提供原因才能變更活動時間。",
+  "reasonRequiredMessage": "必須提供原因才能變更約診時間。",
   "@reasonRequiredMessage": {
     "description": "Error message when reason is required"
   },
@@ -538,12 +538,12 @@
     "description": "Change time button text"
   },
 
-  "eventTimeChangedSuccess": "活動時間變更成功",
+  "eventTimeChangedSuccess": "約診時間變更成功",
   "@eventTimeChangedSuccess": {
     "description": "Success message for time change"
   },
 
-  "errorChangingEventTime": "變更活動時間時發生錯誤：{error}",
+  "errorChangingEventTime": "變更約診時間時發生錯誤：{error}",
   "@errorChangingEventTime": {
     "description": "Error message when changing time fails",
     "placeholders": {
@@ -568,12 +568,12 @@
     "description": "Processing message"
   },
 
-  "eventTimeChanged": "活動時間已變更",
+  "eventTimeChanged": "約診時間已變更",
   "@eventTimeChanged": {
     "description": "Label for event time changed status"
   },
 
-  "eventRemoved": "活動已移除",
+  "eventRemoved": "約診已移除",
   "@eventRemoved": {
     "description": "Label for event removed status"
   },
@@ -658,7 +658,7 @@
     }
   },
 
-  "errorSavingEvent": "儲存活動時發生錯誤：{error}",
+  "errorSavingEvent": "儲存約診時發生錯誤：{error}",
   "@errorSavingEvent": {
     "description": "Error message when saving event fails",
     "placeholders": {
@@ -668,12 +668,12 @@
     }
   },
 
-  "eventSavedNoteFailure": "活動已儲存，但筆記儲存失敗",
+  "eventSavedNoteFailure": "約診已儲存，但筆記儲存失敗",
   "@eventSavedNoteFailure": {
     "description": "Message when event saves but note save fails"
   },
 
-  "errorDeletingEvent": "刪除活動時發生錯誤：{error}",
+  "errorDeletingEvent": "刪除約診時發生錯誤：{error}",
   "@errorDeletingEvent": {
     "description": "Error message when deleting event fails",
     "placeholders": {
@@ -683,7 +683,7 @@
     }
   },
 
-  "errorRemovingEvent": "移除活動時發生錯誤：{error}",
+  "errorRemovingEvent": "移除約診時發生錯誤：{error}",
   "@errorRemovingEvent": {
     "description": "Error message when removing event fails",
     "placeholders": {
@@ -748,7 +748,7 @@
     "description": "OK button text"
   },
 
-  "eventTimeChangedSuccessfully": "活動時間變更成功",
+  "eventTimeChangedSuccessfully": "約診時間變更成功",
   "@eventTimeChangedSuccessfully": {
     "description": "Success message after changing event time"
   },
@@ -778,12 +778,12 @@
     "description": "Label for removal reason field"
   },
 
-  "eventRemovedSuccessfully": "活動已成功移除",
+  "eventRemovedSuccessfully": "約診已成功移除",
   "@eventRemovedSuccessfully": {
     "description": "Success message after removing event"
   },
 
-  "errorRemovingEventMessage": "移除活動時發生錯誤：{error}",
+  "errorRemovingEventMessage": "移除約診時發生錯誤：{error}",
   "@errorRemovingEventMessage": {
     "description": "Error message when removing event fails",
     "placeholders": {
@@ -793,12 +793,12 @@
     }
   },
 
-  "generateRandomEvents": "產生隨機活動",
+  "generateRandomEvents": "產生隨機約診",
   "@generateRandomEvents": {
     "description": "Title for generate random events dialog"
   },
 
-  "numberOfEvents": "活動數量",
+  "numberOfEvents": "約診數量",
   "@numberOfEvents": {
     "description": "Label for number of events field"
   },
@@ -808,12 +808,12 @@
     "description": "Hint text for number input"
   },
 
-  "clearAllExistingEventsFirst": "先清除所有現有活動",
+  "clearAllExistingEventsFirst": "先清除所有現有約診",
   "@clearAllExistingEventsFirst": {
     "description": "Checkbox label to clear existing events"
   },
 
-  "generateOpenEndedEventsOnly": "僅產生不設結束時間的活動",
+  "generateOpenEndedEventsOnly": "僅產生不設結束時間的約診",
   "@generateOpenEndedEventsOnly": {
     "description": "Checkbox label for open-ended events"
   },
@@ -858,7 +858,7 @@
     }
   },
 
-  "clearedAndGeneratedEvents": "已清除所有活動並產生 {count} 個活動",
+  "clearedAndGeneratedEvents": "已清除所有約診並產生 {count} 個約診",
   "@clearedAndGeneratedEvents": {
     "description": "Message after clearing and generating events",
     "placeholders": {
@@ -868,7 +868,7 @@
     }
   },
 
-  "clearedAndGeneratedEventsSomeFull": "已清除所有活動並產生 {count} 個活動（部分時段已滿）",
+  "clearedAndGeneratedEventsSomeFull": "已清除所有約診並產生 {count} 個約診（部分時段已滿）",
   "@clearedAndGeneratedEventsSomeFull": {
     "description": "Message when some slots were full",
     "placeholders": {
@@ -878,7 +878,7 @@
     }
   },
 
-  "clearedAndGeneratedOpenEndedEvents": "已清除所有活動並產生 {count} 個不設結束時間的活動",
+  "clearedAndGeneratedOpenEndedEvents": "已清除所有約診並產生 {count} 個不設結束時間的約診",
   "@clearedAndGeneratedOpenEndedEvents": {
     "description": "Message for open-ended events",
     "placeholders": {
@@ -888,7 +888,7 @@
     }
   },
 
-  "clearedAndGeneratedOpenEndedEventsSomeFull": "已清除所有活動並產生 {count} 個不設結束時間的活動（部分時段已滿）",
+  "clearedAndGeneratedOpenEndedEventsSomeFull": "已清除所有約診並產生 {count} 個不設結束時間的約診（部分時段已滿）",
   "@clearedAndGeneratedOpenEndedEventsSomeFull": {
     "description": "Message for open-ended events with full slots",
     "placeholders": {
@@ -898,7 +898,7 @@
     }
   },
 
-  "generatedEvents": "已產生 {count} 個隨機活動",
+  "generatedEvents": "已產生 {count} 個隨機約診",
   "@generatedEvents": {
     "description": "Message after generating events",
     "placeholders": {
@@ -908,7 +908,7 @@
     }
   },
 
-  "generatedEventsSomeFull": "已產生 {count} 個活動（部分時段已滿）",
+  "generatedEventsSomeFull": "已產生 {count} 個約診（部分時段已滿）",
   "@generatedEventsSomeFull": {
     "description": "Message when some slots were full",
     "placeholders": {
@@ -918,7 +918,7 @@
     }
   },
 
-  "generatedOpenEndedEvents": "已產生 {count} 個不設結束時間的活動",
+  "generatedOpenEndedEvents": "已產生 {count} 個不設結束時間的約診",
   "@generatedOpenEndedEvents": {
     "description": "Message for generated open-ended events",
     "placeholders": {
@@ -928,7 +928,7 @@
     }
   },
 
-  "generatedOpenEndedEventsSomeFull": "已產生 {count} 個不設結束時間的活動（部分時段已滿）",
+  "generatedOpenEndedEventsSomeFull": "已產生 {count} 個不設結束時間的約診（部分時段已滿）",
   "@generatedOpenEndedEventsSomeFull": {
     "description": "Message for open-ended events with full slots",
     "placeholders": {
@@ -943,7 +943,7 @@
     "description": "Tooltip for go to today button"
   },
 
-  "eventOptions": "活動選項",
+  "eventOptions": "約診選項",
   "@eventOptions": {
     "description": "Title for event options menu"
   },
@@ -1023,12 +1023,12 @@
     }
   },
 
-  "eventSavedButNoteFailed": "活動已儲存，但筆記儲存失敗",
+  "eventSavedButNoteFailed": "約診已儲存，但筆記儲存失敗",
   "@eventSavedButNoteFailed": {
     "description": "Message when event saves but note fails"
   },
 
-  "errorSavingEventMessage": "儲存活動時發生錯誤：{error}",
+  "errorSavingEventMessage": "儲存約診時發生錯誤：{error}",
   "@errorSavingEventMessage": {
     "description": "Error message when saving event fails",
     "placeholders": {
@@ -1043,7 +1043,7 @@
     "description": "Title for delete event dialog"
   },
 
-  "deleteEventConfirmMessage": "您確定要刪除此活動及其筆記嗎？",
+  "deleteEventConfirmMessage": "您確定要刪除此約診及其筆記嗎？",
   "@deleteEventConfirmMessage": {
     "description": "Confirmation message for deleting event"
   },
@@ -1053,7 +1053,7 @@
     "description": "Delete button text"
   },
 
-  "errorDeletingEventMessage": "刪除活動時發生錯誤：{error}",
+  "errorDeletingEventMessage": "刪除約診時發生錯誤：{error}",
   "@errorDeletingEventMessage": {
     "description": "Error message when deleting event fails",
     "placeholders": {
@@ -1068,7 +1068,7 @@
     "description": "Title for remove event dialog"
   },
 
-  "removeEventMessage": "此活動將被標記為已移除，但仍會以刪除線顯示。",
+  "removeEventMessage": "此約診將被標記為已移除，但仍會以刪除線顯示。",
   "@removeEventMessage": {
     "description": "Message explaining remove action"
   },
@@ -1088,7 +1088,7 @@
     "description": "Title for change event time dialog"
   },
 
-  "changeTimeMessage": "這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。",
+  "changeTimeMessage": "這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。",
   "@changeTimeMessage": {
     "description": "Message explaining time change action"
   },
@@ -1103,12 +1103,12 @@
     "description": "Change time button text"
   },
 
-  "eventTimeChangedSuccess": "活動時間變更成功",
+  "eventTimeChangedSuccess": "約診時間變更成功",
   "@eventTimeChangedSuccess": {
     "description": "Success message for time change"
   },
 
-  "errorChangingEventTimeMessage": "變更活動時間時發生錯誤：{error}",
+  "errorChangingEventTimeMessage": "變更約診時間時發生錯誤：{error}",
   "@errorChangingEventTimeMessage": {
     "description": "Error message when changing event time fails",
     "placeholders": {
@@ -1143,7 +1143,7 @@
     "description": "Error text when reason is required but not provided"
   },
 
-  "reasonRequiredMessage": "必須提供變更活動時間的原因。",
+  "reasonRequiredMessage": "必須提供變更約診時間的原因。",
   "@reasonRequiredMessage": {
     "description": "Detailed message that reason is required"
   },
@@ -1158,7 +1158,7 @@
     "description": "Heavy load test button label"
   },
 
-  "heavyLoadTestWarning": "此測試將產生 2,928 個活動與約 8,800 萬個資料點，可能需要數分鐘時間。",
+  "heavyLoadTestWarning": "此測試將產生 2,928 個約診與約 8,800 萬個資料點，可能需要數分鐘時間。",
   "@heavyLoadTestWarning": {
     "description": "Warning message for heavy load test"
   },
@@ -1184,7 +1184,7 @@
     }
   },
 
-  "heavyLoadTestComplete": "已產生 {events} 個活動，共 {strokes} 個筆畫，耗時 {time}",
+  "heavyLoadTestComplete": "已產生 {events} 個約診，共 {strokes} 個筆畫，耗時 {time}",
   "@heavyLoadTestComplete": {
     "description": "Completion message for heavy load test",
     "placeholders": {
@@ -1200,17 +1200,17 @@
     }
   },
 
-  "clearExistingEvents": "清除現有活動",
+  "clearExistingEvents": "清除現有約診",
   "@clearExistingEvents": {
     "description": "Checkbox label to clear existing events"
   },
 
-  "generatingEvents": "產生活動中...",
+  "generatingEvents": "產生約診中...",
   "@generatingEvents": {
     "description": "Dialog title during event generation"
   },
 
-  "stage1Creating": "階段 1/2：建立活動",
+  "stage1Creating": "階段 1/2：建立約診",
   "@stage1Creating": {
     "description": "Stage 1 label for creating events"
   },
@@ -1230,17 +1230,17 @@
     "description": "Button label for Stage 2 only"
   },
 
-  "stage1OnlyWarning": "建立 11,712 個空白活動（不含筆畫）\n每個格子4個活動",
+  "stage1OnlyWarning": "建立 11,712 個空白約診（不含筆畫）\n每個格子4個約診",
   "@stage1OnlyWarning": {
     "description": "Warning message for Stage 1 only"
   },
 
-  "stage2OnlyWarning": "為現有 HEAVY- 活動加入筆畫（750筆畫/活動）",
+  "stage2OnlyWarning": "為現有 HEAVY- 約診加入筆畫（750筆畫/約診）",
   "@stage2OnlyWarning": {
     "description": "Warning message for Stage 2 only"
   },
 
-  "stage1Complete": "階段1完成：已建立 {events} 個活動",
+  "stage1Complete": "階段1完成：已建立 {events} 個約診",
   "@stage1Complete": {
     "description": "Completion message for Stage 1",
     "placeholders": {
@@ -1250,7 +1250,7 @@
     }
   },
 
-  "stage2Complete": "階段2完成：已加入 {strokes} 個筆畫到 {events} 個活動，耗時 {time}",
+  "stage2Complete": "階段2完成：已加入 {strokes} 個筆畫到 {events} 個約診，耗時 {time}",
   "@stage2Complete": {
     "description": "Completion message for Stage 2",
     "placeholders": {
@@ -1447,9 +1447,9 @@
   "enterOtherReasonHint": "請輸入其他原因...",
   "enterOtherReasonRequired": "請輸入其他原因",
   "today": "今天",
-  "dayEventSummaryTooltip": "顯示當天活動摘要",
-  "dayEventSummaryTitle": "當天活動摘要",
-  "dayEventSummaryTotalEvents": "活動總數：{count}",
+  "dayEventSummaryTooltip": "顯示當天約診摘要",
+  "dayEventSummaryTitle": "當天約診摘要",
+  "dayEventSummaryTotalEvents": "約診總數：{count}",
   "@dayEventSummaryTotalEvents": {
     "description": "Summary line showing total active events for a date",
     "placeholders": {
@@ -1459,7 +1459,7 @@
     }
   },
   "dayEventSummaryTypeBreakdown": "類型統計",
-  "dayEventSummaryNoEvents": "這一天沒有活動。",
+  "dayEventSummaryNoEvents": "這一天沒有約診。",
   "dayEventSummaryTypeCount": "{type}：{count}",
   "@dayEventSummaryTypeCount": {
     "description": "Summary line showing event type count for the day",
@@ -1476,9 +1476,9 @@
   "eventTypesOverflowSummary": "{firstType}、{secondType}，另外 {remainingCount} 種",
   "errorInitializingServices": "初始化服務失敗，部分功能可能無法使用：{error}",
   "endTimeCleared": "已清除結束時間：{error}",
-  "syncingEvent": "正在同步活動...",
-  "loadingEvent": "正在載入活動...",
-  "viewEvent": "檢視活動",
+  "syncingEvent": "正在同步約診...",
+  "loadingEvent": "正在載入約診...",
+  "viewEvent": "檢視約診",
   "unsyncedChangesLabel": "未同步變更",
   "offlineLabel": "離線",
   "readOnlyModeTooltip": "唯讀模式：已停用資料編輯與手寫功能。",
@@ -1526,12 +1526,12 @@
   "serverUrlUpdated": "伺服器網址已更新為：{url}",
   "failedToUpdateServerUrl": "更新伺服器網址失敗：{error}",
   "cannotMoveEndTimeExceedsLimit": "無法移動：結束時間將為 {hour}:{minute}（超過 21:00）",
-  "eventsCannotSpanAcrossDates": "活動不可跨日期",
+  "eventsCannotSpanAcrossDates": "約診不可跨日期",
   "testTimeDialogPlaceholder": "測試時間對話框（功能已拆分）",
   "otherEventType": "其他",
   "chargeAmountSummary": "NT\u0024{received} / NT\u0024{total}",
-  "thisEventTime": "此次活動時間",
-  "thisEventFocus": "聚焦此次活動（其他淡化）",
+  "thisEventTime": "此次約診時間",
+  "thisEventFocus": "聚焦此次約診（其他淡化）",
   "allItems": "全部項目",
   "highlighterWidth": "螢光筆寬度",
   "syncedOfflineNotes": "已同步 {total} 筆離線筆記",

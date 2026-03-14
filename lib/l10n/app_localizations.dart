@@ -150,7 +150,7 @@ abstract class AppLocalizations {
   /// Confirmation message for deleting a book
   ///
   /// In zh_TW, this message translates to:
-  /// **'您確定要永久刪除「{bookName}」及其所有活動嗎？'**
+  /// **'您確定要永久刪除「{bookName}」及其所有約診嗎？'**
   String deleteBookConfirmation(String bookName);
 
   /// Delete button text
@@ -336,13 +336,13 @@ abstract class AppLocalizations {
   /// Tooltip for create event button
   ///
   /// In zh_TW, this message translates to:
-  /// **'建立活動'**
+  /// **'建立約診'**
   String get createEvent;
 
   /// Error message when loading events fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'載入活動時發生錯誤：{error}'**
+  /// **'載入約診時發生錯誤：{error}'**
   String errorLoadingEvents(String error);
 
   /// Label for record number in event tile
@@ -378,7 +378,7 @@ abstract class AppLocalizations {
   /// Title for edit event screen
   ///
   /// In zh_TW, this message translates to:
-  /// **'編輯活動'**
+  /// **'編輯約診'**
   String get editEvent;
 
   /// Label for event name field
@@ -528,7 +528,7 @@ abstract class AppLocalizations {
   /// Confirmation message for deleting event
   ///
   /// In zh_TW, this message translates to:
-  /// **'您確定要刪除此活動及其筆記嗎？'**
+  /// **'您確定要刪除此約診及其筆記嗎？'**
   String get deleteEventConfirmation;
 
   /// Title for remove event dialog and menu item
@@ -540,7 +540,7 @@ abstract class AppLocalizations {
   /// Description for remove event action
   ///
   /// In zh_TW, this message translates to:
-  /// **'此活動將被標記為已移除，但仍會以刪除線顯示。'**
+  /// **'此約診將被標記為已移除，但仍會以刪除線顯示。'**
   String get removeEventDescription;
 
   /// Label for removal reason field
@@ -576,19 +576,19 @@ abstract class AppLocalizations {
   /// Success message after changing event type
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動類型已更新'**
+  /// **'約診類型已更新'**
   String get eventTypeChanged;
 
   /// Error message when updating event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'更新活動時發生錯誤：{error}'**
+  /// **'更新約診時發生錯誤：{error}'**
   String errorUpdatingEvent(String error);
 
   /// Success message after deleting event
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動已刪除'**
+  /// **'約診已刪除'**
   String get eventDeleted;
 
   /// Confirmation message for deleting event with name
@@ -600,7 +600,7 @@ abstract class AppLocalizations {
   /// Description for change time action
   ///
   /// In zh_TW, this message translates to:
-  /// **'這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。'**
+  /// **'這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。'**
   String get changeTimeDescription;
 
   /// Label for start time in change time dialog
@@ -642,7 +642,7 @@ abstract class AppLocalizations {
   /// Detailed message that reason is required
   ///
   /// In zh_TW, this message translates to:
-  /// **'必須提供變更活動時間的原因。'**
+  /// **'必須提供變更約診時間的原因。'**
   String get reasonRequiredMessage;
 
   /// Change time button text
@@ -654,13 +654,13 @@ abstract class AppLocalizations {
   /// Success message for time change
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動時間變更成功'**
+  /// **'約診時間變更成功'**
   String get eventTimeChangedSuccess;
 
   /// Error message when changing time fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'變更活動時間時發生錯誤：{error}'**
+  /// **'變更約診時間時發生錯誤：{error}'**
   String errorChangingEventTime(String error);
 
   /// Retry button label
@@ -684,13 +684,13 @@ abstract class AppLocalizations {
   /// Label for event time changed status
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動時間已變更'**
+  /// **'約診時間已變更'**
   String get eventTimeChanged;
 
   /// Label for event removed status
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動已移除'**
+  /// **'約診已移除'**
   String get eventRemoved;
 
   /// Label for reason
@@ -774,25 +774,25 @@ abstract class AppLocalizations {
   /// Error message when saving event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'儲存活動時發生錯誤：{error}'**
+  /// **'儲存約診時發生錯誤：{error}'**
   String errorSavingEvent(String error);
 
   /// Message when event saves but note save fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動已儲存，但筆記儲存失敗'**
+  /// **'約診已儲存，但筆記儲存失敗'**
   String get eventSavedNoteFailure;
 
   /// Error message when deleting event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'刪除活動時發生錯誤：{error}'**
+  /// **'刪除約診時發生錯誤：{error}'**
   String errorDeletingEvent(String error);
 
   /// Error message when removing event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'移除活動時發生錯誤：{error}'**
+  /// **'移除約診時發生錯誤：{error}'**
   String errorRemovingEvent(String error);
 
   /// Consultation event type
@@ -864,7 +864,7 @@ abstract class AppLocalizations {
   /// Success message after changing event time
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動時間變更成功'**
+  /// **'約診時間變更成功'**
   String get eventTimeChangedSuccessfully;
 
   /// Error message when changing time fails
@@ -888,25 +888,25 @@ abstract class AppLocalizations {
   /// Success message after removing event
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動已成功移除'**
+  /// **'約診已成功移除'**
   String get eventRemovedSuccessfully;
 
   /// Error message when removing event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'移除活動時發生錯誤：{error}'**
+  /// **'移除約診時發生錯誤：{error}'**
   String errorRemovingEventMessage(String error);
 
   /// Title for generate random events dialog
   ///
   /// In zh_TW, this message translates to:
-  /// **'產生隨機活動'**
+  /// **'產生隨機約診'**
   String get generateRandomEvents;
 
   /// Label for number of events field
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動數量'**
+  /// **'約診數量'**
   String get numberOfEvents;
 
   /// Hint text for number input
@@ -918,13 +918,13 @@ abstract class AppLocalizations {
   /// Checkbox label to clear existing events
   ///
   /// In zh_TW, this message translates to:
-  /// **'先清除所有現有活動'**
+  /// **'先清除所有現有約診'**
   String get clearAllExistingEventsFirst;
 
   /// Checkbox label for open-ended events
   ///
   /// In zh_TW, this message translates to:
-  /// **'僅產生不設結束時間的活動'**
+  /// **'僅產生不設結束時間的約診'**
   String get generateOpenEndedEventsOnly;
 
   /// Subtitle for open-ended events option
@@ -966,49 +966,49 @@ abstract class AppLocalizations {
   /// Message after clearing and generating events
   ///
   /// In zh_TW, this message translates to:
-  /// **'已清除所有活動並產生 {count} 個活動'**
+  /// **'已清除所有約診並產生 {count} 個約診'**
   String clearedAndGeneratedEvents(int count);
 
   /// Message when some slots were full
   ///
   /// In zh_TW, this message translates to:
-  /// **'已清除所有活動並產生 {count} 個活動（部分時段已滿）'**
+  /// **'已清除所有約診並產生 {count} 個約診（部分時段已滿）'**
   String clearedAndGeneratedEventsSomeFull(int count);
 
   /// Message for open-ended events
   ///
   /// In zh_TW, this message translates to:
-  /// **'已清除所有活動並產生 {count} 個不設結束時間的活動'**
+  /// **'已清除所有約診並產生 {count} 個不設結束時間的約診'**
   String clearedAndGeneratedOpenEndedEvents(int count);
 
   /// Message for open-ended events with full slots
   ///
   /// In zh_TW, this message translates to:
-  /// **'已清除所有活動並產生 {count} 個不設結束時間的活動（部分時段已滿）'**
+  /// **'已清除所有約診並產生 {count} 個不設結束時間的約診（部分時段已滿）'**
   String clearedAndGeneratedOpenEndedEventsSomeFull(int count);
 
   /// Message after generating events
   ///
   /// In zh_TW, this message translates to:
-  /// **'已產生 {count} 個隨機活動'**
+  /// **'已產生 {count} 個隨機約診'**
   String generatedEvents(int count);
 
   /// Message when some slots were full
   ///
   /// In zh_TW, this message translates to:
-  /// **'已產生 {count} 個活動（部分時段已滿）'**
+  /// **'已產生 {count} 個約診（部分時段已滿）'**
   String generatedEventsSomeFull(int count);
 
   /// Message for generated open-ended events
   ///
   /// In zh_TW, this message translates to:
-  /// **'已產生 {count} 個不設結束時間的活動'**
+  /// **'已產生 {count} 個不設結束時間的約診'**
   String generatedOpenEndedEvents(int count);
 
   /// Message for open-ended events with full slots
   ///
   /// In zh_TW, this message translates to:
-  /// **'已產生 {count} 個不設結束時間的活動（部分時段已滿）'**
+  /// **'已產生 {count} 個不設結束時間的約診（部分時段已滿）'**
   String generatedOpenEndedEventsSomeFull(int count);
 
   /// Tooltip for go to today button
@@ -1020,7 +1020,7 @@ abstract class AppLocalizations {
   /// Title for event options menu
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動選項'**
+  /// **'約診選項'**
   String get eventOptions;
 
   /// Menu item and dialog title for scheduling next appointment
@@ -1092,13 +1092,13 @@ abstract class AppLocalizations {
   /// Message when event saves but note fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動已儲存，但筆記儲存失敗'**
+  /// **'約診已儲存，但筆記儲存失敗'**
   String get eventSavedButNoteFailed;
 
   /// Error message when saving event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'儲存活動時發生錯誤：{error}'**
+  /// **'儲存約診時發生錯誤：{error}'**
   String errorSavingEventMessage(String error);
 
   /// Title for delete event dialog
@@ -1110,7 +1110,7 @@ abstract class AppLocalizations {
   /// Confirmation message for deleting event
   ///
   /// In zh_TW, this message translates to:
-  /// **'您確定要刪除此活動及其筆記嗎？'**
+  /// **'您確定要刪除此約診及其筆記嗎？'**
   String get deleteEventConfirmMessage;
 
   /// Delete button text
@@ -1122,7 +1122,7 @@ abstract class AppLocalizations {
   /// Error message when deleting event fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'刪除活動時發生錯誤：{error}'**
+  /// **'刪除約診時發生錯誤：{error}'**
   String errorDeletingEventMessage(String error);
 
   /// Title for remove event dialog
@@ -1134,7 +1134,7 @@ abstract class AppLocalizations {
   /// Message explaining remove action
   ///
   /// In zh_TW, this message translates to:
-  /// **'此活動將被標記為已移除，但仍會以刪除線顯示。'**
+  /// **'此約診將被標記為已移除，但仍會以刪除線顯示。'**
   String get removeEventMessage;
 
   /// Label for removal reason field
@@ -1158,7 +1158,7 @@ abstract class AppLocalizations {
   /// Message explaining time change action
   ///
   /// In zh_TW, this message translates to:
-  /// **'這將建立一個新活動並使用更新的時間，並將原活動標記為已移除。'**
+  /// **'這將建立一個新約診並使用更新的時間，並將原約診標記為已移除。'**
   String get changeTimeMessage;
 
   /// Label for time change reason field (required)
@@ -1176,7 +1176,7 @@ abstract class AppLocalizations {
   /// Error message when changing event time fails
   ///
   /// In zh_TW, this message translates to:
-  /// **'變更活動時間時發生錯誤：{error}'**
+  /// **'變更約診時間時發生錯誤：{error}'**
   String errorChangingEventTimeMessage(String error);
 
   /// Heavy load test button label
@@ -1188,7 +1188,7 @@ abstract class AppLocalizations {
   /// Warning message for heavy load test
   ///
   /// In zh_TW, this message translates to:
-  /// **'此測試將產生 2,928 個活動與約 8,800 萬個資料點，可能需要數分鐘時間。'**
+  /// **'此測試將產生 2,928 個約診與約 8,800 萬個資料點，可能需要數分鐘時間。'**
   String get heavyLoadTestWarning;
 
   /// Confirm button for heavy load test
@@ -1206,25 +1206,25 @@ abstract class AppLocalizations {
   /// Completion message for heavy load test
   ///
   /// In zh_TW, this message translates to:
-  /// **'已產生 {events} 個活動，共 {strokes} 個筆畫，耗時 {time}'**
+  /// **'已產生 {events} 個約診，共 {strokes} 個筆畫，耗時 {time}'**
   String heavyLoadTestComplete(int events, int strokes, String time);
 
   /// Checkbox label to clear existing events
   ///
   /// In zh_TW, this message translates to:
-  /// **'清除現有活動'**
+  /// **'清除現有約診'**
   String get clearExistingEvents;
 
   /// Dialog title during event generation
   ///
   /// In zh_TW, this message translates to:
-  /// **'產生活動中...'**
+  /// **'產生約診中...'**
   String get generatingEvents;
 
   /// Stage 1 label for creating events
   ///
   /// In zh_TW, this message translates to:
-  /// **'階段 1/2：建立活動'**
+  /// **'階段 1/2：建立約診'**
   String get stage1Creating;
 
   /// Stage 2 label for adding strokes
@@ -1248,25 +1248,25 @@ abstract class AppLocalizations {
   /// Warning message for Stage 1 only
   ///
   /// In zh_TW, this message translates to:
-  /// **'建立 11,712 個空白活動（不含筆畫）\n每個格子4個活動'**
+  /// **'建立 11,712 個空白約診（不含筆畫）\n每個格子4個約診'**
   String get stage1OnlyWarning;
 
   /// Warning message for Stage 2 only
   ///
   /// In zh_TW, this message translates to:
-  /// **'為現有 HEAVY- 活動加入筆畫（750筆畫/活動）'**
+  /// **'為現有 HEAVY- 約診加入筆畫（750筆畫/約診）'**
   String get stage2OnlyWarning;
 
   /// Completion message for Stage 1
   ///
   /// In zh_TW, this message translates to:
-  /// **'階段1完成：已建立 {events} 個活動'**
+  /// **'階段1完成：已建立 {events} 個約診'**
   String stage1Complete(int events);
 
   /// Completion message for Stage 2
   ///
   /// In zh_TW, this message translates to:
-  /// **'階段2完成：已加入 {strokes} 個筆畫到 {events} 個活動，耗時 {time}'**
+  /// **'階段2完成：已加入 {strokes} 個筆畫到 {events} 個約診，耗時 {time}'**
   String stage2Complete(int events, int strokes, String time);
 
   /// Offline mode indicator
@@ -1536,19 +1536,19 @@ abstract class AppLocalizations {
   /// No description provided for @dayEventSummaryTooltip.
   ///
   /// In zh_TW, this message translates to:
-  /// **'顯示當天活動摘要'**
+  /// **'顯示當天約診摘要'**
   String get dayEventSummaryTooltip;
 
   /// No description provided for @dayEventSummaryTitle.
   ///
   /// In zh_TW, this message translates to:
-  /// **'當天活動摘要'**
+  /// **'當天約診摘要'**
   String get dayEventSummaryTitle;
 
   /// Summary line showing total active events for a date
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動總數：{count}'**
+  /// **'約診總數：{count}'**
   String dayEventSummaryTotalEvents(int count);
 
   /// No description provided for @dayEventSummaryTypeBreakdown.
@@ -1560,7 +1560,7 @@ abstract class AppLocalizations {
   /// No description provided for @dayEventSummaryNoEvents.
   ///
   /// In zh_TW, this message translates to:
-  /// **'這一天沒有活動。'**
+  /// **'這一天沒有約診。'**
   String get dayEventSummaryNoEvents;
 
   /// Summary line showing event type count for the day
@@ -1600,19 +1600,19 @@ abstract class AppLocalizations {
   /// No description provided for @syncingEvent.
   ///
   /// In zh_TW, this message translates to:
-  /// **'正在同步活動...'**
+  /// **'正在同步約診...'**
   String get syncingEvent;
 
   /// No description provided for @loadingEvent.
   ///
   /// In zh_TW, this message translates to:
-  /// **'正在載入活動...'**
+  /// **'正在載入約診...'**
   String get loadingEvent;
 
   /// No description provided for @viewEvent.
   ///
   /// In zh_TW, this message translates to:
-  /// **'檢視活動'**
+  /// **'檢視約診'**
   String get viewEvent;
 
   /// No description provided for @unsyncedChangesLabel.
@@ -1900,7 +1900,7 @@ abstract class AppLocalizations {
   /// No description provided for @eventsCannotSpanAcrossDates.
   ///
   /// In zh_TW, this message translates to:
-  /// **'活動不可跨日期'**
+  /// **'約診不可跨日期'**
   String get eventsCannotSpanAcrossDates;
 
   /// No description provided for @testTimeDialogPlaceholder.
@@ -1924,13 +1924,13 @@ abstract class AppLocalizations {
   /// No description provided for @thisEventTime.
   ///
   /// In zh_TW, this message translates to:
-  /// **'此次活動時間'**
+  /// **'此次約診時間'**
   String get thisEventTime;
 
   /// No description provided for @thisEventFocus.
   ///
   /// In zh_TW, this message translates to:
-  /// **'聚焦此次活動（其他淡化）'**
+  /// **'聚焦此次約診（其他淡化）'**
   String get thisEventFocus;
 
   /// No description provided for @allItems.
