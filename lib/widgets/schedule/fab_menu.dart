@@ -7,7 +7,6 @@ import '../../repositories/event_repository.dart';
 import '../../services/service_locator.dart';
 import '../../services/time_service.dart';
 import 'query_appointments_dialog.dart';
-import 'test_menu.dart';
 
 /// Helper class for building schedule screen FAB menu
 class ScheduleFabMenuHelper {
@@ -24,7 +23,7 @@ class ScheduleFabMenuHelper {
     required bool showGoToToday,
   }) {
     if (!isMenuVisible) return fabButtonSize;
-    final buttonCount = 5 + (showGoToToday ? 1 : 0);
+    final buttonCount = 4 + (showGoToToday ? 1 : 0);
     return (buttonCount * fabButtonSize) + ((buttonCount - 1) * fabSpacing);
   }
 
@@ -49,8 +48,8 @@ class ScheduleFabMenuHelper {
         heroTag: 'toggle_fab_menu',
         onPressed: onToggleMenu,
         backgroundColor: Colors.grey.shade600,
-        child: const Icon(Icons.menu),
         tooltip: l10n.showMenu,
+        child: const Icon(Icons.menu),
       );
     }
 
@@ -59,36 +58,20 @@ class ScheduleFabMenuHelper {
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        // Test Time FAB (for testing time change behavior)
-        FloatingActionButton(
-          heroTag: 'test_time',
-          onPressed: () => ScheduleTestMenuHelper.showTestTimeDialog(context),
-          backgroundColor: TimeService.instance.isTestMode
-              ? Colors.red
-              : Colors.grey.shade700,
-          child: Icon(
-            TimeService.instance.isTestMode
-                ? Icons.schedule
-                : Icons.access_time,
-          ),
-          tooltip: TimeService.instance.isTestMode
-              ? l10n.resetToRealTime
-              : l10n.testTimeActive,
-        ),
-        const SizedBox(height: 12),
         // Go to Today FAB (only show when not viewing today)
         if (!isViewingToday())
           FloatingActionButton(
             heroTag: 'goto_today',
             onPressed: () async {
+              final scheduleCubit = context.read<ScheduleCubit>();
               if (isDrawingMode) await saveDrawing();
               onDateChange(TimeService.instance.now());
-              context.read<ScheduleCubit>().selectDate(selectedDate);
+              scheduleCubit.selectDate(selectedDate);
               await loadDrawing();
             },
             backgroundColor: Colors.green,
-            child: const Icon(Icons.today),
             tooltip: l10n.goToTodayTooltip,
+            child: const Icon(Icons.today),
           ),
         if (!isViewingToday()) const SizedBox(height: 12),
         // Query Appointments FAB (disabled in drawing mode)
@@ -102,8 +85,8 @@ class ScheduleFabMenuHelper {
                   getIt<IEventRepository>(),
                 ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.teal,
-          child: const Icon(Icons.search),
           tooltip: isDrawingMode ? null : l10n.queryAppointments,
+          child: const Icon(Icons.search),
         ),
         const SizedBox(height: 12),
         // Drawing mode toggle FAB
@@ -111,8 +94,8 @@ class ScheduleFabMenuHelper {
           heroTag: 'drawing_toggle',
           onPressed: toggleDrawingMode,
           backgroundColor: isDrawingMode ? Colors.orange : Colors.blue,
-          child: Icon(isDrawingMode ? Icons.draw : Icons.draw_outlined),
           tooltip: isDrawingMode ? l10n.exitDrawingMode : l10n.enterDrawingMode,
+          child: Icon(isDrawingMode ? Icons.draw : Icons.draw_outlined),
         ),
         const SizedBox(height: 12),
         // Create event FAB (disabled in drawing mode)
@@ -120,8 +103,8 @@ class ScheduleFabMenuHelper {
           heroTag: 'create_event',
           onPressed: isDrawingMode ? null : createEvent,
           backgroundColor: isDrawingMode ? Colors.grey : null,
-          child: const Icon(Icons.add),
           tooltip: l10n.createEvent,
+          child: const Icon(Icons.add),
         ),
         const SizedBox(height: 12),
         // Toggle FAB to hide menu (kept at bottom to preserve anchor position)
@@ -129,8 +112,8 @@ class ScheduleFabMenuHelper {
           heroTag: 'toggle_fab_menu',
           onPressed: onToggleMenu,
           backgroundColor: Colors.grey.shade600,
-          child: const Icon(Icons.close),
           tooltip: l10n.hideMenu,
+          child: const Icon(Icons.close),
         ),
       ],
     );
