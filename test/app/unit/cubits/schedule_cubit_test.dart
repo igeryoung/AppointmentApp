@@ -269,6 +269,7 @@ void main() {
   Map<String, dynamic> serverEventMap({
     required String eventId,
     required DateTime startTime,
+    String? recordPhone,
   }) {
     final startSeconds = startTime.toUtc().millisecondsSinceEpoch ~/ 1000;
     return {
@@ -277,6 +278,7 @@ void main() {
       'record_uuid': 'record-1',
       'record_name': 'Alice',
       'record_number': '001',
+      'record_phone': recordPhone,
       'event_types': '["consultation"]',
       'start_time': startSeconds,
       'end_time': startSeconds + 1800,
@@ -341,7 +343,11 @@ void main() {
         deviceToken: 't1',
       );
       apiClient.queuedResponses.add([
-        serverEventMap(eventId: 'event-1', startTime: fixedNow),
+        serverEventMap(
+          eventId: 'event-1',
+          startTime: fixedNow,
+          recordPhone: '0900000000',
+        ),
       ]);
       return buildCubit();
     },
@@ -350,7 +356,8 @@ void main() {
       isA<ScheduleLoading>(),
       isA<ScheduleLoaded>()
           .having((s) => s.events.length, 'events length', 1)
-          .having((s) => s.events.first.id, 'event id', 'event-1'),
+          .having((s) => s.events.first.id, 'event id', 'event-1')
+          .having((s) => s.events.first.phone, 'event phone', '0900000000'),
     ],
   );
 

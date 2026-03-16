@@ -9,7 +9,6 @@ class BookCard extends StatelessWidget {
   final Book book;
   final VoidCallback onTap;
   final VoidCallback onRename;
-  final VoidCallback onArchive;
   final VoidCallback onDelete;
   final bool isReadOnlyDevice;
 
@@ -18,7 +17,6 @@ class BookCard extends StatelessWidget {
     required this.book,
     required this.onTap,
     required this.onRename,
-    required this.onArchive,
     required this.onDelete,
     this.isReadOnlyDevice = false,
   });
@@ -48,8 +46,8 @@ class BookCard extends StatelessWidget {
       height: 48,
       decoration: BoxDecoration(
         color: book.isArchived
-            ? Colors.grey.withOpacity(0.3)
-            : Theme.of(context).primaryColor.withOpacity(0.1),
+            ? Colors.grey.withValues(alpha: 0.3)
+            : Theme.of(context).primaryColor.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Icon(
@@ -98,9 +96,6 @@ class BookCard extends StatelessWidget {
           case 'rename':
             onRename();
             break;
-          case 'archive':
-            onArchive();
-            break;
           case 'delete':
             onDelete();
             break;
@@ -118,14 +113,6 @@ class BookCard extends StatelessWidget {
           ),
         if (!book.isArchived)
           PopupMenuItem(
-            value: 'archive',
-            child: ListTile(
-              leading: const Icon(Icons.archive),
-              title: Text(l10n.archive),
-              contentPadding: EdgeInsets.zero,
-            ),
-          ),
-        PopupMenuItem(
           value: 'delete',
           child: ListTile(
             leading: const Icon(Icons.delete, color: Colors.red),

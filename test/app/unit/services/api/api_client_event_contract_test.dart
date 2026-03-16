@@ -29,6 +29,7 @@ void main() {
                 'record_uuid': 'record-1',
                 'record_name': 'Alice',
                 'record_number': '001',
+                'record_phone': '0900000000',
                 'event_types': '["consultation","followUp"]',
                 'has_charge_items': true,
                 'start_time': 1760058000,
@@ -74,6 +75,7 @@ void main() {
         expect(mappedEvent.title, 'Alice');
         expect(mappedEvent.recordUuid, 'record-1');
         expect(mappedEvent.recordNumber, '001');
+        expect(mappedEvent.phone, '0900000000');
         expect(mappedEvent.eventTypes, const [
           EventType.consultation,
           EventType.followUp,

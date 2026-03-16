@@ -11,7 +11,6 @@ class BookListView extends StatelessWidget {
   final Future<void> Function(int oldIndex, int newIndex) onReorder;
   final void Function(Book) onTap;
   final void Function(Book) onRename;
-  final void Function(Book) onArchive;
   final void Function(Book) onDelete;
   final bool isReadOnlyDevice;
 
@@ -22,7 +21,6 @@ class BookListView extends StatelessWidget {
     required this.onReorder,
     required this.onTap,
     required this.onRename,
-    required this.onArchive,
     required this.onDelete,
     this.isReadOnlyDevice = false,
   });
@@ -46,7 +44,6 @@ class BookListView extends StatelessWidget {
                   book: book,
                   onTap: () => onTap(book),
                   onRename: () => onRename(book),
-                  onArchive: () => onArchive(book),
                   onDelete: () => onDelete(book),
                   isReadOnlyDevice: true,
                 );
@@ -64,7 +61,6 @@ class BookListView extends StatelessWidget {
                   book: book,
                   onTap: () => onTap(book),
                   onRename: () => onRename(book),
-                  onArchive: () => onArchive(book),
                   onDelete: () => onDelete(book),
                   isReadOnlyDevice: false,
                 );
@@ -80,7 +76,7 @@ class BookListView extends StatelessWidget {
       builder: (context, child) {
         return Material(
           elevation: 8.0,
-          shadowColor: Colors.black.withOpacity(0.3),
+          shadowColor: Colors.black.withValues(alpha: 0.3),
           borderRadius: BorderRadius.circular(12),
           child: child,
         );

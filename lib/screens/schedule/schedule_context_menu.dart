@@ -92,6 +92,8 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final phone = widget.event.phone?.trim();
+    final phoneDisplay = phone != null && phone.isNotEmpty ? phone : '電話未填寫';
     final localizedEventTypes =
         EventType.sortAlphabetically(widget.event.eventTypes)
             .map(
@@ -131,6 +133,7 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                   ),
                 ),
                 child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     // Checkbox for marking event as completed
                     Transform.scale(
@@ -147,17 +150,31 @@ class _ScheduleContextMenuState extends State<ScheduleContextMenu> {
                         visualDensity: VisualDensity.compact,
                       ),
                     ),
-                    // Event name
                     Expanded(
-                      child: Text(
-                        widget.event.title.isEmpty
-                            ? l10n.eventOptions
-                            : widget.event.title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.bold,
-                          fontSize: 14,
-                        ),
-                        overflow: TextOverflow.ellipsis,
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.event.title.isEmpty
+                                ? l10n.eventOptions
+                                : widget.event.title,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            phoneDisplay,
+                            style: const TextStyle(
+                              fontSize: 14,
+                              color: Colors.black,
+                            ),
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ),
                     ),
                     // Close button

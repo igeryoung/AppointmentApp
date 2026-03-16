@@ -14,6 +14,7 @@ class Event {
   final String recordUuid;
   final String title;
   final String recordNumber;
+  final String? phone;
   final List<EventType> eventTypes;
   final List<ChargeItem> chargeItems;
   final bool hasChargeItems;
@@ -35,6 +36,7 @@ class Event {
     required this.recordUuid,
     required this.title,
     this.recordNumber = '',
+    this.phone,
     required List<EventType> eventTypes,
     List<ChargeItem>? chargeItems,
     this.hasChargeItems = false,
@@ -60,6 +62,7 @@ class Event {
     String? recordUuid,
     String? title,
     String? recordNumber,
+    String? phone,
     List<EventType>? eventTypes,
     List<ChargeItem>? chargeItems,
     bool? hasChargeItems,
@@ -82,6 +85,7 @@ class Event {
       recordUuid: recordUuid ?? this.recordUuid,
       title: title ?? this.title,
       recordNumber: recordNumber ?? this.recordNumber,
+      phone: phone ?? this.phone,
       eventTypes: eventTypes ?? this.eventTypes,
       chargeItems: chargeItems ?? this.chargeItems,
       hasChargeItems: hasChargeItems ?? this.hasChargeItems,
@@ -153,20 +157,23 @@ class Event {
     }
 
     DateTime parseTime(dynamic value) {
-      if (value == null)
+      if (value == null) {
         return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
-      if (value is int)
+      }
+      if (value is int) {
         return DateTime.fromMillisecondsSinceEpoch(
           value * 1000,
           isUtc: true,
         ).toLocal();
+      }
       if (value is String) {
         final seconds = int.tryParse(value);
-        if (seconds != null)
+        if (seconds != null) {
           return DateTime.fromMillisecondsSinceEpoch(
             seconds * 1000,
             isUtc: true,
           ).toLocal();
+        }
       }
       return DateTime.fromMillisecondsSinceEpoch(0, isUtc: true).toLocal();
     }
@@ -177,6 +184,7 @@ class Event {
       recordUuid: map['record_uuid'] ?? '',
       title: map['title'] ?? '',
       recordNumber: map['record_number'] ?? '',
+      phone: map['phone']?.toString() ?? map['record_phone']?.toString(),
       eventTypes: eventTypes,
       chargeItems: [],
       hasChargeItems: (map['has_charge_items'] ?? 0) == 1,
@@ -224,6 +232,7 @@ class Event {
       recordUuid: map['record_uuid'] ?? '',
       title: map['record_name'] ?? map['title'] ?? '',
       recordNumber: map['record_number'] ?? '',
+      phone: map['record_phone']?.toString() ?? map['phone']?.toString(),
       eventTypes: eventTypes,
       chargeItems: [],
       hasChargeItems: map['has_charge_items'] == true,
@@ -254,6 +263,7 @@ class Event {
           other.recordUuid == recordUuid &&
           other.title == title &&
           other.recordNumber == recordNumber &&
+          other.phone == phone &&
           listEquals(other.eventTypes, eventTypes) &&
           listEquals(other.chargeItems, chargeItems) &&
           other.hasChargeItems == hasChargeItems &&
@@ -276,6 +286,7 @@ class Event {
     recordUuid,
     title,
     recordNumber,
+    phone,
     Object.hashAll(eventTypes),
     Object.hashAll(chargeItems),
     hasChargeItems,
