@@ -1,5 +1,4 @@
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
 
 /// Service for checking network connectivity
 /// Enforces network requirement for sync operations
@@ -10,21 +9,8 @@ class NetworkService {
   /// Returns true if connected to WiFi, mobile, or ethernet
   Future<bool> hasConnectivity() async {
     try {
-      final result = await _connectivity.checkConnectivity();
-
-      if (result == ConnectivityResult.none) {
-        return false;
-      }
-
-      final hasConnection = result == ConnectivityResult.wifi ||
-          result == ConnectivityResult.mobile ||
-          result == ConnectivityResult.ethernet;
-
-      if (hasConnection) {
-      } else {
-      }
-
-      return hasConnection;
+      final results = await _connectivity.checkConnectivity();
+      return _hasConnection(results);
     } catch (e) {
       return false;
     }
@@ -41,15 +27,15 @@ class NetworkService {
 
   /// Stream of connectivity changes
   /// Subscribe to this to react to network changes
-  Stream<ConnectivityResult> get onConnectivityChanged {
+  Stream<List<ConnectivityResult>> get onConnectivityChanged {
     return _connectivity.onConnectivityChanged;
   }
 
   /// Check if currently connected to WiFi
   Future<bool> isConnectedToWiFi() async {
     try {
-      final result = await _connectivity.checkConnectivity();
-      return result == ConnectivityResult.wifi;
+      final results = await _connectivity.checkConnectivity();
+      return results.contains(ConnectivityResult.wifi);
     } catch (e) {
       return false;
     }
@@ -58,11 +44,19 @@ class NetworkService {
   /// Check if currently connected to mobile data
   Future<bool> isConnectedToMobile() async {
     try {
-      final result = await _connectivity.checkConnectivity();
-      return result == ConnectivityResult.mobile;
+      final results = await _connectivity.checkConnectivity();
+      return results.contains(ConnectivityResult.mobile);
     } catch (e) {
       return false;
     }
+  }
+
+  bool _hasConnection(List<ConnectivityResult> results) {
+    return results.any((result) {
+      return result == ConnectivityResult.wifi ||
+          result == ConnectivityResult.mobile ||
+          result == ConnectivityResult.ethernet;
+    });
   }
 }
 

@@ -1,12 +1,11 @@
 import 'dart:async';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:flutter/foundation.dart';
 
 /// Wrapper for connectivity_plus that provides a simple Stream<bool isOnline>
 
 class ConnectivityWatcher {
   final Connectivity _connectivity = Connectivity();
-  StreamSubscription<ConnectivityResult>? _subscription;
+  StreamSubscription<List<ConnectivityResult>>? _subscription;
   final _controller = StreamController<bool>.broadcast();
 
   /// Stream of connectivity status (true = online, false = offline)
@@ -14,19 +13,20 @@ class ConnectivityWatcher {
 
   /// Start watching connectivity changes
   void startWatching() {
-
     _subscription = _connectivity.onConnectivityChanged.listen(
-      (ConnectivityResult result) {
-        final hasConnection = result != ConnectivityResult.none;
-        _controller.add(hasConnection);
+      (List<ConnectivityResult> results) {
+        _controller.add(_hasConnection(results));
       },
     );
 
     // Also check initial connectivity state
-    _connectivity.checkConnectivity().then((result) {
-      final hasConnection = result != ConnectivityResult.none;
-      _controller.add(hasConnection);
+    _connectivity.checkConnectivity().then((results) {
+      _controller.add(_hasConnection(results));
     });
+  }
+
+  bool _hasConnection(List<ConnectivityResult> results) {
+    return results.any((result) => result != ConnectivityResult.none);
   }
 
   /// Stop watching connectivity changes

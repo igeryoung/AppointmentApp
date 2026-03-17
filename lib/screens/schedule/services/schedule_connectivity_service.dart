@@ -32,7 +32,7 @@ class ScheduleConnectivityService {
   bool _isSyncing = false;
 
   /// Connectivity subscription
-  StreamSubscription<ConnectivityResult>? _connectivitySubscription;
+  StreamSubscription<List<ConnectivityResult>>? _connectivitySubscription;
 
   /// Callback to update offline and syncing state
   final void Function(bool isOffline, bool isSyncing) onStateChanged;
@@ -120,14 +120,14 @@ class ScheduleConnectivityService {
   /// Setup network connectivity monitoring for automatic sync retry
   void setupConnectivityMonitoring() {
     _connectivitySubscription = Connectivity().onConnectivityChanged.listen((
-      ConnectivityResult result,
+      List<ConnectivityResult> results,
     ) {
-      _onConnectivityChanged(result);
+      _onConnectivityChanged(results);
     });
 
     // Also check initial connectivity state
-    Connectivity().checkConnectivity().then((result) {
-      _onConnectivityChanged(result);
+    Connectivity().checkConnectivity().then((results) {
+      _onConnectivityChanged(results);
     });
   }
 
@@ -147,8 +147,20 @@ class ScheduleConnectivityService {
   }
 
   /// Handle connectivity changes - automatically retry sync when network returns
-  void _onConnectivityChanged(ConnectivityResult result) {
-    final hasConnection = result != ConnectivityResult.none;
+  void _onConnectivityChanged(List<ConnectivityResult> results) {
+    final hasConnection = results.any(
+      (result) => result != ConnectivityResult.none,
+    );
+
+    if (!hasConnection) {
+      if (isMounted()) {
+        _isOffline = true;
+        _wasOfflineLastCheck = true;
+        onStateChanged(_isOffline, _isSyncing);
+        onUpdateCubitOfflineStatus(_isOffline);
+      }
+      return;
+    }
 
     // Verify actual server connectivity, not just network interface status
     Future.microtask(() async {
