@@ -1716,7 +1716,7 @@ void main() {
   );
 
   test(
-    'EVENT-DETAIL-UNIT-023: addChargeItem() throws when server save fails and keeps local database unchanged',
+    'EVENT-DETAIL-UNIT-023: addChargeItem() keeps a dirty local copy when server save fails',
     () async {
       await dbService.saveDeviceCredentials(
         deviceId: 'device-001',
@@ -1732,21 +1732,22 @@ void main() {
 
       final controller = buildController();
 
-      await expectLater(
-        controller.addChargeItem(
-          ChargeItem(
-            recordUuid: 'ignored-by-controller',
-            itemName: 'ServerOnly',
-            itemPrice: 1100,
-          ),
+      await controller.addChargeItem(
+        ChargeItem(
+          recordUuid: 'ignored-by-controller',
+          itemName: 'ServerOnly',
+          itemPrice: 1100,
         ),
-        throwsA(isA<ApiException>()),
       );
 
       final savedItems = await dbService.getChargeItemsByRecordUuid(
         'record-a1',
       );
-      expect(savedItems, isEmpty);
+      expect(savedItems, hasLength(1));
+      expect(savedItems.single.itemName, 'ServerOnly');
+      expect(savedItems.single.itemPrice, 1100);
+      expect(savedItems.single.isDirty, isTrue);
+      expect(controller.state.isOffline, isTrue);
     },
   );
 
@@ -1913,6 +1914,77 @@ void main() {
       expect(savedItem, isNotNull);
       expect(savedItem!.receivedAmount, 800);
       expect(savedItem.isPaid, isTrue);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-027: editChargeItem() updates the local charge item when device credentials are unavailable',
+    () async {
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-edit-local-only',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 100,
+        ),
+      );
+
+      final controller = buildController();
+
+      await controller.editChargeItem(
+        ChargeItem(
+          id: 'charge-edit-local-only',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 350,
+        ),
+      );
+
+      final savedItem = await dbService.getChargeItemById(
+        'charge-edit-local-only',
+      );
+      expect(savedItem, isNotNull);
+      expect(savedItem!.receivedAmount, 350);
+      expect(savedItem.isPaid, isFalse);
+      expect(savedItem.isDirty, isTrue);
+      expect(fakeApiClient.saveChargeItemCalls, 0);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-028: toggleChargeItemPaidStatus() updates the local charge item when device credentials are unavailable',
+    () async {
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-toggle-local-only',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Therapy',
+          itemPrice: 600,
+          receivedAmount: 0,
+        ),
+      );
+
+      final controller = buildController();
+      final existingItem = await dbService.getChargeItemById(
+        'charge-toggle-local-only',
+      );
+
+      expect(existingItem, isNotNull);
+      await controller.toggleChargeItemPaidStatus(existingItem!);
+
+      final savedItem = await dbService.getChargeItemById(
+        'charge-toggle-local-only',
+      );
+      expect(savedItem, isNotNull);
+      expect(savedItem!.receivedAmount, 600);
+      expect(savedItem.isPaid, isTrue);
+      expect(savedItem.isDirty, isTrue);
+      expect(fakeApiClient.saveChargeItemCalls, 0);
     },
   );
 }

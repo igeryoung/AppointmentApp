@@ -1315,7 +1315,7 @@ class EventDetailController {
       eventId: associatedEventId,
     );
 
-    await _syncChargeItemUpsertToServer(prdDb, newItem);
+    await _saveChargeItemWithBestEffortSync(prdDb, newItem);
     await loadChargeItems();
   }
 
@@ -1348,7 +1348,7 @@ class EventDetailController {
       receivedAmount: item.receivedAmount,
     );
 
-    await _syncChargeItemUpsertToServer(prdDb, updatedItem);
+    await _saveChargeItemWithBestEffortSync(prdDb, updatedItem);
     await loadChargeItems();
   }
 
@@ -1359,11 +1359,7 @@ class EventDetailController {
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    await _syncChargeItemDeleteToServer(
-      prdDb,
-      item.id,
-      recordUuid: item.recordUuid,
-    );
+    await _deleteChargeItemWithBestEffortSync(prdDb, item);
     await loadChargeItems();
   }
 
@@ -1377,7 +1373,7 @@ class EventDetailController {
     final prdDb = _dbService as PRDDatabaseService;
     final newReceivedAmount = item.isPaid ? 0 : item.itemPrice;
     final updatedItem = item.copyWith(receivedAmount: newReceivedAmount);
-    await _syncChargeItemUpsertToServer(prdDb, updatedItem);
+    await _saveChargeItemWithBestEffortSync(prdDb, updatedItem);
     await loadChargeItems();
   }
 
@@ -1392,7 +1388,7 @@ class EventDetailController {
 
     final prdDb = _dbService as PRDDatabaseService;
     final updatedItem = item.copyWith(receivedAmount: receivedAmount);
-    await _syncChargeItemUpsertToServer(prdDb, updatedItem);
+    await _saveChargeItemWithBestEffortSync(prdDb, updatedItem);
     await loadChargeItems();
   }
 
@@ -1508,6 +1504,25 @@ class EventDetailController {
     await prdDb.applyServerChargeItemChange(serverItem);
   }
 
+  Future<void> _saveChargeItemWithBestEffortSync(
+    PRDDatabaseService prdDb,
+    ChargeItem item,
+  ) async {
+    final savedItem = await prdDb.saveChargeItem(item);
+    if (!await _canSyncChargeItems(prdDb)) {
+      return;
+    }
+
+    try {
+      await _syncChargeItemUpsertToServer(prdDb, savedItem);
+      _updateState(_state.copyWith(isOffline: false));
+    } on ApiConflictException {
+      rethrow;
+    } catch (_) {
+      _updateState(_state.copyWith(isOffline: true));
+    }
+  }
+
   Future<void> _syncChargeItemDeleteToServer(
     PRDDatabaseService prdDb,
     String chargeItemId, {
@@ -1543,6 +1558,34 @@ class EventDetailController {
       whereArgs: [chargeItemId],
     );
     await prdDb.updateEventsHasChargeItemsFlag(recordUuid: recordUuid);
+  }
+
+  Future<void> _deleteChargeItemWithBestEffortSync(
+    PRDDatabaseService prdDb,
+    ChargeItem item,
+  ) async {
+    await prdDb.deleteChargeItem(item.id);
+    if (!await _canSyncChargeItems(prdDb)) {
+      return;
+    }
+
+    try {
+      await _syncChargeItemDeleteToServer(
+        prdDb,
+        item.id,
+        recordUuid: item.recordUuid,
+      );
+      _updateState(_state.copyWith(isOffline: false));
+    } on ApiConflictException {
+      rethrow;
+    } catch (_) {
+      _updateState(_state.copyWith(isOffline: true));
+    }
+  }
+
+  Future<bool> _canSyncChargeItems(PRDDatabaseService prdDb) async {
+    final credentials = await prdDb.getDeviceCredentials();
+    return _contentService != null && credentials != null;
   }
 
   bool _isUuidLike(String value) {
