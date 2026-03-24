@@ -1049,8 +1049,6 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
                         ),
                       )
                     : null),
-          filled: widget.isReadOnly,
-          fillColor: widget.isReadOnly ? Colors.grey.shade100 : null,
         ),
       ),
     );
