@@ -18,6 +18,7 @@ import '../widgets/schedule/fab_menu.dart';
 import '../navigation/app_route_observer.dart';
 import 'schedule/schedule_body.dart';
 import 'schedule/schedule_controller.dart';
+import 'schedule/schedule_header_title.dart';
 
 /// Schedule screen supporting 2-day and 3-day views
 class ScheduleScreen extends StatefulWidget {
@@ -348,6 +349,106 @@ class _ScheduleScreenState extends State<ScheduleScreen>
         normalized.contains('failed to load events');
   }
 
+  Widget _buildDateControlsTitle(AppLocalizations l10n) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        IconButton(
+          onPressed: () => _controller.dateService?.navigate180DaysPrevious(),
+          icon: const Text(
+            '-180',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          iconSize: 18,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.daysBackwardTooltip(180),
+        ),
+        IconButton(
+          onPressed: () => _controller.dateService?.navigate90DaysPrevious(),
+          icon: const Text(
+            '-90',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          iconSize: 18,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.daysBackwardTooltip(90),
+        ),
+        BlocBuilder<ScheduleCubit, ScheduleState>(
+          builder: (context, state) {
+            final viewMode = state is ScheduleLoaded
+                ? state.viewMode
+                : ScheduleDrawing.VIEW_MODE_2DAY;
+            final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY
+                ? 2
+                : 3;
+            return IconButton(
+              onPressed: () => _controller.dateService?.navigatePagePrevious(),
+              icon: const Icon(Icons.chevron_left, size: 18),
+              iconSize: 18,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              tooltip: l10n.daysBackwardTooltip(windowSize),
+            );
+          },
+        ),
+        const SizedBox(width: 4),
+        GestureDetector(
+          onTap: () => _controller.dateService?.showDatePickerDialog(context),
+          child: Text(
+            _controller.dateService?.getDateDisplayText(context) ?? '',
+            style: const TextStyle(color: Colors.black, fontSize: 13),
+            textAlign: TextAlign.center,
+            overflow: TextOverflow.ellipsis,
+            maxLines: 1,
+          ),
+        ),
+        const SizedBox(width: 4),
+        BlocBuilder<ScheduleCubit, ScheduleState>(
+          builder: (context, state) {
+            final viewMode = state is ScheduleLoaded
+                ? state.viewMode
+                : ScheduleDrawing.VIEW_MODE_2DAY;
+            final windowSize = viewMode == ScheduleDrawing.VIEW_MODE_2DAY
+                ? 2
+                : 3;
+            return IconButton(
+              onPressed: () => _controller.dateService?.navigatePageNext(),
+              icon: const Icon(Icons.chevron_right, size: 18),
+              iconSize: 18,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+              padding: EdgeInsets.zero,
+              tooltip: l10n.daysForwardTooltip(windowSize),
+            );
+          },
+        ),
+        IconButton(
+          onPressed: () => _controller.dateService?.navigate90DaysNext(),
+          icon: const Text(
+            '+90',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          iconSize: 18,
+          constraints: const BoxConstraints(minWidth: 32, minHeight: 28),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.daysForwardTooltip(90),
+        ),
+        IconButton(
+          onPressed: () => _controller.dateService?.navigate180DaysNext(),
+          icon: const Text(
+            '+180',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+          ),
+          iconSize: 18,
+          constraints: const BoxConstraints(minWidth: 36, minHeight: 28),
+          padding: EdgeInsets.zero,
+          tooltip: l10n.daysForwardTooltip(180),
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
@@ -382,150 +483,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               children: [
                 Scaffold(
                   appBar: AppBar(
-                    title: Padding(
-                      padding: const EdgeInsets.only(left: 160.0),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          IconButton(
-                            onPressed: () => _controller.dateService
-                                ?.navigate180DaysPrevious(),
-                            icon: const Text(
-                              '-180',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            iconSize: 18,
-                            constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            tooltip: l10n.daysBackwardTooltip(180),
-                          ),
-                          IconButton(
-                            onPressed: () => _controller.dateService
-                                ?.navigate90DaysPrevious(),
-                            icon: const Text(
-                              '-90',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            iconSize: 18,
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            tooltip: l10n.daysBackwardTooltip(90),
-                          ),
-                          BlocBuilder<ScheduleCubit, ScheduleState>(
-                            builder: (context, state) {
-                              final viewMode = state is ScheduleLoaded
-                                  ? state.viewMode
-                                  : ScheduleDrawing.VIEW_MODE_2DAY;
-                              final windowSize =
-                                  viewMode == ScheduleDrawing.VIEW_MODE_2DAY
-                                  ? 2
-                                  : 3;
-                              return IconButton(
-                                onPressed: () => _controller.dateService
-                                    ?.navigatePagePrevious(),
-                                icon: const Icon(Icons.chevron_left, size: 18),
-                                iconSize: 18,
-                                constraints: const BoxConstraints(
-                                  minWidth: 28,
-                                  minHeight: 28,
-                                ),
-                                padding: EdgeInsets.zero,
-                                tooltip: l10n.daysBackwardTooltip(windowSize),
-                              );
-                            },
-                          ),
-                          const SizedBox(width: 4),
-                          GestureDetector(
-                            onTap: () => _controller.dateService
-                                ?.showDatePickerDialog(context),
-                            child: Text(
-                              _controller.dateService?.getDateDisplayText(
-                                    context,
-                                  ) ??
-                                  '',
-                              style: const TextStyle(
-                                color: Colors.black,
-                                fontSize: 13,
-                              ),
-                              textAlign: TextAlign.center,
-                              overflow: TextOverflow.ellipsis,
-                              maxLines: 1,
-                            ),
-                          ),
-                          const SizedBox(width: 4),
-                          BlocBuilder<ScheduleCubit, ScheduleState>(
-                            builder: (context, state) {
-                              final viewMode = state is ScheduleLoaded
-                                  ? state.viewMode
-                                  : ScheduleDrawing.VIEW_MODE_2DAY;
-                              final windowSize =
-                                  viewMode == ScheduleDrawing.VIEW_MODE_2DAY
-                                  ? 2
-                                  : 3;
-                              return IconButton(
-                                onPressed: () =>
-                                    _controller.dateService?.navigatePageNext(),
-                                icon: const Icon(Icons.chevron_right, size: 18),
-                                iconSize: 18,
-                                constraints: const BoxConstraints(
-                                  minWidth: 28,
-                                  minHeight: 28,
-                                ),
-                                padding: EdgeInsets.zero,
-                                tooltip: l10n.daysForwardTooltip(windowSize),
-                              );
-                            },
-                          ),
-                          IconButton(
-                            onPressed: () =>
-                                _controller.dateService?.navigate90DaysNext(),
-                            icon: const Text(
-                              '+90',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            iconSize: 18,
-                            constraints: const BoxConstraints(
-                              minWidth: 32,
-                              minHeight: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            tooltip: l10n.daysForwardTooltip(90),
-                          ),
-                          IconButton(
-                            onPressed: () =>
-                                _controller.dateService?.navigate180DaysNext(),
-                            icon: const Text(
-                              '+180',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                            iconSize: 18,
-                            constraints: const BoxConstraints(
-                              minWidth: 36,
-                              minHeight: 28,
-                            ),
-                            padding: EdgeInsets.zero,
-                            tooltip: l10n.daysForwardTooltip(180),
-                          ),
-                        ],
-                      ),
+                    title: ScheduleHeaderTitle(
+                      bookName: widget.book.name,
+                      child: _buildDateControlsTitle(l10n),
                     ),
                     actions: [
                       BlocBuilder<ScheduleCubit, ScheduleState>(
