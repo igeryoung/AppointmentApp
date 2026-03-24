@@ -42,6 +42,8 @@ Widget _buildSection({
   required List<RecordNumberOption> allRecordNumberOptions,
   bool isNameSuggestionsLoading = false,
   bool isRecordNumberSuggestionsLoading = false,
+  ValueChanged<String>? onRecordNumberSelected,
+  ValueChanged<String>? onNameSelected,
 }) {
   return EventMetadataSection(
     event: _buildEvent(),
@@ -62,6 +64,8 @@ Widget _buildSection({
     allRecordNumberOptions: allRecordNumberOptions,
     isNameSuggestionsLoading: isNameSuggestionsLoading,
     isRecordNumberSuggestionsLoading: isRecordNumberSuggestionsLoading,
+    onRecordNumberSelected: onRecordNumberSelected,
+    onNameSelected: onNameSelected,
   );
 }
 
@@ -157,6 +161,50 @@ void main() {
           find.byType(TextField).first,
         );
         expect(nameField.decoration?.suffixIcon, isNotNull);
+      },
+    );
+
+    testWidgets(
+      'EVENT-METADATA-WIDGET-004: clicking record suggestion fills the field on desktop-style tap flow',
+      (tester) async {
+        final nameController = TextEditingController(text: 'Kai');
+        final phoneController = TextEditingController();
+        String? selectedRecordNumber;
+        addTearDown(() {
+          nameController.dispose();
+          phoneController.dispose();
+        });
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _buildSection(
+              nameController: nameController,
+              phoneController: phoneController,
+              recordNumber: '',
+              availableRecordNumbers: const ['K001'],
+              allRecordNumberOptions: [
+                RecordNumberOption(recordNumber: 'K001', name: 'Kai'),
+              ],
+              onRecordNumberSelected: (value) {
+                selectedRecordNumber = value;
+              },
+            ),
+          ),
+        );
+
+        final recordFieldFinder = find.byType(TextField).at(2);
+        await tester.tap(recordFieldFinder);
+        await tester.pumpAndSettle();
+
+        final optionFinder = find.text('K001 - Kai');
+        expect(optionFinder, findsOneWidget);
+
+        await tester.tap(optionFinder);
+        await tester.pumpAndSettle();
+
+        final recordField = tester.widget<TextField>(recordFieldFinder);
+        expect(recordField.controller?.text, 'K001');
+        expect(selectedRecordNumber, 'K001');
       },
     );
   });

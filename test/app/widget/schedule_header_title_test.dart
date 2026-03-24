@@ -4,6 +4,33 @@ import 'package:schedule_note_app/screens/schedule/schedule_header_title.dart';
 
 void main() {
   group('ScheduleHeaderTitle', () {
+    testWidgets(
+      'does not request infinite height when used as an AppBar title',
+      (tester) async {
+        await tester.pumpWidget(
+          MaterialApp(
+            home: Scaffold(
+              appBar: AppBar(
+                title: ScheduleHeaderTitle(
+                  bookName: 'Clinic Schedule',
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [Text('DATE-CONTROL')],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        );
+
+        await tester.pump();
+
+        expect(tester.takeException(), isNull);
+        expect(find.text('Clinic Schedule'), findsOneWidget);
+        expect(find.text('DATE-CONTROL'), findsOneWidget);
+      },
+    );
+
     testWidgets('renders the active book name beside the date controls', (
       tester,
     ) async {

@@ -553,6 +553,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
   late bool _ownsFocusNode;
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
+  final Object _tapRegionGroupId = Object();
 
   @override
   void initState() {
@@ -710,51 +711,54 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
             link: _layerLink,
             showWhenUnlinked: false,
             offset: Offset(0, size.height + 5),
-            child: Material(
-              elevation: 4.0,
-              borderRadius: BorderRadius.circular(8),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 250),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  shrinkWrap: true,
-                  itemCount: options.length,
-                  itemBuilder: (context, index) {
-                    final option = options[index];
-                    return InkWell(
-                      onTap: () {
-                        _controller.text = option.value;
-                        if (widget.onRecordNumberSelected != null) {
-                          widget.onRecordNumberSelected!(option.value);
-                        }
-                        _removeOverlay();
-                        _focusNode.unfocus();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 10.0,
-                          horizontal: 12.0,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.grey.shade200,
-                              width: 1.0,
+            child: TextFieldTapRegion(
+              groupId: _tapRegionGroupId,
+              child: Material(
+                elevation: 4.0,
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 250),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(8.0),
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final option = options[index];
+                      return InkWell(
+                        onTap: () {
+                          _controller.text = option.value;
+                          if (widget.onRecordNumberSelected != null) {
+                            widget.onRecordNumberSelected!(option.value);
+                          }
+                          _removeOverlay();
+                          _focusNode.unfocus();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 10.0,
+                            horizontal: 12.0,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey.shade200,
+                                width: 1.0,
+                              ),
+                            ),
+                          ),
+                          child: Text(
+                            option.displayText,
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: option.isSpecial
+                                  ? FontWeight.bold
+                                  : FontWeight.normal,
                             ),
                           ),
                         ),
-                        child: Text(
-                          option.displayText,
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: option.isSpecial
-                                ? FontWeight.bold
-                                : FontWeight.normal,
-                          ),
-                        ),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -770,6 +774,7 @@ class _RecordNumberAutocompleteState extends State<_RecordNumberAutocomplete> {
       link: _layerLink,
       child: TextField(
         controller: _controller,
+        groupId: _tapRegionGroupId,
         focusNode: _focusNode,
         enabled: widget.isEnabled,
         onChanged: (value) {
@@ -854,6 +859,7 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
   late bool _ownsFocusNode;
   OverlayEntry? _overlayEntry;
   final LayerLink _layerLink = LayerLink();
+  final Object _tapRegionGroupId = Object();
 
   @override
   void initState() {
@@ -965,43 +971,46 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
             link: _layerLink,
             showWhenUnlinked: false,
             offset: Offset(0, size.height + 5),
-            child: Material(
-              elevation: 4.0,
-              borderRadius: BorderRadius.circular(8),
-              child: ConstrainedBox(
-                constraints: const BoxConstraints(maxHeight: 200),
-                child: ListView.builder(
-                  padding: const EdgeInsets.all(8.0),
-                  shrinkWrap: true,
-                  itemCount: options.length,
-                  itemBuilder: (context, index) {
-                    final option = options[index];
-                    return InkWell(
-                      onTap: () {
-                        widget.controller.text = option;
-                        if (widget.onNameSelected != null) {
-                          widget.onNameSelected!(option);
-                        }
-                        _removeOverlay();
-                        _focusNode.unfocus();
-                      },
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 10.0,
-                          horizontal: 12.0,
-                        ),
-                        decoration: BoxDecoration(
-                          border: Border(
-                            bottom: BorderSide(
-                              color: Colors.grey.shade200,
-                              width: 1.0,
+            child: TextFieldTapRegion(
+              groupId: _tapRegionGroupId,
+              child: Material(
+                elevation: 4.0,
+                borderRadius: BorderRadius.circular(8),
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxHeight: 200),
+                  child: ListView.builder(
+                    padding: const EdgeInsets.all(8.0),
+                    shrinkWrap: true,
+                    itemCount: options.length,
+                    itemBuilder: (context, index) {
+                      final option = options[index];
+                      return InkWell(
+                        onTap: () {
+                          widget.controller.text = option;
+                          if (widget.onNameSelected != null) {
+                            widget.onNameSelected!(option);
+                          }
+                          _removeOverlay();
+                          _focusNode.unfocus();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                            vertical: 10.0,
+                            horizontal: 12.0,
+                          ),
+                          decoration: BoxDecoration(
+                            border: Border(
+                              bottom: BorderSide(
+                                color: Colors.grey.shade200,
+                                width: 1.0,
+                              ),
                             ),
                           ),
+                          child: Text(option),
                         ),
-                        child: Text(option),
-                      ),
-                    );
-                  },
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
@@ -1017,6 +1026,7 @@ class _NameAutocompleteFieldState extends State<_NameAutocompleteField> {
       link: _layerLink,
       child: TextField(
         controller: widget.controller,
+        groupId: _tapRegionGroupId,
         focusNode: _focusNode,
         readOnly: widget.isReadOnly,
         enableInteractiveSelection: !widget.isReadOnly,
