@@ -135,12 +135,12 @@ class HandwritingToolbar extends StatelessWidget {
                 padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
                 decoration: BoxDecoration(
                   color: showOnlyCurrentEvent
-                      ? Colors.purple.shade100
+                      ? Colors.green.shade50
                       : Colors.grey.shade100,
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(
                     color: showOnlyCurrentEvent
-                        ? Colors.purple.shade300
+                        ? Colors.green.shade300
                         : Colors.grey.shade300,
                   ),
                 ),
@@ -153,7 +153,7 @@ class HandwritingToolbar extends StatelessWidget {
                           : Icons.visibility_off,
                       size: 16,
                       color: showOnlyCurrentEvent
-                          ? Colors.purple.shade700
+                          ? Colors.green.shade700
                           : Colors.grey.shade600,
                     ),
                     const SizedBox(width: 4),
@@ -165,7 +165,7 @@ class HandwritingToolbar extends StatelessWidget {
                             ? FontWeight.bold
                             : FontWeight.normal,
                         color: showOnlyCurrentEvent
-                            ? Colors.purple.shade700
+                            ? Colors.green.shade700
                             : Colors.grey.shade600,
                       ),
                     ),
