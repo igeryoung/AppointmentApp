@@ -450,7 +450,7 @@ abstract class AppLocalizations {
   /// Label showing paid amount
   ///
   /// In zh_TW, this message translates to:
-  /// **'已付'**
+  /// **'已付清'**
   String get paid;
 
   /// Label for charge item paid amount field

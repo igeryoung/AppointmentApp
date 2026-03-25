@@ -205,7 +205,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get editChargeItemTitle => 'Edit Charge Item';
 
   @override
-  String get paid => 'Paid';
+  String get paid => 'Paid Off';
 
   @override
   String get chargeItemPaidAmount => 'Paid Amount';

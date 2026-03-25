@@ -175,6 +175,8 @@ class _ChargeItemsPopup extends StatefulWidget {
 }
 
 class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
+  final Set<String> _expandedChargeItemIds = <String>{};
+
   List<ChargeItem> get _chargeItems => widget.controller.state.chargeItems;
   bool get _showOnlyThisEventItems =>
       widget.controller.state.showOnlyThisEventItems;
@@ -192,18 +194,36 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
   }
 
   List<ChargeItem> get _displayChargeItems {
-    if (!_showOnlyThisEventItems || _currentEventId == null) {
-      return _chargeItems;
-    }
-
     final items = List<ChargeItem>.from(_chargeItems);
     items.sort((a, b) {
+      if (a.isPaid != b.isPaid) {
+        return a.isPaid ? 1 : -1;
+      }
+
+      if (_showOnlyThisEventItems && _currentEventId != null) {
+        final aIsCurrentEvent = a.eventId == _currentEventId;
+        final bIsCurrentEvent = b.eventId == _currentEventId;
+        if (aIsCurrentEvent != bIsCurrentEvent) {
+          return aIsCurrentEvent ? -1 : 1;
+        }
+      }
+
+      final remainingCompare = b.remainingAmount.compareTo(a.remainingAmount);
+      if (remainingCompare != 0) {
+        return remainingCompare;
+      }
+
+      final updatedCompare = b.updatedAt.compareTo(a.updatedAt);
+      if (updatedCompare != 0) {
+        return updatedCompare;
+      }
+
       final aIsCurrentEvent = a.eventId == _currentEventId;
       final bIsCurrentEvent = b.eventId == _currentEventId;
-      if (aIsCurrentEvent == bIsCurrentEvent) {
-        return a.createdAt.compareTo(b.createdAt);
+      if (aIsCurrentEvent != bIsCurrentEvent) {
+        return aIsCurrentEvent ? -1 : 1;
       }
-      return aIsCurrentEvent ? -1 : 1;
+      return a.createdAt.compareTo(b.createdAt);
     });
     return items;
   }
@@ -244,6 +264,18 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
     if (mounted) {
       setState(() {});
     }
+  }
+
+  bool _isExpanded(ChargeItem item) => _expandedChargeItemIds.contains(item.id);
+
+  void _toggleExpanded(ChargeItem item) {
+    setState(() {
+      if (_expandedChargeItemIds.contains(item.id)) {
+        _expandedChargeItemIds.remove(item.id);
+      } else {
+        _expandedChargeItemIds.add(item.id);
+      }
+    });
   }
 
   Future<void> _toggleFilter() async {
@@ -503,6 +535,8 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                       final isDiluted = _isDilutedItem(item);
                       final remainingAmount = item.remainingAmount;
                       final paidItems = item.paidItems;
+                      final isExpanded = _isExpanded(item);
+                      final showPaidItems = paidItems.isNotEmpty && isExpanded;
 
                       return AnimatedOpacity(
                         duration: const Duration(milliseconds: 180),
@@ -533,18 +567,37 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                         crossAxisAlignment:
                                             CrossAxisAlignment.start,
                                         children: [
-                                          Text(
-                                            item.itemName,
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
-                                            style: theme.textTheme.titleSmall
-                                                ?.copyWith(
-                                                  fontWeight: FontWeight.w600,
-                                                  decoration: item.isPaid
-                                                      ? TextDecoration
-                                                            .lineThrough
-                                                      : TextDecoration.none,
+                                          Row(
+                                            children: [
+                                              if (item.isPaid)
+                                                Text(
+                                                  '✅',
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleSmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w700,
+                                                      ),
                                                 ),
+                                              if (item.isPaid)
+                                                const SizedBox(width: 6),
+                                              Expanded(
+                                                child: Text(
+                                                  item.itemName,
+                                                  maxLines: 1,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                  style: theme
+                                                      .textTheme
+                                                      .titleSmall
+                                                      ?.copyWith(
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
@@ -567,36 +620,51 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                       ),
                                     ),
                                     const SizedBox(width: 8),
-                                    Column(
-                                      crossAxisAlignment:
-                                          CrossAxisAlignment.end,
-                                      children: [
-                                        Text(
-                                          'NT\$$remainingAmount',
-                                          style: theme.textTheme.labelLarge
-                                              ?.copyWith(
-                                                color: item.isPaid
-                                                    ? theme.colorScheme.primary
-                                                    : theme
+                                    SizedBox(
+                                      height: 48,
+                                      child: Align(
+                                        alignment: Alignment.centerRight,
+                                        child: item.isPaid
+                                            ? Text(
+                                                l10n.paid,
+                                                style: theme
+                                                    .textTheme
+                                                    .labelLarge
+                                                    ?.copyWith(
+                                                      color: theme
+                                                          .colorScheme
+                                                          .primary,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                              )
+                                            : Text(
+                                                'NT\$$remainingAmount',
+                                                style: theme
+                                                    .textTheme
+                                                    .labelLarge
+                                                    ?.copyWith(
+                                                      color: theme
                                                           .colorScheme
                                                           .secondary,
-                                                fontWeight: FontWeight.w700,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
                                               ),
-                                        ),
-                                        if (item.isPaid)
-                                          const SizedBox(height: 2),
-                                        if (item.isPaid)
-                                          Text(
-                                            l10n.paid,
-                                            style: theme.textTheme.labelSmall
-                                                ?.copyWith(
-                                                  color:
-                                                      theme.colorScheme.primary,
-                                                ),
-                                          ),
-                                      ],
+                                      ),
                                     ),
                                     const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: Icon(
+                                        showPaidItems
+                                            ? Icons.expand_less_rounded
+                                            : Icons.expand_more_rounded,
+                                        size: 20,
+                                      ),
+                                      onPressed: paidItems.isEmpty
+                                          ? null
+                                          : () => _toggleExpanded(item),
+                                    ),
                                     IconButton(
                                       icon: const Icon(
                                         Icons.add_rounded,
@@ -634,9 +702,8 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                                     ),
                                   ],
                                 ),
-                                if (paidItems.isNotEmpty)
-                                  const SizedBox(height: 10),
-                                if (paidItems.isNotEmpty)
+                                if (showPaidItems) const SizedBox(height: 10),
+                                if (showPaidItems)
                                   Container(
                                     width: double.infinity,
                                     padding: const EdgeInsets.all(10),

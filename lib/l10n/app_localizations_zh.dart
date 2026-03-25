@@ -205,7 +205,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get editChargeItemTitle => '編輯待收款項';
 
   @override
-  String get paid => '已付';
+  String get paid => '已付清';
 
   @override
   String get chargeItemPaidAmount => '已付金額';
@@ -1299,7 +1299,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get editChargeItemTitle => '編輯待收款項';
 
   @override
-  String get paid => '已付';
+  String get paid => '已付清';
 
   @override
   String get chargeItemPaidAmount => '已付金額';

@@ -346,7 +346,7 @@
     "description": "Title for edit charge item dialog"
   },
 
-  "paid": "已付",
+  "paid": "已付清",
   "@paid": {
     "description": "Label showing paid amount"
   },

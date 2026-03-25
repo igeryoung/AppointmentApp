@@ -141,7 +141,7 @@
     "description": "Title for edit charge item dialog"
   },
 
-  "paid": "Paid",
+  "paid": "Paid Off",
   "@paid": {
     "description": "Label showing paid amount"
   },
