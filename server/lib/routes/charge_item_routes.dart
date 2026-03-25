@@ -223,14 +223,16 @@ class ChargeItemRoutes {
         .where((id) => id.isNotEmpty)
         .toSet();
 
-    for (final eventId in linkedEventIds) {
-      await db.client
-          .from('events')
-          .update({'has_charge_items': true, 'updated_at': nowIso})
-          .eq('id', eventId)
-          .eq('record_uuid', recordUuid)
-          .eq('is_deleted', false);
+    if (linkedEventIds.isEmpty) {
+      return;
     }
+
+    await db.client
+        .from('events')
+        .update({'has_charge_items': true, 'updated_at': nowIso})
+        .inFilter('id', linkedEventIds.toList())
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false);
   }
 
   int _toInt(dynamic value, {int fallback = 0}) {

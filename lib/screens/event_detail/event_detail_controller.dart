@@ -1174,9 +1174,42 @@ class EventDetailController {
         chargeItems = await prdDb.getChargeItemsByRecordUuid(recordUuid);
       }
 
-      // Always get all items for the record.
-      _updateState(_state.copyWith(chargeItems: chargeItems));
+      _setChargeItemsState(chargeItems);
     } catch (e) {}
+  }
+
+  List<ChargeItem> _sortedChargeItems(Iterable<ChargeItem> items) {
+    final sorted = List<ChargeItem>.from(items);
+    sorted.sort((a, b) {
+      final created = a.createdAt.compareTo(b.createdAt);
+      if (created != 0) {
+        return created;
+      }
+      return a.id.compareTo(b.id);
+    });
+    return sorted;
+  }
+
+  void _setChargeItemsState(Iterable<ChargeItem> items) {
+    _updateState(_state.copyWith(chargeItems: _sortedChargeItems(items)));
+  }
+
+  void _upsertChargeItemInState(ChargeItem item) {
+    final items = List<ChargeItem>.from(_state.chargeItems);
+    final index = items.indexWhere((existing) => existing.id == item.id);
+    if (index >= 0) {
+      items[index] = item;
+    } else {
+      items.add(item);
+    }
+    _setChargeItemsState(items);
+  }
+
+  void _removeChargeItemFromState(String itemId) {
+    final items = _state.chargeItems
+        .where((item) => item.id != itemId)
+        .toList(growable: false);
+    _setChargeItemsState(items);
   }
 
   Future<void> _syncChargeItemsFromServer(
@@ -1315,8 +1348,9 @@ class EventDetailController {
       eventId: associatedEventId,
     );
 
-    await _saveChargeItemWithBestEffortSync(prdDb, newItem);
-    await loadChargeItems();
+    final savedItem = await prdDb.saveChargeItem(newItem);
+    _upsertChargeItemInState(savedItem);
+    await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
   }
 
   /// Edit an existing charge item
@@ -1348,8 +1382,9 @@ class EventDetailController {
       receivedAmount: item.receivedAmount,
     );
 
-    await _saveChargeItemWithBestEffortSync(prdDb, updatedItem);
-    await loadChargeItems();
+    final savedItem = await prdDb.saveChargeItem(updatedItem);
+    _upsertChargeItemInState(savedItem);
+    await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
   }
 
   /// Delete a charge item
@@ -1359,8 +1394,9 @@ class EventDetailController {
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    await _deleteChargeItemWithBestEffortSync(prdDb, item);
-    await loadChargeItems();
+    await prdDb.deleteChargeItem(item.id);
+    _removeChargeItemFromState(item.id);
+    await _syncChargeItemDeleteWithBestEffortInBackground(prdDb, item);
   }
 
   /// Toggle paid status of a charge item
@@ -1373,8 +1409,9 @@ class EventDetailController {
     final prdDb = _dbService as PRDDatabaseService;
     final newReceivedAmount = item.isPaid ? 0 : item.itemPrice;
     final updatedItem = item.copyWith(receivedAmount: newReceivedAmount);
-    await _saveChargeItemWithBestEffortSync(prdDb, updatedItem);
-    await loadChargeItems();
+    final savedItem = await prdDb.saveChargeItem(updatedItem);
+    _upsertChargeItemInState(savedItem);
+    await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
   }
 
   /// Update the received amount of a charge item
@@ -1388,8 +1425,9 @@ class EventDetailController {
 
     final prdDb = _dbService as PRDDatabaseService;
     final updatedItem = item.copyWith(receivedAmount: receivedAmount);
-    await _saveChargeItemWithBestEffortSync(prdDb, updatedItem);
-    await loadChargeItems();
+    final savedItem = await prdDb.saveChargeItem(updatedItem);
+    _upsertChargeItemInState(savedItem);
+    await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
   }
 
   /// Update charge items (legacy method - kept for compatibility but now loads from database)
@@ -1504,20 +1542,32 @@ class EventDetailController {
     await prdDb.applyServerChargeItemChange(serverItem);
   }
 
-  Future<void> _saveChargeItemWithBestEffortSync(
+  Future<void> _syncChargeItemUpsertWithBestEffortInBackground(
     PRDDatabaseService prdDb,
     ChargeItem item,
   ) async {
-    final savedItem = await prdDb.saveChargeItem(item);
     if (!await _canSyncChargeItems(prdDb)) {
       return;
     }
 
+    unawaited(_runChargeItemUpsertSync(prdDb, item));
+  }
+
+  Future<void> _runChargeItemUpsertSync(
+    PRDDatabaseService prdDb,
+    ChargeItem item,
+  ) async {
     try {
-      await _syncChargeItemUpsertToServer(prdDb, savedItem);
+      await _syncChargeItemUpsertToServer(prdDb, item);
+      final syncedItem = await prdDb.getChargeItemById(item.id);
+      if (syncedItem != null) {
+        _upsertChargeItemInState(syncedItem);
+      }
       _updateState(_state.copyWith(isOffline: false));
     } on ApiConflictException {
-      rethrow;
+      await _syncChargeItemsFromServer(prdDb, recordUuid: item.recordUuid);
+      await loadChargeItems();
+      _updateState(_state.copyWith(isOffline: false));
     } catch (_) {
       _updateState(_state.copyWith(isOffline: true));
     }
@@ -1560,15 +1610,21 @@ class EventDetailController {
     await prdDb.updateEventsHasChargeItemsFlag(recordUuid: recordUuid);
   }
 
-  Future<void> _deleteChargeItemWithBestEffortSync(
+  Future<void> _syncChargeItemDeleteWithBestEffortInBackground(
     PRDDatabaseService prdDb,
     ChargeItem item,
   ) async {
-    await prdDb.deleteChargeItem(item.id);
     if (!await _canSyncChargeItems(prdDb)) {
       return;
     }
 
+    unawaited(_runChargeItemDeleteSync(prdDb, item));
+  }
+
+  Future<void> _runChargeItemDeleteSync(
+    PRDDatabaseService prdDb,
+    ChargeItem item,
+  ) async {
     try {
       await _syncChargeItemDeleteToServer(
         prdDb,
@@ -1577,7 +1633,9 @@ class EventDetailController {
       );
       _updateState(_state.copyWith(isOffline: false));
     } on ApiConflictException {
-      rethrow;
+      await _syncChargeItemsFromServer(prdDb, recordUuid: item.recordUuid);
+      await loadChargeItems();
+      _updateState(_state.copyWith(isOffline: false));
     } catch (_) {
       _updateState(_state.copyWith(isOffline: true));
     }

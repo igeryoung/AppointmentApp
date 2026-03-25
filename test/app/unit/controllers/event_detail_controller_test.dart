@@ -67,6 +67,8 @@ class _FakeEventMetadataApiClient extends ApiClient {
   Object? saveChargeItemError;
   Object? deleteChargeItemError;
   Object? validateRecordNumberError;
+  Duration saveChargeItemDelay = Duration.zero;
+  Duration deleteChargeItemDelay = Duration.zero;
   String? requiredRecordUuidForUpdate;
   bool failUpdateEventWithNotFound = false;
   final Map<String, String> recordUuidsByRecordNumber = {};
@@ -295,6 +297,9 @@ class _FakeEventMetadataApiClient extends ApiClient {
   }) async {
     saveChargeItemCalls += 1;
     if (saveChargeItemError != null) throw saveChargeItemError!;
+    if (saveChargeItemDelay > Duration.zero) {
+      await Future<void>.delayed(saveChargeItemDelay);
+    }
     lastSaveChargeItemRecordUuid = recordUuid;
     lastSaveChargeItemData = Map<String, dynamic>.from(chargeItemData);
     return {
@@ -322,6 +327,9 @@ class _FakeEventMetadataApiClient extends ApiClient {
   }) async {
     deleteChargeItemCalls += 1;
     if (deleteChargeItemError != null) throw deleteChargeItemError!;
+    if (deleteChargeItemDelay > Duration.zero) {
+      await Future<void>.delayed(deleteChargeItemDelay);
+    }
     lastDeleteChargeItemId = chargeItemId;
     lastDeleteChargeItemBookUuid = bookUuid;
   }
@@ -1675,6 +1683,7 @@ void main() {
           itemPrice: 900,
         ),
       );
+      await waitForBackgroundSync();
 
       expect(fakeApiClient.saveChargeItemCalls, 1);
       expect(
@@ -1705,6 +1714,7 @@ void main() {
           itemPrice: 2600,
         ),
       );
+      await waitForBackgroundSync();
 
       expect(fakeApiClient.saveChargeItemCalls, 1);
       expect(fakeApiClient.lastSaveChargeItemRecordUuid, 'record-a1');
@@ -1748,6 +1758,47 @@ void main() {
       expect(savedItems.single.itemPrice, 1100);
       expect(savedItems.single.isDirty, isTrue);
       expect(controller.state.isOffline, isTrue);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-029: addChargeItem() returns after local state update before delayed server sync completes',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      fakeApiClient.saveChargeItemDelay = const Duration(milliseconds: 150);
+
+      final controller = buildController();
+
+      final stopwatch = Stopwatch()..start();
+      await controller.addChargeItem(
+        ChargeItem(
+          recordUuid: 'ignored-by-controller',
+          itemName: 'Fast MRI',
+          itemPrice: 2600,
+        ),
+      );
+      stopwatch.stop();
+
+      expect(stopwatch.elapsedMilliseconds, lessThan(120));
+      expect(controller.state.chargeItems, hasLength(1));
+      expect(controller.state.chargeItems.single.itemName, 'Fast MRI');
+      expect(controller.state.chargeItems.single.isDirty, isTrue);
+
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+
+      final savedItem = await dbService.getChargeItemById(
+        controller.state.chargeItems.single.id,
+      );
+      expect(savedItem, isNotNull);
+      expect(savedItem!.isDirty, isFalse);
+      expect(controller.state.chargeItems.single.isDirty, isFalse);
+      expect(fakeApiClient.saveChargeItemCalls, 1);
     },
   );
 
@@ -1952,6 +2003,60 @@ void main() {
       expect(savedItem.isPaid, isFalse);
       expect(savedItem.isDirty, isTrue);
       expect(fakeApiClient.saveChargeItemCalls, 0);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-030: editChargeItem() returns after local state update before delayed server sync completes',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-edit-fast',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 100,
+        ),
+      );
+      fakeApiClient.saveChargeItemDelay = const Duration(milliseconds: 150);
+
+      final controller = buildController();
+      await controller.loadChargeItems();
+
+      final stopwatch = Stopwatch()..start();
+      await controller.editChargeItem(
+        ChargeItem(
+          id: 'charge-edit-fast',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 500,
+        ),
+      );
+      stopwatch.stop();
+
+      expect(stopwatch.elapsedMilliseconds, lessThan(120));
+      expect(controller.state.chargeItems, hasLength(1));
+      expect(controller.state.chargeItems.single.receivedAmount, 500);
+      expect(controller.state.chargeItems.single.isDirty, isTrue);
+
+      await Future<void>.delayed(const Duration(milliseconds: 220));
+
+      final savedItem = await dbService.getChargeItemById('charge-edit-fast');
+      expect(savedItem, isNotNull);
+      expect(savedItem!.receivedAmount, 500);
+      expect(savedItem.isDirty, isFalse);
+      expect(controller.state.chargeItems.single.isDirty, isFalse);
+      expect(fakeApiClient.saveChargeItemCalls, 1);
     },
   );
 
