@@ -20,6 +20,16 @@ import '../../support/fixtures/event_fixtures.dart';
 import '../../support/fixtures/note_fixtures.dart';
 import '../../support/test_db_path.dart';
 
+List<ChargeItemPayment> _singlePaidItem(int amount, DateTime paidDate) {
+  return [
+    ChargeItemPayment(
+      id: 'payment-$amount-${paidDate.millisecondsSinceEpoch}',
+      amount: amount,
+      paidDate: paidDate,
+    ),
+  ];
+}
+
 class _FakeEventMetadataApiClient extends ApiClient {
   _FakeEventMetadataApiClient() : super(baseUrl: 'http://fake.local');
 
@@ -309,6 +319,8 @@ class _FakeEventMetadataApiClient extends ApiClient {
       'item_name': chargeItemData['itemName'],
       'item_price': chargeItemData['itemPrice'],
       'received_amount': chargeItemData['receivedAmount'],
+      'paidItems': chargeItemData['paidItems'] ?? const [],
+      'paid_items_json': jsonEncode(chargeItemData['paidItems'] ?? const []),
       'is_deleted': chargeItemData['isDeleted'] == true,
       'is_dirty': 0,
       'version': chargeItemData['version'] ?? 1,
@@ -1107,6 +1119,7 @@ void main() {
           itemName: 'Follow-up Fee',
           itemPrice: 1200,
           receivedAmount: 300,
+          paidItems: _singlePaidItem(300, DateTime(2026, 3, 20)),
         ),
       );
 
@@ -1920,7 +1933,7 @@ void main() {
   );
 
   test(
-    'EVENT-DETAIL-UNIT-013: editChargeItem() persists partial paid amount and marks full payment when received amount matches price',
+    'EVENT-DETAIL-UNIT-013: appendChargeItemPayment() accumulates paid items and marks the charge item paid when totals match',
     () async {
       await dbService.saveDeviceCredentials(
         deviceId: 'device-001',
@@ -1942,29 +1955,92 @@ void main() {
       );
 
       final controller = buildController();
+      final existingItem = await dbService.getChargeItemById(
+        'charge-edit-paid',
+      );
 
-      await controller.editChargeItem(
-        ChargeItem(
-          id: 'charge-edit-paid',
-          recordUuid: 'record-a1',
-          eventId: 'event-a1',
-          itemName: 'Medication',
-          itemPrice: 800,
-          receivedAmount: 300,
+      expect(existingItem, isNotNull);
+      await controller.appendChargeItemPayment(
+        existingItem!,
+        ChargeItemPayment(
+          id: 'payment-1',
+          amount: 300,
+          paidDate: DateTime(2026, 3, 20),
         ),
       );
 
       var savedItem = await dbService.getChargeItemById('charge-edit-paid');
       expect(savedItem, isNotNull);
       expect(savedItem!.receivedAmount, 300);
+      expect(savedItem.paidItems, hasLength(1));
       expect(savedItem.isPaid, isFalse);
 
-      await controller.editChargeItem(savedItem.copyWith(receivedAmount: 800));
+      await controller.appendChargeItemPayment(
+        savedItem,
+        ChargeItemPayment(
+          id: 'payment-2',
+          amount: 500,
+          paidDate: DateTime(2026, 3, 21),
+        ),
+      );
 
       savedItem = await dbService.getChargeItemById('charge-edit-paid');
       expect(savedItem, isNotNull);
       expect(savedItem!.receivedAmount, 800);
+      expect(savedItem.paidItems, hasLength(2));
       expect(savedItem.isPaid, isTrue);
+    },
+  );
+
+  test(
+    'EVENT-DETAIL-UNIT-031: applyServerChargeItemChange() ignores stale server versions so newer paid items are not overwritten',
+    () async {
+      final initial = await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-stale-sync',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 800,
+          receivedAmount: 300,
+          paidItems: _singlePaidItem(300, DateTime(2026, 3, 20)),
+        ),
+      );
+
+      final newerLocal = await dbService.saveChargeItem(
+        initial.appendPaidItem(
+          ChargeItemPayment(
+            id: 'payment-2',
+            amount: 500,
+            paidDate: DateTime(2026, 3, 21),
+          ),
+        ),
+      );
+
+      expect(newerLocal.version, greaterThan(1));
+      expect(newerLocal.paidItems, hasLength(2));
+
+      await dbService.applyServerChargeItemChange({
+        'id': 'charge-stale-sync',
+        'record_uuid': 'record-a1',
+        'event_id': 'event-a1',
+        'item_name': 'Medication',
+        'item_price': 800,
+        'received_amount': 300,
+        'paidItems': [
+          {'id': 'payment-1', 'amount': 300, 'paidDate': '2026-03-20'},
+        ],
+        'created_at': DateTime(2026, 3, 20).toUtc().toIso8601String(),
+        'updated_at': DateTime(2026, 3, 20).toUtc().toIso8601String(),
+        'version': 1,
+        'is_deleted': false,
+      });
+
+      final savedItem = await dbService.getChargeItemById('charge-stale-sync');
+      expect(savedItem, isNotNull);
+      expect(savedItem!.paidItems, hasLength(2));
+      expect(savedItem.receivedAmount, 800);
+      expect(savedItem.version, newerLocal.version);
     },
   );
 
@@ -1979,6 +2055,7 @@ void main() {
           itemName: 'Medication',
           itemPrice: 800,
           receivedAmount: 100,
+          paidItems: _singlePaidItem(100, DateTime(2026, 3, 20)),
         ),
       );
 
@@ -1992,6 +2069,7 @@ void main() {
           itemName: 'Medication',
           itemPrice: 800,
           receivedAmount: 350,
+          paidItems: _singlePaidItem(350, DateTime(2026, 3, 21)),
         ),
       );
 
@@ -2024,6 +2102,7 @@ void main() {
           itemName: 'Medication',
           itemPrice: 800,
           receivedAmount: 100,
+          paidItems: _singlePaidItem(100, DateTime(2026, 3, 20)),
         ),
       );
       fakeApiClient.saveChargeItemDelay = const Duration(milliseconds: 150);
@@ -2040,6 +2119,7 @@ void main() {
           itemName: 'Medication',
           itemPrice: 800,
           receivedAmount: 500,
+          paidItems: _singlePaidItem(500, DateTime(2026, 3, 21)),
         ),
       );
       stopwatch.stop();
@@ -2061,7 +2141,7 @@ void main() {
   );
 
   test(
-    'EVENT-DETAIL-UNIT-028: toggleChargeItemPaidStatus() updates the local charge item when device credentials are unavailable',
+    'EVENT-DETAIL-UNIT-028: appendChargeItemPayment() updates the local charge item when device credentials are unavailable',
     () async {
       await dbService.saveChargeItem(
         ChargeItem(
@@ -2080,13 +2160,21 @@ void main() {
       );
 
       expect(existingItem, isNotNull);
-      await controller.toggleChargeItemPaidStatus(existingItem!);
+      await controller.appendChargeItemPayment(
+        existingItem!,
+        ChargeItemPayment(
+          id: 'payment-local-only',
+          amount: 600,
+          paidDate: DateTime(2026, 3, 22),
+        ),
+      );
 
       final savedItem = await dbService.getChargeItemById(
         'charge-toggle-local-only',
       );
       expect(savedItem, isNotNull);
       expect(savedItem!.receivedAmount, 600);
+      expect(savedItem.paidItems, hasLength(1));
       expect(savedItem.isPaid, isTrue);
       expect(savedItem.isDirty, isTrue);
       expect(fakeApiClient.saveChargeItemCalls, 0);

@@ -459,6 +459,24 @@ abstract class AppLocalizations {
   /// **'已付金額'**
   String get chargeItemPaidAmount;
 
+  /// Title and action text for appending a paid item to a charge item
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'新增已付項目'**
+  String get addChargeItemPayment;
+
+  /// Label for the paid item amount field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已付項目金額'**
+  String get chargeItemPaymentAmount;
+
+  /// Label for the paid item date field
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'付款日期'**
+  String get chargeItemPaymentDate;
+
   /// Label for total amount
   ///
   /// In zh_TW, this message translates to:
@@ -477,6 +495,12 @@ abstract class AppLocalizations {
   /// **'費用必須為正整數'**
   String get chargeItemCostInvalid;
 
+  /// Validation error when charge item cost is reduced below the current paid total
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'費用不可低於已付總額'**
+  String get chargeItemCostBelowPaidAmount;
+
   /// Validation error for invalid paid amount
   ///
   /// In zh_TW, this message translates to:
@@ -488,6 +512,18 @@ abstract class AppLocalizations {
   /// In zh_TW, this message translates to:
   /// **'已付金額不可超過費用'**
   String get chargeItemPaidAmountExceedsCost;
+
+  /// Validation error when a paid item amount exceeds the remaining amount
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'已付項目金額不可超過剩餘金額'**
+  String get chargeItemPaymentAmountExceedsRemaining;
+
+  /// Validation error for an invalid paid item date
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'請選擇有效的付款日期'**
+  String get chargeItemPaymentDateInvalid;
 
   /// Label for event type field
   ///

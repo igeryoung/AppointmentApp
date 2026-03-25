@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:sqflite/sqflite.dart';
 
 import '../models/book.dart';
+import '../models/charge_item.dart';
 import '../services/api_client.dart';
 import '../services/database/prd_database_service.dart';
 import 'book_repository.dart';
@@ -440,28 +441,14 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
         }
 
         for (final item in chargeItems) {
-          final createdAt = _toSeconds(_pick(item, 'createdAt', 'created_at'));
-          final updatedAt =
-              _toSecondsOrNull(_pick(item, 'updatedAt', 'updated_at')) ??
-              createdAt;
-          await txn.insert('charge_items', {
-            'id': _pick(item, 'id', 'id')?.toString(),
-            'record_uuid':
-                _pick(item, 'recordUuid', 'record_uuid')?.toString() ?? '',
-            'event_id': _pick(item, 'eventId', 'event_id')?.toString(),
-            'item_name': _pick(item, 'itemName', 'item_name')?.toString() ?? '',
-            'item_price': _pick(item, 'itemPrice', 'item_price') ?? 0,
-            'received_amount':
-                _pick(item, 'receivedAmount', 'received_amount') ?? 0,
-            'created_at': createdAt,
-            'updated_at': updatedAt,
-            'synced_at': updatedAt,
-            'version': _pick(item, 'version', 'version') ?? 1,
-            'is_dirty': 0,
-            'is_deleted': _pick(item, 'isDeleted', 'is_deleted') == true
-                ? 1
-                : 0,
-          }, conflictAlgorithm: ConflictAlgorithm.replace);
+          final chargeItem = ChargeItem.fromMap(
+            item,
+          ).copyWith(isDirty: false, syncedAt: DateTime.now());
+          await txn.insert(
+            'charge_items',
+            chargeItem.toMap(),
+            conflictAlgorithm: ConflictAlgorithm.replace,
+          );
         }
       });
     } catch (e) {

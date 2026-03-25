@@ -256,10 +256,72 @@ class ChargeItemRoutes {
     return fallback;
   }
 
+  String _formatPaidDate(DateTime date) {
+    final utcDate = DateTime.utc(date.year, date.month, date.day);
+    final month = utcDate.month.toString().padLeft(2, '0');
+    final day = utcDate.day.toString().padLeft(2, '0');
+    return '${utcDate.year}-$month-$day';
+  }
+
+  List<Map<String, dynamic>> _normalizePaidItems(dynamic value) {
+    if (value is! List) {
+      return const [];
+    }
+
+    final normalized = <Map<String, dynamic>>[];
+    for (final rawItem in value) {
+      if (rawItem is! Map) {
+        continue;
+      }
+
+      final item = Map<String, dynamic>.from(rawItem);
+      final amount = _toInt(item['amount']);
+      final paidDate = DateTime.tryParse(
+        (item['paidDate'] ?? item['paid_date'] ?? '').toString().trim(),
+      );
+      if (amount <= 0 || paidDate == null) {
+        continue;
+      }
+
+      normalized.add({
+        'id': (item['id'] ?? '').toString().trim(),
+        'amount': amount,
+        'paidDate': _formatPaidDate(paidDate),
+      });
+    }
+
+    normalized.sort((a, b) {
+      final dateCompare = a['paidDate'].toString().compareTo(
+        b['paidDate'].toString(),
+      );
+      if (dateCompare != 0) {
+        return dateCompare;
+      }
+      return a['id'].toString().compareTo(b['id'].toString());
+    });
+    return normalized;
+  }
+
+  List<Map<String, dynamic>> _decodePaidItems(dynamic value) {
+    if (value is String && value.trim().isNotEmpty) {
+      try {
+        return _normalizePaidItems(jsonDecode(value));
+      } catch (_) {
+        return const [];
+      }
+    }
+    return _normalizePaidItems(value);
+  }
+
   Map<String, dynamic> _serializeChargeItem(Map<String, dynamic> row) {
     final createdAt = _asUtc(row['created_at']).toIso8601String();
     final updatedAt = _asUtc(row['updated_at']).toIso8601String();
     final isDeleted = row['is_deleted'] == true || row['is_deleted'] == 1;
+    final paidItems = _decodePaidItems(row['paid_items_json']);
+    final receivedAmount = paidItems.fold<int>(
+      0,
+      (sum, item) => sum + _toInt(item['amount']),
+    );
 
     return {
       'id': row['id'],
@@ -267,7 +329,8 @@ class ChargeItemRoutes {
       'eventId': row['event_id'],
       'itemName': row['item_name'],
       'itemPrice': _toInt(row['item_price']),
-      'receivedAmount': _toInt(row['received_amount']),
+      'receivedAmount': receivedAmount,
+      'paidItems': paidItems,
       'createdAt': createdAt,
       'updatedAt': updatedAt,
       'version': _toInt(row['version'], fallback: 1),
@@ -277,7 +340,8 @@ class ChargeItemRoutes {
       'event_id': row['event_id'],
       'item_name': row['item_name'],
       'item_price': _toInt(row['item_price']),
-      'received_amount': _toInt(row['received_amount']),
+      'received_amount': receivedAmount,
+      'paid_items_json': jsonEncode(paidItems),
       'created_at': createdAt,
       'updated_at': updatedAt,
       'is_deleted': isDeleted,
@@ -328,7 +392,7 @@ class ChargeItemRoutes {
       final rows = await db.client
           .from('charge_items')
           .select(
-            'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+            'id, record_uuid, event_id, item_name, item_price, received_amount, paid_items_json, created_at, updated_at, version, is_deleted',
           )
           .eq('record_uuid', recordUuid)
           .eq('is_deleted', false)
@@ -430,8 +494,12 @@ class ChargeItemRoutes {
           .toString()
           .trim();
       final itemPrice = _toInt(json['itemPrice'] ?? json['item_price']);
-      final receivedAmount = _toInt(
-        json['receivedAmount'] ?? json['received_amount'],
+      final paidItems = _normalizePaidItems(
+        json['paidItems'] ?? json['paid_items'],
+      );
+      final receivedAmount = paidItems.fold<int>(
+        0,
+        (sum, item) => sum + _toInt(item['amount']),
       );
       final isDeleted = _toBool(
         json['isDeleted'] ?? json['is_deleted'],
@@ -464,6 +532,7 @@ class ChargeItemRoutes {
               'item_name': itemName,
               'item_price': itemPrice,
               'received_amount': receivedAmount,
+              'paid_items_json': jsonEncode(paidItems),
               'created_at': nowIso,
               'updated_at': nowIso,
               'synced_at': nowIso,
@@ -471,7 +540,7 @@ class ChargeItemRoutes {
               'is_deleted': isDeleted,
             })
             .select(
-              'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+              'id, record_uuid, event_id, item_name, item_price, received_amount, paid_items_json, created_at, updated_at, version, is_deleted',
             )
             .limit(1);
         result = _first(inserted);
@@ -479,7 +548,7 @@ class ChargeItemRoutes {
         final existingRows = await db.client
             .from('charge_items')
             .select(
-              'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+              'id, record_uuid, event_id, item_name, item_price, received_amount, paid_items_json, created_at, updated_at, version, is_deleted',
             )
             .eq('id', id)
             .limit(1);
@@ -495,6 +564,7 @@ class ChargeItemRoutes {
                 'item_name': itemName,
                 'item_price': itemPrice,
                 'received_amount': receivedAmount,
+                'paid_items_json': jsonEncode(paidItems),
                 'created_at': nowIso,
                 'updated_at': nowIso,
                 'synced_at': nowIso,
@@ -502,7 +572,7 @@ class ChargeItemRoutes {
                 'is_deleted': isDeleted,
               })
               .select(
-                'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+                'id, record_uuid, event_id, item_name, item_price, received_amount, paid_items_json, created_at, updated_at, version, is_deleted',
               )
               .limit(1);
           result = _first(inserted);
@@ -543,6 +613,7 @@ class ChargeItemRoutes {
                 'item_name': itemName,
                 'item_price': itemPrice,
                 'received_amount': receivedAmount,
+                'paid_items_json': jsonEncode(paidItems),
                 'updated_at': nowIso,
                 'synced_at': nowIso,
                 'version': serverVersion + 1,
@@ -550,7 +621,7 @@ class ChargeItemRoutes {
               })
               .eq('id', id)
               .select(
-                'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+                'id, record_uuid, event_id, item_name, item_price, received_amount, paid_items_json, created_at, updated_at, version, is_deleted',
               )
               .limit(1);
           result = _first(updated);

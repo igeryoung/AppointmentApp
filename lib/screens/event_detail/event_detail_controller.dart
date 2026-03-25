@@ -46,6 +46,7 @@ class EventDetailController {
   EventDetailState _state;
   int _noteEditGeneration = 0;
   bool _noteEditedInSession = false;
+  final Map<String, Future<void>> _chargeItemUpsertSyncQueue = {};
 
   EventDetailController({
     required this.event,
@@ -1380,7 +1381,29 @@ class EventDetailController {
       itemName: item.itemName,
       itemPrice: item.itemPrice,
       receivedAmount: item.receivedAmount,
+      paidItems: item.paidItems,
     );
+
+    final savedItem = await prdDb.saveChargeItem(updatedItem);
+    _upsertChargeItemInState(savedItem);
+    await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
+  }
+
+  /// Append a new paid entry to an existing charge item.
+  Future<void> appendChargeItemPayment(
+    ChargeItem item,
+    ChargeItemPayment payment,
+  ) async {
+    if (_dbService is! PRDDatabaseService) {
+      return;
+    }
+
+    final prdDb = _dbService as PRDDatabaseService;
+    final existingItem = await prdDb.getChargeItemById(item.id) ?? item;
+    final updatedItem = existingItem.appendPaidItem(payment);
+    if (updatedItem.receivedAmount > updatedItem.itemPrice) {
+      return;
+    }
 
     final savedItem = await prdDb.saveChargeItem(updatedItem);
     _upsertChargeItemInState(savedItem);
@@ -1407,8 +1430,19 @@ class EventDetailController {
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    final newReceivedAmount = item.isPaid ? 0 : item.itemPrice;
-    final updatedItem = item.copyWith(receivedAmount: newReceivedAmount);
+    final now = DateTime.now();
+    final updatedItem = item.isPaid
+        ? item.copyWith(receivedAmount: 0, paidItems: const [])
+        : item.copyWith(
+            receivedAmount: item.itemPrice,
+            paidItems: [
+              ChargeItemPayment(
+                id: 'toggle-${item.id}-${now.millisecondsSinceEpoch}',
+                amount: item.itemPrice,
+                paidDate: now,
+              ),
+            ],
+          );
     final savedItem = await prdDb.saveChargeItem(updatedItem);
     _upsertChargeItemInState(savedItem);
     await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
@@ -1424,7 +1458,19 @@ class EventDetailController {
     }
 
     final prdDb = _dbService as PRDDatabaseService;
-    final updatedItem = item.copyWith(receivedAmount: receivedAmount);
+    final now = DateTime.now();
+    final updatedItem = item.copyWith(
+      receivedAmount: receivedAmount,
+      paidItems: receivedAmount <= 0
+          ? const []
+          : [
+              ChargeItemPayment(
+                id: 'manual-${item.id}-${now.millisecondsSinceEpoch}',
+                amount: receivedAmount,
+                paidDate: now,
+              ),
+            ],
+    );
     final savedItem = await prdDb.saveChargeItem(updatedItem);
     _upsertChargeItemInState(savedItem);
     await _syncChargeItemUpsertWithBestEffortInBackground(prdDb, savedItem);
@@ -1550,7 +1596,21 @@ class EventDetailController {
       return;
     }
 
-    unawaited(_runChargeItemUpsertSync(prdDb, item));
+    final itemId = item.id;
+    final previousSync = _chargeItemUpsertSyncQueue[itemId];
+    final nextSync = previousSync == null
+        ? _runChargeItemUpsertSync(prdDb, item)
+        : previousSync
+              .catchError((_) {})
+              .then((_) => _runChargeItemUpsertSync(prdDb, item));
+    _chargeItemUpsertSyncQueue[itemId] = nextSync;
+    unawaited(
+      nextSync.whenComplete(() {
+        if (identical(_chargeItemUpsertSyncQueue[itemId], nextSync)) {
+          _chargeItemUpsertSyncQueue.remove(itemId);
+        }
+      }),
+    );
   }
 
   Future<void> _runChargeItemUpsertSync(

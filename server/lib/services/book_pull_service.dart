@@ -225,7 +225,7 @@ class BookPullService {
       final chargeItemsRaw = await db.client
           .from('charge_items')
           .select(
-            'id, record_uuid, event_id, item_name, item_price, received_amount, created_at, updated_at, version, is_deleted',
+            'id, record_uuid, event_id, item_name, item_price, received_amount, paid_items_json, created_at, updated_at, version, is_deleted',
           )
           .inFilter('record_uuid', recordUuids)
           .order('updated_at', ascending: true);
@@ -238,6 +238,7 @@ class BookPullService {
           'item_name': row['item_name'] as String,
           'item_price': (row['item_price'] as num?)?.toInt() ?? 0,
           'received_amount': (row['received_amount'] as num?)?.toInt() ?? 0,
+          'paid_items_json': row['paid_items_json']?.toString() ?? '[]',
           'created_at': _asUtc(row['created_at']).toIso8601String(),
           'updated_at': _asUtc(row['updated_at']).toIso8601String(),
           'version': (row['version'] as num?)?.toInt() ?? 1,

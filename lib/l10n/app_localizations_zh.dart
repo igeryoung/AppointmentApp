@@ -211,6 +211,15 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chargeItemPaidAmount => '已付金額';
 
   @override
+  String get addChargeItemPayment => '新增已付項目';
+
+  @override
+  String get chargeItemPaymentAmount => '已付項目金額';
+
+  @override
+  String get chargeItemPaymentDate => '付款日期';
+
+  @override
   String get total => '總額';
 
   @override
@@ -220,10 +229,19 @@ class AppLocalizationsZh extends AppLocalizations {
   String get chargeItemCostInvalid => '費用必須為正整數';
 
   @override
+  String get chargeItemCostBelowPaidAmount => '費用不可低於已付總額';
+
+  @override
   String get chargeItemPaidAmountInvalid => '已付金額必須為 0 或正整數';
 
   @override
   String get chargeItemPaidAmountExceedsCost => '已付金額不可超過費用';
+
+  @override
+  String get chargeItemPaymentAmountExceedsRemaining => '已付項目金額不可超過剩餘金額';
+
+  @override
+  String get chargeItemPaymentDateInvalid => '請選擇有效的付款日期';
 
   @override
   String get eventType => '約診類型 *';
@@ -1287,6 +1305,15 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get chargeItemPaidAmount => '已付金額';
 
   @override
+  String get addChargeItemPayment => '新增已付項目';
+
+  @override
+  String get chargeItemPaymentAmount => '已付項目金額';
+
+  @override
+  String get chargeItemPaymentDate => '付款日期';
+
+  @override
   String get total => '總額';
 
   @override
@@ -1296,10 +1323,19 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
   String get chargeItemCostInvalid => '費用必須為正整數';
 
   @override
+  String get chargeItemCostBelowPaidAmount => '費用不可低於已付總額';
+
+  @override
   String get chargeItemPaidAmountInvalid => '已付金額必須為 0 或正整數';
 
   @override
   String get chargeItemPaidAmountExceedsCost => '已付金額不可超過費用';
+
+  @override
+  String get chargeItemPaymentAmountExceedsRemaining => '已付項目金額不可超過剩餘金額';
+
+  @override
+  String get chargeItemPaymentDateInvalid => '請選擇有效的付款日期';
 
   @override
   String get eventType => '約診類型 *';

@@ -132,19 +132,25 @@ mixin ChargeItemOperationsMixin {
     required String id,
     required int receivedAmount,
   }) async {
-    final db = await database;
-    final now = DateTime.now();
+    final existing = await getChargeItemById(id);
+    if (existing == null) {
+      return;
+    }
 
-    await db.update(
-      'charge_items',
-      {
-        'received_amount': receivedAmount,
-        'updated_at': now.millisecondsSinceEpoch ~/ 1000,
-        'is_dirty': 1,
-      },
-      where: 'id = ?',
-      whereArgs: [id],
+    final now = DateTime.now();
+    final updatedItem = existing.copyWith(
+      receivedAmount: receivedAmount,
+      paidItems: receivedAmount <= 0
+          ? const []
+          : [
+              ChargeItemPayment(
+                id: 'manual-$id-${now.millisecondsSinceEpoch}',
+                amount: receivedAmount,
+                paidDate: now,
+              ),
+            ],
     );
+    await saveChargeItem(updatedItem);
   }
 
   /// Soft delete a charge item
@@ -297,10 +303,15 @@ mixin ChargeItemOperationsMixin {
       throw ArgumentError('Missing id for charge_items');
     }
 
+    final incomingVersion = data['version']?.toInt() ?? 1;
     final isDeleted = data['is_deleted'] == true || data['isDeleted'] == true;
 
     // Check if item exists locally
     final existing = await getChargeItemById(id);
+
+    if (existing != null && existing.version > incomingVersion) {
+      return;
+    }
 
     if (isDeleted) {
       // Soft delete locally

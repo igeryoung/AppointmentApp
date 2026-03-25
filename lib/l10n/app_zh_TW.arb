@@ -356,6 +356,21 @@
     "description": "Label for charge item paid amount field"
   },
 
+  "addChargeItemPayment": "新增已付項目",
+  "@addChargeItemPayment": {
+    "description": "Title and action text for appending a paid item to a charge item"
+  },
+
+  "chargeItemPaymentAmount": "已付項目金額",
+  "@chargeItemPaymentAmount": {
+    "description": "Label for the paid item amount field"
+  },
+
+  "chargeItemPaymentDate": "付款日期",
+  "@chargeItemPaymentDate": {
+    "description": "Label for the paid item date field"
+  },
+
   "total": "總額",
   "@total": {
     "description": "Label for total amount"
@@ -371,6 +386,11 @@
     "description": "Validation error for invalid cost"
   },
 
+  "chargeItemCostBelowPaidAmount": "費用不可低於已付總額",
+  "@chargeItemCostBelowPaidAmount": {
+    "description": "Validation error when charge item cost is reduced below the current paid total"
+  },
+
   "chargeItemPaidAmountInvalid": "已付金額必須為 0 或正整數",
   "@chargeItemPaidAmountInvalid": {
     "description": "Validation error for invalid paid amount"
@@ -379,6 +399,16 @@
   "chargeItemPaidAmountExceedsCost": "已付金額不可超過費用",
   "@chargeItemPaidAmountExceedsCost": {
     "description": "Validation error when paid amount exceeds cost"
+  },
+
+  "chargeItemPaymentAmountExceedsRemaining": "已付項目金額不可超過剩餘金額",
+  "@chargeItemPaymentAmountExceedsRemaining": {
+    "description": "Validation error when a paid item amount exceeds the remaining amount"
+  },
+
+  "chargeItemPaymentDateInvalid": "請選擇有效的付款日期",
+  "@chargeItemPaymentDateInvalid": {
+    "description": "Validation error for an invalid paid item date"
   },
 
   "eventType": "約診類型 *",

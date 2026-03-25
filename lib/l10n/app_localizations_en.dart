@@ -211,6 +211,15 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chargeItemPaidAmount => 'Paid Amount';
 
   @override
+  String get addChargeItemPayment => 'Add Paid Item';
+
+  @override
+  String get chargeItemPaymentAmount => 'Paid Item Amount';
+
+  @override
+  String get chargeItemPaymentDate => 'Paid Date';
+
+  @override
   String get total => 'Total';
 
   @override
@@ -220,12 +229,23 @@ class AppLocalizationsEn extends AppLocalizations {
   String get chargeItemCostInvalid => 'Cost must be a positive integer';
 
   @override
+  String get chargeItemCostBelowPaidAmount =>
+      'Cost cannot be less than the paid total';
+
+  @override
   String get chargeItemPaidAmountInvalid =>
       'Paid amount must be 0 or a positive integer';
 
   @override
   String get chargeItemPaidAmountExceedsCost =>
       'Paid amount cannot exceed cost';
+
+  @override
+  String get chargeItemPaymentAmountExceedsRemaining =>
+      'Paid item amount cannot exceed the remaining amount';
+
+  @override
+  String get chargeItemPaymentDateInvalid => 'Please choose a valid paid date';
 
   @override
   String get eventType => '約診類型 *';

@@ -56,7 +56,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 27,
+      version: 28,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -96,6 +96,7 @@ class PRDDatabaseService
               item_name TEXT NOT NULL,
               item_price INTEGER NOT NULL DEFAULT 0,
               received_amount INTEGER NOT NULL DEFAULT 0,
+              paid_items_json TEXT NOT NULL DEFAULT '[]',
               created_at INTEGER NOT NULL,
               updated_at INTEGER NOT NULL,
               synced_at INTEGER,
@@ -132,6 +133,18 @@ class PRDDatabaseService
           );
           await db.execute(
             "UPDATE device_info SET device_role = 'write' WHERE device_role IS NULL OR TRIM(device_role) = ''",
+          );
+        }
+        // v28: Reset local charge items for append-only paid-entry storage
+        if (oldVersion < 28) {
+          await db.close();
+          final databasesPath = await getDatabasesPath();
+          final dbName = kDebugMode
+              ? 'prd_schedule_test.db'
+              : 'prd_schedule.db';
+          await deleteDatabase(join(databasesPath, dbName));
+          throw Exception(
+            'Database reset for v28 migration. Please restart the app.',
           );
         }
       },
@@ -245,6 +258,7 @@ class PRDDatabaseService
         item_name TEXT NOT NULL,
         item_price INTEGER NOT NULL DEFAULT 0,
         received_amount INTEGER NOT NULL DEFAULT 0,
+        paid_items_json TEXT NOT NULL DEFAULT '[]',
         created_at INTEGER NOT NULL,
         updated_at INTEGER NOT NULL,
         synced_at INTEGER,

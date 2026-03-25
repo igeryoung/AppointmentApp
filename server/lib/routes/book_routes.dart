@@ -745,6 +745,7 @@ class BookRoutes {
           'itemName': c['item_name'],
           'itemPrice': c['item_price'],
           'receivedAmount': c['received_amount'],
+          'paidItems': jsonDecode((c['paid_items_json'] ?? '[]').toString()),
           'createdAt': c['created_at'],
           'updatedAt': c['updated_at'],
           'version': c['version'],

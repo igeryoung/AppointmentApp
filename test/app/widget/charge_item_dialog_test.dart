@@ -51,7 +51,9 @@ class _ChargeItemDialogHostState extends State<_ChargeItemDialogHost> {
         children: [
           ElevatedButton(onPressed: _openDialog, child: const Text('Open')),
           if (_savedItem != null)
-            Text('saved:${_savedItem!.receivedAmount}:${_savedItem!.isPaid}'),
+            Text(
+              'saved:${_savedItem!.itemPrice}:${_savedItem!.receivedAmount}:${_savedItem!.paidItems.length}:${_savedItem!.isPaid}',
+            ),
         ],
       ),
     );
@@ -66,51 +68,54 @@ void main() {
     itemName: 'Consultation',
     itemPrice: 1000,
     receivedAmount: 250,
+    paidItems: [
+      ChargeItemPayment(
+        id: 'payment-1',
+        amount: 250,
+        paidDate: DateTime(2026, 3, 20),
+      ),
+    ],
   );
 
   Future<void> openDialog(WidgetTester tester) async {
     await tester.tap(find.text('Open'));
     await tester.pumpAndSettle();
     expect(find.text('編輯待收款項'), findsOneWidget);
-    expect(find.byType(TextFormField), findsNWidgets(3));
+    expect(find.byType(TextFormField), findsNWidgets(2));
   }
 
-  group('ChargeItemDialog partial payment editing', () {
+  group('ChargeItemDialog charge item editing', () {
     testWidgets(
-      'CHARGE-ITEM-WIDGET-001: editing keeps partial paid amount instead of resetting it',
+      'CHARGE-ITEM-WIDGET-001: editing keeps existing paid entries instead of resetting them',
       (tester) async {
         await tester.pumpWidget(
-          _buildLocalizedApp(
-            _ChargeItemDialogHost(existingItem: existingItem),
-          ),
+          _buildLocalizedApp(_ChargeItemDialogHost(existingItem: existingItem)),
         );
 
         await openDialog(tester);
 
-        await tester.enterText(find.byType(TextFormField).at(2), '300');
+        await tester.enterText(find.byType(TextFormField).at(1), '1200');
         await tester.tap(find.text('儲存'));
         await tester.pumpAndSettle();
 
-        expect(find.text('saved:300:false'), findsOneWidget);
+        expect(find.text('saved:1200:250:1:false'), findsOneWidget);
       },
     );
 
     testWidgets(
-      'CHARGE-ITEM-WIDGET-002: editing rejects paid amount greater than cost',
+      'CHARGE-ITEM-WIDGET-002: editing rejects cost lower than the existing paid total',
       (tester) async {
         await tester.pumpWidget(
-          _buildLocalizedApp(
-            _ChargeItemDialogHost(existingItem: existingItem),
-          ),
+          _buildLocalizedApp(_ChargeItemDialogHost(existingItem: existingItem)),
         );
 
         await openDialog(tester);
 
-        await tester.enterText(find.byType(TextFormField).at(2), '1200');
+        await tester.enterText(find.byType(TextFormField).at(1), '200');
         await tester.tap(find.text('儲存'));
         await tester.pump();
 
-        expect(find.text('已付金額不可超過費用'), findsOneWidget);
+        expect(find.text('費用不可低於已付總額'), findsOneWidget);
         expect(find.text('編輯待收款項'), findsOneWidget);
         expect(find.textContaining('saved:'), findsNothing);
       },

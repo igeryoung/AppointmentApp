@@ -151,6 +151,21 @@
     "description": "Label for charge item paid amount field"
   },
 
+  "addChargeItemPayment": "Add Paid Item",
+  "@addChargeItemPayment": {
+    "description": "Title and action text for appending a paid item to a charge item"
+  },
+
+  "chargeItemPaymentAmount": "Paid Item Amount",
+  "@chargeItemPaymentAmount": {
+    "description": "Label for the paid item amount field"
+  },
+
+  "chargeItemPaymentDate": "Paid Date",
+  "@chargeItemPaymentDate": {
+    "description": "Label for the paid item date field"
+  },
+
   "total": "Total",
   "@total": {
     "description": "Label for total amount"
@@ -166,6 +181,11 @@
     "description": "Validation error for invalid cost"
   },
 
+  "chargeItemCostBelowPaidAmount": "Cost cannot be less than the paid total",
+  "@chargeItemCostBelowPaidAmount": {
+    "description": "Validation error when charge item cost is reduced below the current paid total"
+  },
+
   "chargeItemPaidAmountInvalid": "Paid amount must be 0 or a positive integer",
   "@chargeItemPaidAmountInvalid": {
     "description": "Validation error for invalid paid amount"
@@ -174,6 +194,16 @@
   "chargeItemPaidAmountExceedsCost": "Paid amount cannot exceed cost",
   "@chargeItemPaidAmountExceedsCost": {
     "description": "Validation error when paid amount exceeds cost"
+  },
+
+  "chargeItemPaymentAmountExceedsRemaining": "Paid item amount cannot exceed the remaining amount",
+  "@chargeItemPaymentAmountExceedsRemaining": {
+    "description": "Validation error when a paid item amount exceeds the remaining amount"
+  },
+
+  "chargeItemPaymentDateInvalid": "Please choose a valid paid date",
+  "@chargeItemPaymentDateInvalid": {
+    "description": "Validation error for an invalid paid item date"
   },
 
   "chargeItemsRequireRecordNumber": "Please add a record number to track charge items",

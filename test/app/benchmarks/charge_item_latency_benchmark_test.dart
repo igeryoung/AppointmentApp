@@ -21,6 +21,16 @@ const _benchBookUuid = 'book-bench';
 const _benchEventId = '11111111-1111-4111-8111-111111111111';
 const _benchRecordUuid = '22222222-2222-4222-8222-222222222222';
 
+List<ChargeItemPayment> _singlePaidItem(int amount, DateTime paidDate) {
+  return [
+    ChargeItemPayment(
+      id: 'payment-$amount-${paidDate.millisecondsSinceEpoch}',
+      amount: amount,
+      paidDate: paidDate,
+    ),
+  ];
+}
+
 class _DelayedChargeItemApiClient extends ApiClient {
   _DelayedChargeItemApiClient({required this.saveDelay})
     : super(baseUrl: 'http://benchmark.local');
@@ -44,6 +54,8 @@ class _DelayedChargeItemApiClient extends ApiClient {
       'item_name': chargeItemData['itemName'],
       'item_price': chargeItemData['itemPrice'],
       'received_amount': chargeItemData['receivedAmount'],
+      'paidItems': chargeItemData['paidItems'] ?? const [],
+      'paid_items_json': jsonEncode(chargeItemData['paidItems'] ?? const []),
       'created_at': chargeItemData['createdAt'] ?? nowIso,
       'updated_at': nowIso,
       'version': chargeItemData['version'] ?? 1,
@@ -153,6 +165,7 @@ ChargeItem _existingChargeItem() {
     itemName: 'Bench Medication',
     itemPrice: 800,
     receivedAmount: 100,
+    paidItems: _singlePaidItem(100, DateTime(2026, 3, 20)),
   );
 }
 
@@ -239,7 +252,10 @@ Future<_ScenarioSample> _runLegacyEdit(
   await _resetChargeItems(dbService);
   final existing = _existingChargeItem();
   await dbService.saveChargeItem(existing);
-  final updated = existing.copyWith(receivedAmount: 500);
+  final updated = existing.copyWith(
+    receivedAmount: 500,
+    paidItems: _singlePaidItem(500, DateTime(2026, 3, 21)),
+  );
 
   final total = Stopwatch()..start();
 
@@ -292,7 +308,12 @@ Future<_ScenarioSample> _runOptimizedEdit(
   await controller.loadChargeItems();
 
   final total = Stopwatch()..start();
-  await controller.editChargeItem(existing.copyWith(receivedAmount: 500));
+  await controller.editChargeItem(
+    existing.copyWith(
+      receivedAmount: 500,
+      paidItems: _singlePaidItem(500, DateTime(2026, 3, 21)),
+    ),
+  );
   final userVisibleMicros = total.elapsedMicroseconds;
 
   await _waitForSyncedChargeItem(dbService, existing.id);

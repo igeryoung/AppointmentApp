@@ -307,13 +307,27 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
     _refreshFromController();
   }
 
-  Future<void> _deleteChargeItem(ChargeItem item) async {
-    await widget.controller.deleteChargeItem(item);
+  Future<void> _appendPaidItem(ChargeItem item) async {
+    if (item.remainingAmount <= 0) {
+      return;
+    }
+
+    final result = await showDialog<ChargeItemPayment>(
+      context: context,
+      builder: (context) =>
+          ChargeItemPaymentDialog(maxAmount: item.remainingAmount),
+    );
+
+    if (result == null) {
+      return;
+    }
+
+    await widget.controller.appendChargeItemPayment(item, result);
     _refreshFromController();
   }
 
-  Future<void> _togglePaidStatus(ChargeItem item) async {
-    await widget.controller.toggleChargeItemPaidStatus(item);
+  Future<void> _deleteChargeItem(ChargeItem item) async {
+    await widget.controller.deleteChargeItem(item);
     _refreshFromController();
   }
 
@@ -487,10 +501,8 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                     itemBuilder: (context, index) {
                       final item = _displayChargeItems[index];
                       final isDiluted = _isDilutedItem(item);
-                      final remainingAmount =
-                          (item.itemPrice - item.receivedAmount) < 0
-                          ? 0
-                          : (item.itemPrice - item.receivedAmount);
+                      final remainingAmount = item.remainingAmount;
+                      final paidItems = item.paidItems;
 
                       return AnimatedOpacity(
                         duration: const Duration(milliseconds: 180),
@@ -509,96 +521,181 @@ class _ChargeItemsPopupState extends State<_ChargeItemsPopup> {
                             ),
                           ),
                           child: Padding(
-                            padding: const EdgeInsets.fromLTRB(8, 8, 6, 8),
-                            child: Row(
+                            padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Checkbox(
-                                  value: item.isPaid,
-                                  onChanged: widget.isReadOnlyMode || isDiluted
-                                      ? null
-                                      : (_) => _togglePaidStatus(item),
-                                ),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.itemName,
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        style: theme.textTheme.titleSmall
-                                            ?.copyWith(
-                                              fontWeight: FontWeight.w600,
-                                              decoration: item.isPaid
-                                                  ? TextDecoration.lineThrough
-                                                  : TextDecoration.none,
-                                            ),
-                                      ),
-                                      const SizedBox(height: 4),
-                                      Text(
-                                        l10n.chargeAmountSummary(
-                                          item.receivedAmount.toString(),
-                                          item.itemPrice.toString(),
-                                        ),
-                                        style: theme.textTheme.bodySmall
-                                            ?.copyWith(
-                                              color: item.isPaid
-                                                  ? theme.colorScheme.primary
-                                                  : theme
-                                                        .colorScheme
-                                                        .onSurfaceVariant,
-                                            ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const SizedBox(width: 8),
-                                Column(
-                                  crossAxisAlignment: CrossAxisAlignment.end,
+                                Row(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(
-                                      'NT\$$remainingAmount',
-                                      style: theme.textTheme.labelLarge
-                                          ?.copyWith(
-                                            color: item.isPaid
-                                                ? theme.colorScheme.primary
-                                                : theme.colorScheme.secondary,
-                                            fontWeight: FontWeight.w700,
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.itemName,
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            style: theme.textTheme.titleSmall
+                                                ?.copyWith(
+                                                  fontWeight: FontWeight.w600,
+                                                  decoration: item.isPaid
+                                                      ? TextDecoration
+                                                            .lineThrough
+                                                      : TextDecoration.none,
+                                                ),
                                           ),
-                                    ),
-                                    if (item.isPaid) const SizedBox(height: 2),
-                                    if (item.isPaid)
-                                      Text(
-                                        l10n.paid,
-                                        style: theme.textTheme.labelSmall
-                                            ?.copyWith(
-                                              color: theme.colorScheme.primary,
+                                          const SizedBox(height: 4),
+                                          Text(
+                                            l10n.chargeAmountSummary(
+                                              item.receivedAmount.toString(),
+                                              item.itemPrice.toString(),
                                             ),
+                                            style: theme.textTheme.bodySmall
+                                                ?.copyWith(
+                                                  color: item.isPaid
+                                                      ? theme
+                                                            .colorScheme
+                                                            .primary
+                                                      : theme
+                                                            .colorScheme
+                                                            .onSurfaceVariant,
+                                                ),
+                                          ),
+                                        ],
                                       ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.end,
+                                      children: [
+                                        Text(
+                                          'NT\$$remainingAmount',
+                                          style: theme.textTheme.labelLarge
+                                              ?.copyWith(
+                                                color: item.isPaid
+                                                    ? theme.colorScheme.primary
+                                                    : theme
+                                                          .colorScheme
+                                                          .secondary,
+                                                fontWeight: FontWeight.w700,
+                                              ),
+                                        ),
+                                        if (item.isPaid)
+                                          const SizedBox(height: 2),
+                                        if (item.isPaid)
+                                          Text(
+                                            l10n.paid,
+                                            style: theme.textTheme.labelSmall
+                                                ?.copyWith(
+                                                  color:
+                                                      theme.colorScheme.primary,
+                                                ),
+                                          ),
+                                      ],
+                                    ),
+                                    const SizedBox(width: 4),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.add_rounded,
+                                        size: 20,
+                                      ),
+                                      tooltip: l10n.addChargeItemPayment,
+                                      onPressed:
+                                          widget.isReadOnlyMode ||
+                                              isDiluted ||
+                                              item.remainingAmount <= 0
+                                          ? null
+                                          : () => _appendPaidItem(item),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.edit_rounded,
+                                        size: 20,
+                                      ),
+                                      tooltip: l10n.editChargeItemTitle,
+                                      onPressed:
+                                          widget.isReadOnlyMode || isDiluted
+                                          ? null
+                                          : () => _editChargeItem(item),
+                                    ),
+                                    IconButton(
+                                      icon: const Icon(
+                                        Icons.delete_outline_rounded,
+                                        size: 20,
+                                      ),
+                                      tooltip: l10n.delete,
+                                      onPressed:
+                                          widget.isReadOnlyMode || isDiluted
+                                          ? null
+                                          : () => _deleteChargeItem(item),
+                                    ),
                                   ],
                                 ),
-                                const SizedBox(width: 4),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.edit_rounded,
-                                    size: 20,
+                                if (paidItems.isNotEmpty)
+                                  const SizedBox(height: 10),
+                                if (paidItems.isNotEmpty)
+                                  Container(
+                                    width: double.infinity,
+                                    padding: const EdgeInsets.all(10),
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: theme.colorScheme.surface
+                                          .withValues(alpha: 0.7),
+                                    ),
+                                    child: Column(
+                                      children: paidItems
+                                          .map(
+                                            (paidItem) => Padding(
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    vertical: 3,
+                                                  ),
+                                              child: Row(
+                                                children: [
+                                                  Icon(
+                                                    Icons
+                                                        .subdirectory_arrow_right_rounded,
+                                                    size: 16,
+                                                    color: theme
+                                                        .colorScheme
+                                                        .primary,
+                                                  ),
+                                                  const SizedBox(width: 8),
+                                                  Expanded(
+                                                    child: Text(
+                                                      ChargeItemPayment.formatDate(
+                                                        paidItem.paidDate,
+                                                      ),
+                                                      style: theme
+                                                          .textTheme
+                                                          .bodySmall
+                                                          ?.copyWith(
+                                                            color: theme
+                                                                .colorScheme
+                                                                .onSurfaceVariant,
+                                                          ),
+                                                    ),
+                                                  ),
+                                                  Text(
+                                                    'NT\$${paidItem.amount}',
+                                                    style: theme
+                                                        .textTheme
+                                                        .bodySmall
+                                                        ?.copyWith(
+                                                          fontWeight:
+                                                              FontWeight.w700,
+                                                        ),
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          )
+                                          .toList(growable: false),
+                                    ),
                                   ),
-                                  tooltip: l10n.editChargeItemTitle,
-                                  onPressed: widget.isReadOnlyMode || isDiluted
-                                      ? null
-                                      : () => _editChargeItem(item),
-                                ),
-                                IconButton(
-                                  icon: const Icon(
-                                    Icons.delete_outline_rounded,
-                                    size: 20,
-                                  ),
-                                  tooltip: l10n.delete,
-                                  onPressed: widget.isReadOnlyMode || isDiluted
-                                      ? null
-                                      : () => _deleteChargeItem(item),
-                                ),
                               ],
                             ),
                           ),

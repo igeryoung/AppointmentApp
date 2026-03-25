@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS public.charge_items
     item_name text COLLATE pg_catalog."default" NOT NULL,
     item_price integer NOT NULL DEFAULT 0,
     received_amount integer NOT NULL DEFAULT 0,
+    paid_items_json jsonb NOT NULL DEFAULT '[]'::jsonb,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     synced_at timestamp with time zone,

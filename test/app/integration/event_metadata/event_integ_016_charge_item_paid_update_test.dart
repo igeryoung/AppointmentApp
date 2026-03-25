@@ -42,21 +42,38 @@ List<Map<String, dynamic>> _findChargeItemsById(
       .toList();
 }
 
+List<Map<String, dynamic>> _buildPaidItems(List<int> amounts) {
+  final paidItems = <Map<String, dynamic>>[];
+  for (var index = 0; index < amounts.length; index++) {
+    paidItems.add({
+      'id': 'payment-${index + 1}',
+      'amount': amounts[index],
+      'paidDate': '2026-03-${(20 + index).toString().padLeft(2, '0')}',
+    });
+  }
+  return paidItems;
+}
+
 Map<String, dynamic> _buildChargeItemPayload({
   required String id,
   required String eventId,
   required String itemName,
   required int itemPrice,
-  required int receivedAmount,
+  required List<Map<String, dynamic>> paidItems,
   required String bookUuid,
   int? version,
 }) {
+  final receivedAmount = paidItems.fold<int>(
+    0,
+    (sum, item) => sum + ((item['amount'] as num?)?.toInt() ?? 0),
+  );
   return {
     'id': id,
     'eventId': eventId,
     'itemName': itemName,
     'itemPrice': itemPrice,
     'receivedAmount': receivedAmount,
+    'paidItems': paidItems,
     'bookUuid': bookUuid,
     if (version != null) 'version': version,
   };
@@ -92,6 +109,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
                 'itemName': 'IT read-only paid update block',
                 'itemPrice': 400,
                 'receivedAmount': 200,
+                'paidItems': _buildPaidItems(const [200]),
                 'bookUuid': fixture.bookUuid,
               },
               deviceId: live.deviceId,
@@ -144,7 +162,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
             eventId: eventId,
             itemName: 'Progress Payment',
             itemPrice: 900,
-            receivedAmount: 0,
+            paidItems: const [],
             bookUuid: bookUuid,
           ),
           deviceId: live.deviceId,
@@ -159,7 +177,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
             eventId: eventId,
             itemName: 'Progress Payment',
             itemPrice: 900,
-            receivedAmount: 400,
+            paidItems: _buildPaidItems(const [400]),
             bookUuid: bookUuid,
             version: _nextVersion(createdChargeItem),
           ),
@@ -191,6 +209,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
           ),
           900,
         );
+        expect(partialMatches.single['paidItems'], hasLength(1));
 
         final finalUpdate = await apiClient.saveChargeItem(
           recordUuid: recordUuid,
@@ -199,7 +218,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
             eventId: eventId,
             itemName: 'Progress Payment',
             itemPrice: 900,
-            receivedAmount: 900,
+            paidItems: _buildPaidItems(const [400, 500]),
             bookUuid: bookUuid,
             version: _nextVersion(partialUpdate),
           ),
@@ -229,6 +248,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
 
         expect(fullReceivedAmount, 900);
         expect(fullItemPrice, 900);
+        expect(fullMatches.single['paidItems'], hasLength(2));
         expect(
           fullReceivedAmount,
           fullItemPrice,
