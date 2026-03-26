@@ -7,6 +7,15 @@ import 'package:schedule_note_app/utils/schedule/schedule_layout_utils.dart';
 
 void main() {
   test(
+    'SCHEDULE-UTIL-000: schedule grid ends at 20:00 with 44 active quarter-hour slots',
+    () {
+      expect(ScheduleLayoutUtils.startHour, 9);
+      expect(ScheduleLayoutUtils.endHour, 20);
+      expect(ScheduleLayoutUtils.totalSlots, 44);
+    },
+  );
+
+  test(
     'SCHEDULE-UTIL-001: getEffectiveDate() uses 2-day window in 2-day mode',
     () {
       // 2000-01-05 is a known split case:

@@ -1051,7 +1051,7 @@ class AppLocalizationsZh extends AppLocalizations {
 
   @override
   String cannotMoveEndTimeExceedsLimit(Object hour, Object minute) {
-    return '无法移动：结束时间将为 $hour:$minute（超过 21:00）';
+    return '无法移动：结束时间将为 $hour:$minute（超过 20:00）';
   }
 
   @override
@@ -2145,7 +2145,7 @@ class AppLocalizationsZhTw extends AppLocalizationsZh {
 
   @override
   String cannotMoveEndTimeExceedsLimit(Object hour, Object minute) {
-    return '無法移動：結束時間將為 $hour:$minute（超過 21:00）';
+    return '無法移動：結束時間將為 $hour:$minute（超過 20:00）';
   }
 
   @override

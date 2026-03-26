@@ -81,7 +81,7 @@ Map<String, dynamic> _buildChargeItemPayload({
 
 void registerEventInteg016({required LiveServerConfig? config}) {
   test(
-    'EVENT-INTEG-016: updating charge item paid amount persists partial and full payment on live server',
+    'EVENT-INTEG-016: appending paid items preserves existing entries and marks the charge item paid when totals match',
     () async {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
@@ -210,6 +210,11 @@ void registerEventInteg016({required LiveServerConfig? config}) {
           900,
         );
         expect(partialMatches.single['paidItems'], hasLength(1));
+        expect(
+          ((partialMatches.single['paidItems'] as List).first
+              as Map<String, dynamic>)['amount'],
+          400,
+        );
 
         final finalUpdate = await apiClient.saveChargeItem(
           recordUuid: recordUuid,
@@ -249,6 +254,10 @@ void registerEventInteg016({required LiveServerConfig? config}) {
         expect(fullReceivedAmount, 900);
         expect(fullItemPrice, 900);
         expect(fullMatches.single['paidItems'], hasLength(2));
+        final fullPaidItems = (fullMatches.single['paidItems'] as List)
+            .cast<Map<String, dynamic>>();
+        expect(fullPaidItems[0]['amount'], 400);
+        expect(fullPaidItems[1]['amount'], 500);
         expect(
           fullReceivedAmount,
           fullItemPrice,

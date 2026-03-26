@@ -13,8 +13,8 @@ class DateTimePickerUtils {
   /// - [initialDateTime]: The initial date and time to display
   /// - [firstDate]: The earliest selectable date (optional, defaults to 1 year ago)
   /// - [lastDate]: The latest selectable date (optional, defaults to 1 year from now)
-  /// - [validateBusinessHours]: If true, validates that selected time is within 9:00-21:00
-  /// - [isEndTime]: If true, treats this as end time selection (allows 21:00 exactly)
+  /// - [validateBusinessHours]: If true, validates that selected time is within 9:00-20:00
+  /// - [isEndTime]: If true, treats this as end time selection (allows 20:00 exactly)
   /// - [referenceStartTime]: For end time validation, the start time to validate against
   static Future<DateTime?> pickDateTime(
     BuildContext context, {
@@ -81,10 +81,7 @@ class DateTimePickerUtils {
 
       if (error != null && context.mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error),
-            backgroundColor: Colors.orange,
-          ),
+          SnackBar(content: Text(error), backgroundColor: Colors.orange),
         );
         return null; // Return null to indicate invalid selection
       }

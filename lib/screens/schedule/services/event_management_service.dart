@@ -582,7 +582,7 @@ class EventManagementService {
       return;
     }
 
-    // Validate new start time is within business hours (9:00-21:00)
+    // Validate new start time is within business hours (9:00-20:00)
     final startTimeError = EventTimeValidator.validateStartTime(newStartTime);
     if (startTimeError != null) {
       onShowSnackbar(startTimeError, backgroundColor: Colors.orange);

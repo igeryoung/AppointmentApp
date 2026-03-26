@@ -642,7 +642,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
 
     _controller.updateStartTime(result);
 
-    // If end time exists and is now invalid (before start or exceeds 21:00), clear it
+    // If end time exists and is now invalid (before start or exceeds 20:00), clear it
     final currentEndTime = _controller.state.endTime;
     if (currentEndTime != null) {
       final error = EventTimeValidator.validateTimeRange(

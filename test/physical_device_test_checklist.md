@@ -99,7 +99,7 @@ Use this checklist for real-device verification after unit tests pass.
 |---|---|---|---|---|
 | [ ] | [V] | Create an event for a record that already has charge items | Existing record charge items remain linked, but the new event does not show has-charge-items yet | P12 - EVENT-INTEG-015A @ `test/app/integration/event_metadata/event_integ_015_charge_item_flag_test.dart` |
 | [ ] | [V] | Add a charge item to an existing event | Charge item is linked to that event and the event shows has-charge-items after refresh | P12 - EVENT-INTEG-015B @ `test/app/integration/event_metadata/event_integ_015_charge_item_flag_test.dart`; P09 - EVENT-DETAIL-UNIT-022/026 @ `test/app/unit/controllers/event_detail_controller_test.dart` |
-| [ ] | [V] | Edit a charge item's paid amount or mark it paid | Updated paid amount persists after refresh, and a fully paid item reopens as Paid without duplicating the charge item | P12 - EVENT-INTEG-016 @ `test/app/integration/event_metadata/event_integ_016_charge_item_paid_update_test.dart`; P09 - EVENT-DETAIL-UNIT-013/027/028 @ `test/app/unit/controllers/event_detail_controller_test.dart` |
+| [ ] | [V] | Append a paid item under a charge item | Existing paid items remain, the new paid item is appended after refresh, and a fully paid item reopens as 已付清 without duplicating the charge item | P12 - EVENT-INTEG-016 @ `test/app/integration/event_metadata/event_integ_016_charge_item_paid_update_test.dart`; P09 - EVENT-DETAIL-UNIT-013/028/032 @ `test/app/unit/controllers/event_detail_controller_test.dart` |
 
 ## 7. Device Credentials & Session
 

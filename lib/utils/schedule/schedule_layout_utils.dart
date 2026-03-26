@@ -31,8 +31,8 @@ class PositionedEventData {
 class ScheduleLayoutUtils {
   // Time range constants
   static const int startHour = 9; // 9:00 AM
-  static const int endHour = 21; // 9:00 PM
-  static const int totalSlots = (endHour - startHour) * 4; // 48 slots
+  static const int endHour = 20; // 8:00 PM
+  static const int totalSlots = (endHour - startHour) * 4; // 44 active slots
 
   // Large screen detection threshold for text scaling
   static const double largeScreenSlotHeightThreshold = 15.0;

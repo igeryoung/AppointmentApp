@@ -1122,7 +1122,7 @@
   "failedToLoadServerBooks": "加载服务器簿册失败：{error}",
   "serverUrlUpdated": "服务器网址已更新为：{url}",
   "failedToUpdateServerUrl": "更新服务器网址失败：{error}",
-  "cannotMoveEndTimeExceedsLimit": "无法移动：结束时间将为 {hour}:{minute}（超过 21:00）",
+  "cannotMoveEndTimeExceedsLimit": "无法移动：结束时间将为 {hour}:{minute}（超过 20:00）",
   "eventsCannotSpanAcrossDates": "活动不可跨日期",
   "testTimeDialogPlaceholder": "测试时间对话框（功能已拆分）",
   "otherEventType": "其他",

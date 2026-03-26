@@ -116,7 +116,7 @@ const Map<String, List<String>> _operationToPipelineSteps = {
   'Add a charge item to an existing event': [
     'Pipeline 12 - Live Event Metadata Roundtrip',
   ],
-  'Edit a charge item\'s paid amount or mark it paid': [
+  'Append a paid item under a charge item': [
     'Pipeline 12 - Live Event Metadata Roundtrip',
   ],
   'Complete setup once, then relaunch app multiple times': [

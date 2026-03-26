@@ -1555,7 +1555,7 @@
   "failedToLoadServerBooks": "載入伺服器簿冊失敗：{error}",
   "serverUrlUpdated": "伺服器網址已更新為：{url}",
   "failedToUpdateServerUrl": "更新伺服器網址失敗：{error}",
-  "cannotMoveEndTimeExceedsLimit": "無法移動：結束時間將為 {hour}:{minute}（超過 21:00）",
+  "cannotMoveEndTimeExceedsLimit": "無法移動：結束時間將為 {hour}:{minute}（超過 20:00）",
   "eventsCannotSpanAcrossDates": "約診不可跨日期",
   "testTimeDialogPlaceholder": "測試時間對話框（功能已拆分）",
   "otherEventType": "其他",

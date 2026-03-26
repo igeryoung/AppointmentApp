@@ -1,13 +1,13 @@
 /// Centralized event time validation utility
 ///
 /// Business rules:
-/// 1. Start and end times must be between 9:00 - 21:00
+/// 1. Start and end times must be between 9:00 - 20:00
 /// 2. End time must be greater than start time
 /// 3. Cross-date events are not allowed (start and end must be on same day)
 class EventTimeValidator {
   // Constants for business hours
   static const int scheduleStartHour = 9; // 9:00 AM
-  static const int scheduleEndHour = 21; // 9:00 PM
+  static const int scheduleEndHour = 20; // 8:00 PM
 
   // Minimum event duration in minutes
   static const int minimumDurationMinutes = 15;
@@ -57,13 +57,13 @@ class EventTimeValidator {
     return null;
   }
 
-  /// Check if start time is within business hours (9:00-20:59)
+  /// Check if start time is within business hours (9:00-19:59)
   static bool isValidStartTime(DateTime time) {
     final hour = time.hour;
     return hour >= scheduleStartHour && hour < scheduleEndHour;
   }
 
-  /// Check if end time is within business hours (9:00-21:00 inclusive)
+  /// Check if end time is within business hours (9:00-20:00 inclusive)
   /// End time can be exactly at scheduleEndHour:00
   static bool isValidEndTime(DateTime time) {
     final hour = time.hour;
@@ -72,7 +72,7 @@ class EventTimeValidator {
     if (hour < scheduleStartHour) return false;
     if (hour > scheduleEndHour) return false;
 
-    // If hour equals scheduleEndHour, only allow :00 (exactly 21:00)
+    // If hour equals scheduleEndHour, only allow :00 (exactly 20:00)
     if (hour == scheduleEndHour && minute > 0) return false;
 
     return true;

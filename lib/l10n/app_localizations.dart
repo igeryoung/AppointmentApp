@@ -1930,7 +1930,7 @@ abstract class AppLocalizations {
   /// No description provided for @cannotMoveEndTimeExceedsLimit.
   ///
   /// In zh_TW, this message translates to:
-  /// **'無法移動：結束時間將為 {hour}:{minute}（超過 21:00）'**
+  /// **'無法移動：結束時間將為 {hour}:{minute}（超過 20:00）'**
   String cannotMoveEndTimeExceedsLimit(Object hour, Object minute);
 
   /// No description provided for @eventsCannotSpanAcrossDates.

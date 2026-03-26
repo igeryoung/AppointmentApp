@@ -1993,6 +1993,55 @@ void main() {
   );
 
   test(
+    'EVENT-DETAIL-UNIT-032: appendChargeItemPayment() syncs both existing and new paid items to server',
+    () async {
+      await dbService.saveDeviceCredentials(
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Test Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      await dbService.saveChargeItem(
+        ChargeItem(
+          id: 'charge-append-sync',
+          recordUuid: 'record-a1',
+          eventId: 'event-a1',
+          itemName: 'Medication',
+          itemPrice: 900,
+          receivedAmount: 400,
+          paidItems: _singlePaidItem(400, DateTime(2026, 3, 20)),
+        ),
+      );
+
+      final controller = buildController();
+      final existingItem = await dbService.getChargeItemById(
+        'charge-append-sync',
+      );
+
+      expect(existingItem, isNotNull);
+      await controller.appendChargeItemPayment(
+        existingItem!,
+        ChargeItemPayment(
+          id: 'payment-2',
+          amount: 200,
+          paidDate: DateTime(2026, 3, 21),
+        ),
+      );
+      await waitForBackgroundSync();
+
+      final paidItems =
+          fakeApiClient.lastSaveChargeItemData?['paidItems'] as List<dynamic>?;
+      expect(fakeApiClient.saveChargeItemCalls, 1);
+      expect(paidItems, isNotNull);
+      expect(paidItems, hasLength(2));
+      expect((paidItems![0] as Map<String, dynamic>)['amount'], 400);
+      expect((paidItems[1] as Map<String, dynamic>)['amount'], 200);
+    },
+  );
+
+  test(
     'EVENT-DETAIL-UNIT-031: applyServerChargeItemChange() ignores stale server versions so newer paid items are not overwritten',
     () async {
       final initial = await dbService.saveChargeItem(

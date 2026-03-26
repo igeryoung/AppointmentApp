@@ -1068,7 +1068,7 @@ class AppLocalizationsEn extends AppLocalizations {
 
   @override
   String cannotMoveEndTimeExceedsLimit(Object hour, Object minute) {
-    return 'Cannot move: end time would be $hour:$minute (exceeds 21:00)';
+    return 'Cannot move: end time would be $hour:$minute (exceeds 20:00)';
   }
 
   @override

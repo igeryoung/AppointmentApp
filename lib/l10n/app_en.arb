@@ -332,7 +332,7 @@
   "failedToLoadServerBooks": "Failed to load server books: {error}",
   "serverUrlUpdated": "Server URL updated to: {url}",
   "failedToUpdateServerUrl": "Failed to update server URL: {error}",
-  "cannotMoveEndTimeExceedsLimit": "Cannot move: end time would be {hour}:{minute} (exceeds 21:00)",
+  "cannotMoveEndTimeExceedsLimit": "Cannot move: end time would be {hour}:{minute} (exceeds 20:00)",
   "eventsCannotSpanAcrossDates": "Events cannot span across dates",
   "testTimeDialogPlaceholder": "Test time dialog - feature extracted",
   "otherEventType": "Other",
