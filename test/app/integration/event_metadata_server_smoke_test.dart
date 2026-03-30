@@ -18,6 +18,7 @@ import 'event_metadata/event_integ_013_record_lookup_autofill_test.dart';
 import 'event_metadata/event_integ_014_schedule_reschedule_pipeline_test.dart';
 import 'event_metadata/event_integ_015_charge_item_flag_test.dart';
 import 'event_metadata/event_integ_016_charge_item_paid_update_test.dart';
+import 'event_metadata/event_integ_017_write_device_global_book_access_test.dart';
 import 'event_metadata/live_server_test_support.dart';
 
 void main() {
@@ -38,4 +39,5 @@ void main() {
   registerEventInteg014(config: config);
   registerEventInteg015(config: config);
   registerEventInteg016(config: config);
+  registerEventInteg017(config: config);
 }

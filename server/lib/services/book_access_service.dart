@@ -43,8 +43,17 @@ class BookAccessService {
     final bookRow = _first(existingBook);
     if (bookRow == null) return false;
 
+    final hasWriteRole = await _deviceHasWriteRole(deviceId);
+    if (hasWriteRole) {
+      return true;
+    }
+
+    if (requireWrite) {
+      return false;
+    }
+
     if (bookRow['device_id']?.toString() == deviceId) {
-      return requireWrite ? _deviceHasWriteRole(deviceId) : true;
+      return true;
     }
 
     final accessRows = await db.client
@@ -56,7 +65,7 @@ class BookAccessService {
     final accessRow = _first(accessRows);
     if (accessRow == null) return false;
 
-    return requireWrite ? _deviceHasWriteRole(deviceId) : true;
+    return true;
   }
 
   Future<void> grantBookAccess({

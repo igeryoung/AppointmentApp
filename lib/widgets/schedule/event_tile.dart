@@ -9,6 +9,18 @@ import '../../utils/schedule/schedule_layout_utils.dart';
 ///
 /// Provides adaptive event tile rendering based on height and state
 class ScheduleEventTileHelper {
+  static const double eventBlockOpacity = 1.0;
+  static const double removedEventBlockOpacity = 0.30;
+
+  static Color _withScaledAlpha(Color color, double opacity) {
+    final baseAlpha = color.a;
+    return color.withValues(alpha: baseAlpha * opacity);
+  }
+
+  static Color _solidColor(Color color) {
+    return color.withValues(alpha: 1.0);
+  }
+
   /// Check if event should be displayed as open-ended
   static bool shouldDisplayAsOpenEnd(Event event) {
     // Removed events or old events with new time should be displayed as open-end (single slot)
@@ -134,13 +146,17 @@ class ScheduleEventTileHelper {
     Widget colorWidget;
 
     if (colors.length == 1) {
-      colorWidget = Container(color: colors[0].withOpacity(opacity));
+      colorWidget = Container(color: _withScaledAlpha(colors[0], opacity));
     } else {
       // Render two selected colors as a simple 50/50 split.
       colorWidget = Row(
         children: [
-          Expanded(child: Container(color: colors[0].withOpacity(opacity))),
-          Expanded(child: Container(color: colors[1].withOpacity(opacity))),
+          Expanded(
+            child: Container(color: _withScaledAlpha(colors[0], opacity)),
+          ),
+          Expanded(
+            child: Container(color: _withScaledAlpha(colors[1], opacity)),
+          ),
         ],
       );
     }
@@ -155,7 +171,7 @@ class ScheduleEventTileHelper {
           Expanded(
             flex: 10,
             child: Container(
-              color: Colors.black.withOpacity(0.3),
+              color: Colors.black.withValues(alpha: 0.3),
               child: Image.asset(
                 'assets/images/handwirtenote.png',
                 fit: BoxFit.fill, // Stretch to fill 100% width and 100% height
@@ -199,6 +215,7 @@ class ScheduleEventTileHelper {
     final colors = _getEventColors(context, event, getEventTypeColor);
     final primaryColor =
         colors.first; // Use first color for borders and accents
+    final solidPrimaryColor = _solidColor(primaryColor);
 
     final tileContent = Opacity(
       opacity: isBeingDragged ? 0.3 : 1.0,
@@ -211,7 +228,7 @@ class ScheduleEventTileHelper {
               ? Border.all(color: Colors.white, width: 2)
               : event.isRemoved
               ? Border.all(
-                  color: primaryColor.withOpacity(0.6),
+                  color: solidPrimaryColor.withValues(alpha: 0.6),
                   width: 1,
                   style: BorderStyle.solid,
                 )
@@ -224,7 +241,7 @@ class ScheduleEventTileHelper {
             Positioned.fill(
               child: _buildColorBackground(
                 colors,
-                event.isRemoved ? 0.3 : 0.75,
+                event.isRemoved ? removedEventBlockOpacity : eventBlockOpacity,
                 hasHandwriting: hasHandwriting,
               ),
             ),
@@ -244,7 +261,9 @@ class ScheduleEventTileHelper {
                   // Dotted line overlay for removed events
                   if (event.isRemoved && dottedBorderPainter != null)
                     Positioned.fill(
-                      child: dottedBorderPainter(primaryColor.withOpacity(0.8)),
+                      child: dottedBorderPainter(
+                        solidPrimaryColor.withValues(alpha: 0.8),
+                      ),
                     ),
                   // Content with height-adaptive rendering
                   buildEventTileContent(
@@ -315,6 +334,7 @@ class ScheduleEventTileHelper {
   }) {
     final colors = _getEventColors(context, event, getEventTypeColor);
     final primaryColor = colors.first;
+    final solidPrimaryColor = _solidColor(primaryColor);
 
     return SizedBox(
       width: width,
@@ -324,7 +344,7 @@ class ScheduleEventTileHelper {
           borderRadius: BorderRadius.circular(2),
           border: event.isRemoved
               ? Border.all(
-                  color: primaryColor.withOpacity(0.6),
+                  color: solidPrimaryColor.withValues(alpha: 0.6),
                   width: 1,
                   style: BorderStyle.solid,
                 )
@@ -336,7 +356,7 @@ class ScheduleEventTileHelper {
             Positioned.fill(
               child: _buildColorBackground(
                 colors,
-                event.isRemoved ? 0.3 : 0.75,
+                event.isRemoved ? removedEventBlockOpacity : eventBlockOpacity,
                 hasHandwriting: hasHandwriting,
               ),
             ),

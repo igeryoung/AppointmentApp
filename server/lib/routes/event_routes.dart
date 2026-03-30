@@ -183,6 +183,10 @@ class EventRoutes {
       return 'unauthorized';
     }
 
+    if (deviceRole == 'write') {
+      return null;
+    }
+
     final ownsBook = book['device_id']?.toString() == deviceId;
     if (ownsBook) {
       return null;

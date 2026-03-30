@@ -1,8 +1,9 @@
+// ignore_for_file: library_annotations
+
 @Tags(['device', 'unit'])
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/repositories/device_repository_impl.dart';
 import 'package:schedule_note_app/services/database/prd_database_service.dart';
-import 'package:sqflite/sqflite.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 
 import '../../../support/test_db_path.dart';

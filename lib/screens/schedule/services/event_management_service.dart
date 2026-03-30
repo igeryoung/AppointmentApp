@@ -18,6 +18,16 @@ import 'schedule_date_service.dart';
 /// and event-related UI dialogs. Handles creation, editing, deletion,
 /// type changes, and drag-and-drop time adjustments.
 class EventManagementService {
+  static const Map<EventType, Color> scheduleEventHighlightColors = {
+    EventType.consultation: Color(0x662196F3), // Blue
+    EventType.surgery: Color(0x664CAF50), // Green
+    EventType.followUp: Color(0x66FF9800), // Orange
+    EventType.emergency: Color(0x6600BCD4), // Cyan
+    EventType.checkUp: Color(0x66E91E63), // Pink
+    EventType.treatment: Color(0x669C27B0), // Purple
+    EventType.other: Color(0x662196F3), // Blue
+  };
+
   /// Database service for event operations
   final IDatabaseService _dbService;
 
@@ -783,37 +793,8 @@ class EventManagementService {
 
   /// Get color for event type
   Color getEventTypeColor(EventType eventType) {
-    // Color coding based on event type enum (type-safe)
-    final Color baseColor;
-
-    switch (eventType) {
-      case EventType.consultation:
-        baseColor = Colors.blue;
-        break;
-      case EventType.surgery:
-        baseColor = Colors.red;
-        break;
-      case EventType.followUp:
-        baseColor = Colors.green;
-        break;
-      case EventType.emergency:
-        baseColor = Colors.orange;
-        break;
-      case EventType.checkUp:
-        baseColor = Colors.purple;
-        break;
-      case EventType.treatment:
-        baseColor = Colors.cyan;
-        break;
-      case EventType.other:
-        // Default color for unknown types
-        baseColor = Colors.grey;
-        break;
-    }
-
-    // Reduce saturation to 60%
-    final hslColor = HSLColor.fromColor(baseColor);
-    return hslColor.withSaturation(0.60).toColor();
+    return scheduleEventHighlightColors[eventType] ??
+        scheduleEventHighlightColors[EventType.other]!;
   }
 
   /// Get colors for multiple event types

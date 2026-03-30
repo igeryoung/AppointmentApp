@@ -96,6 +96,19 @@ class ChargeItemRoutes {
   }
 
   Future<Set<String>> _accessibleBookUuids(String deviceId) async {
+    final canWrite = await _canDeviceWrite(deviceId);
+    if (canWrite) {
+      final allRows = await db.client
+          .from('books')
+          .select('book_uuid')
+          .eq('is_deleted', false);
+
+      return _rows(allRows)
+          .map((row) => row['book_uuid']?.toString() ?? '')
+          .where((uuid) => uuid.isNotEmpty)
+          .toSet();
+    }
+
     final ownedRows = await db.client
         .from('books')
         .select('book_uuid')
