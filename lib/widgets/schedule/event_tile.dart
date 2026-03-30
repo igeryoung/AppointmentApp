@@ -11,6 +11,8 @@ import '../../utils/schedule/schedule_layout_utils.dart';
 class ScheduleEventTileHelper {
   static const double eventBlockOpacity = 1.0;
   static const double removedEventBlockOpacity = 0.30;
+  static const Color eventBlockTextColor = Color(0xFF3A3A3A);
+  static const Color removedEventBlockTextColor = Color(0xB3424242);
 
   static Color _withScaledAlpha(Color color, double opacity) {
     final baseAlpha = color.a;
@@ -431,10 +433,10 @@ class ScheduleEventTileHelper {
           event: event,
           fontSize: fontSize,
           slotHeight: slotHeight,
-          color: event.isRemoved ? Colors.white70 : Colors.white,
+          color: event.isRemoved ? removedEventBlockTextColor : eventBlockTextColor,
           height: 1.2,
           decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-          decorationColor: Colors.white70,
+          decorationColor: removedEventBlockTextColor,
           fontWeight: FontWeight.bold,
           overflow: TextOverflow.ellipsis,
           maxLines: 1,
@@ -472,10 +474,10 @@ class ScheduleEventTileHelper {
         event: event,
         fontSize: fontSize,
         slotHeight: slotHeight,
-        color: event.isRemoved ? Colors.white70 : Colors.white,
+        color: event.isRemoved ? removedEventBlockTextColor : eventBlockTextColor,
         height: 1.2,
         decoration: event.isRemoved ? TextDecoration.lineThrough : null,
-        decorationColor: Colors.white70,
+        decorationColor: removedEventBlockTextColor,
         fontWeight: FontWeight.bold,
         overflow: TextOverflow.ellipsis,
         maxLines: 1,
