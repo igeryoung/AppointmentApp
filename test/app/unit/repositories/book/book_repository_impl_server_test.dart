@@ -12,8 +12,10 @@ class _FakeBookServerApiClient extends ApiClient {
   _FakeBookServerApiClient() : super(baseUrl: 'http://fake.local');
 
   int listCalls = 0;
+  int relatedListCalls = 0;
   int pullCalls = 0;
   int infoCalls = 0;
+  int removeAccessCalls = 0;
 
   String? lastListDeviceId;
   String? lastListDeviceToken;
@@ -30,6 +32,7 @@ class _FakeBookServerApiClient extends ApiClient {
   String? lastInfoBookPassword;
 
   List<Map<String, dynamic>> listResponse = const [];
+  List<Map<String, dynamic>> relatedListResponse = const [];
   Map<String, dynamic> pullResponse = {
     'book': {
       'book_uuid': 'server-book-default',
@@ -48,6 +51,7 @@ class _FakeBookServerApiClient extends ApiClient {
   };
 
   Object? listError;
+  Object? relatedListError;
   Object? pullError;
   Object? infoError;
 
@@ -63,6 +67,20 @@ class _FakeBookServerApiClient extends ApiClient {
     lastListSearchQuery = searchQuery;
     if (listError != null) throw listError!;
     return listResponse;
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> listRelatedServerBooks({
+    required String deviceId,
+    required String deviceToken,
+    String? searchQuery,
+  }) async {
+    relatedListCalls += 1;
+    lastListDeviceId = deviceId;
+    lastListDeviceToken = deviceToken;
+    lastListSearchQuery = searchQuery;
+    if (relatedListError != null) throw relatedListError!;
+    return relatedListResponse;
   }
 
   @override
@@ -96,6 +114,18 @@ class _FakeBookServerApiClient extends ApiClient {
     if (infoError != null) throw infoError!;
     return infoResponse;
   }
+
+  @override
+  Future<void> removeOwnBookAccess({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    removeAccessCalls += 1;
+    lastPullBookUuid = bookUuid;
+    lastPullDeviceId = deviceId;
+    lastPullDeviceToken = deviceToken;
+  }
 }
 
 void main() {
@@ -126,6 +156,8 @@ void main() {
 
   Future<void> saveCredentials() async {
     await dbService.saveDeviceCredentials(
+      accountId: 'account-001',
+      username: 'alice',
       deviceId: 'device-001',
       deviceToken: 'token-001',
       deviceName: 'Test Device',
@@ -274,6 +306,7 @@ void main() {
       expect(inserted, isNotNull);
       expect(inserted!.name, 'Pulled Book 2');
       expect(inserted.archivedAt, isNull);
+      expect(fakeApiClient!.removeAccessCalls, 0);
     },
   );
 
@@ -392,6 +425,60 @@ void main() {
       expect(noteRows, isEmpty);
       expect(drawingRows, isEmpty);
       expect(chargeRows, isEmpty);
+    },
+  );
+
+  test(
+    'BOOK-UNIT-015: getAll() restores accessible server book metadata when local cache is empty',
+    () async {
+      await saveCredentials();
+      fakeApiClient!.relatedListResponse = [
+        {
+          'bookUuid': 'server-book-restored',
+          'name': 'Restored Server Book',
+          'createdAt': '2026-02-10T08:00:00Z',
+          'archivedAt': null,
+          'version': 7,
+        },
+        {
+          'bookUuid': 'server-book-other',
+          'name': 'Other Accessible Book',
+          'createdAt': '2026-02-11T08:00:00Z',
+          'archivedAt': null,
+          'version': 2,
+        },
+      ];
+      final repository = buildRepository();
+
+      final books = await repository.getAll();
+
+      expect(fakeApiClient!.relatedListCalls, 1);
+      expect(fakeApiClient!.lastListDeviceId, 'device-001');
+      expect(books, hasLength(2));
+      final local = await repository.getByUuid('server-book-restored');
+      expect(local, isNotNull);
+      final other = await repository.getByUuid('server-book-other');
+      expect(other, isNotNull);
+    },
+  );
+
+  test(
+    'BOOK-UNIT-016: delete() removes own server-side relation before local delete',
+    () async {
+      await saveCredentials();
+      await db.insert('books', {
+        'book_uuid': 'server-book-delete',
+        'name': 'Delete Me',
+        'created_at': DateTime.utc(2026, 1, 1).millisecondsSinceEpoch ~/ 1000,
+        'archived_at': null,
+      });
+      final repository = buildRepository();
+
+      await repository.delete('server-book-delete');
+
+      expect(fakeApiClient!.removeAccessCalls, 1);
+      final local = await repository.getByUuid('server-book-delete');
+      expect(local, isNull);
     },
   );
 }

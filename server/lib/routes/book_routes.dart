@@ -23,19 +23,18 @@ import '../services/note_service.dart';
 class BookRoutes {
   final DatabaseConnection db;
   late final BookPullService _pullService;
-  late final NoteService _noteService;
   late final BookAccessService _bookAccessService;
   late final AccountAuthService _accountAuth;
 
   BookRoutes(this.db) {
     _pullService = BookPullService(db);
-    _noteService = NoteService(db);
     _bookAccessService = BookAccessService(db);
     _accountAuth = AccountAuthService(db);
   }
 
   Router get router {
     final router = Router();
+    router.get('/accessed', _listAccessedBooks);
     router.post('/', _createBook);
     router.get('/', _listBooks);
     router.get('/<bookUuid>', _getBook);
@@ -43,6 +42,7 @@ class BookRoutes {
     router.post('/<bookUuid>/archive', _archiveBook);
     router.delete('/<bookUuid>', _deleteBook);
     router.post('/<bookUuid>/access', _grantBookAccess);
+    router.delete('/<bookUuid>/access', _removeOwnBookAccess);
     router.get('/<bookUuid>/bundle', _getBookBundle);
     return router;
   }
@@ -113,6 +113,14 @@ class BookRoutes {
       if (row is Map) return Map<String, dynamic>.from(row);
     }
     return null;
+  }
+
+  List<Map<String, dynamic>> _rows(dynamic data) {
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
   }
 
   bool _toBool(dynamic value, {bool defaultValue = false}) {
@@ -402,6 +410,57 @@ class BookRoutes {
     }
   }
 
+  Future<Response> _listAccessedBooks(Request request) async {
+    try {
+      final auth = await _auth(request);
+      if (auth == null) {
+        return _json(401, {
+          'success': false,
+          'message': 'Invalid device credentials',
+        });
+      }
+
+      final accountId = auth['accountId']!;
+      final search = request.url.queryParameters['search']?.trim();
+      final accessRows = await db.client
+          .from('account_book_access')
+          .select('book_uuid')
+          .eq('account_id', accountId);
+      final bookUuids = _rows(accessRows)
+          .map((row) => row['book_uuid']?.toString() ?? '')
+          .where((uuid) => uuid.isNotEmpty)
+          .toSet()
+          .toList();
+      if (bookUuids.isEmpty) {
+        return _json(200, {'success': true, 'books': const [], 'count': 0});
+      }
+
+      dynamic query = db.client
+          .from('books')
+          .select(
+            'book_uuid, name, created_at, updated_at, archived_at, version, is_deleted, device_id',
+          )
+          .inFilter('book_uuid', bookUuids)
+          .eq('is_deleted', false);
+      if (search != null && search.isNotEmpty) {
+        query = query.ilike('name', '%$search%');
+      }
+      final rows = await query.order('created_at', ascending: false);
+      final books = _rows(rows).map(_bookResponse).toList();
+
+      return _json(200, {
+        'success': true,
+        'books': books,
+        'count': books.length,
+      });
+    } catch (e) {
+      return _json(500, {
+        'success': false,
+        'message': 'Failed to list account books: $e',
+      });
+    }
+  }
+
   Future<Response> _getBook(Request request, String bookUuid) async {
     try {
       final auth = await _auth(request);
@@ -420,16 +479,7 @@ class BookRoutes {
         return passwordValidation;
       }
 
-      final canAccess = await _noteService.verifyBookOwnership(
-        auth['deviceId']!,
-        bookUuid,
-      );
-      if (!canAccess) {
-        await _ensureMembership(
-          deviceId: auth['deviceId']!,
-          bookUuid: bookUuid,
-        );
-      }
+      await _ensureMembership(deviceId: auth['deviceId']!, bookUuid: bookUuid);
 
       final book = await _pullService.getBookMetadata(
         bookUuid,
@@ -670,16 +720,7 @@ class BookRoutes {
         return passwordValidation;
       }
 
-      final canAccess = await _noteService.verifyBookOwnership(
-        auth['deviceId']!,
-        bookUuid,
-      );
-      if (!canAccess) {
-        await _ensureMembership(
-          deviceId: auth['deviceId']!,
-          bookUuid: bookUuid,
-        );
-      }
+      await _ensureMembership(deviceId: auth['deviceId']!, bookUuid: bookUuid);
 
       final bundle = await _pullService.getCompleteBookData(
         bookUuid,
@@ -851,6 +892,38 @@ class BookRoutes {
       return _json(500, {
         'success': false,
         'message': 'Failed to grant book access: $e',
+      });
+    }
+  }
+
+  Future<Response> _removeOwnBookAccess(
+    Request request,
+    String bookUuid,
+  ) async {
+    try {
+      final auth = await _auth(request);
+      if (auth == null) {
+        return _json(401, {
+          'success': false,
+          'message': 'Invalid device credentials',
+        });
+      }
+
+      await db.client
+          .from('account_book_access')
+          .delete()
+          .eq('account_id', auth['accountId']!)
+          .eq('book_uuid', bookUuid);
+
+      return _json(200, {
+        'success': true,
+        'bookUuid': bookUuid,
+        'membershipRemoved': true,
+      });
+    } catch (e) {
+      return _json(500, {
+        'success': false,
+        'message': 'Failed to remove book access: $e',
       });
     }
   }

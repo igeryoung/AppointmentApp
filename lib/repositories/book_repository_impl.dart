@@ -17,12 +17,11 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
   final PRDDatabaseService? _dbService;
 
   BookRepositoryImpl(
-    Future<Database> Function() getDatabaseFn, {
+    super.getDatabaseFn, {
     ApiClient? apiClient,
     PRDDatabaseService? dbService,
   }) : _apiClient = apiClient,
-       _dbService = dbService,
-       super(getDatabaseFn);
+       _dbService = dbService;
 
   @override
   String get tableName => 'books';
@@ -35,10 +34,20 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
 
   @override
   Future<List<Book>> getAll({bool includeArchived = false}) async {
-    if (includeArchived) {
-      return queryAll(orderBy: 'created_at DESC');
+    Future<List<Book>> loadLocal() {
+      if (includeArchived) {
+        return queryAll(orderBy: 'created_at DESC');
+      }
+      return query(where: 'archived_at IS NULL', orderBy: 'created_at DESC');
     }
-    return query(where: 'archived_at IS NULL', orderBy: 'created_at DESC');
+
+    final localBooks = await loadLocal();
+    if (localBooks.isNotEmpty || includeArchived) {
+      return localBooks;
+    }
+
+    await _hydrateAccessibleServerBookMetadata();
+    return loadLocal();
   }
 
   @override
@@ -64,6 +73,53 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
       );
     }
     return credentials;
+  }
+
+  Future<void> _hydrateAccessibleServerBookMetadata() async {
+    if (_apiClient == null || _dbService == null) return;
+
+    DeviceCredentials credentials;
+    try {
+      credentials = await _requireCredentials('restoring account books');
+    } catch (_) {
+      return;
+    }
+
+    List<Map<String, dynamic>> serverBooks;
+    try {
+      serverBooks = await _apiClient.listRelatedServerBooks(
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+    } catch (_) {
+      return;
+    }
+
+    if (serverBooks.isEmpty) return;
+
+    final db = await getDatabaseFn();
+    await db.transaction((txn) async {
+      for (final book in serverBooks) {
+        final bookUuid = (_pick(book, 'bookUuid', 'book_uuid') ?? '')
+            .toString();
+        final name = (book['name'] ?? '').toString().trim();
+        if (bookUuid.isEmpty || name.isEmpty) continue;
+        final createdAt = _pick(book, 'createdAt', 'created_at');
+
+        await txn.insert('books', {
+          'book_uuid': bookUuid,
+          'name': name,
+          'created_at': createdAt == null
+              ? DateTime.now().toUtc().millisecondsSinceEpoch ~/ 1000
+              : _toSeconds(createdAt),
+          'archived_at': _toSecondsOrNull(
+            _pick(book, 'archivedAt', 'archived_at'),
+          ),
+          'version': _pick(book, 'version', 'version') ?? 1,
+          'is_dirty': 0,
+        }, conflictAlgorithm: ConflictAlgorithm.ignore);
+      }
+    });
   }
 
   dynamic _pick(Map<String, dynamic> map, String camel, String snake) {
@@ -153,7 +209,6 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
         'name': trimmedName,
         'created_at': now.millisecondsSinceEpoch ~/ 1000,
       });
-
       return Book(uuid: serverUuid, name: trimmedName, createdAt: now);
     } catch (e) {
       throw Exception('Failed to create book: Server connection required. $e');
@@ -206,6 +261,17 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
   Future<void> delete(String uuid) async {
     // Device-level delete: remove only local copy.
     // Server copy stays available for future import.
+
+    final credentials = _apiClient != null
+        ? await _requireCredentials('removing book access')
+        : null;
+    if (_apiClient != null && credentials != null) {
+      await _apiClient.removeOwnBookAccess(
+        bookUuid: uuid,
+        deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
+      );
+    }
 
     final db = await getDatabaseFn();
     final deletedRows = await db.delete(
@@ -337,8 +403,10 @@ class BookRepositoryImpl extends BaseRepository<Book, int>
 
       await db.transaction((txn) async {
         final bookMap = bookData['book'] as Map<String, dynamic>;
+        final resolvedBookUuid =
+            _pick(bookMap, 'bookUuid', 'book_uuid')?.toString() ?? bookUuid;
         await txn.insert('books', {
-          'book_uuid': _pick(bookMap, 'bookUuid', 'book_uuid'),
+          'book_uuid': resolvedBookUuid,
           'name': bookMap['name'],
           'created_at': _toSeconds(_pick(bookMap, 'createdAt', 'created_at')),
           'archived_at': null,

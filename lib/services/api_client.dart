@@ -1327,6 +1327,39 @@ class ApiClient {
     }
   }
 
+  /// List books explicitly linked to the current account via account_book_access.
+  Future<List<Map<String, dynamic>>> listRelatedServerBooks({
+    required String deviceId,
+    required String deviceToken,
+    String? searchQuery,
+  }) async {
+    final uri = searchQuery != null && searchQuery.isNotEmpty
+        ? Uri.parse('$baseUrl/api/books/accessed?search=$searchQuery')
+        : Uri.parse('$baseUrl/api/books/accessed');
+
+    final response = await _client
+        .get(
+          uri,
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      final json = jsonDecode(response.body) as Map<String, dynamic>;
+      return (json['books'] as List).cast<Map<String, dynamic>>();
+    }
+
+    throw ApiException(
+      'List related server books failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
   /// Fetch complete book payload (book + events + notes + drawings)
   /// from canonical endpoint.
   Future<Map<String, dynamic>> pullBook({
@@ -1492,6 +1525,31 @@ class ApiClient {
     }
 
     return jsonDecode(response.body) as Map<String, dynamic>;
+  }
+
+  Future<void> removeOwnBookAccess({
+    required String bookUuid,
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .delete(
+          Uri.parse('$baseUrl/api/books/$bookUuid/access'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode != 200) {
+      throw ApiException(
+        'Remove book access failed: ${response.statusCode}',
+        statusCode: response.statusCode,
+        responseBody: response.body,
+      );
+    }
   }
 
   Future<Map<String, dynamic>> archiveBook({

@@ -56,7 +56,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 29,
+      version: 31,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -155,6 +155,11 @@ class PRDDatabaseService
           );
           await db.execute('ALTER TABLE device_info ADD COLUMN username TEXT');
           await db.delete('device_info');
+        }
+        // v30/v31: remove local account_book_cache; server account_book_access
+        // is the source of truth for relogin restore.
+        if (oldVersion < 31) {
+          await db.execute('DROP TABLE IF EXISTS account_book_cache');
         }
       },
     );
