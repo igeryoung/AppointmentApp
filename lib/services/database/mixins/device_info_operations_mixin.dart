@@ -2,11 +2,15 @@ import 'package:sqflite/sqflite.dart';
 
 /// Device credentials for API authentication
 class DeviceCredentials {
+  final String? accountId;
+  final String? username;
   final String deviceId;
   final String deviceToken;
   final String deviceRole;
 
   const DeviceCredentials({
+    this.accountId,
+    this.username,
     required this.deviceId,
     required this.deviceToken,
     this.deviceRole = 'write',
@@ -37,6 +41,8 @@ mixin DeviceInfoOperationsMixin {
 
     final row = maps.first;
     return DeviceCredentials(
+      accountId: row['account_id'] as String?,
+      username: row['username'] as String?,
       deviceId: row['device_id'] as String,
       deviceToken: row['device_token'] as String,
       deviceRole: (row['device_role'] as String?) ?? 'write',
@@ -45,6 +51,8 @@ mixin DeviceInfoOperationsMixin {
 
   /// Save device credentials after registration
   Future<void> saveDeviceCredentials({
+    String? accountId,
+    String? username,
     required String deviceId,
     required String deviceToken,
     required String deviceName,
@@ -55,6 +63,8 @@ mixin DeviceInfoOperationsMixin {
     final db = await database;
     await db.insert('device_info', {
       'id': 1,
+      'account_id': accountId,
+      'username': username,
       'device_id': deviceId,
       'device_token': deviceToken,
       'device_name': deviceName,

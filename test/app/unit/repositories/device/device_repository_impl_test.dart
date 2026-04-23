@@ -56,6 +56,8 @@ void main() {
 
       // Act
       await repository.saveCredentials(
+        accountId: 'account-001',
+        username: 'alice',
         deviceId: deviceId,
         deviceToken: deviceToken,
         deviceName: 'Primary Device',
@@ -67,6 +69,8 @@ void main() {
       expect(credentials, isNotNull);
       expect(credentials!.deviceId, deviceId);
       expect(credentials.deviceToken, deviceToken);
+      expect(credentials.accountId, 'account-001');
+      expect(credentials.username, 'alice');
     },
   );
 

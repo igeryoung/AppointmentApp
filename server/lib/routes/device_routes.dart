@@ -1,27 +1,19 @@
 import 'dart:convert';
-import 'dart:io';
 
-import 'package:crypto/crypto.dart';
 import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
-import 'package:uuid/uuid.dart';
 
 import '../database/connection.dart';
 import '../models/device.dart';
+import '../services/account_auth_service.dart';
 
 /// Router for device management endpoints.
 class DeviceRoutes {
   final DatabaseConnection db;
-  final _uuid = const Uuid();
+  late final AccountAuthService _accountAuth;
 
-  DeviceRoutes(this.db);
-
-  String get _defaultDeviceRole {
-    final configuredRole = (Platform.environment['DEFAULT_DEVICE_ROLE'] ?? '')
-        .trim()
-        .toLowerCase();
-    if (configuredRole == 'write') return 'write';
-    return 'read';
+  DeviceRoutes(this.db) {
+    _accountAuth = AccountAuthService(db);
   }
 
   Router get router {
@@ -43,58 +35,16 @@ class DeviceRoutes {
   }
 
   Future<Response> _registerDevice(Request request) async {
-    try {
-      final body = await request.readAsString();
-      final json = jsonDecode(body) as Map<String, dynamic>;
-      final registerRequest = DeviceRegisterRequest.fromJson(json);
-
-      final expectedPassword =
-          Platform.environment['REGISTRATION_PASSWORD'] ?? 'password';
-      if (registerRequest.password != expectedPassword) {
-        return Response(
-          401,
-          body: jsonEncode({
-            'success': false,
-            'message': 'Invalid registration password',
-          }),
-          headers: {'Content-Type': 'application/json'},
-        );
-      }
-
-      final deviceId = _uuid.v4();
-      final deviceToken = _generateToken(deviceId);
-
-      await db.client.from('devices').insert({
-        'id': deviceId,
-        'device_name': registerRequest.deviceName,
-        'device_token': deviceToken,
-        'device_role': _defaultDeviceRole,
-        'platform': registerRequest.platform,
-        'registered_at': DateTime.now().toUtc().toIso8601String(),
-        'is_active': true,
-      });
-
-      final response = DeviceRegisterResponse(
-        deviceId: deviceId,
-        deviceToken: deviceToken,
-        message: 'Device registered successfully',
-      );
-
-      final responseJson = response.toJson()
-        ..['deviceRole'] = _defaultDeviceRole;
-      return Response.ok(
-        jsonEncode(responseJson),
-        headers: {'Content-Type': 'application/json'},
-      );
-    } catch (e) {
-      return Response.internalServerError(
-        body: jsonEncode({
-          'success': false,
-          'message': 'Failed to register device: $e',
-        }),
-        headers: {'Content-Type': 'application/json'},
-      );
-    }
+    final _ = request;
+    return Response(
+      410,
+      body: jsonEncode({
+        'success': false,
+        'message': 'Device-only registration has moved to account registration',
+        'error': 'ACCOUNT_REGISTRATION_REQUIRED',
+      }),
+      headers: {'Content-Type': 'application/json'},
+    );
   }
 
   Future<Response> _getDevice(Request request, String deviceId) async {
@@ -106,7 +56,8 @@ class DeviceRoutes {
           .limit(1);
       final row = _first(rows);
 
-      if (row == null) {
+      final accountId = row?['account_id']?.toString() ?? '';
+      if (row == null || accountId.isEmpty) {
         return Response.notFound(
           jsonEncode({'success': false, 'message': 'Device not found'}),
           headers: {'Content-Type': 'application/json'},
@@ -114,7 +65,7 @@ class DeviceRoutes {
       }
 
       final device = Device.fromDatabase(row);
-      final deviceRole = (row['device_role'] ?? _defaultDeviceRole).toString();
+      final deviceRole = await _accountAuth.getAccountRoleForDevice(deviceId);
       final payload = device.toJson()..['deviceRole'] = deviceRole;
       return Response.ok(
         jsonEncode(payload),
@@ -191,18 +142,27 @@ class DeviceRoutes {
         );
       }
 
-      if (!await _verifyDeviceToken(deviceId, deviceToken)) {
+      final session = await _accountAuth.authenticateDevice(
+        deviceId,
+        deviceToken,
+      );
+      if (session == null) {
         return Response.forbidden(
           jsonEncode({'success': false, 'message': 'Invalid device token'}),
           headers: {'Content-Type': 'application/json'},
         );
       }
 
-      await db.client
-          .from('book_device_access')
-          .delete()
-          .eq('device_id', deviceId);
       await db.client.from('devices').delete().eq('id', deviceId);
+      final remainingDevices = await db.client
+          .from('devices')
+          .select('id')
+          .eq('account_id', session.accountId)
+          .limit(1);
+      if (_first(remainingDevices) == null &&
+          session.username.startsWith('fixture-')) {
+        await db.client.from('accounts').delete().eq('id', session.accountId);
+      }
 
       return Response.ok(
         jsonEncode({'success': true, 'message': 'Device deleted successfully'}),
@@ -219,25 +179,9 @@ class DeviceRoutes {
     }
   }
 
-  String _generateToken(String deviceId) {
-    final timestamp = DateTime.now().millisecondsSinceEpoch;
-    final random = _uuid.v4();
-    final content = '$deviceId:$timestamp:$random';
-    final bytes = utf8.encode(content);
-    final digest = sha256.convert(bytes);
-    return digest.toString();
-  }
-
   Future<bool> _verifyDeviceToken(String deviceId, String token) async {
     try {
-      final rows = await db.client
-          .from('devices')
-          .select('device_token, is_active')
-          .eq('id', deviceId)
-          .limit(1);
-      final row = _first(rows);
-      if (row == null) return false;
-      return row['is_active'] == true && row['device_token'] == token;
+      return await _accountAuth.authenticateDevice(deviceId, token) != null;
     } catch (e) {
       return false;
     }

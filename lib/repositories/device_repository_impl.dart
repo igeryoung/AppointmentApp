@@ -17,6 +17,8 @@ class DeviceRepositoryImpl implements IDeviceRepository {
 
     final map = maps.first;
     return DeviceCredentials(
+      accountId: map['account_id'] as String?,
+      username: map['username'] as String?,
       deviceId: map['device_id'] as String,
       deviceToken: map['device_token'] as String,
       deviceRole: (map['device_role'] as String?) ?? 'write',
@@ -25,6 +27,8 @@ class DeviceRepositoryImpl implements IDeviceRepository {
 
   @override
   Future<void> saveCredentials({
+    String? accountId,
+    String? username,
     required String deviceId,
     required String deviceToken,
     required String deviceName,
@@ -34,6 +38,8 @@ class DeviceRepositoryImpl implements IDeviceRepository {
     final db = await _getDatabaseFn();
     await db.insert('device_info', {
       'id': 1,
+      'account_id': accountId,
+      'username': username,
       'device_id': deviceId,
       'device_token': deviceToken,
       'device_name': deviceName,

@@ -56,7 +56,7 @@ class PRDDatabaseService
 
     return await openDatabase(
       path,
-      version: 28,
+      version: 29,
       onCreate: _createTables,
       onConfigure: (db) => db.execute('PRAGMA foreign_keys = ON'),
       onUpgrade: (db, oldVersion, newVersion) async {
@@ -146,6 +146,15 @@ class PRDDatabaseService
           throw Exception(
             'Database reset for v28 migration. Please restart the app.',
           );
+        }
+        // v29: Account-based device recovery. Existing device-only credentials
+        // are intentionally not migrated; users should register or log in.
+        if (oldVersion < 29) {
+          await db.execute(
+            'ALTER TABLE device_info ADD COLUMN account_id TEXT',
+          );
+          await db.execute('ALTER TABLE device_info ADD COLUMN username TEXT');
+          await db.delete('device_info');
         }
       },
     );
@@ -272,6 +281,8 @@ class PRDDatabaseService
     await db.execute('''
       CREATE TABLE device_info (
         id INTEGER PRIMARY KEY CHECK (id = 1),
+        account_id TEXT,
+        username TEXT,
         device_id TEXT UNIQUE NOT NULL,
         device_token TEXT NOT NULL,
         device_name TEXT NOT NULL,

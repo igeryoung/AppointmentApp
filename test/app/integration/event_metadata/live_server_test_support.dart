@@ -280,9 +280,10 @@ Future<LiveDeviceCredentials> registerTemporaryDevice({
   String deviceNamePrefix = 'IT second device',
 }) async {
   final suffix = DateTime.now().millisecondsSinceEpoch.toString();
-  final registration = await apiClient.registerDevice(
+  final registration = await apiClient.registerFixtureDevice(
     deviceName: '$deviceNamePrefix $suffix',
     password: config.registrationPassword,
+    deviceRole: liveDeviceRoleRead,
     platform: 'ios',
   );
 

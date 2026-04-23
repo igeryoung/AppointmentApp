@@ -17,16 +17,21 @@ class ServerSetupScreen extends StatefulWidget {
 class _ServerSetupScreenState extends State<ServerSetupScreen> {
   final _formKey = GlobalKey<FormState>();
   final _urlController = TextEditingController();
-  final _passwordController = TextEditingController();
+  final _usernameController = TextEditingController();
+  final _accountPasswordController = TextEditingController();
+  final _registrationPasswordController = TextEditingController();
 
   bool _isLoading = false;
   String? _errorMessage;
   _SetupStep _currentStep = _SetupStep.url;
+  _AuthMode _authMode = _AuthMode.login;
 
   @override
   void dispose() {
     _urlController.dispose();
-    _passwordController.dispose();
+    _usernameController.dispose();
+    _accountPasswordController.dispose();
+    _registrationPasswordController.dispose();
     super.dispose();
   }
 
@@ -57,7 +62,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   Text(
                     _currentStep == _SetupStep.url
                         ? l10n.serverSetupTitle
-                        : l10n.deviceRegistrationTitle,
+                        : 'Account Login',
                     style: Theme.of(context).textTheme.headlineSmall,
                     textAlign: TextAlign.center,
                   ),
@@ -67,7 +72,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                   Text(
                     _currentStep == _SetupStep.url
                         ? l10n.serverSetupSubtitle
-                        : l10n.deviceRegistrationSubtitle,
+                        : 'Log in after reinstall, or register a new account with the server registration password.',
                     style: Theme.of(
                       context,
                     ).textTheme.bodyMedium?.copyWith(color: Colors.grey[600]),
@@ -103,25 +108,91 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                       textInputAction: TextInputAction.next,
                     ),
                   ] else ...[
-                    // Registration step
+                    SegmentedButton<_AuthMode>(
+                      segments: const [
+                        ButtonSegment(
+                          value: _AuthMode.login,
+                          icon: Icon(Icons.login),
+                          label: Text('Login'),
+                        ),
+                        ButtonSegment(
+                          value: _AuthMode.register,
+                          icon: Icon(Icons.person_add),
+                          label: Text('Register'),
+                        ),
+                      ],
+                      selected: {_authMode},
+                      onSelectionChanged: _isLoading
+                          ? null
+                          : (selection) {
+                              setState(() {
+                                _authMode = selection.first;
+                                _errorMessage = null;
+                              });
+                            },
+                    ),
+                    const SizedBox(height: 16),
                     TextFormField(
-                      controller: _passwordController,
-                      decoration: InputDecoration(
-                        labelText: l10n.registrationPasswordLabel,
-                        border: const OutlineInputBorder(),
-                        prefixIcon: const Icon(Icons.lock),
+                      controller: _usernameController,
+                      decoration: const InputDecoration(
+                        labelText: 'Username',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.person),
                       ),
                       validator: (value) {
-                        if (value == null || value.trim().isEmpty) {
-                          return l10n.passwordRequired;
+                        final text = value?.trim() ?? '';
+                        if (text.isEmpty) return 'Username is required';
+                        return null;
+                      },
+                      enabled: !_isLoading,
+                      textInputAction: TextInputAction.next,
+                    ),
+                    const SizedBox(height: 16),
+                    TextFormField(
+                      controller: _accountPasswordController,
+                      decoration: const InputDecoration(
+                        labelText: 'Password',
+                        border: OutlineInputBorder(),
+                        prefixIcon: Icon(Icons.lock),
+                      ),
+                      validator: (value) {
+                        final text = value ?? '';
+                        if (text.isEmpty) return 'Password is required';
+                        if (text.length < 8) {
+                          return 'Password must be at least 8 characters';
                         }
                         return null;
                       },
                       enabled: !_isLoading,
                       obscureText: true,
-                      textInputAction: TextInputAction.done,
-                      onFieldSubmitted: (_) => _handleSubmit(),
+                      textInputAction: _authMode == _AuthMode.login
+                          ? TextInputAction.done
+                          : TextInputAction.next,
+                      onFieldSubmitted: (_) {
+                        if (_authMode == _AuthMode.login) _handleSubmit();
+                      },
                     ),
+                    if (_authMode == _AuthMode.register) ...[
+                      const SizedBox(height: 16),
+                      TextFormField(
+                        controller: _registrationPasswordController,
+                        decoration: InputDecoration(
+                          labelText: l10n.registrationPasswordLabel,
+                          border: const OutlineInputBorder(),
+                          prefixIcon: const Icon(Icons.admin_panel_settings),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return l10n.passwordRequired;
+                          }
+                          return null;
+                        },
+                        enabled: !_isLoading,
+                        obscureText: true,
+                        textInputAction: TextInputAction.done,
+                        onFieldSubmitted: (_) => _handleSubmit(),
+                      ),
+                    ],
                   ],
 
                   // Error message
@@ -165,13 +236,15 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
                           : Text(
                               _currentStep == _SetupStep.url
                                   ? l10n.nextButton
-                                  : l10n.registerButton,
+                                  : (_authMode == _AuthMode.login
+                                        ? 'Login'
+                                        : l10n.registerButton),
                             ),
                     ),
                   ),
 
                   // Back button for registration step
-                  if (_currentStep == _SetupStep.registration) ...[
+                  if (_currentStep == _SetupStep.account) ...[
                     const SizedBox(height: 12),
                     TextButton(
                       onPressed: _isLoading
@@ -206,7 +279,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       if (_currentStep == _SetupStep.url) {
         await _handleUrlSubmit();
       } else {
-        await _handleRegistration();
+        await _handleAccountAuth();
       }
     } catch (e) {
       setState(() {
@@ -231,7 +304,7 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       // Server is reachable, move to registration step
       if (!mounted) return;
       setState(() {
-        _currentStep = _SetupStep.registration;
+        _currentStep = _SetupStep.account;
         _isLoading = false;
       });
     } finally {
@@ -239,9 +312,11 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     }
   }
 
-  Future<void> _handleRegistration() async {
+  Future<void> _handleAccountAuth() async {
     final serverUrl = _urlController.text.trim();
-    final password = _passwordController.text.trim();
+    final username = _usernameController.text.trim();
+    final password = _accountPasswordController.text;
+    final registrationPassword = _registrationPasswordController.text.trim();
     final dbService = PRDDatabaseService();
 
     final platform = Theme.of(context).platform.name;
@@ -250,18 +325,31 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
     // Create API client and register device
     final apiClient = ApiClient(baseUrl: serverUrl);
     try {
-      final response = await apiClient.registerDevice(
-        deviceName: deviceName,
-        password: password,
-        platform: platform,
-      );
+      final response = _authMode == _AuthMode.login
+          ? await apiClient.loginAccount(
+              username: username,
+              password: password,
+              deviceName: deviceName,
+              platform: platform,
+            )
+          : await apiClient.registerAccount(
+              username: username,
+              password: password,
+              registrationPassword: registrationPassword,
+              deviceName: deviceName,
+              platform: platform,
+            );
 
       // Save device credentials WITH server URL
+      final accountId = response['accountId'] as String?;
+      final accountUsername = response['username'] as String? ?? username;
       final deviceId = response['deviceId'] as String;
       final deviceToken = response['deviceToken'] as String;
       final deviceRole =
           (response['deviceRole'] as String?)?.toLowerCase() ?? 'read';
       await dbService.saveDeviceCredentials(
+        accountId: accountId,
+        username: accountUsername,
         deviceId: deviceId,
         deviceToken: deviceToken,
         deviceName: deviceName,
@@ -280,7 +368,11 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
       );
     } on ApiException catch (e) {
       if (e.statusCode == 401) {
-        throw Exception('Invalid registration password');
+        throw Exception(
+          _authMode == _AuthMode.login
+              ? 'Invalid username or password'
+              : 'Invalid registration password',
+        );
       }
       rethrow;
     } finally {
@@ -289,4 +381,6 @@ class _ServerSetupScreenState extends State<ServerSetupScreen> {
   }
 }
 
-enum _SetupStep { url, registration }
+enum _SetupStep { url, account }
+
+enum _AuthMode { login, register }

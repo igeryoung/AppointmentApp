@@ -1551,6 +1551,98 @@ class ApiClient {
   // Device Registration API
   // ===================
 
+  Future<Map<String, dynamic>> registerAccount({
+    required String username,
+    required String password,
+    required String registrationPassword,
+    required String deviceName,
+    String? platform,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/accounts/register'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'username': username,
+            'password': password,
+            'registrationPassword': registrationPassword,
+            'deviceName': deviceName,
+            'platform': platform,
+          }),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      response.statusCode == 401
+          ? 'Invalid registration password'
+          : 'Account registration failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  Future<Map<String, dynamic>> loginAccount({
+    required String username,
+    required String password,
+    required String deviceName,
+    String? platform,
+  }) async {
+    final response = await _client
+        .post(
+          Uri.parse('$baseUrl/api/accounts/login'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'username': username,
+            'password': password,
+            'deviceName': deviceName,
+            'platform': platform,
+          }),
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      response.statusCode == 401
+          ? 'Invalid username or password'
+          : 'Account login failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
+  Future<Map<String, dynamic>> fetchCurrentAccount({
+    required String deviceId,
+    required String deviceToken,
+  }) async {
+    final response = await _client
+        .get(
+          Uri.parse('$baseUrl/api/accounts/me'),
+          headers: {
+            'Content-Type': 'application/json',
+            'X-Device-ID': deviceId,
+            'X-Device-Token': deviceToken,
+          },
+        )
+        .timeout(timeout);
+
+    if (response.statusCode == 200) {
+      return jsonDecode(response.body) as Map<String, dynamic>;
+    }
+
+    throw ApiException(
+      'Fetch account failed: ${response.statusCode}',
+      statusCode: response.statusCode,
+      responseBody: response.body,
+    );
+  }
+
   /// Fetch the current device role from server.
   Future<String?> fetchDeviceRole({required String deviceId}) async {
     try {

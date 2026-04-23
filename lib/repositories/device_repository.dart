@@ -7,6 +7,8 @@ abstract class IDeviceRepository {
 
   /// Save device credentials
   Future<void> saveCredentials({
+    String? accountId,
+    String? username,
     required String deviceId,
     required String deviceToken,
     required String deviceName,

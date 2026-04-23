@@ -14,12 +14,42 @@ CREATE TABLE IF NOT EXISTS public.book_device_access
 COMMENT ON TABLE public.book_device_access
     IS 'Tracks which devices have membership on which books.';
 
+CREATE TABLE IF NOT EXISTS public.account_book_access
+(
+    book_uuid uuid NOT NULL,
+    account_id uuid NOT NULL,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT account_book_access_pkey PRIMARY KEY (book_uuid, account_id)
+);
+
+COMMENT ON TABLE public.account_book_access
+    IS 'Tracks which accounts have membership on which books.';
+
+CREATE TABLE IF NOT EXISTS public.accounts
+(
+    id uuid NOT NULL DEFAULT uuid_generate_v4(),
+    username text COLLATE pg_catalog."default" NOT NULL,
+    password_hash text COLLATE pg_catalog."default" NOT NULL,
+    password_salt text COLLATE pg_catalog."default" NOT NULL,
+    password_iterations integer NOT NULL DEFAULT 120000,
+    account_role text COLLATE pg_catalog."default" NOT NULL DEFAULT 'read'::text,
+    is_active boolean NOT NULL DEFAULT true,
+    created_at timestamp with time zone NOT NULL DEFAULT now(),
+    CONSTRAINT accounts_pkey PRIMARY KEY (id),
+    CONSTRAINT accounts_username_key UNIQUE (username),
+    CONSTRAINT accounts_account_role_check CHECK (account_role = ANY (ARRAY['read'::text, 'write'::text]))
+);
+
+COMMENT ON TABLE public.accounts
+    IS 'User accounts that own permissions; devices are login sessions.';
+
 CREATE TABLE IF NOT EXISTS public.books
 (
     book_uuid uuid NOT NULL DEFAULT uuid_generate_v4(),
-    device_id uuid NOT NULL,
+    device_id uuid,
     name text COLLATE pg_catalog."default" NOT NULL,
     book_password_hash text COLLATE pg_catalog."default",
+    owner_account_id uuid,
     created_at timestamp with time zone NOT NULL DEFAULT now(),
     updated_at timestamp with time zone NOT NULL DEFAULT now(),
     archived_at timestamp with time zone,
@@ -66,6 +96,7 @@ CREATE TABLE IF NOT EXISTS public.devices
     id uuid NOT NULL DEFAULT uuid_generate_v4(),
     device_name text COLLATE pg_catalog."default" NOT NULL,
     device_token text COLLATE pg_catalog."default" NOT NULL,
+    account_id uuid,
     device_role text COLLATE pg_catalog."default" NOT NULL DEFAULT 'read'::text,
     platform text COLLATE pg_catalog."default",
     registered_at timestamp with time zone NOT NULL DEFAULT now(),
@@ -210,14 +241,38 @@ ALTER TABLE IF EXISTS public.book_device_access
 CREATE INDEX IF NOT EXISTS idx_book_device_access_device_id
     ON public.book_device_access(device_id);
 
+ALTER TABLE IF EXISTS public.account_book_access
+    ADD CONSTRAINT account_book_access_account_id_fkey FOREIGN KEY (account_id)
+    REFERENCES public.accounts (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+CREATE INDEX IF NOT EXISTS idx_account_book_access_account_id
+    ON public.account_book_access(account_id);
+
+
+ALTER TABLE IF EXISTS public.account_book_access
+    ADD CONSTRAINT account_book_access_book_uuid_fkey FOREIGN KEY (book_uuid)
+    REFERENCES public.books (book_uuid) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE CASCADE;
+
 
 ALTER TABLE IF EXISTS public.books
     ADD CONSTRAINT books_device_id_fkey FOREIGN KEY (device_id)
     REFERENCES public.devices (id) MATCH SIMPLE
     ON UPDATE NO ACTION
-    ON DELETE CASCADE;
+    ON DELETE SET NULL;
 CREATE INDEX IF NOT EXISTS idx_books_device_id
     ON public.books(device_id);
+
+
+ALTER TABLE IF EXISTS public.books
+    ADD CONSTRAINT books_owner_account_id_fkey FOREIGN KEY (owner_account_id)
+    REFERENCES public.accounts (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_books_owner_account_id
+    ON public.books(owner_account_id);
 
 
 ALTER TABLE IF EXISTS public.charge_items
@@ -279,6 +334,15 @@ ALTER TABLE IF EXISTS public.sync_log
     REFERENCES public.devices (id) MATCH SIMPLE
     ON UPDATE NO ACTION
     ON DELETE CASCADE;
+
+
+ALTER TABLE IF EXISTS public.devices
+    ADD CONSTRAINT devices_account_id_fkey FOREIGN KEY (account_id)
+    REFERENCES public.accounts (id) MATCH SIMPLE
+    ON UPDATE NO ACTION
+    ON DELETE SET NULL;
+CREATE INDEX IF NOT EXISTS idx_devices_account_id
+    ON public.devices(account_id);
 CREATE INDEX IF NOT EXISTS idx_sync_log_device_id
     ON public.sync_log(device_id);
 

@@ -7,15 +7,19 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../database/connection.dart';
+import '../services/account_auth_service.dart';
 import '../services/book_access_service.dart';
 import '../services/note_service.dart';
 
 class TestFixtureRoutes {
   final DatabaseConnection db;
   final BookAccessService _bookAccessService;
+  final AccountAuthService _accountAuthService;
   final _uuid = const Uuid();
 
-  TestFixtureRoutes(this.db) : _bookAccessService = BookAccessService(db);
+  TestFixtureRoutes(this.db)
+    : _bookAccessService = BookAccessService(db),
+      _accountAuthService = AccountAuthService(db);
 
   Router get router {
     final router = Router();
@@ -43,6 +47,14 @@ class TestFixtureRoutes {
     return Map<String, dynamic>.from(jsonDecode(rawBody) as Map);
   }
 
+  List<Map<String, dynamic>> _rows(dynamic data) {
+    if (data is! List) return const [];
+    return data
+        .whereType<Map>()
+        .map((row) => Map<String, dynamic>.from(row))
+        .toList();
+  }
+
   bool _isFixturePasswordValid(String password) {
     final expected =
         (Platform.environment['REGISTRATION_PASSWORD'] ?? 'password').trim();
@@ -63,18 +75,35 @@ class TestFixtureRoutes {
     return sha256.convert(utf8.encode(content)).toString();
   }
 
+  String _fixturePasswordHash(String accountId) {
+    return sha256.convert(utf8.encode('fixture:$accountId')).toString();
+  }
+
   Future<Map<String, String>> _createDevice({
     required String deviceName,
     required String deviceRole,
     String? platform,
   }) async {
     final now = DateTime.now().toUtc().toIso8601String();
+    final accountId = _uuid.v4();
     final deviceId = _uuid.v4();
     final deviceToken = _generateDeviceToken(deviceId);
     final normalizedRole = _normalizeDeviceRole(deviceRole);
 
+    await db.client.from('accounts').insert({
+      'id': accountId,
+      'username': 'fixture-${accountId.substring(0, 8)}',
+      'password_hash': _fixturePasswordHash(accountId),
+      'password_salt': 'fixture',
+      'password_iterations': 1,
+      'account_role': normalizedRole,
+      'is_active': true,
+      'created_at': now,
+    });
+
     await db.client.from('devices').insert({
       'id': deviceId,
+      'account_id': accountId,
       'device_name': deviceName,
       'device_token': deviceToken,
       'device_role': normalizedRole,
@@ -87,6 +116,7 @@ class TestFixtureRoutes {
       'deviceId': deviceId,
       'deviceToken': deviceToken,
       'deviceRole': normalizedRole,
+      'accountId': accountId,
     };
   }
 
@@ -106,6 +136,9 @@ class TestFixtureRoutes {
     await db.client.from('books').insert({
       'book_uuid': bookUuid,
       'device_id': writeDeviceId,
+      'owner_account_id': await _accountAuthService.accountIdForDevice(
+        writeDeviceId,
+      ),
       'name': 'IT shared fixture $suffix',
       'book_password_hash': _hashBookPassword(bookPassword),
       'created_at': now.toIso8601String(),
@@ -204,6 +237,10 @@ class TestFixtureRoutes {
           .delete()
           .inFilter('book_uuid', nonEmptyBookUuids);
       await db.client
+          .from('account_book_access')
+          .delete()
+          .inFilter('book_uuid', nonEmptyBookUuids);
+      await db.client
           .from('book_device_access')
           .delete()
           .inFilter('book_uuid', nonEmptyBookUuids);
@@ -213,6 +250,14 @@ class TestFixtureRoutes {
           .inFilter('book_uuid', nonEmptyBookUuids);
     }
     if (nonEmptyDeviceIds.isNotEmpty) {
+      final accountRows = await db.client
+          .from('devices')
+          .select('account_id')
+          .inFilter('id', nonEmptyDeviceIds);
+      final accountIds = _rows(accountRows)
+          .map((row) => row['account_id']?.toString() ?? '')
+          .where((id) => id.isNotEmpty)
+          .toList();
       await db.client
           .from('book_device_access')
           .delete()
@@ -221,6 +266,13 @@ class TestFixtureRoutes {
           .from('devices')
           .delete()
           .inFilter('id', nonEmptyDeviceIds);
+      if (accountIds.isNotEmpty) {
+        await db.client
+            .from('account_book_access')
+            .delete()
+            .inFilter('account_id', accountIds);
+        await db.client.from('accounts').delete().inFilter('id', accountIds);
+      }
     }
   }
 
@@ -253,6 +305,7 @@ class TestFixtureRoutes {
         'deviceId': device['deviceId'],
         'deviceToken': device['deviceToken'],
         'deviceRole': device['deviceRole'],
+        'accountId': device['accountId'],
       });
     } catch (e) {
       return _json(500, {

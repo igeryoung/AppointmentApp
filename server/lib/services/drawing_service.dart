@@ -1,4 +1,5 @@
 import '../database/connection.dart';
+import 'account_auth_service.dart';
 import 'book_access_service.dart';
 
 /// Result of drawing operation that may have version conflict
@@ -47,9 +48,11 @@ class DrawingService {
 
   final DatabaseConnection db;
   late final BookAccessService _bookAccessService;
+  late final AccountAuthService _accountAuth;
 
   DrawingService(this.db) {
     _bookAccessService = BookAccessService(db);
+    _accountAuth = AccountAuthService(db);
   }
 
   Map<String, dynamic>? _first(dynamic data) {
@@ -85,53 +88,15 @@ class DrawingService {
   }
 
   Future<bool> verifyDeviceAccess(String deviceId, String token) async {
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        final rows = await db.client
-            .from('devices')
-            .select('id, device_token, is_active')
-            .eq('id', deviceId)
-            .limit(1);
-        final row = _first(rows);
-        if (row == null) return false;
-        final active = row['is_active'] == true;
-        return active && (row['device_token'] ?? '').toString() == token;
-      } catch (_) {
-        if (attempt == 2) return false;
-        await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
-      }
-    }
-    return false;
+    return _accountAuth.verifyDeviceAccess(deviceId, token);
   }
 
   Future<bool> verifyBookOwnership(String deviceId, String bookUuid) async {
     return verifyBookAccess(deviceId, bookUuid);
   }
 
-  String _normalizeDeviceRole(dynamic value, {String fallback = roleWrite}) {
-    final normalized = value?.toString().trim().toLowerCase() ?? '';
-    if (normalized == roleRead) return roleRead;
-    if (normalized == roleWrite) return roleWrite;
-    return fallback;
-  }
-
   Future<String> getDeviceRole(String deviceId) async {
-    for (var attempt = 0; attempt < 2; attempt++) {
-      try {
-        final rows = await db.client
-            .from('devices')
-            .select('device_role')
-            .eq('id', deviceId)
-            .limit(1);
-        final row = _first(rows);
-        if (row == null) return roleWrite;
-        return _normalizeDeviceRole(row['device_role']);
-      } catch (_) {
-        if (attempt == 1) return roleWrite;
-        await Future<void>.delayed(Duration(milliseconds: 80 * (attempt + 1)));
-      }
-    }
-    return roleWrite;
+    return _accountAuth.getAccountRoleForDevice(deviceId);
   }
 
   Future<bool> canDeviceWrite(String deviceId) async {

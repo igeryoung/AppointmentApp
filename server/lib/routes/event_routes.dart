@@ -5,6 +5,7 @@ import 'package:shelf_router/shelf_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../database/connection.dart';
+import '../services/account_auth_service.dart';
 
 class _PreparedEventCreate {
   final String eventId;
@@ -35,9 +36,11 @@ class EventRoutes {
 
   final DatabaseConnection db;
   late final Router bookScopedRouter;
+  late final AccountAuthService _accountAuth;
   final _uuid = const Uuid();
 
   EventRoutes(this.db) {
+    _accountAuth = AccountAuthService(db);
     bookScopedRouter = Router()
       ..get('/<bookUuid>/query-options/names', _getNameSuggestions)
       ..get(
@@ -131,13 +134,6 @@ class EventRoutes {
     return jsonEncode([value.toString()]);
   }
 
-  String _normalizeDeviceRole(dynamic value, {String fallback = 'write'}) {
-    final normalized = value?.toString().trim().toLowerCase() ?? '';
-    if (normalized == 'read') return 'read';
-    if (normalized == 'write') return 'write';
-    return fallback;
-  }
-
   Future<String?> _authorizeBookRequest(
     Request request,
     String bookUuid, {
@@ -150,56 +146,23 @@ class EventRoutes {
       return 'missing_credentials';
     }
 
-    final deviceRows = await db.client
-        .from('devices')
-        .select('id, device_token, is_active, device_role')
-        .eq('id', deviceId)
-        .limit(1);
-    final device = _first(deviceRows);
-    if (device == null) {
+    final session = await _accountAuth.authenticateDevice(
+      deviceId,
+      deviceToken,
+    );
+    if (session == null) {
       return 'invalid_credentials';
     }
 
-    final isActive = device['is_active'] == true;
-    final matchedToken =
-        (device['device_token'] ?? '').toString() == deviceToken;
-    if (!isActive || !matchedToken) {
-      return 'invalid_credentials';
-    }
-
-    final deviceRole = _normalizeDeviceRole(device['device_role']);
-    if (requireWrite && deviceRole != 'write') {
+    if (requireWrite && !session.canWrite) {
       return 'read_only_device';
     }
-
-    final bookRows = await db.client
-        .from('books')
-        .select('book_uuid, device_id')
-        .eq('book_uuid', bookUuid)
-        .eq('is_deleted', false)
-        .limit(1);
-    final book = _first(bookRows);
-    if (book == null) {
-      return 'unauthorized';
-    }
-
-    if (deviceRole == 'write') {
-      return null;
-    }
-
-    final ownsBook = book['device_id']?.toString() == deviceId;
-    if (ownsBook) {
-      return null;
-    }
-
-    final accessRows = await db.client
-        .from('book_device_access')
-        .select('book_uuid')
-        .eq('book_uuid', bookUuid)
-        .eq('device_id', deviceId)
-        .limit(1);
-    final access = _first(accessRows);
-    if (access == null) {
+    final hasBookAccess = await _accountAuth.verifyBookAccess(
+      deviceId,
+      bookUuid,
+      requireWrite: requireWrite,
+    );
+    if (!hasBookAccess) {
       return 'unauthorized';
     }
 

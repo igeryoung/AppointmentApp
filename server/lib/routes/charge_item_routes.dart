@@ -4,14 +4,15 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../database/connection.dart';
+import '../services/account_auth_service.dart';
 
 class ChargeItemRoutes {
-  static const String _roleRead = 'read';
-  static const String _roleWrite = 'write';
-
   final DatabaseConnection db;
+  late final AccountAuthService _accountAuth;
 
-  ChargeItemRoutes(this.db);
+  ChargeItemRoutes(this.db) {
+    _accountAuth = AccountAuthService(db);
+  }
 
   Router get router {
     final r = Router();
@@ -49,87 +50,15 @@ class ChargeItemRoutes {
   }
 
   Future<bool> _verifyDeviceAccess(String deviceId, String token) async {
-    for (var attempt = 0; attempt < 3; attempt++) {
-      try {
-        final rows = await db.client
-            .from('devices')
-            .select('id, device_token, is_active')
-            .eq('id', deviceId)
-            .limit(1);
-        final row = _first(rows);
-        if (row == null) return false;
-        final active = row['is_active'] == true;
-        return active && row['device_token']?.toString() == token;
-      } catch (_) {
-        if (attempt == 2) return false;
-        await Future<void>.delayed(Duration(milliseconds: 150 * (attempt + 1)));
-      }
-    }
-    return false;
-  }
-
-  String _normalizeRole(dynamic value) {
-    final normalized = value?.toString().trim().toLowerCase() ?? '';
-    if (normalized == _roleRead) return _roleRead;
-    if (normalized == _roleWrite) return _roleWrite;
-    return _roleWrite;
-  }
-
-  Future<String> _getDeviceRole(String deviceId) async {
-    try {
-      final rows = await db.client
-          .from('devices')
-          .select('device_role')
-          .eq('id', deviceId)
-          .limit(1);
-      final row = _first(rows);
-      if (row == null) return _roleWrite;
-      return _normalizeRole(row['device_role']);
-    } catch (_) {
-      return _roleWrite;
-    }
+    return _accountAuth.verifyDeviceAccess(deviceId, token);
   }
 
   Future<bool> _canDeviceWrite(String deviceId) async {
-    final role = await _getDeviceRole(deviceId);
-    return role == _roleWrite;
+    return _accountAuth.canDeviceWrite(deviceId);
   }
 
   Future<Set<String>> _accessibleBookUuids(String deviceId) async {
-    final canWrite = await _canDeviceWrite(deviceId);
-    if (canWrite) {
-      final allRows = await db.client
-          .from('books')
-          .select('book_uuid')
-          .eq('is_deleted', false);
-
-      return _rows(allRows)
-          .map((row) => row['book_uuid']?.toString() ?? '')
-          .where((uuid) => uuid.isNotEmpty)
-          .toSet();
-    }
-
-    final ownedRows = await db.client
-        .from('books')
-        .select('book_uuid')
-        .eq('device_id', deviceId)
-        .eq('is_deleted', false);
-
-    final accessRows = await db.client
-        .from('book_device_access')
-        .select('book_uuid')
-        .eq('device_id', deviceId);
-
-    final result = <String>{};
-    for (final row in _rows(ownedRows)) {
-      final uuid = row['book_uuid']?.toString();
-      if (uuid != null && uuid.isNotEmpty) result.add(uuid);
-    }
-    for (final row in _rows(accessRows)) {
-      final uuid = row['book_uuid']?.toString();
-      if (uuid != null && uuid.isNotEmpty) result.add(uuid);
-    }
-    return result;
+    return _accountAuth.accessibleBookUuidsForDevice(deviceId);
   }
 
   Future<bool> _verifyRecordAccess(String deviceId, String recordUuid) async {

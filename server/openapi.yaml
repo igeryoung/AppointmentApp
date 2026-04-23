@@ -46,8 +46,77 @@ paths:
                 password:
                   type: string
       responses:
+        '410':
+          description: Device-only registration has moved to account registration
+
+  /api/accounts/register:
+    post:
+      tags: [Authentication]
+      summary: Register account and create device session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, registrationPassword, deviceName]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                registrationPassword:
+                  type: string
+                deviceName:
+                  type: string
+                platform:
+                  type: string
+      responses:
         '200':
-          description: Device registered
+          description: Account registered and device session created
+
+  /api/accounts/login:
+    post:
+      tags: [Authentication]
+      summary: Login account and create device session
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, deviceName]
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                deviceName:
+                  type: string
+                platform:
+                  type: string
+      responses:
+        '200':
+          description: Device session created
+
+  /api/accounts/me:
+    get:
+      tags: [Authentication]
+      summary: Get current account metadata
+      parameters:
+        - name: X-Device-ID
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: X-Device-Token
+          in: header
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Current account metadata
 
   /api/devices/{deviceId}:
     get:

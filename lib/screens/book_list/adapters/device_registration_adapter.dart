@@ -34,10 +34,13 @@ class DeviceRegistrationAdapter {
     return fallback;
   }
 
-  /// Register device with server
-  Future<void> register({
+  /// Login or register an account and store the returned device session.
+  Future<void> authenticateAccount({
     required String baseUrl,
+    required String username,
     required String password,
+    String? registrationPassword,
+    bool createAccount = false,
     String? deviceName,
     String? platform,
   }) async {
@@ -46,13 +49,24 @@ class DeviceRegistrationAdapter {
 
     final apiClient = ApiClient(baseUrl: baseUrl);
     try {
-      final response = await apiClient.registerDevice(
-        deviceName: actualDeviceName,
-        password: password,
-        platform: actualPlatform,
-      );
+      final response = createAccount
+          ? await apiClient.registerAccount(
+              username: username,
+              password: password,
+              registrationPassword: registrationPassword ?? '',
+              deviceName: actualDeviceName,
+              platform: actualPlatform,
+            )
+          : await apiClient.loginAccount(
+              username: username,
+              password: password,
+              deviceName: actualDeviceName,
+              platform: actualPlatform,
+            );
 
       // Save device credentials with server URL
+      final accountId = response['accountId'] as String?;
+      final accountUsername = response['username'] as String? ?? username;
       final deviceId = response['deviceId'] as String;
       final deviceToken = response['deviceToken'] as String;
       final deviceRole = _normalizeRole(
@@ -61,6 +75,8 @@ class DeviceRegistrationAdapter {
       );
 
       await _dbService.saveDeviceCredentials(
+        accountId: accountId,
+        username: accountUsername,
         deviceId: deviceId,
         deviceToken: deviceToken,
         deviceName: actualDeviceName,
@@ -87,13 +103,21 @@ class DeviceRegistrationAdapter {
 
     final apiClient = ApiClient(baseUrl: serverUrl);
     try {
-      final role = await apiClient.fetchDeviceRole(
+      final account = await apiClient.fetchCurrentAccount(
         deviceId: credentials.deviceId,
+        deviceToken: credentials.deviceToken,
       );
-      if (role == null) return;
+      final accountRole = account['accountRole']?.toString();
       await db.update('device_info', {
-        'device_role': _normalizeRole(role, fallback: credentials.deviceRole),
+        'account_id': account['accountId']?.toString() ?? credentials.accountId,
+        'username': account['username']?.toString() ?? credentials.username,
+        'device_role': _normalizeRole(
+          accountRole,
+          fallback: credentials.deviceRole,
+        ),
       }, where: 'id = 1');
+    } on ApiException {
+      return;
     } finally {
       apiClient.dispose();
     }
@@ -107,6 +131,8 @@ class DeviceRegistrationAdapter {
     return {
       'deviceId': credentials.deviceId,
       'deviceToken': credentials.deviceToken,
+      'accountId': credentials.accountId,
+      'username': credentials.username,
       'deviceRole': credentials.deviceRole,
       'isReadOnly': credentials.isReadOnly,
     };

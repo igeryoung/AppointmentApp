@@ -57,7 +57,7 @@ Optional Railway variables:
   behind Railway's HTTPS proxy. This is already the default when Railway
   provides `PORT` and no certificate paths are configured.
 - `SERVER_HOST=0.0.0.0`
-- `DEFAULT_DEVICE_ROLE=write` to let newly registered devices write
+- `DEFAULT_DEVICE_ROLE=write` to let newly registered accounts write
   immediately. The default is `read`.
 
 Railway provides `PORT` automatically. The production server now honors that
@@ -100,9 +100,11 @@ Recommended Railway settings:
    - `POST /api/notes/batch`
    - `POST /api/drawings/batch`
 
-4. **Device Management** (`/api/devices/*`)
-   - `POST /api/devices/register` - Register device
-   - `GET /api/devices/{id}` - Get device info
+4. **Account and Device Sessions**
+   - `POST /api/accounts/register` - Register account and create device session
+   - `POST /api/accounts/login` - Login and create device session
+   - `GET /api/accounts/me` - Get current account metadata
+   - `GET /api/devices/{id}` - Get device session info
 
 See `doc/Server-Store/` for Server-Store API implementation details.
 
@@ -130,7 +132,9 @@ Client architecture note:
 ## Database Schema
 
 **Tables:**
-- `devices` - Registered devices (auth)
+- `accounts` - Login identities and account-level role
+- `devices` - Device sessions linked to accounts
+- `account_book_access` - Account book memberships
 - `books` - Top-level containers
 - `events` - Appointment entries
 - `notes` - Handwriting notes (1:1 with events)
@@ -141,9 +145,9 @@ Client architecture note:
 - `version` - Incremented on each update (optimistic locking)
 - `synced_at` - Last sync timestamp
 - `is_deleted` - Soft delete flag (never hard delete)
-- `device_id` - Device that created/last modified record
-- `device_role` controls whether a device can perform writes globally
-- `book_device_access` tracks book membership; write permission is derived from `device_role`
+- `device_id` - Device session that created/last modified legacy records
+- `account_role` controls whether an account can perform writes globally
+- `account_book_access` tracks account book membership; write permission is derived from `account_role`
 
 Schema source: `server/schema.sql`.
 
@@ -165,9 +169,9 @@ lsof -i:8080
 ```
 
 **API returns 403 Forbidden**
-- Check device is registered: `POST /api/devices/register`
+- Check the account can log in: `POST /api/accounts/login`
 - Verify `X-Device-ID` and `X-Device-Token` headers are set
-- Check device owns the book being accessed
+- Check account role or book membership allows the request
 
 ## Development
 

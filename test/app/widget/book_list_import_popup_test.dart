@@ -90,6 +90,8 @@ class _FakeDeviceRegistrationAdapter implements DeviceRegistrationAdapter {
     return const {
       'deviceId': 'device-1',
       'deviceToken': 'token-1',
+      'accountId': 'account-1',
+      'username': 'user-1',
       'deviceRole': 'write',
       'isReadOnly': false,
     };
@@ -102,9 +104,12 @@ class _FakeDeviceRegistrationAdapter implements DeviceRegistrationAdapter {
   Future<void> refreshDeviceRoleFromServer() async {}
 
   @override
-  Future<void> register({
+  Future<void> authenticateAccount({
     required String baseUrl,
+    required String username,
     required String password,
+    String? registrationPassword,
+    bool createAccount = false,
     String? deviceName,
     String? platform,
   }) async {}
@@ -148,7 +153,7 @@ class _ImportHost extends StatelessWidget {
 }
 
 void main() {
-  Future<void> _startImportFlow(WidgetTester tester) async {
+  Future<void> startImportFlow(WidgetTester tester) async {
     await tester.tap(find.text('Import'));
     await tester.pumpAndSettle();
 
@@ -182,7 +187,7 @@ void main() {
         _buildLocalizedApp(_ImportHost(controller: controller)),
       );
 
-      await _startImportFlow(tester);
+      await startImportFlow(tester);
 
       expect(find.text('密碼錯誤'), findsOneWidget);
       expect(find.text('您輸入的簿冊密碼不正確，請重新輸入後再試一次。'), findsOneWidget);
@@ -208,7 +213,7 @@ void main() {
         _buildLocalizedApp(_ImportHost(controller: controller)),
       );
 
-      await _startImportFlow(tester);
+      await startImportFlow(tester);
 
       expect(find.text('簿冊已存在'), findsOneWidget);
       expect(find.text('此簿冊已在本機，無法重複匯入。'), findsOneWidget);

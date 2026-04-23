@@ -5,6 +5,7 @@ import 'package:shelf/shelf.dart';
 import 'package:shelf_router/shelf_router.dart';
 
 import '../database/connection.dart';
+import '../services/account_auth_service.dart';
 import '../services/book_access_service.dart';
 import '../services/book_pull_service.dart';
 import '../services/note_service.dart';
@@ -24,11 +25,13 @@ class BookRoutes {
   late final BookPullService _pullService;
   late final NoteService _noteService;
   late final BookAccessService _bookAccessService;
+  late final AccountAuthService _accountAuth;
 
   BookRoutes(this.db) {
     _pullService = BookPullService(db);
     _noteService = NoteService(db);
     _bookAccessService = BookAccessService(db);
+    _accountAuth = AccountAuthService(db);
   }
 
   Router get router {
@@ -50,13 +53,16 @@ class BookRoutes {
     if (deviceId == null || deviceToken == null) {
       return null;
     }
-    final valid = await _noteService.verifyDeviceAccess(deviceId, deviceToken);
-    if (!valid) return null;
-    final role = await _noteService.getDeviceRole(deviceId);
+    final session = await _accountAuth.authenticateDevice(
+      deviceId,
+      deviceToken,
+    );
+    if (session == null) return null;
     return {
-      'deviceId': deviceId,
-      'deviceToken': deviceToken,
-      'deviceRole': role,
+      'deviceId': session.deviceId,
+      'deviceToken': session.deviceToken,
+      'deviceRole': session.accountRole,
+      'accountId': session.accountId,
     };
   }
 
@@ -85,16 +91,18 @@ class BookRoutes {
     required String deviceId,
     required String bookUuid,
   }) async {
+    final accountId = await _accountAuth.accountIdForDevice(deviceId);
+    if (accountId == null) return;
     final existing = await db.client
-        .from('book_device_access')
+        .from('account_book_access')
         .select('book_uuid')
         .eq('book_uuid', bookUuid)
-        .eq('device_id', deviceId)
+        .eq('account_id', accountId)
         .limit(1);
     if (_first(existing) != null) return;
-    await _bookAccessService.grantBookAccess(
+    await _accountAuth.grantBookAccessToAccount(
       bookUuid: bookUuid,
-      deviceId: deviceId,
+      accountId: accountId,
     );
   }
 
@@ -296,6 +304,7 @@ class BookRoutes {
           .from('books')
           .insert({
             'device_id': auth['deviceId'],
+            'owner_account_id': auth['accountId'],
             'name': name,
             'book_password_hash': _hashBookPassword(password),
             'created_at': now,
@@ -305,7 +314,7 @@ class BookRoutes {
             'is_deleted': false,
           })
           .select(
-            'book_uuid, device_id, name, created_at, updated_at, archived_at, version, is_deleted',
+            'book_uuid, device_id, owner_account_id, name, created_at, updated_at, archived_at, version, is_deleted',
           )
           .limit(1);
       final row = _first(inserted);
@@ -317,9 +326,9 @@ class BookRoutes {
         });
       }
 
-      await _bookAccessService.grantBookAccess(
+      await _accountAuth.grantBookAccessToAccount(
         bookUuid: row['book_uuid'].toString(),
-        deviceId: auth['deviceId']!,
+        accountId: auth['accountId']!,
       );
 
       return _json(200, {'success': true, 'book': _bookResponse(row)});

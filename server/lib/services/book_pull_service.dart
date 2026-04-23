@@ -1,15 +1,18 @@
 import 'dart:convert';
 
 import '../database/connection.dart';
+import 'account_auth_service.dart';
 import 'book_access_service.dart';
 
 /// Service for pulling books from server to local device.
 class BookPullService {
   final DatabaseConnection db;
   late final BookAccessService _bookAccessService;
+  late final AccountAuthService _accountAuth;
 
   BookPullService(this.db) {
     _bookAccessService = BookAccessService(db);
+    _accountAuth = AccountAuthService(db);
   }
 
   DateTime _asUtc(dynamic value) {
@@ -71,19 +74,23 @@ class BookPullService {
     String deviceId, {
     String? searchQuery,
   }) async {
-    final _ = deviceId;
-
+    final accessibleBookUuids = await _accountAuth.accessibleBookUuidsForDevice(
+      deviceId,
+    );
+    if (accessibleBookUuids.isEmpty) return const [];
     var query = db.client
         .from('books')
         .select(
-          'book_uuid, name, created_at, updated_at, archived_at, version, is_deleted, device_id',
+          'book_uuid, name, created_at, updated_at, archived_at, version, is_deleted, device_id, owner_account_id',
         );
 
     if (searchQuery != null && searchQuery.trim().isNotEmpty) {
       query = query.ilike('name', '%${searchQuery.trim()}%');
     }
 
-    final results = await query.order('created_at', ascending: false);
+    final results = await query
+        .inFilter('book_uuid', accessibleBookUuids.toList())
+        .order('created_at', ascending: false);
 
     return _rows(results).map((row) {
       return {
@@ -96,7 +103,8 @@ class BookPullService {
             : null,
         'version': (row['version'] as num?)?.toInt() ?? 1,
         'is_deleted': _toBool(row['is_deleted']),
-        'device_id': row['device_id'] as String,
+        'device_id': row['device_id'] as String?,
+        'owner_account_id': row['owner_account_id'] as String?,
       };
     }).toList();
   }

@@ -7,6 +7,7 @@ import 'package:dotenv/dotenv.dart';
 import 'lib/config/database_config.dart';
 import 'lib/database/connection.dart';
 import 'lib/routes/device_routes.dart';
+import 'lib/routes/account_routes.dart';
 import 'lib/routes/book_routes.dart';
 import 'lib/routes/note_routes.dart';
 import 'lib/routes/drawing_routes.dart';
@@ -57,6 +58,10 @@ void main(List<String> args) async {
   // Device routes
   final deviceRoutes = DeviceRoutes(db);
   app.mount('/api/devices/', deviceRoutes.router);
+
+  // Account routes
+  final accountRoutes = AccountRoutes(db);
+  app.mount('/api/accounts/', accountRoutes.router);
 
   // Record routes (validation)
   final recordRoutes = RecordRoutes(db);
@@ -210,8 +215,9 @@ void main(List<String> args) async {
   print('');
   print('📌 Endpoints:');
   print('   GET  /health - Health check');
-  print('   POST /api/devices/register - Register device');
-  print('   GET  /api/devices/<id> - Get device info');
+  print('   POST /api/accounts/register - Register account');
+  print('   POST /api/accounts/login - Login account');
+  print('   GET  /api/accounts/me - Get current account');
   print('');
   print('   === Book API ===');
   print('   POST   /api/books - Create new book');
