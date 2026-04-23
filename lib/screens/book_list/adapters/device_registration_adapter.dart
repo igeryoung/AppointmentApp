@@ -26,6 +26,12 @@ class DeviceRegistrationAdapter {
     return credentials != null;
   }
 
+  /// Remove local account session and cached book data from this device.
+  Future<void> logout() async {
+    await _dbService.clearAllData();
+    await _dbService.clearDeviceCredentials();
+  }
+
   String _normalizeRole(String? role, {String fallback = 'read'}) {
     final normalized = role?.trim().toLowerCase() ?? '';
     if (normalized == 'read' || normalized == 'write') {

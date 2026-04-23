@@ -101,6 +101,9 @@ class _FakeDeviceRegistrationAdapter implements DeviceRegistrationAdapter {
   Future<bool> isRegistered() async => true;
 
   @override
+  Future<void> logout() async {}
+
+  @override
   Future<void> refreshDeviceRoleFromServer() async {}
 
   @override

@@ -449,6 +449,13 @@ class BookListController extends ChangeNotifier {
     }
   }
 
+  /// Clear local account session and cached data.
+  Future<void> logoutLocalSession() async {
+    _setState(_state.copyWith(isLoading: true, errorMessage: null));
+    await deviceReg.logout();
+    _setState(BookListState.initial().copyWith(isLoading: false));
+  }
+
   /// Update state and notify listeners
   void _setState(BookListState newState) {
     if (_isDisposed) return;

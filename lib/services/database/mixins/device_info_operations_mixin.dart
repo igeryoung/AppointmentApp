@@ -74,4 +74,10 @@ mixin DeviceInfoOperationsMixin {
       'registered_at': DateTime.now().millisecondsSinceEpoch ~/ 1000,
     }, conflictAlgorithm: ConflictAlgorithm.replace);
   }
+
+  /// Clear local account/device credentials.
+  Future<void> clearDeviceCredentials() async {
+    final db = await database;
+    await db.delete('device_info');
+  }
 }

@@ -5,6 +5,7 @@ import '../../cubits/schedule_cubit.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/book.dart';
 import '../../services/service_locator.dart';
+import '../server_setup_screen.dart';
 import '../schedule_screen.dart';
 import 'book_list_controller.dart';
 import 'adapters/adapters.dart';
@@ -153,8 +154,59 @@ class _BookListScreenState extends State<BookListScreen> {
             tooltip: l10n.serverSettings,
             onPressed: () => controller.openServerSettingsFlow(context),
           ),
+        if (!PlatformUtils.isWeb)
+          IconButton(
+            icon: const Icon(Icons.logout_rounded),
+            tooltip: 'Logout',
+            onPressed: () => _confirmLogout(context, controller),
+          ),
       ],
     );
+  }
+
+  Future<void> _confirmLogout(
+    BuildContext context,
+    BookListController controller,
+  ) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Logout?'),
+          content: const Text(
+            'This removes the local account session and cached book data from this device. Server data will remain available after login.',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(dialogContext).pop(false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton.icon(
+              onPressed: () => Navigator.of(dialogContext).pop(true),
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Logout'),
+            ),
+          ],
+        );
+      },
+    );
+
+    if (confirmed != true || !context.mounted) return;
+
+    try {
+      await controller.logoutLocalSession();
+      resetServices();
+      if (!context.mounted) return;
+      Navigator.of(context).pushAndRemoveUntil(
+        MaterialPageRoute(builder: (_) => const ServerSetupScreen()),
+        (_) => false,
+      );
+    } catch (e) {
+      if (!context.mounted) return;
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Logout failed: $e')));
+    }
   }
 
   /// Open schedule screen for a book

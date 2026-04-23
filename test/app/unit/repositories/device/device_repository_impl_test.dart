@@ -102,4 +102,24 @@ void main() {
       expect(credentials.deviceToken, 'token-new');
     },
   );
+
+  test(
+    'DEVICE-UNIT-004: clearDeviceCredentials() removes local session',
+    () async {
+      await dbService.saveDeviceCredentials(
+        accountId: 'account-001',
+        username: 'alice',
+        deviceId: 'device-001',
+        deviceToken: 'token-001',
+        deviceName: 'Primary Device',
+        serverUrl: 'https://server.local',
+        platform: 'test',
+      );
+
+      await dbService.clearDeviceCredentials();
+
+      final rows = await db.query('device_info');
+      expect(rows, isEmpty);
+    },
+  );
 }
