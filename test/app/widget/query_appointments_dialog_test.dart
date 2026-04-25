@@ -149,12 +149,21 @@ class _FakeEventRepository implements IEventRepository {
 }
 
 class _QueryAppointmentsDialogHost extends StatelessWidget {
-  const _QueryAppointmentsDialogHost({required this.repository});
+  const _QueryAppointmentsDialogHost({
+    required this.repository,
+    this.onEventSelected,
+  });
 
   final IEventRepository repository;
+  final Future<void> Function(Event event)? onEventSelected;
 
   Future<void> _openDialog(BuildContext context) {
-    return showQueryAppointmentsDialog(context, 'book-1', repository);
+    return showQueryAppointmentsDialog(
+      context,
+      'book-1',
+      repository,
+      onEventSelected: onEventSelected,
+    );
   }
 
   @override
@@ -392,6 +401,69 @@ void main() {
 
         expect(repository.searchRequests, ['Kai|K-001']);
         expect(find.text('Consultation Slot'), findsOneWidget);
+      },
+    );
+
+    testWidgets(
+      'QUERY-APPOINTMENTS-WIDGET-006: tapping a result returns the selected event for schedule navigation',
+      (tester) async {
+        Event? selectedEvent;
+        final result = Event(
+          id: 'event-jump',
+          bookUuid: 'book-1',
+          recordUuid: 'record-jump',
+          title: 'Follow-up Visit',
+          recordNumber: 'K-002',
+          eventTypes: const [EventType.other],
+          startTime: DateTime.utc(2026, 4, 9, 14),
+          endTime: DateTime.utc(2026, 4, 9, 15),
+          createdAt: DateTime.utc(2026, 4, 9, 8),
+          updatedAt: DateTime.utc(2026, 4, 9, 8),
+        );
+        final repository = _FakeEventRepository(
+          nameSuggestionsByPrefix: {
+            'k': ['Kai'],
+          },
+          recordSuggestionsByQuery: {
+            '|kai': const [NameRecordPair(name: 'Kai', recordNumber: 'K-002')],
+          },
+          searchResults: [result],
+        );
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _QueryAppointmentsDialogHost(
+              repository: repository,
+              onEventSelected: (event) async {
+                selectedEvent = event;
+              },
+            ),
+          ),
+        );
+
+        await openDialog(tester);
+
+        await tester.enterText(find.byType(TextField).first, 'K');
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Kai').last);
+        await tester.pumpAndSettle();
+
+        tester.binding.focusManager.primaryFocus?.unfocus();
+        await tester.pumpAndSettle();
+
+        await tester.showKeyboard(find.byType(TextField).at(1));
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Kai - K-002').last);
+        await tester.pumpAndSettle();
+
+        await tester.tap(find.text('搜尋').last);
+        await tester.pumpAndSettle();
+        await tester.tap(find.text('Follow-up Visit'));
+        await tester.pumpAndSettle();
+
+        expect(find.byType(Dialog), findsNothing);
+        expect(selectedEvent?.id, 'event-jump');
+        expect(selectedEvent?.startTime, DateTime.utc(2026, 4, 9, 14));
       },
     );
   });

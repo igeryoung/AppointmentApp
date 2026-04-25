@@ -14,15 +14,20 @@ import '../../utils/event_lookup_suggestion_helper.dart';
 Future<void> showQueryAppointmentsDialog(
   BuildContext context,
   String bookUuid,
-  IEventRepository eventRepository,
-) async {
-  await showDialog(
+  IEventRepository eventRepository, {
+  Future<void> Function(Event event)? onEventSelected,
+}) async {
+  final selectedEvent = await showDialog<Event>(
     context: context,
     builder: (context) => _QueryAppointmentsDialog(
       bookUuid: bookUuid,
       eventRepository: eventRepository,
     ),
   );
+
+  if (selectedEvent != null && context.mounted && onEventSelected != null) {
+    await onEventSelected(selectedEvent);
+  }
 }
 
 class _QueryAppointmentsDialog extends StatefulWidget {
@@ -550,82 +555,90 @@ class _QueryAppointmentsDialogState extends State<_QueryAppointmentsDialog> {
     final l10n = AppLocalizations.of(context)!;
 
     return Card(
-      child: Padding(
-        padding: const EdgeInsets.all(12.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Name
-            Row(
-              children: [
-                Icon(Icons.person, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.bold,
-                      fontSize: 16,
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: () => Navigator.of(context).pop(event),
+        child: Padding(
+          padding: const EdgeInsets.all(12.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Name
+              Row(
+                children: [
+                  Icon(Icons.person, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      event.title,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                      ),
                     ),
                   ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
+                ],
+              ),
+              const SizedBox(height: 8),
 
-            // Record number
-            Row(
-              children: [
-                Icon(Icons.badge, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
-                Text(
-                  '${l10n.recordNumber}: ${event.recordNumber.isEmpty ? '-' : event.recordNumber}',
-                  style: TextStyle(color: Colors.grey.shade700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Start time
-            Row(
-              children: [
-                Icon(Icons.access_time, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
-                Text(
-                  '${l10n.startTime}: ${_formatDateTime(event.startTime)}',
-                  style: TextStyle(color: Colors.grey.shade700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // End time
-            Row(
-              children: [
-                Icon(Icons.schedule, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
-                Text(
-                  '${l10n.endTime}: ${event.endTime != null ? _formatDateTime(event.endTime!) : l10n.openEnded}',
-                  style: TextStyle(color: Colors.grey.shade700),
-                ),
-              ],
-            ),
-            const SizedBox(height: 8),
-
-            // Event types
-            Row(
-              children: [
-                Icon(Icons.category, size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    '${l10n.appointmentType}: ${event.eventTypes.map((t) => EventTypeLocalizations.getLocalizedEventType(context, t)).join(', ')}',
+              // Record number
+              Row(
+                children: [
+                  Icon(Icons.badge, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${l10n.recordNumber}: ${event.recordNumber.isEmpty ? '-' : event.recordNumber}',
                     style: TextStyle(color: Colors.grey.shade700),
                   ),
-                ),
-              ],
-            ),
-          ],
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Start time
+              Row(
+                children: [
+                  Icon(
+                    Icons.access_time,
+                    size: 16,
+                    color: Colors.grey.shade600,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${l10n.startTime}: ${_formatDateTime(event.startTime)}',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // End time
+              Row(
+                children: [
+                  Icon(Icons.schedule, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Text(
+                    '${l10n.endTime}: ${event.endTime != null ? _formatDateTime(event.endTime!) : l10n.openEnded}',
+                    style: TextStyle(color: Colors.grey.shade700),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+
+              // Event types
+              Row(
+                children: [
+                  Icon(Icons.category, size: 16, color: Colors.grey.shade600),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      '${l10n.appointmentType}: ${event.eventTypes.map((t) => EventTypeLocalizations.getLocalizedEventType(context, t)).join(', ')}',
+                      style: TextStyle(color: Colors.grey.shade700),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         ),
       ),
     );

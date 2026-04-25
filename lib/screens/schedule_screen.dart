@@ -212,6 +212,9 @@ class _ScheduleScreenState extends State<ScheduleScreen>
               createEvent: () => _controller.eventService?.createEvent(),
               bookUuid: widget.book.uuid,
               onDateChange: _controller.changeDateTo,
+              navigateToDate: (date) async {
+                await _controller.dateService?.navigateToDate(date);
+              },
             ),
           ),
         ),

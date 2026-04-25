@@ -41,6 +41,7 @@ class ScheduleFabMenuHelper {
     required VoidCallback createEvent,
     required String bookUuid,
     required Function(DateTime) onDateChange,
+    required Future<void> Function(DateTime date) navigateToDate,
   }) {
     if (!isMenuVisible) {
       final l10n = AppLocalizations.of(context)!;
@@ -83,6 +84,7 @@ class ScheduleFabMenuHelper {
                   context,
                   bookUuid,
                   getIt<IEventRepository>(),
+                  onEventSelected: (event) => navigateToDate(event.startTime),
                 ),
           backgroundColor: isDrawingMode ? Colors.grey : Colors.teal,
           tooltip: isDrawingMode ? null : l10n.queryAppointments,
