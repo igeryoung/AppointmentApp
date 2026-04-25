@@ -13,6 +13,7 @@ class DateTimePickerUtils {
   /// - [initialDateTime]: The initial date and time to display
   /// - [firstDate]: The earliest selectable date (optional, defaults to 1 year ago)
   /// - [lastDate]: The latest selectable date (optional, defaults to 1 year from now)
+  /// - [fixedDate]: If provided, skips date selection and uses this date
   /// - [validateBusinessHours]: If true, validates that selected time is within 9:00-20:00
   /// - [isEndTime]: If true, treats this as end time selection (allows 20:00 exactly)
   /// - [referenceStartTime]: For end time validation, the start time to validate against
@@ -21,6 +22,7 @@ class DateTimePickerUtils {
     required DateTime initialDateTime,
     DateTime? firstDate,
     DateTime? lastDate,
+    DateTime? fixedDate,
     bool validateBusinessHours = false,
     bool isEndTime = false,
     DateTime? referenceStartTime,
@@ -29,8 +31,9 @@ class DateTimePickerUtils {
     final defaultFirstDate = DateTime.now().subtract(const Duration(days: 365));
     final defaultLastDate = DateTime.now().add(const Duration(days: 365));
 
-    // Step 1: Show date picker
-    final date = await showDatePicker(
+    // Step 1: Show date picker unless the caller locks selection to a date.
+    DateTime? date = fixedDate;
+    date ??= await showDatePicker(
       context: context,
       initialDate: initialDateTime,
       firstDate: firstDate ?? defaultFirstDate,
@@ -39,6 +42,7 @@ class DateTimePickerUtils {
 
     // User cancelled date selection
     if (date == null) return null;
+    if (!context.mounted) return null;
 
     // Step 2: Show time picker
     final time = await showTimePicker(

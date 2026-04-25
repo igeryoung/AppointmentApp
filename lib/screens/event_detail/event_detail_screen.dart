@@ -610,6 +610,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
         );
 
         await Future.delayed(const Duration(milliseconds: 500));
+        if (!mounted) return;
         Navigator.pop(context, true);
       }
     } catch (e) {
@@ -639,6 +640,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     );
 
     if (result == null) return;
+    if (!mounted) return;
 
     _controller.updateStartTime(result);
 
@@ -681,8 +683,7 @@ class _EventDetailScreenState extends State<EventDetailScreen>
     final result = await DateTimePickerUtils.pickDateTime(
       context,
       initialDateTime: adjustedInitial,
-      firstDate: startTime,
-      lastDate: EventTimeValidator.getLatestEndTime(startTime),
+      fixedDate: startTime,
       validateBusinessHours: true,
       isEndTime: true,
       referenceStartTime: startTime,

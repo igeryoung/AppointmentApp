@@ -1,6 +1,8 @@
 @Tags(['widget'])
 library;
 
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:schedule_note_app/l10n/app_localizations.dart';
@@ -8,6 +10,7 @@ import 'package:schedule_note_app/models/event.dart';
 import 'package:schedule_note_app/models/event_type.dart';
 import 'package:schedule_note_app/screens/event_detail/event_detail_controller.dart';
 import 'package:schedule_note_app/screens/event_detail/widgets/event_metadata_section.dart';
+import 'package:schedule_note_app/utils/datetime_picker_utils.dart';
 
 Widget _buildLocalizedApp(Widget home) {
   return MaterialApp(
@@ -42,6 +45,7 @@ Widget _buildSection({
   required List<RecordNumberOption> allRecordNumberOptions,
   bool isNameSuggestionsLoading = false,
   bool isRecordNumberSuggestionsLoading = false,
+  VoidCallback? onEndTimeTap,
   ValueChanged<String>? onRecordNumberSelected,
   ValueChanged<String>? onNameSelected,
 }) {
@@ -56,7 +60,7 @@ Widget _buildSection({
     startTime: DateTime.utc(2026, 3, 5, 9),
     endTime: DateTime.utc(2026, 3, 5, 10),
     onStartTimeTap: () {},
-    onEndTimeTap: () {},
+    onEndTimeTap: onEndTimeTap ?? () {},
     onClearEndTime: () {},
     onEventTypesChanged: (_) {},
     onRecordNumberChanged: (_) {},
@@ -205,6 +209,57 @@ void main() {
         final recordField = tester.widget<TextField>(recordFieldFinder);
         expect(recordField.controller?.text, 'K001');
         expect(selectedRecordNumber, 'K001');
+      },
+    );
+  });
+
+  group('Event metadata end time picker regression', () {
+    testWidgets(
+      'EVENT-METADATA-WIDGET-005: tapping end time can open a time-only picker locked to the start day',
+      (tester) async {
+        final nameController = TextEditingController(text: 'Kai');
+        final phoneController = TextEditingController();
+        DateTime? picked;
+        addTearDown(() {
+          nameController.dispose();
+          phoneController.dispose();
+        });
+
+        final startTime = DateTime(2026, 3, 5, 9);
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _buildSection(
+              nameController: nameController,
+              phoneController: phoneController,
+              recordNumber: '',
+              availableRecordNumbers: const [],
+              allRecordNumberOptions: const [],
+              onEndTimeTap: () {
+                unawaited(
+                  DateTimePickerUtils.pickDateTime(
+                    tester.element(find.textContaining('10:00').last),
+                    initialDateTime: DateTime(2026, 3, 5, 10),
+                    fixedDate: startTime,
+                    validateBusinessHours: true,
+                    isEndTime: true,
+                    referenceStartTime: startTime,
+                  ).then((value) => picked = value),
+                );
+              },
+            ),
+          ),
+        );
+
+        await tester.tap(find.textContaining('10:00').last);
+        await tester.pumpAndSettle();
+
+        expect(find.byType(TimePickerDialog), findsOneWidget);
+        expect(find.byType(CalendarDatePicker), findsNothing);
+
+        await tester.tap(find.text('確定'));
+        await tester.pumpAndSettle();
+
+        expect(picked, DateTime(2026, 3, 5, 10));
       },
     );
   });
