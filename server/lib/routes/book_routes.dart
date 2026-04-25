@@ -6,6 +6,7 @@ import 'package:shelf_router/shelf_router.dart';
 
 import '../database/connection.dart';
 import '../services/account_auth_service.dart';
+import '../services/book_account_relation_service.dart';
 import '../services/book_access_service.dart';
 import '../services/book_pull_service.dart';
 import '../services/note_service.dart';
@@ -25,11 +26,15 @@ class BookRoutes {
   late final BookPullService _pullService;
   late final BookAccessService _bookAccessService;
   late final AccountAuthService _accountAuth;
+  late final BookAccountRelationService _bookAccountRelations;
 
   BookRoutes(this.db) {
     _pullService = BookPullService(db);
     _bookAccessService = BookAccessService(db);
     _accountAuth = AccountAuthService(db);
+    _bookAccountRelations = BookAccountRelationService(
+      SupabaseBookAccountRelationStore(db),
+    );
   }
 
   Router get router {
@@ -91,18 +96,9 @@ class BookRoutes {
     required String deviceId,
     required String bookUuid,
   }) async {
-    final accountId = await _accountAuth.accountIdForDevice(deviceId);
-    if (accountId == null) return;
-    final existing = await db.client
-        .from('account_book_access')
-        .select('book_uuid')
-        .eq('book_uuid', bookUuid)
-        .eq('account_id', accountId)
-        .limit(1);
-    if (_first(existing) != null) return;
-    await _accountAuth.grantBookAccessToAccount(
+    await _bookAccountRelations.recordPulledBook(
+      deviceId: deviceId,
       bookUuid: bookUuid,
-      accountId: accountId,
     );
   }
 
@@ -334,7 +330,7 @@ class BookRoutes {
         });
       }
 
-      await _accountAuth.grantBookAccessToAccount(
+      await _bookAccountRelations.recordCreatedBook(
         bookUuid: row['book_uuid'].toString(),
         accountId: auth['accountId']!,
       );
@@ -422,15 +418,9 @@ class BookRoutes {
 
       final accountId = auth['accountId']!;
       final search = request.url.queryParameters['search']?.trim();
-      final accessRows = await db.client
-          .from('account_book_access')
-          .select('book_uuid')
-          .eq('account_id', accountId);
-      final bookUuids = _rows(accessRows)
-          .map((row) => row['book_uuid']?.toString() ?? '')
-          .where((uuid) => uuid.isNotEmpty)
-          .toSet()
-          .toList();
+      final bookUuids = (await _bookAccountRelations.accessedBookUuids(
+        accountId,
+      )).toSet().toList();
       if (bookUuids.isEmpty) {
         return _json(200, {'success': true, 'books': const [], 'count': 0});
       }
@@ -909,11 +899,10 @@ class BookRoutes {
         });
       }
 
-      await db.client
-          .from('account_book_access')
-          .delete()
-          .eq('account_id', auth['accountId']!)
-          .eq('book_uuid', bookUuid);
+      await _bookAccountRelations.removeOwnBookAccess(
+        accountId: auth['accountId']!,
+        bookUuid: bookUuid,
+      );
 
       return _json(200, {
         'success': true,

@@ -1,5 +1,0 @@
-{
-  "last_turn_at": "2026-04-23T15:50:03.261Z",
-  "turn_count": 13,
-  "last_agent_output": "Fixed.\n\nWhat changed:\n- Removed the local `account_book_cache` approach entirely.\n- Restore after re"
-}
