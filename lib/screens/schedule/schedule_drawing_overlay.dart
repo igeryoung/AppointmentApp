@@ -34,6 +34,7 @@ class ScheduleDrawingOverlay extends StatelessWidget {
       child: HandwritingCanvas(
         key: canvasKey,
         initialStrokes: currentDrawing?.strokes ?? [],
+        initialStrokeWidth: 1.0,
         onStrokesChanged: onStrokesChanged,
       ),
     );

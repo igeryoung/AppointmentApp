@@ -16,6 +16,7 @@ class HandwritingCanvas extends StatefulWidget {
   final String? currentEventUuid; // Event UUID for tracking stroke origin
   final bool
   showOnlyCurrentEvent; // Focus current event by graying non-current strokes
+  final double initialStrokeWidth;
   final void Function(List<String> erasedStrokeIds)?
   onStrokesErased; // Callback for erased stroke IDs
 
@@ -25,6 +26,7 @@ class HandwritingCanvas extends StatefulWidget {
     this.onStrokesChanged,
     this.currentEventUuid,
     this.showOnlyCurrentEvent = false,
+    this.initialStrokeWidth = 2.0,
     this.onStrokesErased,
   });
 
@@ -77,6 +79,7 @@ class HandwritingCanvasState extends State<HandwritingCanvas> {
   void initState() {
     super.initState();
     _strokes = List<Stroke>.from(widget.initialStrokes);
+    _strokeWidth = widget.initialStrokeWidth;
   }
 
   @override
