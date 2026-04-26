@@ -115,6 +115,21 @@ class EventMetadataSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l10n = AppLocalizations.of(context)!;
+    final newEventTimeDisplay = newEvent == null
+        ? null
+        : DateFormat(
+            'EEEE, MMM d, y - HH:mm',
+            Localizations.localeOf(context).toString(),
+          ).format(newEvent!.startTime);
+    final eventStatusTitle = event.isRemoved
+        ? (event.hasNewTime && newEventTimeDisplay != null
+              ? l10n.eventTimeChangedTo(newEventTimeDisplay)
+              : event.hasNewTime
+              ? l10n.eventTimeChanged
+              : l10n.eventRemoved)
+        : (newEventTimeDisplay != null
+              ? l10n.eventTimeChangedTo(newEventTimeDisplay)
+              : l10n.eventTimeChanged);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -152,17 +167,15 @@ class EventMetadataSection extends StatelessWidget {
                       size: 20,
                     ),
                     const SizedBox(width: 8),
-                    Text(
-                      event.isRemoved
-                          ? (event.hasNewTime
-                                ? l10n.eventTimeChanged
-                                : l10n.eventRemoved)
-                          : l10n.eventTimeChanged,
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        color: event.isRemoved
-                            ? Colors.red.shade700
-                            : Colors.orange.shade700,
+                    Expanded(
+                      child: Text(
+                        eventStatusTitle,
+                        style: TextStyle(
+                          fontWeight: FontWeight.bold,
+                          color: event.isRemoved
+                              ? Colors.red.shade700
+                              : Colors.orange.shade700,
+                        ),
                       ),
                     ),
                   ],
@@ -176,42 +189,6 @@ class EventMetadataSection extends StatelessWidget {
                           ? Colors.red.shade600
                           : Colors.orange.shade600,
                       fontSize: 13,
-                    ),
-                  ),
-                ],
-                if (event.hasNewTime && newEvent != null) ...[
-                  const SizedBox(height: 8),
-                  Container(
-                    padding: const EdgeInsets.all(8),
-                    decoration: BoxDecoration(
-                      color: Colors.red.shade50,
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.red.shade200),
-                    ),
-                    child: Row(
-                      children: [
-                        Icon(
-                          Icons.arrow_forward,
-                          color: Colors.red.shade700,
-                          size: 16,
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: Text(
-                            l10n.movedTo(
-                              DateFormat(
-                                'EEEE, MMM d, y - HH:mm',
-                                Localizations.localeOf(context).toString(),
-                              ).format(newEvent!.startTime),
-                            ),
-                            style: TextStyle(
-                              color: Colors.red.shade700,
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                      ],
                     ),
                   ),
                 ],

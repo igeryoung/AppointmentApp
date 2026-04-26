@@ -357,6 +357,11 @@ class AppLocalizationsEn extends AppLocalizations {
   String get eventTimeChanged => '約診時間已變更';
 
   @override
+  String eventTimeChangedTo(String time) {
+    return '約診時間已變更，變更至：$time';
+  }
+
+  @override
   String get eventRemoved => '約診已移除';
 
   @override

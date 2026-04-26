@@ -723,6 +723,12 @@ abstract class AppLocalizations {
   /// **'約診時間已變更'**
   String get eventTimeChanged;
 
+  /// Label for event time changed status with direct destination time
+  ///
+  /// In zh_TW, this message translates to:
+  /// **'約診時間已變更，變更至：{time}'**
+  String eventTimeChangedTo(String time);
+
   /// Label for event removed status
   ///
   /// In zh_TW, this message translates to:

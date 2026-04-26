@@ -5,6 +5,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:intl/intl.dart';
 import 'package:schedule_note_app/l10n/app_localizations.dart';
 import 'package:schedule_note_app/models/event.dart';
 import 'package:schedule_note_app/models/event_type.dart';
@@ -23,21 +24,44 @@ Widget _buildLocalizedApp(Widget home) {
   );
 }
 
-Event _buildEvent() {
+Event _buildEvent({
+  String id = 'event-1',
+  DateTime? startTime,
+  DateTime? endTime,
+  bool isRemoved = false,
+  String? removalReason,
+  String? originalEventId,
+  String? newEventId,
+}) {
+  final effectiveStartTime = startTime ?? DateTime.utc(2026, 3, 5, 9);
   return Event(
-    id: 'event-1',
+    id: id,
     bookUuid: 'book-1',
     recordUuid: 'record-1',
     title: 'Kai',
     eventTypes: const [EventType.other],
-    startTime: DateTime.utc(2026, 3, 5, 9),
-    endTime: DateTime.utc(2026, 3, 5, 10),
+    startTime: effectiveStartTime,
+    endTime: endTime ?? effectiveStartTime.add(const Duration(hours: 1)),
     createdAt: DateTime.utc(2026, 3, 5, 8),
     updatedAt: DateTime.utc(2026, 3, 5, 8),
+    isRemoved: isRemoved,
+    removalReason: removalReason,
+    originalEventId: originalEventId,
+    newEventId: newEventId,
   );
 }
 
+String _expectedChangedToText(DateTime time) {
+  final formattedTime = DateFormat(
+    'EEEE, MMM d, y - HH:mm',
+    'zh_TW',
+  ).format(time);
+  return '約診時間已變更，變更至：$formattedTime';
+}
+
 Widget _buildSection({
+  Event? event,
+  Event? newEvent,
   required TextEditingController nameController,
   required TextEditingController phoneController,
   required String recordNumber,
@@ -49,16 +73,18 @@ Widget _buildSection({
   ValueChanged<String>? onRecordNumberSelected,
   ValueChanged<String>? onNameSelected,
 }) {
+  final effectiveEvent = event ?? _buildEvent();
   return EventMetadataSection(
-    event: _buildEvent(),
+    event: effectiveEvent,
+    newEvent: newEvent,
     nameController: nameController,
     phoneController: phoneController,
     recordNumber: recordNumber,
     availableRecordNumbers: availableRecordNumbers,
     isRecordNumberFieldEnabled: true,
     selectedEventTypes: const [EventType.other],
-    startTime: DateTime.utc(2026, 3, 5, 9),
-    endTime: DateTime.utc(2026, 3, 5, 10),
+    startTime: effectiveEvent.startTime,
+    endTime: effectiveEvent.endTime,
     onStartTimeTap: () {},
     onEndTimeTap: onEndTimeTap ?? () {},
     onClearEndTime: () {},
@@ -209,6 +235,185 @@ void main() {
         final recordField = tester.widget<TextField>(recordFieldFinder);
         expect(recordField.controller?.text, 'K001');
         expect(selectedRecordNumber, 'K001');
+      },
+    );
+  });
+
+  group('Event metadata changed time status regression', () {
+    testWidgets(
+      'EVENT-METADATA-WIDGET-006: previous event shows direct moved-to time',
+      (tester) async {
+        final nameController = TextEditingController(text: 'Kai');
+        final phoneController = TextEditingController();
+        addTearDown(() {
+          nameController.dispose();
+          phoneController.dispose();
+        });
+
+        final eventA = _buildEvent(
+          id: 'event-a',
+          startTime: DateTime.utc(2026, 3, 5, 9),
+          isRemoved: true,
+          removalReason: 'change time',
+          newEventId: 'event-b',
+        );
+        final eventB = _buildEvent(
+          id: 'event-b',
+          startTime: DateTime.utc(2026, 3, 5, 10, 30),
+          originalEventId: 'event-a',
+        );
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _buildSection(
+              event: eventA,
+              newEvent: eventB,
+              nameController: nameController,
+              phoneController: phoneController,
+              recordNumber: '',
+              availableRecordNumbers: const [],
+              allRecordNumberOptions: const [],
+            ),
+          ),
+        );
+
+        expect(
+          find.text(_expectedChangedToText(eventB.startTime)),
+          findsOneWidget,
+        );
+        expect(find.textContaining('移至：'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'EVENT-METADATA-WIDGET-007: second changed event shows its own direct moved-to time',
+      (tester) async {
+        final nameController = TextEditingController(text: 'Kai');
+        final phoneController = TextEditingController();
+        addTearDown(() {
+          nameController.dispose();
+          phoneController.dispose();
+        });
+
+        final eventB = _buildEvent(
+          id: 'event-b',
+          startTime: DateTime.utc(2026, 3, 5, 10, 30),
+          isRemoved: true,
+          removalReason: 'change time',
+          originalEventId: 'event-a',
+          newEventId: 'event-c',
+        );
+        final eventC = _buildEvent(
+          id: 'event-c',
+          startTime: DateTime.utc(2026, 3, 5, 14, 15),
+          originalEventId: 'event-b',
+        );
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _buildSection(
+              event: eventB,
+              newEvent: eventC,
+              nameController: nameController,
+              phoneController: phoneController,
+              recordNumber: '',
+              availableRecordNumbers: const [],
+              allRecordNumberOptions: const [],
+            ),
+          ),
+        );
+
+        expect(
+          find.text(_expectedChangedToText(eventC.startTime)),
+          findsOneWidget,
+        );
+        expect(find.textContaining('移至：'), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'EVENT-METADATA-WIDGET-008: changed status does not resolve past direct successor',
+      (tester) async {
+        final nameController = TextEditingController(text: 'Kai');
+        final phoneController = TextEditingController();
+        addTearDown(() {
+          nameController.dispose();
+          phoneController.dispose();
+        });
+
+        final eventA = _buildEvent(
+          id: 'event-a',
+          startTime: DateTime.utc(2026, 3, 5, 9),
+          isRemoved: true,
+          removalReason: 'change time',
+          newEventId: 'event-b',
+        );
+        final eventB = _buildEvent(
+          id: 'event-b',
+          startTime: DateTime.utc(2026, 3, 5, 10, 30),
+          isRemoved: true,
+          removalReason: 'change time',
+          originalEventId: 'event-a',
+          newEventId: 'event-c',
+        );
+        final eventCTime = DateTime.utc(2026, 3, 5, 14, 15);
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _buildSection(
+              event: eventA,
+              newEvent: eventB,
+              nameController: nameController,
+              phoneController: phoneController,
+              recordNumber: '',
+              availableRecordNumbers: const [],
+              allRecordNumberOptions: const [],
+            ),
+          ),
+        );
+
+        expect(
+          find.text(_expectedChangedToText(eventB.startTime)),
+          findsOneWidget,
+        );
+        expect(find.text(_expectedChangedToText(eventCTime)), findsNothing);
+      },
+    );
+
+    testWidgets(
+      'EVENT-METADATA-WIDGET-009: missing direct successor keeps changed fallback',
+      (tester) async {
+        final nameController = TextEditingController(text: 'Kai');
+        final phoneController = TextEditingController();
+        addTearDown(() {
+          nameController.dispose();
+          phoneController.dispose();
+        });
+
+        final eventA = _buildEvent(
+          id: 'event-a',
+          startTime: DateTime.utc(2026, 3, 5, 9),
+          isRemoved: true,
+          removalReason: 'change time',
+          newEventId: 'event-b',
+        );
+
+        await tester.pumpWidget(
+          _buildLocalizedApp(
+            _buildSection(
+              event: eventA,
+              nameController: nameController,
+              phoneController: phoneController,
+              recordNumber: '',
+              availableRecordNumbers: const [],
+              allRecordNumberOptions: const [],
+            ),
+          ),
+        );
+
+        expect(find.text('約診時間已變更'), findsOneWidget);
+        expect(find.textContaining('變更至：'), findsNothing);
+        expect(find.textContaining('移至：'), findsNothing);
       },
     );
   });

@@ -603,6 +603,16 @@
     "description": "Label for event time changed status"
   },
 
+  "eventTimeChangedTo": "約診時間已變更，變更至：{time}",
+  "@eventTimeChangedTo": {
+    "description": "Label for event time changed status with direct destination time",
+    "placeholders": {
+      "time": {
+        "type": "String"
+      }
+    }
+  },
+
   "eventRemoved": "約診已移除",
   "@eventRemoved": {
     "description": "Label for event removed status"
