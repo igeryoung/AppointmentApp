@@ -1900,7 +1900,7 @@ void main() {
   );
 
   test(
-    'EVENT-DETAIL-UNIT-026: updateEventsHasChargeItemsFlag() marks only events linked by charge_item.event_id',
+    'EVENT-DETAIL-UNIT-026: updateEventsHasChargeItemsFlag() does not recompute server-owned event flags',
     () async {
       final otherEvent = makeEvent(
         id: 'event-a2',
@@ -1927,7 +1927,7 @@ void main() {
       final eventA2 = await dbService.getEventById('event-a2');
       expect(eventA1, isNotNull);
       expect(eventA2, isNotNull);
-      expect(eventA1!.hasChargeItems, isTrue);
+      expect(eventA1!.hasChargeItems, isFalse);
       expect(eventA2!.hasChargeItems, isFalse);
     },
   );

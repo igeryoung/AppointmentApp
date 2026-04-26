@@ -261,39 +261,14 @@ mixin ChargeItemOperationsMixin {
     );
   }
 
-  /// Update has_charge_items per event for the given record.
-  /// Only events with at least one non-deleted charge item linked by event_id
-  /// should show the charge indicator.
+  /// Legacy compatibility hook.
+  ///
+  /// The schedule dollar indicator is server-owned and is hydrated from the
+  /// event payload. Local charge item writes intentionally do not recompute
+  /// has_charge_items because offline/local-only charge data can be stale.
   Future<void> updateEventsHasChargeItemsFlag({
     required String recordUuid,
-  }) async {
-    final db = await database;
-    await db.transaction((txn) async {
-      await txn.update(
-        'events',
-        {'has_charge_items': 0},
-        where: 'record_uuid = ?',
-        whereArgs: [recordUuid],
-      );
-
-      await txn.rawUpdate(
-        '''
-        UPDATE events
-        SET has_charge_items = 1
-        WHERE record_uuid = ?
-          AND id IN (
-            SELECT DISTINCT event_id
-            FROM charge_items
-            WHERE record_uuid = ?
-              AND is_deleted = 0
-              AND event_id IS NOT NULL
-              AND TRIM(event_id) != ''
-          )
-        ''',
-        [recordUuid, recordUuid],
-      );
-    });
-  }
+  }) async {}
 
   /// Apply server charge item change to local database
   Future<void> applyServerChargeItemChange(Map<String, dynamic> data) async {

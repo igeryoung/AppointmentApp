@@ -8,7 +8,7 @@ void main() {}
 
 void registerEventInteg015({required LiveServerConfig? config}) {
   test(
-    'EVENT-INTEG-015A: create event after charge-item creation keeps charge item but does not inherit has_charge_items',
+    'EVENT-INTEG-015A: create event after unpaid charge-item creation inherits record-level has_charge_items',
     () async {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
@@ -103,7 +103,7 @@ void registerEventInteg015({required LiveServerConfig? config}) {
             createdEvent,
             keys: const ['has_charge_items', 'hasChargeItems'],
           ),
-          isFalse,
+          isTrue,
         );
 
         final eventId = pickString(createdEvent, keys: const ['id']);
@@ -119,7 +119,7 @@ void registerEventInteg015({required LiveServerConfig? config}) {
             refreshedEvent!,
             keys: const ['has_charge_items', 'hasChargeItems'],
           ),
-          isFalse,
+          isTrue,
         );
 
         final chargeItems = await apiClient.fetchChargeItems(
@@ -155,7 +155,7 @@ void registerEventInteg015({required LiveServerConfig? config}) {
   );
 
   test(
-    'EVENT-INTEG-015B: add charge item to existing event flips has_charge_items true',
+    'EVENT-INTEG-015B: add unpaid charge item to existing event flips all record events true',
     () async {
       final live = config!;
       final apiClient = ApiClient(baseUrl: live.baseUrl);
@@ -206,6 +206,7 @@ void registerEventInteg015({required LiveServerConfig? config}) {
         );
 
         final eventId = uuid.v4();
+        final otherEventId = uuid.v4();
         final recordUuid = uuid.v4();
         final start = DateTime.now().toUtc().add(const Duration(minutes: 30));
         final end = start.add(const Duration(minutes: 30));
@@ -228,6 +229,33 @@ void registerEventInteg015({required LiveServerConfig? config}) {
         expect(
           pickBool(
             createdEvent,
+            keys: const ['has_charge_items', 'hasChargeItems'],
+          ),
+          isFalse,
+        );
+
+        final otherCreatedEvent = await apiClient.createEvent(
+          bookUuid: bookUuid,
+          eventData: {
+            'id': otherEventId,
+            'record_uuid': recordUuid,
+            'title': 'IT charge-flag B other event',
+            'record_number': 'IT-CIB-$suffix',
+            'record_name': 'IT Charge Flag B',
+            'event_types': const ['consultation'],
+            'start_time':
+                start.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+                1000,
+            'end_time':
+                end.add(const Duration(hours: 1)).millisecondsSinceEpoch ~/
+                1000,
+          },
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        expect(
+          pickBool(
+            otherCreatedEvent,
             keys: const ['has_charge_items', 'hasChargeItems'],
           ),
           isFalse,
@@ -267,6 +295,21 @@ void registerEventInteg015({required LiveServerConfig? config}) {
           isTrue,
         );
 
+        final refreshedOtherEvent = await apiClient.fetchEvent(
+          bookUuid: bookUuid,
+          eventId: otherEventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        expect(refreshedOtherEvent, isNotNull);
+        expect(
+          pickBool(
+            refreshedOtherEvent!,
+            keys: const ['has_charge_items', 'hasChargeItems'],
+          ),
+          isTrue,
+        );
+
         final chargeItems = await apiClient.fetchChargeItems(
           recordUuid: recordUuid,
           deviceId: live.deviceId,
@@ -280,6 +323,42 @@ void registerEventInteg015({required LiveServerConfig? config}) {
                 (item['eventId'] ?? item['event_id'])?.toString() == eventId,
           ),
           isTrue,
+        );
+
+        await apiClient.deleteChargeItem(
+          chargeItemId: pickString(savedChargeItem, keys: const ['id']),
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+          bookUuid: bookUuid,
+        );
+
+        final eventAfterDelete = await apiClient.fetchEvent(
+          bookUuid: bookUuid,
+          eventId: eventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        final otherEventAfterDelete = await apiClient.fetchEvent(
+          bookUuid: bookUuid,
+          eventId: otherEventId,
+          deviceId: live.deviceId,
+          deviceToken: live.deviceToken,
+        );
+        expect(eventAfterDelete, isNotNull);
+        expect(otherEventAfterDelete, isNotNull);
+        expect(
+          pickBool(
+            eventAfterDelete!,
+            keys: const ['has_charge_items', 'hasChargeItems'],
+          ),
+          isFalse,
+        );
+        expect(
+          pickBool(
+            otherEventAfterDelete!,
+            keys: const ['has_charge_items', 'hasChargeItems'],
+          ),
+          isFalse,
         );
       } finally {
         if (bookUuid != null) {

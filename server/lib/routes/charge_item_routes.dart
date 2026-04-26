@@ -149,30 +149,21 @@ class ChargeItemRoutes {
   Future<void> _refreshEventChargeFlags(String recordUuid) async {
     final nowIso = DateTime.now().toUtc().toIso8601String();
 
-    await db.client
-        .from('events')
-        .update({'has_charge_items': false, 'updated_at': nowIso})
-        .eq('record_uuid', recordUuid)
-        .eq('is_deleted', false);
-
-    final linkedRows = await db.client
+    final chargeRows = await db.client
         .from('charge_items')
-        .select('event_id')
+        .select('item_price, received_amount')
         .eq('record_uuid', recordUuid)
         .eq('is_deleted', false);
-    final linkedEventIds = _rows(linkedRows)
-        .map((row) => row['event_id']?.toString().trim() ?? '')
-        .where((id) => id.isNotEmpty)
-        .toSet();
 
-    if (linkedEventIds.isEmpty) {
-      return;
-    }
+    final hasUnpaidChargeItem = _rows(chargeRows).any((row) {
+      final itemPrice = _toInt(row['item_price']);
+      final receivedAmount = _toInt(row['received_amount']);
+      return receivedAmount < itemPrice;
+    });
 
     await db.client
         .from('events')
-        .update({'has_charge_items': true, 'updated_at': nowIso})
-        .inFilter('id', linkedEventIds.toList())
+        .update({'has_charge_items': hasUnpaidChargeItem, 'updated_at': nowIso})
         .eq('record_uuid', recordUuid)
         .eq('is_deleted', false);
   }

@@ -284,7 +284,7 @@ void registerEventInteg016({required LiveServerConfig? config}) {
             refreshedEvent!,
             keys: const ['has_charge_items', 'hasChargeItems'],
           ),
-          isTrue,
+          isFalse,
         );
       } finally {
         if (bookUuid != null) {

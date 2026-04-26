@@ -74,6 +74,8 @@ class _TrackingDeviceRepository implements IDeviceRepository {
 
   @override
   Future<void> saveCredentials({
+    String? accountId,
+    String? username,
     required String deviceId,
     required String deviceToken,
     required String deviceName,
@@ -81,6 +83,8 @@ class _TrackingDeviceRepository implements IDeviceRepository {
     String deviceRole = 'read',
   }) {
     return _inner.saveCredentials(
+      accountId: accountId,
+      username: username,
       deviceId: deviceId,
       deviceToken: deviceToken,
       deviceName: deviceName,

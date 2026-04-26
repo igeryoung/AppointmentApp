@@ -47,6 +47,43 @@ class BookPullService {
     return false;
   }
 
+  int _toInt(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? defaultValue;
+  }
+
+  Future<Map<String, bool>> _unpaidChargeFlagsByRecordUuids(
+    Iterable<String> recordUuids,
+  ) async {
+    final uniqueRecordUuids = recordUuids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final flags = {for (final id in uniqueRecordUuids) id: false};
+    if (uniqueRecordUuids.isEmpty) return flags;
+
+    final rows = await db.client
+        .from('charge_items')
+        .select('record_uuid, item_price, received_amount')
+        .inFilter('record_uuid', uniqueRecordUuids)
+        .eq('is_deleted', false);
+
+    for (final row in _rows(rows)) {
+      final recordUuid = row['record_uuid']?.toString() ?? '';
+      if (recordUuid.isEmpty || flags[recordUuid] == true) continue;
+      final itemPrice = _toInt(row['item_price']);
+      final receivedAmount = _toInt(row['received_amount']);
+      if (receivedAmount < itemPrice) {
+        flags[recordUuid] = true;
+      }
+    }
+
+    return flags;
+  }
+
   String _normalizeEventTypes(dynamic value) {
     if (value == null) return '[]';
     if (value is String) {
@@ -141,6 +178,9 @@ class BookPullService {
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
+    final unpaidChargeFlagsByRecordUuid = await _unpaidChargeFlagsByRecordUuids(
+      recordUuids,
+    );
 
     final recordsById = <String, Map<String, dynamic>>{};
     if (recordUuids.isNotEmpty) {
@@ -154,19 +194,20 @@ class BookPullService {
     }
 
     final events = eventRows.map((row) {
-      final record = recordsById[row['record_uuid'].toString()];
+      final recordUuid = row['record_uuid'].toString();
+      final record = recordsById[recordUuid];
       final eventTypes = _normalizeEventTypes(row['event_types']);
       return {
         'id': row['id'] as String,
         'book_uuid': row['book_uuid'] as String,
-        'record_uuid': row['record_uuid'] as String,
+        'record_uuid': recordUuid,
         'title': row['title'] as String,
         'name': (record?['name'] as String?) ?? (row['title'] as String),
         'record_number': record?['record_number'] as String?,
         'phone': record?['phone'] as String?,
         'event_type': _primaryEventType(eventTypes),
         'event_types': eventTypes,
-        'has_charge_items': _toBool(row['has_charge_items']),
+        'has_charge_items': unpaidChargeFlagsByRecordUuid[recordUuid] ?? false,
         'is_checked': _toBool(row['is_checked']),
         'has_note': _toBool(row['has_note']),
         'start_time': _asUtc(row['start_time']).toIso8601String(),

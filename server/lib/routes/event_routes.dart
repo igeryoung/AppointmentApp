@@ -117,6 +117,13 @@ class EventRoutes {
     return text == '1' || text == 'true' || text == 'yes';
   }
 
+  int _toInt(dynamic value, {int defaultValue = 0}) {
+    if (value == null) return defaultValue;
+    if (value is int) return value;
+    if (value is num) return value.toInt();
+    return int.tryParse(value.toString()) ?? defaultValue;
+  }
+
   String _eventTypesToJson(dynamic value) {
     if (value == null) return '["other"]';
     if (value is List) return jsonEncode(value);
@@ -246,6 +253,9 @@ class EventRoutes {
 
     return {
       ...event,
+      'has_charge_items': await _recordHasUnpaidChargeItems(
+        event['record_uuid']?.toString() ?? '',
+      ),
       'record_name': record?['name'],
       'record_phone': record?['phone'],
       'record_number': record?['record_number'],
@@ -284,6 +294,9 @@ class EventRoutes {
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
+    final unpaidChargeFlagsByRecordUuid = await _unpaidChargeFlagsByRecordUuids(
+      recordUuids,
+    );
 
     final recordsById = <String, Map<String, dynamic>>{};
     if (recordUuids.isNotEmpty) {
@@ -306,9 +319,11 @@ class EventRoutes {
     }
 
     return eventRows.map((event) {
-      final record = recordsById[event['record_uuid']?.toString() ?? ''];
+      final recordUuid = event['record_uuid']?.toString() ?? '';
+      final record = recordsById[recordUuid];
       return {
         ...event,
+        'has_charge_items': unpaidChargeFlagsByRecordUuid[recordUuid] ?? false,
         'record_name': record?['name'],
         'record_phone': record?['phone'],
         'record_number': record?['record_number'],
@@ -348,6 +363,9 @@ class EventRoutes {
         .where((id) => id.isNotEmpty)
         .toSet()
         .toList();
+    final unpaidChargeFlagsByRecordUuid = await _unpaidChargeFlagsByRecordUuids(
+      recordUuids,
+    );
 
     final recordsById = <String, Map<String, dynamic>>{};
     if (recordUuids.isNotEmpty) {
@@ -370,9 +388,11 @@ class EventRoutes {
     }
 
     return eventRows.map((event) {
-      final record = recordsById[event['record_uuid']?.toString() ?? ''];
+      final recordUuid = event['record_uuid']?.toString() ?? '';
+      final record = recordsById[recordUuid];
       return {
         ...event,
+        'has_charge_items': unpaidChargeFlagsByRecordUuid[recordUuid] ?? false,
         'record_name': _normalizedEventName(event, record),
         'record_phone': record?['phone'],
         'record_number': (record?['record_number'] ?? '').toString().trim(),
@@ -953,6 +973,63 @@ class EventRoutes {
         .eq('record_uuid', recordUuid);
   }
 
+  Future<bool> _recordHasUnpaidChargeItems(String recordUuid) async {
+    if (recordUuid.trim().isEmpty) {
+      return false;
+    }
+    final rows = await db.client
+        .from('charge_items')
+        .select('item_price, received_amount')
+        .eq('record_uuid', recordUuid)
+        .eq('is_deleted', false);
+
+    return _rows(rows).any((row) {
+      final itemPrice = _toInt(row['item_price']);
+      final receivedAmount = _toInt(row['received_amount']);
+      return receivedAmount < itemPrice;
+    });
+  }
+
+  Future<Map<String, bool>> _unpaidChargeFlagsByRecordUuids(
+    Iterable<String> recordUuids,
+  ) async {
+    final uniqueRecordUuids = recordUuids
+        .map((id) => id.trim())
+        .where((id) => id.isNotEmpty)
+        .toSet()
+        .toList();
+    final flags = {for (final id in uniqueRecordUuids) id: false};
+    if (uniqueRecordUuids.isEmpty) {
+      return flags;
+    }
+
+    for (var i = 0; i < uniqueRecordUuids.length; i += _queryPageSize) {
+      final chunk = uniqueRecordUuids.sublist(
+        i,
+        (i + _queryPageSize).clamp(0, uniqueRecordUuids.length),
+      );
+      final rows = await db.client
+          .from('charge_items')
+          .select('record_uuid, item_price, received_amount')
+          .inFilter('record_uuid', chunk)
+          .eq('is_deleted', false);
+
+      for (final row in _rows(rows)) {
+        final recordUuid = row['record_uuid']?.toString() ?? '';
+        if (recordUuid.isEmpty || flags[recordUuid] == true) {
+          continue;
+        }
+        final itemPrice = _toInt(row['item_price']);
+        final receivedAmount = _toInt(row['received_amount']);
+        if (receivedAmount < itemPrice) {
+          flags[recordUuid] = true;
+        }
+      }
+    }
+
+    return flags;
+  }
+
   _PreparedEventCreate _prepareEventCreateInput({
     required Map<String, dynamic> json,
     required String bookUuid,
@@ -1139,7 +1216,15 @@ class EventRoutes {
 
       await _upsertRecordsForBulkEvents(prepared);
 
-      final rows = prepared.map((entry) => entry.eventInsertPayload).toList();
+      final unpaidByRecordUuid = await _unpaidChargeFlagsByRecordUuids(
+        prepared.map((entry) => entry.recordUuid),
+      );
+
+      final rows = prepared.map((entry) {
+        return Map<String, dynamic>.from(
+          entry.eventInsertPayload,
+        )..['has_charge_items'] = unpaidByRecordUuid[entry.recordUuid] ?? false;
+      }).toList();
       await db.client.from('events').insert(rows);
 
       return Response.ok(
@@ -1178,9 +1263,12 @@ class EventRoutes {
       final body = await request.readAsString();
       final json = jsonDecode(body) as Map<String, dynamic>;
       final prepared = _prepareEventCreateInput(json: json, bookUuid: bookUuid);
+      final hasUnpaidChargeItems = await _recordHasUnpaidChargeItems(
+        prepared.recordUuid,
+      );
       final eventPayload = Map<String, dynamic>.from(
         prepared.eventInsertPayload,
-      )..['has_charge_items'] = false;
+      )..['has_charge_items'] = hasUnpaidChargeItems;
 
       await _ensureRecord(
         recordUuid: prepared.recordUuid,
@@ -1703,6 +1791,9 @@ class EventRoutes {
         final record = recordUuid.isEmpty
             ? null
             : await _recordByUuid(recordUuid);
+        final hasUnpaidChargeItems = recordUuid.isNotEmpty
+            ? await _recordHasUnpaidChargeItems(recordUuid)
+            : false;
         final generatedId = _uuid.v4();
         final now = DateTime.now().toUtc().toIso8601String();
         final serverVersion = (existing['version'] as num?)?.toInt() ?? 1;
@@ -1715,6 +1806,7 @@ class EventRoutes {
           'updated_at': now,
           'synced_at': now,
           'version': serverVersion + 1,
+          'has_charge_items': hasUnpaidChargeItems,
           'record_name': record?['name'],
           'record_phone': record?['phone'],
           'record_number': record?['record_number'],
@@ -1726,7 +1818,7 @@ class EventRoutes {
           'record_uuid': existing['record_uuid'],
           'title': existing['title'],
           'event_types': existing['event_types'],
-          'has_charge_items': _toBool(existing['has_charge_items']),
+          'has_charge_items': hasUnpaidChargeItems,
           'start_time': newStart.toIso8601String(),
           'end_time': newEnd?.toIso8601String(),
           'created_at': now,
@@ -1751,6 +1843,7 @@ class EventRoutes {
               'is_removed': true,
               'removal_reason': reason,
               'new_event_id': generatedId,
+              'has_charge_items': hasUnpaidChargeItems,
               'updated_at': now,
               'synced_at': now,
               'version': serverVersion + 1,
@@ -1765,7 +1858,7 @@ class EventRoutes {
           'record_uuid': existing['record_uuid'],
           'title': existing['title'],
           'event_types': existing['event_types'],
-          'has_charge_items': _toBool(existing['has_charge_items']),
+          'has_charge_items': hasUnpaidChargeItems,
           'start_time': newStart.toIso8601String(),
           'end_time': newEnd?.toIso8601String(),
           'created_at': now,
